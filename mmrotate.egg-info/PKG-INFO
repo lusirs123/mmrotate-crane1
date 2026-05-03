@@ -1,0 +1,56 @@
+Metadata-Version: 2.1
+Name: mmrotate
+Version: 0.3.4
+Summary: Rotation Detection Toolbox and Benchmark
+Home-page: https://github.com/open-mmlab/mmrotate
+Author: MMRotate Authors
+Author-email: openmmlab@gmail.com
+License: Apache License 2.0
+Keywords: computer vision,object detection,rotation detection
+Platform: UNKNOWN
+Classifier: Development Status :: 4 - Beta
+Classifier: License :: OSI Approved :: Apache Software License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.6
+Classifier: Programming Language :: Python :: 3.7
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Description-Content-Type: text/markdown
+Provides-Extra: all
+Provides-Extra: tests
+Provides-Extra: build
+Provides-Extra: optional
+Provides-Extra: mim
+License-File: LICENSE
+
+# EOOD
+End-to-End One-Stage Oriented Object Detection
+
+## Introduction
+
+![EOOD](https://github.com/zhangiguang/EOOD/raw/main/figures/eood.png)
+
+### Some Results
+![dior.jpg](https://github.com/zhangiguang/EOOD/blob/main/figures/dior.jpg)
+
+![dota.jpg](https://github.com/zhangiguang/EOOD/blob/main/figures/dota.jpg)
+
+## Installation
+
+Please refer to [install.md](docs/en/install.md) for installation guide.
+
+## Get Started
+
+Please see [get_started.md](docs/en/get_started.md) for the basic usage of MMRotate.
+
+## Data Preparation
+
+Please refer to [data_preparation.md](tools/data/README.md) to prepare the data.
+
+## Acknowledgement
+
+MMRotate is an open source project that is contributed by researchers and engineers from various colleges and companies. We appreciate all the contributors who implement their methods or add new features, as well as users who give valuable feedbacks. We wish that the toolbox and benchmark could serve the growing research community by providing a flexible toolkit to reimplement existing methods and develop their own new methods.
+
+
+

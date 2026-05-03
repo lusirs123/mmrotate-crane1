@@ -1,0 +1,17 @@
+# Python 缓存文件
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# VSCode 配置文件
+.vscode/
+
+# 数据文件夹，不上传
+crane_project/data/crane_grab/
+
+# 日志文件
+*.log
+
+# Mac OS 系统文件
+.DS_Store
