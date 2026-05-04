@@ -1,25 +1,15 @@
-
-
-# 动态 NFL Loss 负样本重新加权损失函数
-
+# mmrotate/models/losses/sym_nfl_loss.py
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from mmrotate.models.builder import ROTATED_LOSSES
 from mmdet.models.losses.utils import weight_reduce_loss
-from mmengine.logging import MessageHub
 
-# 严格复用底层的纯算子，确保分配器与惩罚器使用绝对一致的数学度量
+# 相对路径直接调用同目录下的算子
 from .sym_kld_calculator import sym_kld
 
 @ROTATED_LOSSES.register_module(force=True)
 class SymNFLLoss(nn.Module):
-    """Symmetric KLD Normalized Focal Loss.
-    
-    Dynamically re-weights the focal loss based on the Symmetric KLD 
-    between predicted OBBs and ground truth to suppress geometrically flawed negative samples.
-    """
-
     def __init__(self,
                  use_sigmoid=True,
                  gamma=2.0,
@@ -41,36 +31,32 @@ class SymNFLLoss(nn.Module):
         self.eps = eps
         self.reduction = reduction
         self.loss_weight = loss_weight
+        
+        # [降维改造] 注册不参与梯度的长整型 Buffer，使其随权重一起保存
+        self.register_buffer('_local_iter', torch.tensor(0, dtype=torch.long))
 
     def _get_current_tau(self):
-        """同步时间流形感知：动态计算温度系数"""
-        try:
-            message_hub = MessageHub.get_current_instance()
-            current_iter = message_hub.get_info('iter')
-            
-            if current_iter >= self.warmup_iters:
-                return self.tau_min
-            
-            decay_ratio = current_iter / max(1, self.warmup_iters)
-            return self.tau_init - decay_ratio * (self.tau_init - self.tau_min)
-        except Exception:
+        """同步时间流形感知"""
+        current_iter = self._local_iter.item()
+        if current_iter >= self.warmup_iters:
             return self.tau_min
+        
+        decay_ratio = current_iter / max(1, self.warmup_iters)
+        return self.tau_init - decay_ratio * (self.tau_init - self.tau_min)
 
     def forward(self,
                 pred_logits,
                 labels,
-                pred_bboxes,       # 强制依赖：必须传入解码后的预测框
-                gt_bboxes,         # 强制依赖：必须传入真实框
+                pred_bboxes,
+                gt_bboxes,
                 weight=None,
                 avg_factor=None,
                 reduction_override=None):
-        """
-        Args:
-            pred_logits (Tensor): 分类预测 logits, shape [N, num_classes].
-            labels (Tensor): 真实标签, shape [N]. 背景类标签通常为 num_classes.
-            pred_bboxes (Tensor): 预测旋转框, shape [N, 5].
-            gt_bboxes (Tensor): 真实旋转框, shape [M, 5].
-        """
+        
+        # 仅在训练模式下累加迭代步数
+        if self.training:
+            self._local_iter += 1
+
         assert reduction_override in (None, 'none', 'mean', 'sum')
         reduction = (reduction_override if reduction_override else self.reduction)
 
@@ -79,20 +65,15 @@ class SymNFLLoss(nn.Module):
 
         num_classes = pred_logits.size(1)
         
-        # 1. 提取度量同构重加权因子 (mu_sym)
         if gt_bboxes is not None and gt_bboxes.size(0) > 0:
-            # 获取全连接距离矩阵 [N, M]
             raw_kld = sym_kld(pred_bboxes[:, None, :], gt_bboxes[None, :, :], eps=self.eps)
-            # 获取每个预测框到最近 GT 的距离极小值 [N]
             min_kld, _ = raw_kld.min(dim=1)
             
             current_tau = self._get_current_tau()
-            # 拓扑压制乘子，值域 (1, 2]
             mu_sym = 1.0 + torch.exp(-min_kld / current_tau) 
         else:
             mu_sym = torch.ones_like(pred_logits[:, 0])
 
-        # 2. 基础 Focal Loss
         pred_sigmoid = pred_logits.sigmoid()
         target = F.one_hot(labels, num_classes=num_classes + 1)[:, :-1].float()
 
@@ -102,10 +83,8 @@ class SymNFLLoss(nn.Module):
         loss = F.binary_cross_entropy_with_logits(
             pred_logits, target, reduction='none') * focal_weight
 
-        # 3. 注入 Sym-NFL 拓扑压制
         loss = loss * mu_sym.unsqueeze(-1)
 
-        # 4. 降维对齐
         if weight is not None:
             if weight.shape != loss.shape:
                 if weight.size(0) == loss.size(0):

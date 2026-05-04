@@ -6,4 +6,8 @@ from .pipelines import *  # noqa: F401, F403
 from .sar import SARDataset  # noqa: F401, F403
 from .diorr import DIORRDataset
 
-__all__ = ['SARDataset', 'DOTADataset', 'build_dataset', 'HRSCDataset', 'DIORRDataset']
+from .crane_custom_dota import CraneDataset
+
+__all__ = ['SARDataset', 'DOTADataset', 'build_dataset', 'HRSCDataset', 'DIORRDataset',
+           'CraneDataset'
+           ]

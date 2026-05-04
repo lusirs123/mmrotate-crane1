@@ -109,8 +109,8 @@ class RotatedRetinaHead(RotatedAnchorHead):
                 - bbox_pred (torch.Tensor): Box energies / deltas for a \
                     single scale level, the channels number is num_anchors * 5.
         """
-        cls_feat = x[0]
-        reg_feat = x[1]
+        cls_feat = x
+        reg_feat = x
         cls_score = self.retina_cls(cls_feat)
         bbox_pred = self.retina_reg(reg_feat)
         return cls_score, bbox_pred

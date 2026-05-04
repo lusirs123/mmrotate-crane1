@@ -4,15 +4,6 @@ README.md
 setup.cfg
 setup.py
 crane_project/__init__.py
-crane_project/mmrotate_crane/__init__.py
-crane_project/mmrotate_crane/crane_metrics.py
-crane_project/mmrotate_crane/sym_eood/__init__.py
-crane_project/mmrotate_crane/sym_eood/sym_eood_detector.py
-crane_project/mmrotate_crane/sym_eood/sym_eood_head.py
-crane_project/mmrotate_crane/sym_eood/sym_kld_calculator.py
-crane_project/mmrotate_crane/sym_eood/sym_kld_loss.py
-crane_project/mmrotate_crane/sym_eood/sym_nfl_loss.py
-crane_project/mmrotate_crane/sym_eood/sym_pola.py
 mmrotate/__init__.py
 mmrotate/registry.py
 mmrotate/version.py
@@ -202,6 +193,7 @@ mmrotate/core/visualization/image.py
 mmrotate/core/visualization/palette.py
 mmrotate/datasets/__init__.py
 mmrotate/datasets/builder.py
+mmrotate/datasets/crane_custom_dota.py
 mmrotate/datasets/diorr.py
 mmrotate/datasets/dota.py
 mmrotate/datasets/hrsc.py
@@ -235,6 +227,7 @@ mmrotate/models/dense_heads/rotated_retina_head.py
 mmrotate/models/dense_heads/rotated_retina_refine_head.py
 mmrotate/models/dense_heads/rotated_rpn_head.py
 mmrotate/models/dense_heads/sam_reppoints_head.py
+mmrotate/models/dense_heads/sym_eood_head.py
 mmrotate/models/dense_heads/utils.py
 mmrotate/models/detectors/__init__.py
 mmrotate/models/detectors/base.py
@@ -250,6 +243,7 @@ mmrotate/models/detectors/rotated_reppoints.py
 mmrotate/models/detectors/rotated_retinanet.py
 mmrotate/models/detectors/s2anet.py
 mmrotate/models/detectors/single_stage.py
+mmrotate/models/detectors/sym_eood_detector.py
 mmrotate/models/detectors/two_stage.py
 mmrotate/models/detectors/utils.py
 mmrotate/models/losses/__init__.py
@@ -261,6 +255,9 @@ mmrotate/models/losses/kld_reppoints_loss.py
 mmrotate/models/losses/rotated_iou_loss.py
 mmrotate/models/losses/smooth_focal_loss.py
 mmrotate/models/losses/spatial_border_loss.py
+mmrotate/models/losses/sym_kld_calculator.py
+mmrotate/models/losses/sym_kld_loss.py
+mmrotate/models/losses/sym_nfl_loss.py
 mmrotate/models/necks/__init__.py
 mmrotate/models/necks/re_fpn.py
 mmrotate/models/roi_heads/__init__.py

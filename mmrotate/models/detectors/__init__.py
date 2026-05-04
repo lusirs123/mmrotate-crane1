@@ -13,9 +13,13 @@ from .s2anet import S2ANet
 from .single_stage import RotatedSingleStageDetector
 from .two_stage import RotatedTwoStageDetector
 from .eood import Eood
+
+from .sym_eood_detector import SymEOOD
 __all__ = [
     'RotatedRetinaNet', 'RotatedFasterRCNN', 'OrientedRCNN', 'RoITransformer',
     'GlidingVertex', 'ReDet', 'R3Det', 'S2ANet', 'RotatedRepPoints',
     'RotatedBaseDetector', 'RotatedTwoStageDetector',
-    'RotatedSingleStageDetector', 'RotatedFCOS', "Eood"
+    'RotatedSingleStageDetector', 'RotatedFCOS', "Eood",
+    'SymEOOD'
+
 ]

@@ -5,7 +5,12 @@ from .convex_assigner import ConvexAssigner
 from .max_convex_iou_assigner import MaxConvexIoUAssigner
 from .sas_assigner import SASAssigner
 from .pola import PolaAssigner
+
+
+from .sym_pola import SymPOLAAssigner
+
 __all__ = [
     'ConvexAssigner', 'MaxConvexIoUAssigner', 'SASAssigner', 'ATSSKldAssigner',
-    'ATSSObbAssigner', 'PolaAssigner'
+    'ATSSObbAssigner', 'PolaAssigner',
+    'SymPOLAAssigner'
 ]

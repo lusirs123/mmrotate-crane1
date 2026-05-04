@@ -8,8 +8,12 @@ from .rotated_iou_loss import RotatedIoULoss
 from .smooth_focal_loss import SmoothFocalLoss
 from .spatial_border_loss import SpatialBorderLoss
 
+from .sym_kld_calculator import sym_kld
+from .sym_kld_loss import SymKLDLoss
+from .sym_nfl_loss import SymNFLLoss
+
 __all__ = [
     'GDLoss', 'GDLoss_v1', 'KFLoss', 'ConvexGIoULoss', 'BCConvexGIoULoss',
     'KLDRepPointsLoss', 'SmoothFocalLoss', 'RotatedIoULoss',
-    'SpatialBorderLoss'
+    'SpatialBorderLoss','sym_kld', 'SymKLDLoss','SymNFLLoss'
 ]
