@@ -1,25 +1,31 @@
 # crane_symeood.py
-# MMRotate 0.x 配置：SymEOOD baseline + CraneDataset + symKLD + symNFL
-# 使用根目录的 tools/train.py / tools/test.py。
+# MMRotate 0.3.4 配置：SymEOOD + CraneDataset
 
+# 0.x 的 custom_imports 语法
 custom_imports = dict(
     imports=[
         'mmrotate.datasets.crane_custom_dota',
-        'mmrotate.models.detectors.sym_eood_detector',
+        'mmrotate.models.detectors.sym_eood',
         'mmrotate.models.dense_heads.sym_eood_head',
         'mmrotate.models.losses.sym_nfl_loss',
         'mmrotate.models.losses.sym_kld_loss',
     ],
-    allow_failed_imports=False)
+    allow_failed_imports=False
+)
 
+# 0.x 只继承官方算法完全体，数据流在本文件中完全重写
 _base_ = [
-    '../../configs/_base_/schedules/schedule_1x.py',
-    '../../configs/_base_/default_runtime.py',
+    '../../configs/rotated_retinanet/rotated_retinanet_obb_r50_fpn_1x_dota_le90.py'
 ]
 
+# =========================================================
+# 角度版本
+# =========================================================
 angle_version = 'le90'
-max_epochs = 24
 
+# =========================================================
+# 模型架构（与原版完全一致，仅格式适配）
+# =========================================================
 model = dict(
     type='SymEOOD',
     backbone=dict(
@@ -32,14 +38,16 @@ model = dict(
         norm_cfg=dict(type='BN', requires_grad=True),
         norm_eval=True,
         style='pytorch',
-        init_cfg=dict(type='Pretrained', checkpoint='torchvision://resnet50')),
+        init_cfg=dict(type='Pretrained', checkpoint='torchvision://resnet50'),
+    ),
     neck=dict(
         type='FPN',
         in_channels=[256, 512, 1024, 2048],
         out_channels=256,
         start_level=1,
         add_extra_convs='on_input',
-        num_outs=5),
+        num_outs=5,
+    ),
     bbox_head=dict(
         type='SymEOODHead',
         num_classes=1,
@@ -52,7 +60,8 @@ model = dict(
             octave_base_scale=4,
             scales_per_octave=3,
             ratios=[0.2, 0.5, 2.0, 5.0],
-            strides=[8, 16, 32, 64, 128]),
+            strides=[8, 16, 32, 64, 128],
+        ),
         bbox_coder=dict(
             type='DeltaXYWHAOBBoxCoder',
             angle_range=angle_version,
@@ -60,7 +69,8 @@ model = dict(
             edge_swap=True,
             proj_xy=True,
             target_means=(0.0, 0.0, 0.0, 0.0, 0.0),
-            target_stds=(1.0, 1.0, 1.0, 1.0, 1.0)),
+            target_stds=(1.0, 1.0, 1.0, 1.0, 1.0),
+        ),
         loss_cls=dict(
             type='SymNFLLoss',
             use_sigmoid=True,
@@ -71,12 +81,15 @@ model = dict(
             warmup_iters=500,
             eps=1e-6,
             reduction='mean',
-            loss_weight=1.0),
+            loss_weight=1.0,
+        ),
         loss_bbox=dict(
             type='SymKLDLoss',
             eps=1e-6,
             reduction='mean',
-            loss_weight=2.0),
+            loss_weight=2.0,
+        ),
+        # 0.x：train_cfg/test_cfg 写在 bbox_head 内部
         train_cfg=dict(
             assigner=dict(
                 type='MaxIoUAssigner',
@@ -84,16 +97,21 @@ model = dict(
                 neg_iou_thr=0.4,
                 min_pos_iou=0,
                 ignore_iof_thr=-1,
-                iou_calculator=dict(type='RBboxOverlaps2D')),
+                iou_calculator=dict(type='RBboxOverlaps2D'),
+            ),
             allowed_border=-1,
             pos_weight=-1,
-            debug=False),
+            debug=False,
+        ),
         test_cfg=dict(
             nms_pre=2000,
             min_bbox_size=0,
             score_thr=0.05,
             nms=dict(iou_thr=0.1),
-            max_per_img=1)),
+            max_per_img=1,
+        ),
+    ),
+    # 辅助头保持原样
     aux_bbox_head=[dict(
         type='RotatedATSSHead',
         num_classes=1,
@@ -106,7 +124,8 @@ model = dict(
             octave_base_scale=4,
             scales_per_octave=1,
             ratios=[1.0],
-            strides=[8, 16, 32, 64, 128]),
+            strides=[8, 16, 32, 64, 128],
+        ),
         bbox_coder=dict(
             type='DeltaXYWHAOBBoxCoder',
             angle_range=angle_version,
@@ -114,44 +133,45 @@ model = dict(
             edge_swap=False,
             proj_xy=True,
             target_means=(0.0, 0.0, 0.0, 0.0, 0.0),
-            target_stds=(1.0, 1.0, 1.0, 1.0, 1.0)),
+            target_stds=(1.0, 1.0, 1.0, 1.0, 1.0),
+        ),
         loss_cls=dict(
             type='FocalLoss',
             use_sigmoid=True,
             gamma=2.0,
             alpha=0.25,
-            loss_weight=1.0),
+            loss_weight=1.0,
+        ),
         loss_bbox=dict(type='L1Loss', loss_weight=1.0),
         loss_centerness=dict(
             type='CrossEntropyLoss',
             use_sigmoid=True,
-            loss_weight=1.0),
+            loss_weight=1.0,
+        ),
         train_cfg=dict(
             assigner=dict(
                 type='ATSSObbAssigner',
                 topk=9,
                 angle_version=angle_version,
-                iou_calculator=dict(type='RBboxOverlaps2D')),
+                iou_calculator=dict(type='RBboxOverlaps2D'),
+            ),
             allowed_border=-1,
             pos_weight=-1,
-            debug=False),
+            debug=False,
+        ),
         test_cfg=dict(
             nms_pre=2000,
             min_bbox_size=0,
             score_thr=0.05,
             nms=dict(iou_thr=0.1),
-            max_per_img=1))],
+            max_per_img=1,
+        ),
+    )],
 )
 
 # =========================================================
-# 数据流形（显式写出，避免依赖外部 base 数据配置）
+# Pipeline 硬编码（从基类提取，与 baseline 完全一致）
 # =========================================================
-dataset_type = 'CraneDataset'
-data_root = 'crane_project/data/crane_grab/'
-
-img_norm_cfg = dict(
-    mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
-
 train_pipeline = [
     dict(type='LoadImageFromFile'),
     dict(type='LoadAnnotations', with_bbox=True),
@@ -159,8 +179,11 @@ train_pipeline = [
     dict(type='RRandomFlip',
          flip_ratio=[0.25, 0.25, 0.25],
          direction=['horizontal', 'vertical', 'diagonal'],
-         version=angle_version),
-    dict(type='Normalize', **img_norm_cfg),
+         version='le90'),
+    dict(type='Normalize',
+         mean=[123.675, 116.28, 103.53],
+         std=[58.395, 57.12, 57.375],
+         to_rgb=True),
     dict(type='Pad', size_divisor=32),
     dict(type='DefaultFormatBundle'),
     dict(type='Collect', keys=['img', 'gt_bboxes', 'gt_labels']),
@@ -173,12 +196,21 @@ test_pipeline = [
          flip=False,
          transforms=[
              dict(type='RResize'),
-             dict(type='Normalize', **img_norm_cfg),
+             dict(type='Normalize',
+                  mean=[123.675, 116.28, 103.53],
+                  std=[58.395, 57.12, 57.375],
+                  to_rgb=True),
              dict(type='Pad', size_divisor=32),
-             dict(type='ImageToTensor', keys=['img']),
+             dict(type='DefaultFormatBundle'),
              dict(type='Collect', keys=['img']),
          ]),
 ]
+
+# =========================================================
+# 数据流形（与 baseline 完全一致）
+# =========================================================
+dataset_type = 'CraneDataset'
+data_root = 'crane_project/data/crane_grab/'
 
 data = dict(
     samples_per_gpu=2,
@@ -190,14 +222,14 @@ data = dict(
             ann_file='train/annfiles/',
             img_prefix='train/images/',
             pipeline=train_pipeline,
-            version=angle_version),
+        ),
         dict(
             type=dataset_type,
             data_root=data_root,
             ann_file='train_sim/annfiles/',
             img_prefix='train/images/',
             pipeline=train_pipeline,
-            version=angle_version),
+        ),
     ],
     val=dict(
         type=dataset_type,
@@ -205,17 +237,20 @@ data = dict(
         ann_file='val/annfiles/',
         img_prefix='val/images/',
         pipeline=test_pipeline,
-        version=angle_version),
+    ),
     test=dict(
         type=dataset_type,
         data_root=data_root,
         ann_file='test/annfiles/',
         img_prefix='test/images/',
         pipeline=test_pipeline,
-        version=angle_version),
+    ),
 )
 
-runner = dict(type='EpochBasedRunner', max_epochs=max_epochs)
+# =========================================================
+# 训练策略
+# =========================================================
+runner = dict(type='EpochBasedRunner', max_epochs=24)
 optimizer = dict(type='SGD', lr=0.005, momentum=0.9, weight_decay=0.0001)
 optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
 lr_config = dict(
@@ -223,7 +258,8 @@ lr_config = dict(
     warmup='linear',
     warmup_iters=500,
     warmup_ratio=1.0 / 3,
-    step=[16, 22])
+    step=[16, 22],
+)
 checkpoint_config = dict(interval=2, max_keep_ckpts=5)
 evaluation = dict(
     interval=2,
@@ -233,9 +269,9 @@ evaluation = dict(
     thresh_sim=10.0,
     thresh_real=25.0,
     weight_sim=0.7,
-    weight_real=0.3)
+    weight_real=0.3,
+)
 
 log_level = 'INFO'
 load_from = None
 resume_from = None
-work_dir = 'work_dirs/crane_symeood'

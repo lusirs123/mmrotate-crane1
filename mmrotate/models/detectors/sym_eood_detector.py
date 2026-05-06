@@ -1,4 +1,4 @@
-# mmrotate/models/detectors/sym_eood_detector.py
+import copy
 import torch.nn as nn
 from mmdet.models.detectors.single_stage import SingleStageDetector
 from mmrotate.models.builder import ROTATED_DETECTORS, build_head
@@ -25,9 +25,10 @@ class SymEOOD(SingleStageDetector):
         if aux_bbox_head is not None:
             self.aux_heads = nn.ModuleList()
             for head_cfg in aux_bbox_head:
-                # 确保辅头能够获取全局的 train/test 配置
-                head_cfg.update(train_cfg=train_cfg)
-                head_cfg.update(test_cfg=test_cfg)
+                # 允许辅头保留自己的 train/test 配置；未显式提供时才回退到全局配置。
+                head_cfg = copy.deepcopy(head_cfg)
+                head_cfg.setdefault('train_cfg', train_cfg)
+                head_cfg.setdefault('test_cfg', test_cfg)
                 self.aux_heads.append(build_head(head_cfg))
         else:
             self.aux_heads = None
