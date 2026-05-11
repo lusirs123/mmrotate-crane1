@@ -7,7 +7,6 @@ Author: MMRotate Authors
 Author-email: openmmlab@gmail.com
 License: Apache License 2.0
 Keywords: computer vision,object detection,rotation detection
-Platform: UNKNOWN
 Classifier: Development Status :: 4 - Beta
 Classifier: License :: OSI Approved :: Apache Software License
 Classifier: Operating System :: OS Independent
@@ -17,12 +16,73 @@ Classifier: Programming Language :: Python :: 3.7
 Classifier: Programming Language :: Python :: 3.8
 Classifier: Programming Language :: Python :: 3.9
 Description-Content-Type: text/markdown
-Provides-Extra: all
-Provides-Extra: tests
-Provides-Extra: build
-Provides-Extra: optional
-Provides-Extra: mim
 License-File: LICENSE
+Requires-Dist: e2cnn
+Requires-Dist: matplotlib
+Requires-Dist: mmcv-full
+Requires-Dist: mmdet<3.0.0,>=2.25.1
+Requires-Dist: numpy
+Requires-Dist: pycocotools
+Requires-Dist: six
+Requires-Dist: terminaltables
+Requires-Dist: torch
+Provides-Extra: all
+Requires-Dist: cython; extra == "all"
+Requires-Dist: numpy; extra == "all"
+Requires-Dist: imagecorruptions; extra == "all"
+Requires-Dist: scikit-learn; extra == "all"
+Requires-Dist: scipy; extra == "all"
+Requires-Dist: e2cnn; extra == "all"
+Requires-Dist: matplotlib; extra == "all"
+Requires-Dist: mmcv-full; extra == "all"
+Requires-Dist: mmdet<3.0.0,>=2.25.1; extra == "all"
+Requires-Dist: numpy; extra == "all"
+Requires-Dist: pycocotools; extra == "all"
+Requires-Dist: six; extra == "all"
+Requires-Dist: terminaltables; extra == "all"
+Requires-Dist: torch; extra == "all"
+Requires-Dist: asynctest; extra == "all"
+Requires-Dist: codecov; extra == "all"
+Requires-Dist: coverage; extra == "all"
+Requires-Dist: cython; extra == "all"
+Requires-Dist: e2cnn; extra == "all"
+Requires-Dist: flake8; extra == "all"
+Requires-Dist: interrogate; extra == "all"
+Requires-Dist: isort==4.3.21; extra == "all"
+Requires-Dist: kwarray; extra == "all"
+Requires-Dist: matplotlib; extra == "all"
+Requires-Dist: pytest; extra == "all"
+Requires-Dist: scikit-learn; extra == "all"
+Requires-Dist: ubelt; extra == "all"
+Requires-Dist: wheel; extra == "all"
+Requires-Dist: xdoctest>=0.10.0; extra == "all"
+Requires-Dist: yapf; extra == "all"
+Provides-Extra: tests
+Requires-Dist: asynctest; extra == "tests"
+Requires-Dist: codecov; extra == "tests"
+Requires-Dist: coverage; extra == "tests"
+Requires-Dist: cython; extra == "tests"
+Requires-Dist: e2cnn; extra == "tests"
+Requires-Dist: flake8; extra == "tests"
+Requires-Dist: interrogate; extra == "tests"
+Requires-Dist: isort==4.3.21; extra == "tests"
+Requires-Dist: kwarray; extra == "tests"
+Requires-Dist: matplotlib; extra == "tests"
+Requires-Dist: pytest; extra == "tests"
+Requires-Dist: scikit-learn; extra == "tests"
+Requires-Dist: ubelt; extra == "tests"
+Requires-Dist: wheel; extra == "tests"
+Requires-Dist: xdoctest>=0.10.0; extra == "tests"
+Requires-Dist: yapf; extra == "tests"
+Provides-Extra: build
+Requires-Dist: cython; extra == "build"
+Requires-Dist: numpy; extra == "build"
+Provides-Extra: optional
+Requires-Dist: imagecorruptions; extra == "optional"
+Requires-Dist: scikit-learn; extra == "optional"
+Requires-Dist: scipy; extra == "optional"
+Provides-Extra: mim
+Requires-Dist: mmcv-full>=1.5.0; extra == "mim"
 
 # EOOD
 End-to-End One-Stage Oriented Object Detection
@@ -51,6 +111,4 @@ Please refer to [data_preparation.md](tools/data/README.md) to prepare the data.
 ## Acknowledgement
 
 MMRotate is an open source project that is contributed by researchers and engineers from various colleges and companies. We appreciate all the contributors who implement their methods or add new features, as well as users who give valuable feedbacks. We wish that the toolbox and benchmark could serve the growing research community by providing a flexible toolkit to reimplement existing methods and develop their own new methods.
-
-
 

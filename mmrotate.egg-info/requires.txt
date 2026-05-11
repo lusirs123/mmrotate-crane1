@@ -18,7 +18,6 @@ e2cnn
 matplotlib
 mmcv-full
 mmdet<3.0.0,>=2.25.1
-numpy
 pycocotools
 six
 terminaltables
@@ -26,15 +25,11 @@ torch
 asynctest
 codecov
 coverage
-cython
-e2cnn
 flake8
 interrogate
 isort==4.3.21
 kwarray
-matplotlib
 pytest
-scikit-learn
 ubelt
 wheel
 xdoctest>=0.10.0

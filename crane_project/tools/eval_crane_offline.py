@@ -358,10 +358,29 @@ class CraneOfflineEvaluator:
         self.logger.info(f'\n{sep}\n')
 
 if __name__ == '__main__':
-    # 请确保此处的绝对路径与你服务器中 test.py --format-only 的输出路径完全吻合
-    GT_ANN_DIR = '../../data/crane_dota/test/annfiles/' 
-    PRED_TXT_DIR = '../../work_dirs/crane_symeood/preds/Task1_grab/' 
-    
-    evaluator = CraneOfflineEvaluator(mode='test')
-    evaluator.extract_from_dirs(gt_dir=GT_ANN_DIR, pred_dir=PRED_TXT_DIR)
+    import argparse
+    parser = argparse.ArgumentParser(description='CraneOBB 离线评估器')
+    parser.add_argument(
+        '--gt_dir',
+        default='crane_project/data/crane_grab/test/annfiles',
+        help='GT 标注目录')
+    parser.add_argument(
+        '--pred_dir',
+        default='/home/omnisky/workspace/symEOOD/work_dirs/crane_baseline/preds_thr001/Task1_grab/',
+        help='预测结果目录')
+    parser.add_argument(
+        '--mode',
+        default='test',
+        choices=['test', 'val'])
+    parser.add_argument(
+        '--center_thresh',
+        type=float,
+        default=15.0)
+    args = parser.parse_args()
+
+    evaluator = CraneOfflineEvaluator(
+        mode=args.mode,
+        center_thresh_px=args.center_thresh,
+    )
+    evaluator.extract_from_dirs(gt_dir=args.gt_dir, pred_dir=args.pred_dir)
     evaluator.compute_metrics()

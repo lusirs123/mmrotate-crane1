@@ -20,7 +20,7 @@ def parse_args():
     parser.add_argument(
         '--work-dir',
         help='the directory to save the file containing evaluation metrics')
-    parser.add_argument(
+    parser.add_argument( 
         '--out',
         type=str,
         help='dump predictions to a pickle file for offline evaluation')

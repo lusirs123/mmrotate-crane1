@@ -9,6 +9,7 @@ __pycache__/
 
 # 数据文件夹，不上传
 crane_project/data/crane_grab/
+work_dirs
 
 # 日志文件
 *.log

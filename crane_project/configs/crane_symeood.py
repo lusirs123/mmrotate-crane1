@@ -149,19 +149,21 @@ model = dict(
 dataset_type = 'CraneDataset'
 data_root = 'crane_project/data/crane_grab/'
 
-img_norm_cfg = dict(
-    mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
-
 train_pipeline = [
     dict(type='LoadImageFromFile'),
     dict(type='LoadAnnotations', with_bbox=True),
-    dict(type='RResize', img_scale=(1024, 1024)),
+    dict(type='RResize', img_scale=(1024, 1024)),  # keep_ratio=True，等比缩放
     dict(type='RRandomFlip',
          flip_ratio=[0.25, 0.25, 0.25],
          direction=['horizontal', 'vertical', 'diagonal'],
-         version=angle_version),
-    dict(type='Normalize', **img_norm_cfg),
-    dict(type='Pad', size_divisor=32),
+         version='le90'),
+    dict(type='Normalize',
+         mean=[123.675, 116.28, 103.53],
+         std=[58.395, 57.12, 57.375],
+         to_rgb=True),
+    dict(type='Pad',
+         size=(1024, 1024),          # ← 从 size_divisor=32 改为绝对尺寸
+         pad_val=dict(img=114)),     # ← 灰色填充（114 是 ImageNet 均值近似）
     dict(type='DefaultFormatBundle'),
     dict(type='Collect', keys=['img', 'gt_bboxes', 'gt_labels']),
 ]
@@ -173,9 +175,14 @@ test_pipeline = [
          flip=False,
          transforms=[
              dict(type='RResize'),
-             dict(type='Normalize', **img_norm_cfg),
-             dict(type='Pad', size_divisor=32),
-             dict(type='ImageToTensor', keys=['img']),
+             dict(type='Normalize',
+                  mean=[123.675, 116.28, 103.53],
+                  std=[58.395, 57.12, 57.375],
+                  to_rgb=True),
+             dict(type='Pad',
+                  size=(1024, 1024),      # ← 与训练完全一致
+                  pad_val=dict(img=114)),
+             dict(type='DefaultFormatBundle'),
              dict(type='Collect', keys=['img']),
          ]),
 ]

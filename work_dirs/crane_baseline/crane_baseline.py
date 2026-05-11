@@ -1,5 +1,5 @@
 dataset_type = 'CraneDataset'
-data_root = '/root/EOOD/crane_project/data/crane_grab/'
+data_root = 'crane_project/data/crane_grab/'
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
 train_pipeline = [
@@ -16,7 +16,9 @@ train_pipeline = [
         mean=[123.675, 116.28, 103.53],
         std=[58.395, 57.12, 57.375],
         to_rgb=True),
-    dict(type='Pad', size_divisor=32),
+    dict(
+        type='Pad', size=(1024, 1024),
+        pad_val=dict(img=(114.0, 114.0, 114.0))),
     dict(type='DefaultFormatBundle'),
     dict(type='Collect', keys=['img', 'gt_bboxes', 'gt_labels'])
 ]
@@ -33,18 +35,21 @@ test_pipeline = [
                 mean=[123.675, 116.28, 103.53],
                 std=[58.395, 57.12, 57.375],
                 to_rgb=True),
-            dict(type='Pad', size_divisor=32),
+            dict(
+                type='Pad',
+                size=(1024, 1024),
+                pad_val=dict(img=(114.0, 114.0, 114.0))),
             dict(type='DefaultFormatBundle'),
             dict(type='Collect', keys=['img'])
         ])
 ]
 data = dict(
-    samples_per_gpu=8,
+    samples_per_gpu=4,
     workers_per_gpu=4,
     train=[
         dict(
             type='CraneDataset',
-            data_root='/root/EOOD/crane_project/data/crane_grab/',
+            data_root='crane_project/data/crane_grab/',
             ann_file='train/annfiles/',
             img_prefix='train/images/',
             pipeline=[
@@ -61,13 +66,16 @@ data = dict(
                     mean=[123.675, 116.28, 103.53],
                     std=[58.395, 57.12, 57.375],
                     to_rgb=True),
-                dict(type='Pad', size_divisor=32),
+                dict(
+                    type='Pad',
+                    size=(1024, 1024),
+                    pad_val=dict(img=(114.0, 114.0, 114.0))),
                 dict(type='DefaultFormatBundle'),
                 dict(type='Collect', keys=['img', 'gt_bboxes', 'gt_labels'])
             ]),
         dict(
             type='CraneDataset',
-            data_root='/root/EOOD/crane_project/data/crane_grab/',
+            data_root='crane_project/data/crane_grab/',
             ann_file='train_sim/annfiles/',
             img_prefix='train/images/',
             pipeline=[
@@ -84,7 +92,10 @@ data = dict(
                     mean=[123.675, 116.28, 103.53],
                     std=[58.395, 57.12, 57.375],
                     to_rgb=True),
-                dict(type='Pad', size_divisor=32),
+                dict(
+                    type='Pad',
+                    size=(1024, 1024),
+                    pad_val=dict(img=(114.0, 114.0, 114.0))),
                 dict(type='DefaultFormatBundle'),
                 dict(type='Collect', keys=['img', 'gt_bboxes', 'gt_labels'])
             ])
@@ -106,13 +117,16 @@ data = dict(
                         mean=[123.675, 116.28, 103.53],
                         std=[58.395, 57.12, 57.375],
                         to_rgb=True),
-                    dict(type='Pad', size_divisor=32),
+                    dict(
+                        type='Pad',
+                        size=(1024, 1024),
+                        pad_val=dict(img=(114.0, 114.0, 114.0))),
                     dict(type='DefaultFormatBundle'),
                     dict(type='Collect', keys=['img'])
                 ])
         ],
         version='le90',
-        data_root='/root/EOOD/crane_project/data/crane_grab/'),
+        data_root='crane_project/data/crane_grab/'),
     test=dict(
         type='CraneDataset',
         img_prefix='test/images/',
@@ -130,13 +144,16 @@ data = dict(
                         mean=[123.675, 116.28, 103.53],
                         std=[58.395, 57.12, 57.375],
                         to_rgb=True),
-                    dict(type='Pad', size_divisor=32),
+                    dict(
+                        type='Pad',
+                        size=(1024, 1024),
+                        pad_val=dict(img=(114.0, 114.0, 114.0))),
                     dict(type='DefaultFormatBundle'),
                     dict(type='Collect', keys=['img'])
                 ])
         ],
         version='le90',
-        data_root='/root/EOOD/crane_project/data/crane_grab/'))
+        data_root='crane_project/data/crane_grab/'))
 evaluation = dict(
     interval=2,
     metric='mAP',
@@ -144,9 +161,9 @@ evaluation = dict(
     rule='greater',
     thresh_sim=10.0,
     thresh_real=25.0,
-    weight_sim=0.7,
-    weight_real=0.3)
-optimizer = dict(type='SGD', lr=0.02, momentum=0.9, weight_decay=0.0001)
+    weight_sim=0.6,
+    weight_real=0.4)
+optimizer = dict(type='SGD', lr=0.005, momentum=0.9, weight_decay=0.0001)
 optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
 lr_config = dict(
     policy='step',
@@ -232,4 +249,4 @@ model = dict(
         max_per_img=2000))
 work_dir = 'work_dirs/crane_baseline'
 auto_resume = False
-gpu_ids = [0]
+gpu_ids = range(0, 2)
