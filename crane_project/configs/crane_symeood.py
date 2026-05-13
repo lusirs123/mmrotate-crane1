@@ -1,5 +1,6 @@
 # crane_symeood.py
 # MMRotate 0.x 配置：SymEOOD baseline + CraneDataset + symKLD + symNFL
+# 双分支，主头使用 sympola，辅助头使用普通的 RotatedATSS 
 # 使用根目录的 tools/train.py / tools/test.py。
 
 custom_imports = dict(
@@ -9,6 +10,7 @@ custom_imports = dict(
         'mmrotate.models.dense_heads.sym_eood_head',
         'mmrotate.models.losses.sym_nfl_loss',
         'mmrotate.models.losses.sym_kld_loss',
+        'mmrotate.core.bbox.assigners.sym_pola'
     ],
     allow_failed_imports=False)
 
@@ -50,9 +52,10 @@ model = dict(
         anchor_generator=dict(
             type='RotatedAnchorGenerator',
             octave_base_scale=4,
-            scales_per_octave=3,
-            ratios=[0.2, 0.5, 2.0, 5.0],
-            strides=[8, 16, 32, 64, 128]),
+            scales_per_octave=1,          # 取消尺度冗余，从 3 改为 1
+            ratios=[0.5, 1.0, 2.0],       # 严格贴合顶梁物理比例
+            strides=[8, 16, 32, 64, 128]
+        ),
         bbox_coder=dict(
             type='DeltaXYWHAOBBoxCoder',
             angle_range=angle_version,
@@ -61,6 +64,15 @@ model = dict(
             proj_xy=True,
             target_means=(0.0, 0.0, 0.0, 0.0, 0.0),
             target_stds=(1.0, 1.0, 1.0, 1.0, 1.0)),
+        init_cfg=dict(
+            type='Normal',
+            layer='Conv2d',
+            std=0.01,
+            override=dict(
+                type='Normal',
+                name='retina_cls',
+                std=0.01,
+                bias_prob=0.01)),
         loss_cls=dict(
             type='SymNFLLoss',
             use_sigmoid=True,
@@ -69,31 +81,56 @@ model = dict(
             tau_init=10.0,
             tau_min=1.0,
             warmup_iters=500,
+            loss_call_factor=5,
             eps=1e-6,
             reduction='mean',
-            loss_weight=1.0),
+            loss_weight=1.0,
+            kld_chunk_size=256),
         loss_bbox=dict(
             type='SymKLDLoss',
             eps=1e-6,
             reduction='mean',
-            loss_weight=2.0),
-        train_cfg=dict(
+            loss_weight=2.0)),
+    train_cfg=dict(
             assigner=dict(
-                type='MaxIoUAssigner',
-                pos_iou_thr=0.5,
-                neg_iou_thr=0.4,
-                min_pos_iou=0,
-                ignore_iof_thr=-1,
-                iou_calculator=dict(type='RBboxOverlaps2D')),
-            allowed_border=-1,
-            pos_weight=-1,
-            debug=False),
-        test_cfg=dict(
-            nms_pre=2000,
-            min_bbox_size=0,
-            score_thr=0.05,
-            nms=dict(iou_thr=0.1),
-            max_per_img=1)),
+                type='SymPOLAAssigner',
+                cost_class=1.0,         # 分类代价值权重
+                cost_reg=2.0,           # 回归代价权重 (配合你 loss_bbox 的 2.0 权重对齐)
+                
+                # ==========================================
+                # 【核心拓扑防线】：绝对一对一匹配 (NMS-Free 刚需)
+                # ==========================================
+                o2m=False,              # 物理熔断：彻底关闭一对多分配模式
+                topk=1,                 # 极限寻址：强制只选取 L_sym 最小的那 1 个 Anchor 作为正样本
+                
+                # ==========================================
+                # 【冷启动动力学约束】：与 SymNFLLoss 保持时序同步
+                # ==========================================
+                tau_init=10.0,          # 初期高温：平抑 KLD 异常波动，靠分类锚定位置
+                tau_min=1.0,            # 后期稳态：交接控制权，执行极限角度微雕
+                warmup_iters=500,       # 预热步数：强烈建议与 loss_cls 中的 warmup_iters 保持完全一致
+                eps=1e-6
+            ),
+            
+            # ==========================================
+            # 【梯度流形护城河】：透明透传
+            # ==========================================
+            sampler=dict(
+                type='PseudoSampler'    # 绝对禁止使用 RandomSampler。必须无损透传所有几十万个负样本，交由 Sym-NFL 进行空间排他性压制
+            ),
+            
+            allowed_border=-1,          # 允许 Anchor 超出图像边界（抓斗边缘截断场景必备）
+            pos_weight=-1,              # 不使用启发式的正负样本比例缩放
+            debug=False
+        ),
+    test_cfg=dict(
+        nms_pre=2000,
+        min_bbox_size=0,
+        score_thr=0.05,
+        nms=dict(iou_thr=0.1),
+        max_per_img=1),
+
+    # 普通辅助头
     aux_bbox_head=[dict(
         type='RotatedATSSHead',
         num_classes=1,
@@ -115,17 +152,23 @@ model = dict(
             proj_xy=True,
             target_means=(0.0, 0.0, 0.0, 0.0, 0.0),
             target_stds=(1.0, 1.0, 1.0, 1.0, 1.0)),
+        init_cfg=dict(
+            type='Normal',
+            layer='Conv2d',
+            std=0.01,
+            override=dict(
+                type='Normal',
+                name='retina_cls',
+                std=0.01,
+                bias_prob=0.01)),
         loss_cls=dict(
             type='FocalLoss',
             use_sigmoid=True,
             gamma=2.0,
             alpha=0.25,
-            loss_weight=1.0),
-        loss_bbox=dict(type='L1Loss', loss_weight=1.0),
-        loss_centerness=dict(
-            type='CrossEntropyLoss',
-            use_sigmoid=True,
-            loss_weight=1.0),
+            loss_weight=0.1), # 从 1.0 修改为 0.1
+        loss_bbox=dict(type='L1Loss', loss_weight=0.1), # 从 1.0 修改为 0.1
+
         train_cfg=dict(
             assigner=dict(
                 type='ATSSObbAssigner',
@@ -140,7 +183,8 @@ model = dict(
             min_bbox_size=0,
             score_thr=0.05,
             nms=dict(iou_thr=0.1),
-            max_per_img=1))],
+            max_per_img=1),
+    )],
 )
 
 # =========================================================
@@ -187,8 +231,10 @@ test_pipeline = [
          ]),
 ]
 
+
+
 data = dict(
-    samples_per_gpu=2,
+    samples_per_gpu=2, #统一使用2+两张 1080 显卡=4
     workers_per_gpu=2,
     train=[
         dict(
@@ -224,6 +270,7 @@ data = dict(
 
 runner = dict(type='EpochBasedRunner', max_epochs=max_epochs)
 optimizer = dict(type='SGD', lr=0.005, momentum=0.9, weight_decay=0.0001)
+
 optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
 lr_config = dict(
     policy='step',
@@ -241,6 +288,9 @@ evaluation = dict(
     thresh_real=25.0,
     weight_sim=0.7,
     weight_real=0.3)
+
+# 打印间隔
+log_config = dict(interval=50)
 
 log_level = 'INFO'
 load_from = None

@@ -48,7 +48,7 @@ class SymPOLAAssigner(BaseAssigner):
         return self.tau_init - decay_ratio * (self.tau_init - self.tau_min)
 
     @torch.no_grad()
-    def assign(self, pred_logits, pred_bboxes, gt_labels, gt_bboxes, img_metas=None):
+    def assign(self, pred_logits, pred_bboxes, gt_labels, gt_bboxes, img_metas=None, is_training=True):
         # 每次分配时计数器累加
         self._local_call_count += 1
         
@@ -73,11 +73,11 @@ class SymPOLAAssigner(BaseAssigner):
         raw_cost_reg = sym_kld(pred_bboxes[:, None, :].expand(-1, num_gt, -1),
                                gt_bboxes[None, :, :].expand(num_bboxes, -1, -1),
                                eps=self.eps)
-
-        # 传入训练状态判断
-        is_training = pred_bboxes.requires_grad
+        # NaN/Inf 保护：用大值填充异常，不影响 argmin 排序
+        raw_cost_reg = torch.nan_to_num(
+            raw_cost_reg, nan=1e6, posinf=1e6, neginf=0.0)
         current_tau = self._get_current_tau(is_training)
-        cost_reg = 1.0 - torch.exp(-raw_cost_reg / current_tau)
+        cost_reg = raw_cost_reg / (current_tau + self.eps)
 
         C = self.cost_class * cost_class + self.cost_reg * cost_reg
 

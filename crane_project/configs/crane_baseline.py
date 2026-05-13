@@ -89,7 +89,7 @@ data_root = 'crane_project/data/crane_grab/'
 # 使用两种 1080 显卡，
 
 data = dict(
-    samples_per_gpu=4,
+    samples_per_gpu=4, #samples_per_gpu=4 与双卡（2 张 1080）共同决定了整个训练过程的总批次大小，保证总批次大小一致即可
     workers_per_gpu=4,
     train=[
         dict(

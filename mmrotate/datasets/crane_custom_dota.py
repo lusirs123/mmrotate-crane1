@@ -95,22 +95,26 @@ class CraneDataset(DOTADataset):
                 print_log(f'[CraneDataset] 静态 mAP 计算跳过或异常：{e}', logger=logger)
 
         # 2. 逐帧物理量测收集
-        hits_sim,  hits_real  = [], []
-        sim_a_gt,  sim_a_pred = [], []
+        hits_sim, hits_real = [], []
+        sim_angle_errors = []
+        sim_hit_count = 0
 
         for i, result in enumerate(results):
             info   = self.data_infos[i]
             domain = info.get('domain', 'unknown')
 
+            pred_bboxes = result[0]            # 类别 0 (grab) 预测输出
+
             ann       = self.get_ann_info(i)
-            gt_bboxes = ann['bboxes']          
+            gt_bboxes = ann['bboxes']
             if gt_bboxes.shape[0] == 0:        # 负样本帧过滤
+                if domain == 'sim':
+                    hits_sim.append(0.0)
+                    sim_angle_errors.append(90.0)
                 continue
 
             gt_center = gt_bboxes[0, :2]
             gt_angle  = float(gt_bboxes[0, 4])
-
-            pred_bboxes = result[0]            # 类别 0 (grab) 预测输出
 
             if pred_bboxes.shape[0] > 0:
                 pred_center = pred_bboxes[0, :2]
@@ -120,16 +124,21 @@ class CraneDataset(DOTADataset):
                 if domain == 'sim':
                     is_hit = dist < thresh_sim
                     hits_sim.append(float(is_hit))
-                    # [绝对因果约束]：仅空间命中，姿态收集方有物理意义
                     if is_hit:
-                        sim_a_gt.append(gt_angle)
-                        sim_a_pred.append(pred_angle)
+                        diff = pred_angle - gt_angle
+                        # [流形折叠]：消除 OBB 周期跳变假象，映射至 [-pi/2, pi/2)
+                        diff = (diff + np.pi / 2) % np.pi - np.pi / 2
+                        sim_angle_errors.append(float(np.degrees(abs(diff))))
+                        sim_hit_count += 1
+                    else:
+                        sim_angle_errors.append(90.0)
                 elif domain == 'real':
                     hits_real.append(float(dist < thresh_real))
             else:
                 # 漏检记录
                 if domain == 'sim':
                     hits_sim.append(0.0)
+                    sim_angle_errors.append(90.0)
                 elif domain == 'real':
                     hits_real.append(0.0)
 
@@ -139,13 +148,10 @@ class CraneDataset(DOTADataset):
         weighted_score = weight_sim * r_center_sim + weight_real * r_center_real
 
         # 4. 孪生域绝对角度精度 A-RMSE 计算
-        if len(sim_a_gt) > 0:
-            diff = np.array(sim_a_pred) - np.array(sim_a_gt)
-            # [流形折叠]：消除 OBB 周期跳变假象，映射至 [-pi/2, pi/2)
-            diff = (diff + np.pi / 2) % np.pi - np.pi / 2
-            sim_a_rmse = float(np.degrees(np.sqrt(np.mean(diff ** 2))))
+        if len(sim_angle_errors) > 0:
+            sim_a_rmse = float(np.sqrt(np.mean(np.square(sim_angle_errors))))
         else:
-            sim_a_rmse = 90.0  # [重罚机制]：无任何有效空间命中，触发最高姿态误差
+            sim_a_rmse = 90.0  # [重罚机制]：无任何有效仿真样本，触发最高姿态误差
 
         # 5. 注入框架验证字典
         eval_results['sim_A_RMSE']        = round(sim_a_rmse,    4)
@@ -160,7 +166,7 @@ class CraneDataset(DOTADataset):
             f'  [面向控制的视觉评价结果 (Test Mode)]\n'
             f'{sep}\n'
             f'  [SIM 域]  时序姿态本底 A-RMSE  : {sim_a_rmse:.2f}° '
-            f'({len(sim_a_gt)}/{len(hits_sim)} 帧质心合法)\n'
+            f'({sim_hit_count}/{len(sim_angle_errors)} 帧质心合法)\n'
             f'  [SIM 域]  静态质心容差 <{thresh_sim:.0f}px  : {r_center_sim:.4f}  ({len(hits_sim)} 帧)\n'
             f'  [REAL 域] 极点泛化容差 <{thresh_real:.0f}px  : {r_center_real:.4f}  ({len(hits_real)} 帧)\n'
             f'  [综合决策] 加权保存基准 (W_R_c) : {weighted_score:.4f}\n'

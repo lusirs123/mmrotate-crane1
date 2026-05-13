@@ -39,16 +39,20 @@ class SymKLDLoss(nn.Module):
         if pred.size(0) == 0:
             return pred.sum() * 0.0
 
-        # 1. 调用底层度量算子，计算纯代数张量图
-        loss = sym_kld(pred, target, eps=self.eps)
+        # 1. 调用底层度量算子，得到原始对称 KLD 距离
+        raw_kld = sym_kld(pred, target, eps=self.eps)
 
-        # 2. 权重张量降维对齐
+        # 2. 对原始距离做有界化压缩，避免极端错位样本把梯度拉爆
+        raw_kld = torch.nan_to_num(raw_kld, nan=1e6, posinf=1e6, neginf=0.0)
+        loss = torch.log1p(raw_kld)
+
+        # 3. 权重张量降维对齐
         # 回归权重的原始 shape 通常为 [N, 5]。取第一列作为代表权重，避免均值平滑掉正样本的极值
         if weight is not None and weight.dim() > 1:
             assert weight.shape == pred.shape
             weight = weight[:, 0]
 
-        # 3. 执行梯度聚合与平滑降维
+        # 4. 执行梯度聚合与平滑降维
         loss = weight_reduce_loss(
             loss, weight, reduction, avg_factor)
 

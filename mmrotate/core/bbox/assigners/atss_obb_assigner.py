@@ -66,26 +66,16 @@ class ATSSObbAssigner(BaseAssigner):
         INF = 100000000
         num_gt, num_bboxes = gt_bboxes.shape[0], bboxes.shape[0]
 
-        # compute iou between all bbox and gt
-        overlaps = self.iou_calculator(bboxes, gt_bboxes)
-
-        # assign 0 by default
-        assigned_gt_inds = overlaps.new_full((num_bboxes, ),
-                                             0,
-                                             dtype=torch.long)
+        assigned_gt_inds = bboxes.new_full((num_bboxes, ), 0, dtype=torch.long)
 
         if num_gt == 0 or num_bboxes == 0:
-            # No ground truth or boxes, return empty assignment
-            max_overlaps = overlaps.new_zeros((num_bboxes, ))
-            if num_gt == 0:
-                # No truth, assign everything to background
-                assigned_gt_inds[:] = 0
+            max_overlaps = bboxes.new_zeros((num_bboxes, ))
             if gt_labels is None:
                 assigned_labels = None
             else:
-                assigned_labels = overlaps.new_full((num_bboxes, ),
-                                                    -1,
-                                                    dtype=torch.long)
+                assigned_labels = bboxes.new_full((num_bboxes, ),
+                                                  -1,
+                                                  dtype=torch.long)
             return AssignResult(
                 num_gt, assigned_gt_inds, max_overlaps, labels=assigned_labels)
 
@@ -111,11 +101,18 @@ class ATSSObbAssigner(BaseAssigner):
             start_idx = end_idx
         candidate_idxs = torch.cat(candidate_idxs, dim=0)
 
-        # get corresponding iou for the these candidates, and compute the
-        # mean and std, set mean + std as the iou threshold
-        gt_bboxes = obb2poly(gt_bboxes, self.angle_version)
+        candidate_anchor_inds = candidate_idxs.reshape(-1)
+        candidate_gt_inds = torch.arange(
+            num_gt, device=bboxes.device).repeat(candidate_idxs.size(0))
+        candidate_bboxes = bboxes[candidate_anchor_inds]
 
-        candidate_overlaps = overlaps[candidate_idxs, torch.arange(num_gt)]
+        # compute the expensive geometric metrics only on candidate anchors
+        gt_bboxes_poly = obb2poly(gt_bboxes, self.angle_version)
+        candidate_overlaps_all = self.iou_calculator(candidate_bboxes,
+                                 gt_bboxes)
+        candidate_overlaps = candidate_overlaps_all[
+            torch.arange(candidate_overlaps_all.size(0), device=bboxes.device),
+            candidate_gt_inds].view(candidate_idxs.size(0), num_gt)
         overlaps_mean_per_gt = candidate_overlaps.mean(0)
         overlaps_std_per_gt = candidate_overlaps.std(0)
         overlaps_thr_per_gt = overlaps_mean_per_gt + overlaps_std_per_gt
@@ -123,22 +120,22 @@ class ATSSObbAssigner(BaseAssigner):
         is_pos = candidate_overlaps >= overlaps_thr_per_gt[None, :]
 
         # limit the positive sample's center in gt
-        inside_flag = points_in_polygons(bboxes_points, gt_bboxes)
-        is_in_gts = inside_flag[candidate_idxs,
-                                torch.arange(num_gt)].to(is_pos.dtype)
+        candidate_inside_flag = points_in_polygons(candidate_bboxes[:, :2],
+                               gt_bboxes_poly)
+        is_in_gts = candidate_inside_flag[
+            torch.arange(candidate_inside_flag.size(0), device=bboxes.device),
+            candidate_gt_inds].view(candidate_idxs.size(0), num_gt).to(
+                is_pos.dtype)
 
         is_pos = is_pos & is_in_gts
-        for gt_idx in range(num_gt):
-            candidate_idxs[:, gt_idx] += gt_idx * num_bboxes
-        candidate_idxs = candidate_idxs.view(-1)
 
-        # if an anchor box is assigned to multiple gts,
-        # the one with the highest IoU will be selected.
-        overlaps_inf = torch.full_like(overlaps,
-                                       -INF).t().contiguous().view(-1)
-        index = candidate_idxs.view(-1)[is_pos.view(-1)]
-        overlaps_inf[index] = overlaps.t().contiguous().view(-1)[index]
-        overlaps_inf = overlaps_inf.view(num_gt, -1).t()
+        overlaps_inf = bboxes.new_full((num_bboxes, num_gt), -INF)
+        flat_mask = is_pos.reshape(-1)
+        flat_candidate_inds = candidate_anchor_inds[flat_mask]
+        flat_candidate_gt_inds = candidate_gt_inds[flat_mask]
+        flat_candidate_overlaps = candidate_overlaps.reshape(-1)[flat_mask]
+        overlaps_inf[flat_candidate_inds, flat_candidate_gt_inds] = \
+            flat_candidate_overlaps
 
         max_overlaps, argmax_overlaps = overlaps_inf.max(dim=1)
         assigned_gt_inds[

@@ -20,6 +20,7 @@ from .eood_head import EoodHead
 from .rotated_eood_head import RotatedEoodHead
 
 from .sym_eood_head import SymEOODHead
+from .gaussian_heatmap_head import GaussianHeatmapHead
 __all__ = [
     'RotatedAnchorHead', 'RotatedRetinaHead', 'RotatedRPNHead',
     'OrientedRPNHead', 'RotatedRetinaRefineHead', 'ODMRefineHead',
@@ -27,6 +28,6 @@ __all__ = [
     'RotatedRepPointsHead', 'SAMRepPointsHead', 'CSLRRetinaHead',
     'RotatedATSSHead', 'RotatedAnchorFreeHead', 'RotatedFCOSHead',
     'CSLRFCOSHead', 'OrientedRepPointsHead', "EoodHead", "RotatedEoodHead",
-    'SymEOODHead'
+    'SymEOODHead','GaussianHeatmapHead'
 
 ]

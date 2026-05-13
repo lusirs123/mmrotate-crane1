@@ -8,9 +8,11 @@ __all__ = ['sym_kld']
 def _xywha_to_gaussian(boxes):
     cx, cy, w, h, a = boxes.unbind(-1)
     
-    # [物理防线] 强制截断，防止初期尺度崩塌导致协方差奇异
-    w = w.clamp(min=1e-3)
-    h = h.clamp(min=1e-3)
+    # [物理防线] 在生成协方差矩阵前强制钳制宽高，避免奇异矩阵和除零爆炸
+    # 1024 尺度图像中，1 个像素是更稳健的数值下限
+    min_size = 1.0
+    w = w.clamp(min=min_size)
+    h = h.clamp(min=min_size)
 
     cos_a = torch.cos(a)
     sin_a = torch.sin(a)
