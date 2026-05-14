@@ -145,7 +145,11 @@ class SymNFLLoss(nn.Module):
             min_kld = self._min_sym_kld(topk_pred, gt_bboxes)  # [K]
 
             # 应用指数核 (适配 1:2 顶梁场景)
-            topk_mu = 1.0 + torch.exp(-min_kld / current_tau)
+            # clamp min_kld 防止极端负值或 NaN 导致 exp 爆炸
+            min_kld = torch.nan_to_num(min_kld, nan=1e4, posinf=1e4, neginf=0.0)
+            # detach mu_sym 的 KLD 梯度：训练初期避免分类-回归梯度耦合导致震荡
+            # mu_sym 仅作为"空间感知权重"调制分类损失的幅度，不需要反向传播到 bbox 分支
+            topk_mu = 1.0 + torch.exp(-(min_kld.detach() / current_tau).clamp(min=-20.0, max=20.0))
             
             # 原位写回
             mu_sym[topk_inds] = topk_mu

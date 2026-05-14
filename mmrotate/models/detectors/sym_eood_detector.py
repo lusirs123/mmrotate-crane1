@@ -1,10 +1,11 @@
 # mmrotate/models/detectors/sym_eood_detector.py
 import copy
+import torch
 import torch.nn as nn
 from mmdet.models.detectors.single_stage import SingleStageDetector
 from mmrotate.models.builder import ROTATED_DETECTORS, build_head
 from mmrotate.models.dense_heads.rotated_atss_head import RotatedATSSHead
-from mmdet.core import bbox2result
+from mmrotate.core import rbbox2result
 
 
 @ROTATED_DETECTORS.register_module(force=True)
@@ -83,6 +84,13 @@ class SymEOOD(SingleStageDetector):
                     aux_feats, img_metas, gt_bboxes, gt_labels,
                     gt_bboxes_ignore)
                 for k, v in aux_losses.items():
+                    # [数值安全] 对辅助头损失做 clamp，防止异常值反向传播拖垮主头
+                    if isinstance(v, torch.Tensor):
+                        v = torch.nan_to_num(v, nan=0.0, posinf=10.0, neginf=0.0)
+                        v = v.clamp(max=10.0)
+                    elif isinstance(v, list):
+                        v = [torch.nan_to_num(vi, nan=0.0, posinf=10.0, neginf=0.0).clamp(max=10.0)
+                             if isinstance(vi, torch.Tensor) else vi for vi in v]
                     losses['aux{:d}_{:s}'.format(i, k)] = v
 
         # Mode B: 高斯热图辅助头损失

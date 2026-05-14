@@ -41,6 +41,8 @@ def _inv2x2_safe(sigma, eps=1e-6):
         torch.stack([d, -b], dim=-1),
         torch.stack([-c, a], dim=-1)
     ], dim=-2) / det[..., None, None]
+    # [数值安全] 钳制逆矩阵元素，防止近奇异矩阵产生极大值
+    inv = inv.clamp(-1e4, 1e4)
     return inv
 
 def sym_kld(boxes_p, boxes_q, eps=1e-6):
@@ -56,7 +58,8 @@ def sym_kld(boxes_p, boxes_q, eps=1e-6):
     delta = (mu_p - mu_q).unsqueeze(-1)
     maha = (delta.transpose(-1, -2) @ (inv_p + inv_q) @ delta).squeeze(-1).squeeze(-1)
 
-    # 抑制因计算精度导致的微小负值
-    return (0.5 * (trace_qp + trace_pq - 4.0 + maha)).clamp(min=0.0)
+    # 抑制因计算精度导致的微小负值，同时设置上界防止数值爆炸
+    raw = 0.5 * (trace_qp + trace_pq - 4.0 + maha)
+    return raw.clamp(min=0.0, max=1e4)
 
 

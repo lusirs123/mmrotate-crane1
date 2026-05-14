@@ -80,11 +80,11 @@ model = dict(
             alpha=0.25,
             tau_init=10.0,
             tau_min=1.0,
-            warmup_iters=500,
+            warmup_iters=1000,
             loss_call_factor=5,
             eps=1e-6,
             reduction='mean',
-            loss_weight=1.0,
+            loss_weight=0.25,
             kld_chunk_size=256),
         loss_bbox=dict(
             type='SymKLDLoss',
@@ -104,11 +104,17 @@ model = dict(
                 topk=1,                 # 极限寻址：强制只选取 L_sym 最小的那 1 个 Anchor 作为正样本
                 
                 # ==========================================
+                # 【O2M 冷启动】：训练前期用一对多分配提供充足正样本
+                # ==========================================
+                o2m_warmup_iters=2000,  # 前 2000 步使用 O2M，之后切换为 O2O
+                o2m_topk=9,             # O2M 阶段每个 GT 分配 9 个正样本
+                
+                # ==========================================
                 # 【冷启动动力学约束】：与 SymNFLLoss 保持时序同步
                 # ==========================================
                 tau_init=10.0,          # 初期高温：平抑 KLD 异常波动，靠分类锚定位置
                 tau_min=1.0,            # 后期稳态：交接控制权，执行极限角度微雕
-                warmup_iters=500,       # 预热步数：强烈建议与 loss_cls 中的 warmup_iters 保持完全一致
+                warmup_iters=1000,       # 预热步数：强烈建议与 loss_cls 中的 warmup_iters 保持完全一致
                 eps=1e-6
             ),
             
@@ -167,7 +173,7 @@ model = dict(
             gamma=2.0,
             alpha=0.25,
             loss_weight=0.1), # 从 1.0 修改为 0.1
-        loss_bbox=dict(type='L1Loss', loss_weight=0.1), # 从 1.0 修改为 0.1
+        loss_bbox=dict(type='SmoothL1Loss', beta=1.0, loss_weight=0.1), # SmoothL1 替代 L1，对 outlier 梯度截断
 
         train_cfg=dict(
             assigner=dict(
@@ -234,7 +240,7 @@ test_pipeline = [
 
 
 data = dict(
-    samples_per_gpu=2, #统一使用2+两张 1080 显卡=4
+    samples_per_gpu=4, #统一使用2+两张 1080 显卡=4
     workers_per_gpu=2,
     train=[
         dict(
@@ -269,14 +275,16 @@ data = dict(
 )
 
 runner = dict(type='EpochBasedRunner', max_epochs=max_epochs)
-optimizer = dict(type='SGD', lr=0.005, momentum=0.9, weight_decay=0.0001)
 
-optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
+#统一lr，之后要baseline 也要改为0.0025
+optimizer = dict(type='SGD', lr=0.0025, momentum=0.9, weight_decay=0.0001)
+
+optimizer_config = dict(grad_clip=dict(max_norm=10, norm_type=2))
 lr_config = dict(
     policy='step',
     warmup='linear',
-    warmup_iters=500,
-    warmup_ratio=1.0 / 3,
+    warmup_iters=1000,
+    warmup_ratio=0.001,
     step=[16, 22])
 checkpoint_config = dict(interval=2, max_keep_ckpts=5)
 evaluation = dict(

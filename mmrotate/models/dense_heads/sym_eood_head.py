@@ -284,6 +284,11 @@ class SymEOODHead(RotatedRetinaHead):
             decoded_pred_bboxes[:, 2].clamp_(1.0, float(decode_max_size))
             decoded_pred_bboxes[:, 3].clamp_(1.0, float(decode_max_size))
 
+        # [数值安全] 对解码后的宽高做上界钳制，防止极端预测导致协方差矩阵爆炸
+        max_wh = float(decode_max_size) if decode_max_size is not None else 2048.0
+        decoded_pred_bboxes[:, 2].clamp_(1.0, max_wh)
+        decoded_pred_bboxes[:, 3].clamp_(1.0, max_wh)
+
         # 3. 提取正样本对应的 GT 框（传给 SymNFLLoss 计算 mu_sym）
         pos_inds = (labels >= 0) & (labels < self.num_classes)
         pos_gt_bboxes = decoded_gt_bboxes[pos_inds]
@@ -306,7 +311,12 @@ class SymEOODHead(RotatedRetinaHead):
             pos_gt_bboxes = decoded_gt_bboxes.new_zeros((0, 5))
 
         # 4. SymNFL 分类损失
-        cls_avg_factor = max(float(label_weights.sum().item()), 1.0)
+        # =========================================================
+        # 【归一化策略】：使用全局正样本数作为归一化因子，
+        # 与回归损失保持一致的梯度尺度。SymNFLLoss 内部的 focal weight
+        # 已经天然压制了远端背景的梯度贡献，不需要额外用 anchor 总数稀释。
+        # =========================================================
+        cls_avg_factor = max(float(num_total_samples), 1.0)
         loss_cls = self.loss_cls(
             cls_score,
             labels,
@@ -314,6 +324,10 @@ class SymEOODHead(RotatedRetinaHead):
             gt_bboxes=pos_gt_bboxes,
             weight=label_weights,
             avg_factor=cls_avg_factor)
+
+        # [数值安全] 防止 NaN/Inf 传播导致整个训练崩溃
+        if torch.isnan(loss_cls) or torch.isinf(loss_cls):
+            loss_cls = cls_score.sum() * 0.0
 
         # 5. SymKLD 回归损失（仅正样本）
         if pos_inds.numel() > 0:
@@ -328,6 +342,9 @@ class SymEOODHead(RotatedRetinaHead):
                 pos_gt_bboxes,
                 weight=pos_weights,
                 avg_factor=num_total_samples)
+            # [数值安全] 防止 NaN/Inf 传播
+            if torch.isnan(loss_bbox) or torch.isinf(loss_bbox):
+                loss_bbox = bbox_pred.sum() * 0.0
             # # ── 诊断探针 2：回归梯度断点截获 ─────────────────────────────
             # if getattr(self, '_diag_cnt', 0) <= 5 and pos_inds.sum().item() > 0:
             #     print(f'[DIAG-{self._diag_cnt-1}] loss_bbox原始值={loss_bbox.item():.6f}')
@@ -401,7 +418,22 @@ class SymEOODHead(RotatedRetinaHead):
             bboxes = mlvl_bboxes
 
         if rescale and bboxes.size(0) > 0:
+            scale_factor = bboxes.new_tensor(scale_factor)
             bboxes[:, :4] /= scale_factor
 
         det_bboxes = torch.cat([bboxes, scores[:, None]], dim=1)
         return det_bboxes, labels
+
+    def simple_test(self, feats, img_metas, rescale=False):
+        """推理入口：兼容 BaseDenseHead.simple_test 调用链。
+
+        直接覆写 simple_test，物理切断对 simple_test_bboxes 的依赖，
+        端到端直通 FPN 与 O2O 解码器。
+        """
+        # 1. 前向传播提取密集特征
+        outs = self.forward(feats)
+        # 2. 端到端解码预测结果
+        # 【物理防线】：显式传入 with_nms=False，彻底封死 NMS 后处理通道
+        results_list = self.get_bboxes(
+            *outs, img_metas=img_metas, rescale=rescale, with_nms=False)
+        return results_list

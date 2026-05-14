@@ -16,7 +16,9 @@ class SymPOLAAssigner(BaseAssigner):
                  tau_min: float = 1.0,
                  warmup_iters: int = 2000,
                  eps: float = 1e-6,
-                 topk: int = 6):
+                 topk: int = 6,
+                 o2m_warmup_iters: int = 0,
+                 o2m_topk: int = 9):
         super().__init__()
         self.cost_class = cost_class
         self.cost_reg = cost_reg
@@ -28,6 +30,10 @@ class SymPOLAAssigner(BaseAssigner):
         self.topk = topk
         self.focal_loss_alpha = 0.25
         self.focal_loss_gamma = 2.0
+        
+        # [O2M 冷启动] 训练前 o2m_warmup_iters 步使用 O2M 分配，提供充足正样本
+        self.o2m_warmup_iters = o2m_warmup_iters
+        self.o2m_topk = o2m_topk
         
         # [降维改造] 0.x 无法获取全局 iter，使用内部计数器近似模拟
         # 注意：assign() 是逐图像调用的，若 batch_size=2，则每 2 次调用等于 1 个 iter
@@ -81,7 +87,12 @@ class SymPOLAAssigner(BaseAssigner):
 
         C = self.cost_class * cost_class + self.cost_reg * cost_reg
 
-        if not self.o2m:
+        # [O2M 冷启动切换] 训练前期使用 O2M 提供充足正样本，避免分类分支退化
+        current_iter = self._local_call_count // 2
+        use_o2m = self.o2m or (is_training and self.o2m_warmup_iters > 0 
+                               and current_iter < self.o2m_warmup_iters)
+
+        if not use_o2m:
             mincost, src_ind = torch.min(C, dim=0)
             tgt_ind = torch.arange(len(gt_labels), device=src_ind.device)
 
@@ -97,7 +108,9 @@ class SymPOLAAssigner(BaseAssigner):
 
             return AssignResult(num_gt, assigned_gt_inds, mincost, labels=assigned_labels)
 
-        mincost, src_ind = torch.topk(C, k=min(self.topk, C.shape[0]), dim=0, largest=False)
+        effective_topk = self.o2m_topk if (is_training and self.o2m_warmup_iters > 0 
+                                           and current_iter < self.o2m_warmup_iters) else self.topk
+        mincost, src_ind = torch.topk(C, k=min(effective_topk, C.shape[0]), dim=0, largest=False)
         for i, ind in enumerate(src_ind.transpose(0, 1)):
             assigned_gt_inds[ind] = i + 1
 

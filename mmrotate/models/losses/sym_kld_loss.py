@@ -43,8 +43,13 @@ class SymKLDLoss(nn.Module):
         raw_kld = sym_kld(pred, target, eps=self.eps)
 
         # 2. 对原始距离做有界化压缩，避免极端错位样本把梯度拉爆
-        raw_kld = torch.nan_to_num(raw_kld, nan=1e6, posinf=1e6, neginf=0.0)
-        loss = torch.log1p(raw_kld)
+        raw_kld = torch.nan_to_num(raw_kld, nan=1e4, posinf=1e4, neginf=0.0)
+        # 使用 sqrt(1 + x) - 1 替代 log1p：梯度衰减更平滑，大偏差时梯度 ~ 1/(2*sqrt(x))
+        # 相比 log1p 的 1/(1+x)，对中等偏差（10~100）保留更多梯度信号，
+        # 同时对极端偏差（>1000）压制更强
+        loss = torch.sqrt(1.0 + raw_kld) - 1.0
+        # 上界保护
+        loss = loss.clamp(max=10.0)
 
         # 3. 权重张量降维对齐
         # 回归权重的原始 shape 通常为 [N, 5]。取第一列作为代表权重，避免均值平滑掉正样本的极值
