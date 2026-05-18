@@ -11,8 +11,6 @@
 # 启动训练
 # 
 
-
-
 _base_ = [
     '../../configs/rotated_retinanet/rotated_retinanet_obb_r50_fpn_1x_dota_le90.py'
 ]
@@ -33,7 +31,7 @@ model = dict(
     test_cfg=dict(
         nms_pre=2000,
         min_bbox_size=0,
-        score_thr=0.0001,  # [核心修改] 将默认 0.05 降至极限底噪
+        score_thr=0.05,  # [核心修改] 将默认 0.05 降至极限底噪
         nms=dict(iou_thr=0.1),
         max_per_img=2000
         ),
@@ -89,8 +87,8 @@ data_root = 'crane_project/data/crane_grab/'
 # 使用两种 1080 显卡，
 
 data = dict(
-    samples_per_gpu=4, #samples_per_gpu=4 与双卡（2 张 1080）共同决定了整个训练过程的总批次大小，保证总批次大小一致即可
-    workers_per_gpu=4,
+    samples_per_gpu=2, #samples_per_gpu=4 与双卡（2 张 1080）共同决定了整个训练过程的总批次大小，保证总批次大小一致即可
+    workers_per_gpu=2,
     train=[
         dict(
             type=dataset_type,
@@ -123,29 +121,45 @@ data = dict(
     ),
 )
 # =========================================================
-# 优化器与评估
+# 优化器与训练调度（与 crane_symeood 严格对齐，确保对比公平）
 # =========================================================
 runner = dict(type='EpochBasedRunner', max_epochs=24)
-optimizer = dict(type='SGD', lr=0.005, momentum=0.9, weight_decay=0.0001)
+optimizer = dict(type='SGD', lr=0.0025, momentum=0.9, weight_decay=0.0001)
 
-# evaluation = dict(
-#     interval=2,
-#     metric='mAP',
-#     save_best='R_center',
-#     rule='greater'
-# )
+# 梯度截断：对齐 symeood 的 max_norm=10（基类默认 35，对小数据集过松）
+optimizer_config = dict(grad_clip=dict(max_norm=10, norm_type=2))
+
+# 学习率策略：对齐 symeood 的 1k warmup + step=[16, 22]（基类默认 500/[8, 11] 仅适配 12 epochs）
+lr_config = dict(
+    policy='step',
+    warmup='linear',
+    warmup_iters=1000,
+    warmup_ratio=0.001,
+    step=[16, 22])
+
+# checkpoint：对齐 symeood interval=2、max_keep_ckpts=5
+checkpoint_config = dict(interval=2, max_keep_ckpts=5)
+
 # =========================================================
-# 评估器劫持与加权决策下发
+# 评估器劫持与加权决策下发（权重对齐 symeood：sim=0.7 / real=0.3）
 # =========================================================
 evaluation = dict(
     interval=2,
     metric='mAP',
     save_best='Weighted_R_center',  # 强制 EvalHook 追踪加权分
     rule='greater',
-    
+
     # --- 穿透式物理补偿参数 ---
     thresh_sim=10.0,    # 压榨仿真数据 10 像素级拟合极限
     thresh_real=25.0,   # 兼容真实数据 25 像素人眼抖动方差
-    weight_sim=0.6,     # 赋予纯净数据高梯度权重，确保拓扑不崩
-    weight_real=0.4     # 赋予真实数据低权重，仅作为防止致盲的惩罚项
+    weight_sim=0.7,     # 与 symeood 对齐
+    weight_real=0.3     # 与 symeood 对齐
 )
+
+# 日志间隔与 symeood 对齐
+log_config = dict(interval=100)
+
+log_level = 'INFO'
+load_from = None
+resume_from = None
+work_dir = 'work_dirs/crane_baseline'

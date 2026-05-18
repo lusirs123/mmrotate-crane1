@@ -44,8 +44,9 @@ class SymPOLAAssigner(BaseAssigner):
         if not is_training:
             return self.tau_min
             
-        # 假设单卡 batch_size=2，将调用次数折算为迭代步数
-        current_iter = self._local_call_count // 2 
+        # samples_per_gpu=4, 2 GPUs → 每 iter 调用 assign 8 次（4 images × 2 GPUs 不对，DDP 下每卡独立）
+        # 单卡 samples_per_gpu=4 → 每 iter 调用 4 次
+        current_iter = self._local_call_count // 4
         
         if current_iter >= self.warmup_iters:
             return self.tau_min
@@ -87,12 +88,28 @@ class SymPOLAAssigner(BaseAssigner):
 
         C = self.cost_class * cost_class + self.cost_reg * cost_reg
 
-        # [O2M 冷启动切换] 训练前期使用 O2M 提供充足正样本，避免分类分支退化
-        current_iter = self._local_call_count // 2
-        use_o2m = self.o2m or (is_training and self.o2m_warmup_iters > 0 
-                               and current_iter < self.o2m_warmup_iters)
+        # [渐进式 topk 衰减] 从 o2m_topk 线性衰减到 topk，避免硬切换断崖
+        current_iter = self._local_call_count // 4  # samples_per_gpu=4, DDP 每卡独立
+        
+        if not is_training or self.o2m_warmup_iters <= 0:
+            effective_topk = 1
+        elif current_iter < self.o2m_warmup_iters:
+            # warmup 阶段：使用完整 o2m_topk
+            effective_topk = self.o2m_topk
+        else:
+            # warmup 结束后：线性衰减 topk，用等长的 ramp-down 窗口平滑过渡
+            ramp_down_iters = self.o2m_warmup_iters
+            elapsed = current_iter - self.o2m_warmup_iters
+            if elapsed >= ramp_down_iters:
+                effective_topk = self.topk  # 最终稳态：O2O (topk=1)
+            else:
+                ratio = elapsed / ramp_down_iters
+                effective_topk = max(self.topk,
+                                     int(self.o2m_topk - ratio * (self.o2m_topk - self.topk)))
 
-        if not use_o2m:
+        use_o2o = (effective_topk <= 1) and not self.o2m
+
+        if use_o2o:
             mincost, src_ind = torch.min(C, dim=0)
             tgt_ind = torch.arange(len(gt_labels), device=src_ind.device)
 
@@ -108,8 +125,6 @@ class SymPOLAAssigner(BaseAssigner):
 
             return AssignResult(num_gt, assigned_gt_inds, mincost, labels=assigned_labels)
 
-        effective_topk = self.o2m_topk if (is_training and self.o2m_warmup_iters > 0 
-                                           and current_iter < self.o2m_warmup_iters) else self.topk
         mincost, src_ind = torch.topk(C, k=min(effective_topk, C.shape[0]), dim=0, largest=False)
         for i, ind in enumerate(src_ind.transpose(0, 1)):
             assigned_gt_inds[ind] = i + 1

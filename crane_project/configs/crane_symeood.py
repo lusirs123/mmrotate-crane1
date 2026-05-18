@@ -1,5 +1,5 @@
 # crane_symeood.py
-# MMRotate 0.x 配置：SymEOOD baseline + CraneDataset + symKLD + symNFL
+# MMRotate 0.x 配置：SymEOOD： baseline + CraneDataset + symKLD + symNFL
 # 双分支，主头使用 sympola，辅助头使用普通的 RotatedATSS 
 # 使用根目录的 tools/train.py / tools/test.py。
 
@@ -132,7 +132,7 @@ model = dict(
     test_cfg=dict(
         nms_pre=2000,
         min_bbox_size=0,
-        score_thr=0.05,
+        score_thr=0.05, # baseline是相同的值
         nms=dict(iou_thr=0.1),
         max_per_img=1),
 
@@ -240,7 +240,7 @@ test_pipeline = [
 
 
 data = dict(
-    samples_per_gpu=4, #统一使用2+两张 1080 显卡=4
+    samples_per_gpu=2, #统一使用2+两张 1080 显卡=4
     workers_per_gpu=2,
     train=[
         dict(
