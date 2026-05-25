@@ -1,5 +1,6 @@
 # crane_symeood_gauss.py
-# 对比实验：SymEOOD + 高斯热图辅助头（替换 RotatedATSS）
+# 对比实验：SymEOOD + UADH（替换 RotatedATSS）
+# 不完整未实现
 
 custom_imports = dict(
     imports=[

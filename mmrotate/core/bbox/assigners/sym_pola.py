@@ -44,9 +44,9 @@ class SymPOLAAssigner(BaseAssigner):
         if not is_training:
             return self.tau_min
             
-        # samples_per_gpu=4, 2 GPUs → 每 iter 调用 assign 8 次（4 images × 2 GPUs 不对，DDP 下每卡独立）
-        # 单卡 samples_per_gpu=4 → 每 iter 调用 4 次
-        current_iter = self._local_call_count // 4
+        # 每 iter 在每张 GPU 上调用 assign 次数 = samples_per_gpu
+        # 当前配置 samples_per_gpu=2 → 除以 2 还原 iter 计数
+        current_iter = self._local_call_count // 2
         
         if current_iter >= self.warmup_iters:
             return self.tau_min
@@ -89,7 +89,7 @@ class SymPOLAAssigner(BaseAssigner):
         C = self.cost_class * cost_class + self.cost_reg * cost_reg
 
         # [渐进式 topk 衰减] 从 o2m_topk 线性衰减到 topk，避免硬切换断崖
-        current_iter = self._local_call_count // 4  # samples_per_gpu=4, DDP 每卡独立
+        current_iter = self._local_call_count // 2  # samples_per_gpu=2, DDP 每卡独立
         
         if not is_training or self.o2m_warmup_iters <= 0:
             effective_topk = 1

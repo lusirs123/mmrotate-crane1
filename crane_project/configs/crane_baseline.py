@@ -1,6 +1,7 @@
 # =========================================================
 # 对比实验 A：经典旋转检测基线 (Rotated RetinaNet)
 # 学术定位：展示 NMS 机制与离散 IoU 分配引发的时序抖动缺陷
+# ratios=[0.5, 1.0, 2.0],
 # =========================================================
 # 同时注意 .DS_Store 文件（macOS 系统文件）混入了 annfiles/ 目录，需要清理，否则解析时可能触发异常：
 
@@ -22,8 +23,10 @@ model = dict(
     bbox_head=dict(
         num_classes=1,
         anchor_generator=dict(
-            type='RotatedAnchorGenerator', 
-            ratios=[0.2, 0.5, 1.0, 2.0, 5.0],
+            type='RotatedAnchorGenerator',
+            octave_base_scale=4,
+            scales_per_octave=1,          # 与 M1/M3 对齐，消除 anchor 混杂变量
+            ratios=[0.5, 1.0, 2.0],       # 与 M1/M3 对齐
             strides=[8, 16, 32, 64, 128]
         )
     ),
@@ -156,8 +159,8 @@ evaluation = dict(
     weight_real=0.3     # 与 symeood 对齐
 )
 
-# 日志间隔与 symeood 对齐
-log_config = dict(interval=100)
+# 日志间隔与 symeood / M1 对齐
+log_config = dict(interval=50)
 
 log_level = 'INFO'
 load_from = None

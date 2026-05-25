@@ -213,7 +213,7 @@ train_pipeline = [
          to_rgb=True),
     dict(type='Pad',
          size=(1024, 1024),          # ← 从 size_divisor=32 改为绝对尺寸
-         pad_val=dict(img=114)),     # ← 灰色填充（114 是 ImageNet 均值近似）
+         pad_val=dict(img=(114.0, 114.0, 114.0))),  # ← 灰色填充，格式与 baseline/M1 对齐
     dict(type='DefaultFormatBundle'),
     dict(type='Collect', keys=['img', 'gt_bboxes', 'gt_labels']),
 ]
@@ -231,7 +231,7 @@ test_pipeline = [
                   to_rgb=True),
              dict(type='Pad',
                   size=(1024, 1024),      # ← 与训练完全一致
-                  pad_val=dict(img=114)),
+                  pad_val=dict(img=(114.0, 114.0, 114.0))),
              dict(type='DefaultFormatBundle'),
              dict(type='Collect', keys=['img']),
          ]),

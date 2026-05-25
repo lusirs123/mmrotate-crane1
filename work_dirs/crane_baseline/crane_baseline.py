@@ -44,8 +44,8 @@ test_pipeline = [
         ])
 ]
 data = dict(
-    samples_per_gpu=4,
-    workers_per_gpu=4,
+    samples_per_gpu=2,
+    workers_per_gpu=2,
     train=[
         dict(
             type='CraneDataset',
@@ -161,18 +161,18 @@ evaluation = dict(
     rule='greater',
     thresh_sim=10.0,
     thresh_real=25.0,
-    weight_sim=0.6,
-    weight_real=0.4)
-optimizer = dict(type='SGD', lr=0.005, momentum=0.9, weight_decay=0.0001)
-optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
+    weight_sim=0.7,
+    weight_real=0.3)
+optimizer = dict(type='SGD', lr=0.0025, momentum=0.9, weight_decay=0.0001)
+optimizer_config = dict(grad_clip=dict(max_norm=10, norm_type=2))
 lr_config = dict(
     policy='step',
     warmup='linear',
-    warmup_iters=500,
-    warmup_ratio=0.3333333333333333,
-    step=[8, 11])
+    warmup_iters=1000,
+    warmup_ratio=0.001,
+    step=[16, 22])
 runner = dict(type='EpochBasedRunner', max_epochs=24)
-checkpoint_config = dict(interval=1)
+checkpoint_config = dict(interval=2, max_keep_ckpts=5)
 log_config = dict(interval=50, hooks=[dict(type='TextLoggerHook')])
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
@@ -212,8 +212,8 @@ model = dict(
         anchor_generator=dict(
             type='RotatedAnchorGenerator',
             octave_base_scale=4,
-            scales_per_octave=3,
-            ratios=[0.2, 0.5, 1.0, 2.0, 5.0],
+            scales_per_octave=1,
+            ratios=[0.5, 1.0, 2.0],
             strides=[8, 16, 32, 64, 128]),
         bbox_coder=dict(
             type='DeltaXYWHAOBBoxCoder',
