@@ -3,6 +3,7 @@
 # 双分支，主头使用 sympola，辅助头使用普通的 RotatedATSS 
 # 使用根目录的 tools/train.py / tools/test.py。
 
+
 custom_imports = dict(
     imports=[
         'mmrotate.datasets.crane_custom_dota',
@@ -172,8 +173,8 @@ model = dict(
             use_sigmoid=True,
             gamma=2.0,
             alpha=0.25,
-            loss_weight=0.1), # 从 1.0 修改为 0.1
-        loss_bbox=dict(type='SmoothL1Loss', beta=1.0, loss_weight=0.1), # SmoothL1 替代 L1，对 outlier 梯度截断
+            loss_weight=0.01),
+        loss_bbox=dict(type='SmoothL1Loss', beta=1.0, loss_weight=0.01),
 
         train_cfg=dict(
             assigner=dict(
@@ -286,7 +287,7 @@ lr_config = dict(
     warmup_iters=1000,
     warmup_ratio=0.001,
     step=[16, 22])
-checkpoint_config = dict(interval=2, max_keep_ckpts=5)
+checkpoint_config = dict(interval=1, max_keep_ckpts=-1)
 evaluation = dict(
     interval=2,
     metric='mAP',

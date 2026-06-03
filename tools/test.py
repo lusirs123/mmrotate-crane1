@@ -86,6 +86,10 @@ def parse_args():
         help='custom options for evaluation, the key-value pair in xxx=yyy '
         'format will be kwargs for dataset.evaluate() function')
     parser.add_argument(
+        '--comparison-file',
+        default='checkpoint_eval_summary.json',
+        help='json file name under work-dir to append checkpoint metrics')
+    parser.add_argument(
         '--launcher',
         choices=['none', 'pytorch', 'slurm', 'mpi'],
         default='none',
@@ -254,9 +258,18 @@ def main():
             eval_kwargs.update(dict(metric=args.eval, **kwargs))
             metric = dataset.evaluate(outputs, **eval_kwargs)
             print(metric)
-            metric_dict = dict(config=args.config, metric=metric)
+            metric_dict = dict(config=args.config, checkpoint=args.checkpoint, metric=metric)
             if args.work_dir is not None and rank == 0:
                 mmcv.dump(metric_dict, json_file)
+                comparison_file = osp.join(args.work_dir, args.comparison_file)
+                if osp.exists(comparison_file):
+                    comparison = mmcv.load(comparison_file)
+                    if not isinstance(comparison, list):
+                        comparison = [comparison]
+                else:
+                    comparison = []
+                comparison.append(metric_dict)
+                mmcv.dump(comparison, comparison_file)
 
 
 if __name__ == '__main__':

@@ -10,7 +10,21 @@
 #tmux attach -t crane_train 重新使用原本的
 
 # 启动训练
-# 
+# CUDA_VISIBLE_DEVICES=0,1 ./tools/dist_train.sh   crane_project/configs/crane_symeood_m2.py   2   --resume-from work_dirs/crane_symeood_m2/epoch_8.pth   --work-dir work_dirs/crane_symeood_m2
+
+# 计算
+# avg_20_22_24.pth：
+# python crane_project/tools/model_converters/average_checkpoints.py \
+#  work_dirs/crane_symeood_m2/epoch_20.pth \
+#   work_dirs/crane_symeood_m2/epoch_22.pth \
+#   work_dirs/crane_symeood_m2/epoch_24.pth \
+#   -o work_dirs/crane_symeood_m2/avg_20_22_24.pth
+
+#使用 test 数据集生成测试数据：
+# python tools/test.py   work_dirs/crane_symeood_m2/crane_symeood_m2.py  work_dirs/crane_symeood_m2/epoch_22.pth   --format-only  --eval-options submission_dir=work_dirs/crane_symeood_m2/preds_epoch_22
+
+# 再使用 test 的预测结果去进行离线指标检验：
+#python crane_project/tools/eval_crane_offline.py    --gt_dir crane_project/data/crane_grab/test/annfiles    --pred_dir work_dirs/crane_symeood_m1/preds_avg_20_22_24/Task1_grab/    --mode test
 
 _base_ = [
     '../../configs/rotated_retinanet/rotated_retinanet_obb_r50_fpn_1x_dota_le90.py'
