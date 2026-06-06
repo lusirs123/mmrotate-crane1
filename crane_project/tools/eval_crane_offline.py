@@ -6,8 +6,10 @@ eval_crane_offline.py
 1. 完全剥离 MMEngine 与 MMCV 依赖。
 2. 继承原版 crane_metrics.py 的所有数学计算流形与指标体系。
 3. 动态解析 DOTA 文本并重建绝对时序。
+4. 评估结果自动保存至对应训练目录，方便跨实验对比。
 """
 
+import json
 import math
 import os
 import re
@@ -15,6 +17,7 @@ import glob
 import logging
 import warnings
 from collections import defaultdict
+from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 import numpy as np
 import cv2
@@ -357,6 +360,85 @@ class CraneOfflineEvaluator:
             self.logger.info(f'  └{"─"*60}')
         self.logger.info(f'\n{sep}\n')
 
+    # =================================================================
+    # 结果持久化
+    # =================================================================
+
+    def save_results(
+        self,
+        metrics: Dict[str, float],
+        save_dir: str,
+        config: str = '',
+        checkpoint: str = '',
+    ) -> str:
+        """将本次评估指标写入 JSON 文件，同时维护一份可追加的 summary。
+
+        文件布局（与 avg_eval/ 风格对齐）：
+            {save_dir}/offline_eval_<YYYYmmdd_HHMMSS>.json
+            {save_dir}/offline_eval_summary.json
+
+        返回本次写入的 JSON 文件路径。
+        """
+        os.makedirs(save_dir, exist_ok=True)
+
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        entry = {
+            'config': config,
+            'checkpoint': checkpoint,
+            'mode': self.mode,
+            'metric': metrics,
+        }
+
+        # ---- 单次文件 ----
+        single_path = os.path.join(save_dir, f'offline_eval_{timestamp}.json')
+        with open(single_path, 'w', encoding='utf-8') as f:
+            json.dump(entry, f, indent=2, ensure_ascii=False)
+        self.logger.info(f'评估结果已保存至: {single_path}')
+
+        # ---- 累积 summary ----
+        summary_path = os.path.join(save_dir, 'offline_eval_summary.json')
+        if os.path.exists(summary_path):
+            with open(summary_path, 'r', encoding='utf-8') as f:
+                try:
+                    summary = json.load(f)
+                except json.JSONDecodeError:
+                    summary = []
+        else:
+            summary = []
+
+        summary.append(entry)
+        with open(summary_path, 'w', encoding='utf-8') as f:
+            json.dump(summary, f, indent=2, ensure_ascii=False)
+        self.logger.info(f'累积摘要已更新至: {summary_path}')
+
+        return single_path
+
+def _infer_save_dir(pred_dir: str) -> str:
+    """从预测目录向上回溯，自动定位对应的训练 work_dir。
+
+    典型目录结构：
+        work_dirs/<exp_name>/preds*/Task1_grab/  →  返回 work_dirs/<exp_name>
+        work_dirs/<exp_name>/preds*/              →  返回 work_dirs/<exp_name>
+    若回溯至 work_dirs/ 本身或文件系统根目录仍未命中，则回退到 pred_dir。
+    """
+    cur = os.path.abspath(pred_dir)
+    work_dirs_root = os.path.abspath('work_dirs')
+
+    for _ in range(5):
+        parent = os.path.dirname(cur)
+        if parent == cur:
+            break
+        # 如果当前层已包含 .pth 或 .py 配置，视为 work_dir
+        if any(f.endswith('.pth') for f in os.listdir(cur)):
+            return cur
+        # 如果父级就是 work_dirs/ 且当前层是实验目录
+        if parent == work_dirs_root:
+            return cur
+        cur = parent
+
+    return os.path.abspath(pred_dir)
+
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description='CraneOBB 离线评估器')
@@ -366,7 +448,7 @@ if __name__ == '__main__':
         help='GT 标注目录')
     parser.add_argument(
         '--pred_dir',
-        default='/home/omnisky/workspace/symEOOD/work_dirs/crane_baseline/preds_thr001/Task1_grab/',
+        default='work_dirs/crane_baseline/preds/Task1_grab/',
         help='预测结果目录')
     parser.add_argument(
         '--mode',
@@ -376,11 +458,44 @@ if __name__ == '__main__':
         '--center_thresh',
         type=float,
         default=15.0)
+    parser.add_argument(
+        '--save_dir',
+        default=None,
+        help='评估结果保存目录；未指定时自动从 pred_dir 推断对应训练目录')
+    parser.add_argument(
+        '--config',
+        default='',
+        help='关联的训练配置文件路径（仅用于记录）')
+    parser.add_argument(
+        '--checkpoint',
+        default='',
+        help='关联的权重文件路径（仅用于记录）')
+    parser.add_argument(
+        '--no-save',
+        action='store_true',
+        help='不保存评估结果 JSON 文件（仅终端输出）')
     args = parser.parse_args()
+
+    # ---- 确定保存目录 ----
+    if args.save_dir is not None:
+        save_dir = args.save_dir
+    else:
+        save_dir = _infer_save_dir(args.pred_dir)
 
     evaluator = CraneOfflineEvaluator(
         mode=args.mode,
         center_thresh_px=args.center_thresh,
     )
     evaluator.extract_from_dirs(gt_dir=args.gt_dir, pred_dir=args.pred_dir)
-    evaluator.compute_metrics()
+    metrics = evaluator.compute_metrics()
+
+    # ---- 持久化评估结果 ----
+    if metrics and not args.no_save:
+        evaluator.save_results(
+            metrics,
+            save_dir=save_dir,
+            config=args.config,
+            checkpoint=args.checkpoint,
+        )
+    elif metrics:
+        print('（--no-save 模式：结果未写入文件）')

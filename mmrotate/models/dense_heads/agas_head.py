@@ -23,11 +23,17 @@ class AGASHead(RotatedATSSHead):
                  agas_alpha=2.0,
                  agas_beta=0.5,
                  agas_min_weight=0.05,
+                 agas_max_weight=None,
+                 agas_normalize_weight=False,
+                 agas_decode_max_size=None,
                  **kwargs):
         super(AGASHead, self).__init__(*args, **kwargs)
         self.agas_alpha = agas_alpha
         self.agas_beta = agas_beta
         self.agas_min_weight = agas_min_weight
+        self.agas_max_weight = agas_max_weight
+        self.agas_normalize_weight = agas_normalize_weight
+        self.agas_decode_max_size = agas_decode_max_size
 
     def _anisotropic_gaussian_weight(self, anchor_centers, target_bboxes):
         """Compute object-aligned scalar weights for positive anchors.
@@ -74,7 +80,39 @@ class AGASHead(RotatedATSSHead):
                              (dy_rot / sigma_y).pow(2)))
         if self.agas_min_weight is not None and self.agas_min_weight > 0:
             weight = weight.clamp(min=float(self.agas_min_weight))
+        if self.agas_max_weight is not None and self.agas_max_weight > 0:
+            weight = weight.clamp(max=float(self.agas_max_weight))
+
+        # Keep AGAS as a reweighting mechanism instead of silently shrinking the
+        # whole auxiliary regression branch. Without normalization, most ATSS
+        # positive anchors can receive weights < 1, making aux0_loss_bbox look
+        # nearly constant even when gradients exist.
+        if self.agas_normalize_weight and weight.numel() > 0:
+            weight = weight / weight.mean().clamp(min=1e-6)
+            if self.agas_min_weight is not None and self.agas_min_weight > 0:
+                weight = weight.clamp(min=float(self.agas_min_weight))
+            if self.agas_max_weight is not None and self.agas_max_weight > 0:
+                weight = weight.clamp(max=float(self.agas_max_weight))
         return weight
+
+    def _sanitize_decoded_bboxes(self, bboxes):
+        """Clamp decoded OBBs before SymKLD to avoid early saturated loss.
+
+        ATSS auxiliary predictions are random at the beginning. Decoded boxes can
+        become extremely large, causing SymKLDLoss to hit its per-sample upper
+        clamp for almost every positive sample. Once saturated, aux0_loss_bbox
+        appears almost unchanged. Clamping keeps the decoded boxes in the image
+        scale while preserving gradients for normal boxes.
+        """
+        if bboxes.numel() == 0 or self.agas_decode_max_size is None:
+            return bboxes
+        max_size = float(self.agas_decode_max_size)
+        bboxes = bboxes.clone()
+        bboxes[:, 0].clamp_(0.0, max_size - 1.0)
+        bboxes[:, 1].clamp_(0.0, max_size - 1.0)
+        bboxes[:, 2].clamp_(1.0, max_size)
+        bboxes[:, 3].clamp_(1.0, max_size)
+        return bboxes
 
     def loss_single(self, cls_score, bbox_pred, anchors, labels, label_weights,
                     bbox_targets, bbox_weights, num_total_samples):
@@ -108,6 +146,8 @@ class AGASHead(RotatedATSSHead):
                 pos_anchors, pos_bbox_pred)
             pos_target_bboxes = self.bbox_coder.decode(
                 pos_anchors, pos_bbox_targets)
+            pos_pred_bboxes = self._sanitize_decoded_bboxes(pos_pred_bboxes)
+            pos_target_bboxes = self._sanitize_decoded_bboxes(pos_target_bboxes)
 
             agas_weights = self._anisotropic_gaussian_weight(
                 pos_anchors[:, 0:2], pos_target_bboxes)

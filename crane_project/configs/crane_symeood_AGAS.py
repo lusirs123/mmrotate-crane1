@@ -1,13 +1,13 @@
 # crane_symeood_AGAS.py
 # 消融实验 AGAS：SymEOOD 主头 + 各向异性高斯加权的 ATSS 辅助头
-#
+# 实验结果表明各向异性高斯加权的 ATSS 辅助头产出过强的梯度会影响主头的训练效果，使用更加宽泛更加平和的辅助头
 # 设计目的：
 #   - 继承 M2 的完整训练/数据/主头配置；
 #   - 将 M2 中普通 RotatedATSSHead auxiliary head 替换为 AGASHead；
 #   - 保留 ATSSObbAssigner 与 FocalLoss 分类监督，避免破坏 M2 已验证的稳定性；
 #   - 将辅助回归监督改为 decoded SymKLD，并对正样本回归损失加入与 GT OBB 对齐的
 #     anisotropic Gaussian weighting。
-#
+
 # 与已有实验的关系：
 #   M1: SymEOOD 主头，无辅助头
 #   M2: SymEOOD 主头 + RotatedATSSHead auxiliary head
@@ -49,6 +49,8 @@ model = dict(
         agas_alpha=2.0,
         agas_beta=0.5,
         agas_min_weight=0.05,
+        agas_normalize_weight=False,
+        agas_decode_max_size=None,
         anchor_generator=dict(
             type='RotatedAnchorGenerator',
             octave_base_scale=4,
@@ -81,11 +83,12 @@ model = dict(
             loss_weight=0.01),
         # AGAS-lite：回归改为 decoded OBB 上的 SymKLDLoss。
         # AGASHead.loss_single 内部会先 decode pred/target，再施加 anisotropic Gaussian weight。
+        # 诊断实验：先将辅助回归权重从 0.01 降到 0.005，验证 AGAS 是否主要是辅助梯度过强。
         loss_bbox=dict(
             type='SymKLDLoss',
             eps=1e-6,
             reduction='mean',
-            loss_weight=0.01),
+            loss_weight=0.005),
         train_cfg=dict(
             assigner=dict(
                 type='ATSSObbAssigner',
@@ -104,4 +107,4 @@ model = dict(
     )],
 )
 
-work_dir = 'work_dirs/crane_symeood_AGAS'
+work_dir = 'work_dirs/crane_symeood_AGAS_lw0005'
