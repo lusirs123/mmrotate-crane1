@@ -24,6 +24,7 @@ from .gaussian_heatmap_head import GaussianHeatmapHead
 from .uadh_head import UADHead
 from .agas_head import AGASHead
 from .rotated_atss_symkld_head import RotatedATSSSymKLDHead
+from .cm_daga_head import CMDAGAHead
 __all__ = [
     'RotatedAnchorHead', 'RotatedRetinaHead', 'RotatedRPNHead',
     'OrientedRPNHead', 'RotatedRetinaRefineHead', 'ODMRefineHead',
@@ -32,6 +33,6 @@ __all__ = [
     'RotatedATSSHead', 'RotatedAnchorFreeHead', 'RotatedFCOSHead',
     'CSLRFCOSHead', 'OrientedRepPointsHead', "EoodHead", "RotatedEoodHead",
     'SymEOODHead','GaussianHeatmapHead','UADHead','AGASHead',
-    'RotatedATSSSymKLDHead'
+    'RotatedATSSSymKLDHead','CMDAGAHead'
 
 ]

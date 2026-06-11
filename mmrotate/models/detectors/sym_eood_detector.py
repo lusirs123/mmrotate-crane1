@@ -1,5 +1,6 @@
 # mmrotate/models/detectors/sym_eood_detector.py
 import copy
+import inspect
 import torch
 import torch.nn as nn
 from mmdet.models.detectors.single_stage import SingleStageDetector
@@ -92,9 +93,16 @@ class SymEOOD(SingleStageDetector):
         if self.aux_heads is not None:
             for i, aux_head in enumerate(self.aux_heads):
                 aux_feats = self._build_aux_feats(x, aux_head)
+                aux_kwargs = {}
+                aux_sig_params = inspect.signature(
+                    aux_head.forward_train).parameters
+                if 'main_outs' in aux_sig_params:
+                    aux_kwargs['main_outs'] = main_outs
+                if 'main_bbox_head' in aux_sig_params:
+                    aux_kwargs['main_bbox_head'] = self.bbox_head
                 aux_losses = aux_head.forward_train(
                     aux_feats, img_metas, gt_bboxes, gt_labels,
-                    gt_bboxes_ignore)
+                    gt_bboxes_ignore, **aux_kwargs)
                 for k, v in aux_losses.items():
                     if isinstance(v, torch.Tensor):
                         v = torch.nan_to_num(v, nan=0.0, posinf=0.0, neginf=0.0)

@@ -53,11 +53,18 @@ ckpt_sweep.py — 训练后 checkpoint 离线扫描选权工具
       --work-dir work_dirs/crane_symeood_m2
 
   # 只扫描指定 epoch
-  python crane_project/tools/ckpt_sweep.py \\
-      --config crane_project/configs/crane_symeood_m2.py \\
-      --work-dir work_dirs/crane_symeood_m2 \\
-      --epochs 18 20 22 24
+  python crane_project/tools/ckpt_sweep.py \
+      --config crane_project/configs/crane_symeood_m2.py \
+      --work-dir work_dirs/crane_symeood_m2 \
+      --epochs 16 18 20 22 24 \
+      --gpus 0 1 2
 
+python crane_project/tools/ckpt_sweep.py \
+      --config crane_project/configs/crane_symeood_baseline.py \
+      --work-dir work_dirs/crane_symeood_baseline \
+      --epochs 16 18 20 22 24 \
+      --gpus 0 1 2
+      
   # 也纳入 avg 和 best 权重
   python crane_project/tools/ckpt_sweep.py \\
       --config crane_project/configs/crane_symeood_m2.py \\
@@ -65,10 +72,12 @@ ckpt_sweep.py — 训练后 checkpoint 离线扫描选权工具
       --include-avg --include-best
 
   # 扫描后自动在 test 集上跑最终评估
-  python crane_project/tools/ckpt_sweep.py \\
-      --config crane_project/configs/crane_symeood_m2.py \\
-      --work-dir work_dirs/crane_symeood_m2 \\
-      --run-final-test
+    python crane_project/tools/ckpt_sweep.py \
+        --config crane_project/configs/crane_baseline.py \
+        --work-dir work_dirs/crane_baseline \
+        --epochs 16 18 20 22 24 \
+        --gpus 0 1 2 \
+        --run-final-test
 """
 
 import argparse
@@ -80,8 +89,7 @@ import re
 import subprocess
 import sys
 from collections import OrderedDict
-
-import cv2
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import numpy as np
 
 # 项目根目录
@@ -151,7 +159,7 @@ def get_val_img_ids(val_ann_dir):
     return [os.path.splitext(os.path.basename(f))[0] for f in txt_files]
 
 
-def run_test_on_val(config, checkpoint, sweep_dir, ckpt_name):
+def run_test_on_val(config, checkpoint, sweep_dir, ckpt_name, gpu=None):
     """调用 test.py 在 val 集上推理，返回 pickle 路径。"""
     preds_dir = os.path.join(sweep_dir, ckpt_name, 'preds')
     os.makedirs(preds_dir, exist_ok=True)
@@ -165,7 +173,7 @@ def run_test_on_val(config, checkpoint, sweep_dir, ckpt_name):
 
     cmd = [
         sys.executable,
-        os.path.join(PROJ_ROOT, 'crane_project/tools/test.py'),
+        os.path.join(PROJ_ROOT, 'tools/test.py'),
         config, checkpoint,
         '--work-dir', tmp_work_dir,
         '--out', pkl_path,
@@ -175,9 +183,13 @@ def run_test_on_val(config, checkpoint, sweep_dir, ckpt_name):
     ]
 
     print(f'  [推理] test.py -> {pkl_path}')
+    env = os.environ.copy()
+    if gpu is not None:
+        env['CUDA_VISIBLE_DEVICES'] = str(gpu)
+        print(f'  [GPU] {ckpt_name} 使用 GPU {gpu}')
     result = subprocess.run(
         cmd, capture_output=True, text=True,
-        cwd=PROJ_ROOT, timeout=1200,
+        cwd=PROJ_ROOT, timeout=1200, env=env,
     )
 
     if result.returncode != 0:
@@ -195,6 +207,7 @@ def pkl_to_dota(pkl_path, img_ids, output_dir):
     pickle 内容：list[per_image]，每个元素为 list[per_class_ndarray]。
     单类 grab 对应 results[i][0]，shape=(K, 6)：[cx, cy, w, h, theta, score]。
     """
+    import cv2
     task_dir = os.path.join(output_dir, 'Task1_grab')
     if os.path.isdir(task_dir) and glob.glob(os.path.join(task_dir, '*.txt')):
         n = len(glob.glob(os.path.join(task_dir, '*.txt')))
@@ -229,6 +242,33 @@ def pkl_to_dota(pkl_path, img_ids, output_dir):
 
     print(f'  [转换] {count} 个预测框 -> {task_dir}')
     return task_dir
+
+
+def process_checkpoint(ckpt_name, ckpt_path, args, sweep_dir, img_ids, val_ann_dir, gpu):
+    """处理单个 checkpoint：val 推理、格式转换、离线评估。"""
+    print(f'\n{"─" * 60}')
+    print(f'  [{ckpt_name}] 开始处理...')
+    print(f'{"─" * 60}')
+
+    pkl_path = run_test_on_val(args.config, ckpt_path, sweep_dir, ckpt_name, gpu=gpu)
+    if pkl_path is None:
+        print(f'  [{ckpt_name}] 推理失败，跳过。')
+        return ckpt_name, None
+
+    preds_dir = os.path.join(sweep_dir, ckpt_name, 'preds')
+    task_dir = pkl_to_dota(pkl_path, img_ids, preds_dir)
+
+    metrics = run_offline_eval(
+        task_dir, val_ann_dir,
+        mode='test',
+        center_thresh=args.center_thresh,
+    )
+
+    return ckpt_name, {
+        'checkpoint': ckpt_path,
+        'metrics': metrics,
+        'gpu': gpu,
+    }
 
 
 # =====================================================================
@@ -495,7 +535,7 @@ def run_final_test(config, best_ckpt, work_dir, center_thresh):
     if not os.path.exists(pkl_path):
         cmd = [
             sys.executable,
-            os.path.join(PROJ_ROOT, 'crane_project/tools/test.py'),
+            os.path.join(PROJ_ROOT, 'tools/test.py'),
             config, best_ckpt,
             '--work-dir', final_dir,
             '--out', pkl_path,
@@ -548,10 +588,23 @@ def main():
         '--run-final-test', action='store_true',
         help='扫描完成后自动在 test 集上跑最终评估',
     )
-    parser.add_argument('--gpu', type=int, default=0, help='GPU 编号')
+    parser.add_argument(
+        '--include-avg', action='store_true',
+        help='扫描时纳入 avg_*.pth 权重（默认不纳入）',
+    )
+    parser.add_argument(
+        '--include-best', action='store_true',
+        help='扫描时纳入 best_*.pth 权重（默认不纳入）',
+    )
+    parser.add_argument('--gpu', type=int, default=0, help='GPU 编号（单 GPU 串行模式）')
+    parser.add_argument(
+        '--gpus', nargs='+', type=int, default=None,
+        help='多 GPU 并行扫描使用的 GPU 编号列表，例如 --gpus 0 1 2；指定后会覆盖 --gpu',
+    )
     args = parser.parse_args()
 
-    os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu)
+    gpu_list = args.gpus if args.gpus else [args.gpu]
+    os.environ['CUDA_VISIBLE_DEVICES'] = ','.join(str(g) for g in gpu_list)
 
     # 合并配置：命令行参数覆盖默认值
     config = dict(SELECTION_CONFIG)
@@ -562,7 +615,11 @@ def main():
     os.makedirs(sweep_dir, exist_ok=True)
 
     # ---- 1. 发现 checkpoint ----
-    ckpts = find_checkpoints(work_dir, args.epochs)
+    ckpts = find_checkpoints(
+        work_dir, args.epochs,
+        include_avg=args.include_avg,
+        include_best=args.include_best,
+    )
     print(f'\n发现 {len(ckpts)} 个 checkpoint:')
     for name, path in ckpts.items():
         print(f'  {name}: {path}')
@@ -577,30 +634,47 @@ def main():
 
     # ---- 3. 逐 checkpoint 扫描 ----
     all_results = OrderedDict()
+    ckpt_items = list(ckpts.items())
 
-    for ckpt_name, ckpt_path in ckpts.items():
-        print(f'\n{"─" * 60}')
-        print(f'  [{ckpt_name}] 开始处理...')
-        print(f'{"─" * 60}')
+    if len(gpu_list) == 1:
+        gpu = gpu_list[0]
+        for ckpt_name, ckpt_path in ckpt_items:
+            name, result = process_checkpoint(
+                ckpt_name, ckpt_path, args, sweep_dir,
+                img_ids, val_ann_dir, gpu,
+            )
+            if result is not None:
+                all_results[name] = result
+    else:
+        print(f'\n启用多 GPU 并行扫描: {gpu_list}')
+        max_workers = len(gpu_list)
+        futures = {}
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            for idx, (ckpt_name, ckpt_path) in enumerate(ckpt_items):
+                gpu = gpu_list[idx % len(gpu_list)]
+                print(f'  分配 {ckpt_name} -> GPU {gpu}')
+                fut = executor.submit(
+                    process_checkpoint,
+                    ckpt_name, ckpt_path, args, sweep_dir,
+                    img_ids, val_ann_dir, gpu,
+                )
+                futures[fut] = ckpt_name
 
-        pkl_path = run_test_on_val(args.config, ckpt_path, sweep_dir, ckpt_name)
-        if pkl_path is None:
-            print(f'  [{ckpt_name}] 推理失败，跳过。')
-            continue
+            completed = {}
+            for fut in as_completed(futures):
+                ckpt_name = futures[fut]
+                try:
+                    name, result = fut.result()
+                except Exception as e:
+                    print(f'  [{ckpt_name}] 处理异常，跳过: {e}')
+                    continue
+                if result is not None:
+                    completed[name] = result
 
-        preds_dir = os.path.join(sweep_dir, ckpt_name, 'preds')
-        task_dir = pkl_to_dota(pkl_path, img_ids, preds_dir)
-
-        metrics = run_offline_eval(
-            task_dir, val_ann_dir,
-            mode='test',
-            center_thresh=args.center_thresh,
-        )
-
-        all_results[ckpt_name] = {
-            'checkpoint': ckpt_path,
-            'metrics': metrics,
-        }
+        # 恢复 checkpoint 发现顺序，保证 sweep_results.json 稳定可复现
+        for ckpt_name, _ in ckpt_items:
+            if ckpt_name in completed:
+                all_results[ckpt_name] = completed[ckpt_name]
 
     # ---- 4. 两阶段约束式选择 ----
     best_name, best_data, selection_info = select_best_checkpoint(

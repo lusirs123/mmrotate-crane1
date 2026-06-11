@@ -560,3 +560,77 @@ class RMosaic(Mosaic):
                      (bbox_h > self.min_bbox_size)
         valid_inds = np.nonzero(valid_inds)[0]
         return bboxes[valid_inds], labels[valid_inds]
+
+
+@ROTATED_PIPELINES.register_module()
+class RandomBrightnessContrast(object):
+    """Random adjust brightness and contrast of the image.
+
+    Simulates low-light / over-exposure conditions by applying:
+      1. Gamma correction (brightness):  img = img ^ gamma
+      2. Contrast adjustment:            img = (img - mean) * factor + mean
+      3. Optional Gaussian noise
+
+    Bounding boxes are NOT affected, only pixel values change.
+
+    Args:
+        brightness_range (tuple[float]): Range of gamma values.
+            Values < 1 darken the image, > 1 brighten it.
+            Default: (0.5, 1.5).
+        contrast_range (tuple[float]): Range of contrast scale factors.
+            Values < 1 reduce contrast, > 1 increase it.
+            Default: (0.7, 1.3).
+        noise_std_range (tuple[float]): Range of Gaussian noise std
+            (in 0-255 scale). Set to (0, 0) to disable noise.
+            Default: (0, 15).
+        prob (float): Probability of applying this transform.
+            Default: 0.5.
+    """
+
+    def __init__(self,
+                 brightness_range=(0.5, 1.5),
+                 contrast_range=(0.7, 1.3),
+                 noise_std_range=(0, 15),
+                 prob=0.5):
+        self.brightness_range = brightness_range
+        self.contrast_range = contrast_range
+        self.noise_std_range = noise_std_range
+        self.prob = prob
+
+    def __call__(self, results):
+        """Call function."""
+        if np.random.rand() > self.prob:
+            return results
+
+        img = results['img']
+        # Work on float32 to avoid overflow
+        img = img.astype(np.float32)
+
+        # 1. Gamma correction for brightness
+        gamma = np.random.uniform(*self.brightness_range)
+        # Normalize to [0, 1], apply gamma, scale back
+        img_norm = img / 255.0
+        img_gamma = np.power(np.clip(img_norm, 0, 1), gamma) * 255.0
+
+        # 2. Contrast adjustment
+        factor = np.random.uniform(*self.contrast_range)
+        mean_val = img_gamma.mean()
+        img_contrast = np.clip(
+            (img_gamma - mean_val) * factor + mean_val, 0, 255)
+
+        # 3. Gaussian noise
+        noise_std = np.random.uniform(*self.noise_std_range)
+        if noise_std > 0:
+            noise = np.random.normal(0, noise_std, img_contrast.shape)
+            img_contrast = np.clip(img_contrast + noise, 0, 255)
+
+        results['img'] = img_contrast.astype(np.uint8)
+        return results
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__
+        repr_str += f'(brightness_range={self.brightness_range}, '
+        repr_str += f'contrast_range={self.contrast_range}, '
+        repr_str += f'noise_std_range={self.noise_std_range}, '
+        repr_str += f'prob={self.prob})'
+        return repr_str

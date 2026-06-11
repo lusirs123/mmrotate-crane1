@@ -14,13 +14,13 @@
 #   UAHD: SymEOOD 主头 + diagonal-scale UADHead，关闭 RotatedATSSHead
 #   M3: SymEOOD 主头 + RotatedATSSHead auxiliary head + UADHead
 #   AGAS: SymEOOD 主头 + AGASHead auxiliary head
-#
+
 # 注意：
 #   AGAS 不是在 M2 后额外叠加第二个辅助头，而是替换 M2 的 ATSS auxiliary head。
 #   这样可以公平验证：在完整 OBB/角度辅助监督框架内，引入 SymKLD 度量一致回归与
 #   各向异性旋转高斯正样本加权是否能进一步提升时序/控制稳定性。
 
-_base_ = ['crane_symeood_m2.py']
+_base_ = ['./crane_symeood_m2.py']
 
 # 子配置在 MMCV 临时模块中不会直接继承 base 的 Python 变量，
 # 因此这里显式写出 angle_version，保证 aux_bbox_head 覆写时可解析。

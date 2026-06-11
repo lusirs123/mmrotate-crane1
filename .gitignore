@@ -17,3 +17,5 @@ work_dirs
 # Mac OS 系统文件
 .DS_Store
 *.pth
+
+.hermes

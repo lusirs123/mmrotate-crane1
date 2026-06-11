@@ -287,7 +287,7 @@ lr_config = dict(
     warmup_iters=1000,
     warmup_ratio=0.001,
     step=[16, 22])
-checkpoint_config = dict(interval=1, max_keep_ckpts=-1)
+checkpoint_config = dict(interval=2, max_keep_ckpts=24)
 evaluation = dict(
     interval=2,
     metric='mAP',
@@ -304,4 +304,4 @@ log_config = dict(interval=50)
 log_level = 'INFO'
 load_from = None
 resume_from = None
-work_dir = 'work_dirs/crane_symeood'
+work_dir = 'work_dirs/crane_symeood_m2'
