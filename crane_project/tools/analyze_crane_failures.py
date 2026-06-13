@@ -15,6 +15,9 @@ import os
 import re
 from collections import defaultdict
 
+import cv2
+import numpy as np
+
 
 def parse_seq_frame(path):
     name = os.path.splitext(os.path.basename(path))[0]
@@ -59,6 +62,7 @@ def poly_to_obb(poly):
         'h': h,
         'angle_deg': normalize_angle_deg(angle),
         'diag': math.hypot(w, h),
+        'poly': [float(x) for x in poly],
     }
 
 
@@ -126,6 +130,135 @@ def score_summary(scores):
         'max': round(max(scores), 6),
         'mean': round(sum(scores) / len(scores), 6),
     }
+
+
+def value_summary(values):
+    values = [float(v) for v in values if v is not None]
+    if not values:
+        return {}
+    return {
+        'count': len(values),
+        'min': round(min(values), 6),
+        'p10': round(percentile(values, 0.10), 6),
+        'median': round(percentile(values, 0.50), 6),
+        'p90': round(percentile(values, 0.90), 6),
+        'max': round(max(values), 6),
+        'mean': round(sum(values) / len(values), 6),
+    }
+
+
+def summarize_metrics(rows):
+    if not rows:
+        return {}
+    out = {}
+    keys = sorted({k for r in rows for k in r.keys()})
+    for key in keys:
+        vals = [r.get(key) for r in rows]
+        out[key] = value_summary(vals)
+    return out
+
+
+def image_name_from_ann(filename):
+    return os.path.splitext(filename)[0] + '.jpg'
+
+
+def gt_crop(img, gt, pad=32):
+    if img is None or not gt or 'poly' not in gt:
+        return None
+    pts = np.array(gt['poly'], dtype=np.float32).reshape(4, 2)
+    h, w = img.shape[:2]
+    x1 = max(0, int(np.floor(pts[:, 0].min() - pad)))
+    y1 = max(0, int(np.floor(pts[:, 1].min() - pad)))
+    x2 = min(w, int(np.ceil(pts[:, 0].max() + pad)))
+    y2 = min(h, int(np.ceil(pts[:, 1].max() + pad)))
+    if x2 <= x1 or y2 <= y1:
+        return None
+    return img[y1:y2, x1:x2]
+
+
+def degradation_metrics(img):
+    if img is None or img.size == 0:
+        return None
+    imgf = img.astype(np.float32)
+    b, g, r = cv2.split(imgf)
+    y = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)[:, :, 0].astype(np.float32)
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    sat = hsv[:, :, 1].astype(np.float32)
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    return {
+        'luma_mean': float(y.mean()),
+        'luma_p10': float(np.percentile(y, 10)),
+        'luma_p90': float(np.percentile(y, 90)),
+        'luma_std': float(y.std()),
+        'dark_ratio': float((y < 40).mean()),
+        'very_dark_ratio': float((y < 25).mean()),
+        'bright_ratio': float((y > 220).mean()),
+        'sat_mean': float(sat.mean()),
+        'b_mean': float(b.mean()),
+        'g_mean': float(g.mean()),
+        'r_mean': float(r.mean()),
+        'green_cast': float((g - (r + b) / 2.0).mean()),
+        'cyan_cast': float(((g + b) / 2.0 - r).mean()),
+        'lap_var': float(cv2.Laplacian(gray, cv2.CV_64F).var()),
+    }
+
+
+def attach_image_stats(records, img_dir, crop_pad=32):
+    if not img_dir:
+        return {}
+
+    groups = {
+        'all': records,
+        'hit': [r for r in records if r['hit']],
+        'miss': [r for r in records if r['miss']],
+        'empty': [r for r in records if r['empty']],
+        'nonempty_miss': [
+            r for r in records if r['miss'] and not r['empty']],
+    }
+    top_miss = continuous_segments(records, 'miss')[:5]
+    top_files = set()
+    for seg in top_miss:
+        for frame_id in range(seg['start_frame'], seg['end_frame'] + 1):
+            top_files.add(
+                f"{seg['domain']}_{seg['seq_id']}_{frame_id:05d}.txt")
+    groups['top_miss_segments'] = [
+        r for r in records if r['filename'] in top_files]
+    worst_records = [r for r in records if r['miss']]
+    worst_records.sort(key=lambda r: (
+        -1 if r['center_dist'] is None else -r['center_dist'],
+        r['domain'], r['seq_id'], r['frame_id']))
+    groups['worst_miss_frames'] = worst_records[:min(20, len(worst_records))]
+
+    out = {}
+    cache = {}
+    for name, items in groups.items():
+        full_rows = []
+        crop_rows = []
+        missing = 0
+        for r in items:
+            img_name = image_name_from_ann(r['filename'])
+            img_path = os.path.join(img_dir, img_name)
+            if img_path not in cache:
+                cache[img_path] = cv2.imread(img_path)
+            img = cache[img_path]
+            if img is None:
+                missing += 1
+                continue
+            full = degradation_metrics(img)
+            if full:
+                full_rows.append(full)
+            crop = gt_crop(img, r.get('gt'), crop_pad)
+            crop_stat = degradation_metrics(crop)
+            if crop_stat:
+                crop_rows.append(crop_stat)
+        out[name] = {
+            'num_frames': len(items),
+            'num_images_found': len(items) - missing,
+            'num_images_missing': missing,
+            'full_image': summarize_metrics(full_rows),
+            'gt_crop': summarize_metrics(crop_rows),
+        }
+    return out
 
 
 def continuous_segments(records, flag_name):
@@ -244,6 +377,9 @@ def analyze(args):
         'top_miss_segments': miss_segments[:args.topk],
         'worst_miss_frames': worst_miss_frames(records, args.topk),
     }
+    if getattr(args, 'img_dir', None):
+        summary['image_degradation'] = attach_image_stats(
+            records, args.img_dir, args.crop_pad)
     return summary
 
 
@@ -330,6 +466,30 @@ def print_summary(summary):
             f"pred_count={r['pred_count']} score={r['pred_score']} "
             f"center_dist={r['center_dist']} gt={r['gt']} pred={r['pred']}")
 
+    if summary.get('image_degradation'):
+        print('\n[Image Degradation Summary]')
+        for group in ['all', 'miss', 'hit', 'empty', 'nonempty_miss',
+                      'top_miss_segments', 'worst_miss_frames']:
+            item = summary['image_degradation'].get(group)
+            if not item:
+                continue
+            print(
+                f"  {group}: frames={item['num_frames']} "
+                f"found={item['num_images_found']} "
+                f"missing={item['num_images_missing']}")
+            crop = item.get('gt_crop', {})
+            full = item.get('full_image', {})
+            for region_name, region in [('full', full), ('gt', crop)]:
+                brief = []
+                for key in [
+                        'luma_mean', 'luma_std', 'dark_ratio',
+                        'bright_ratio', 'green_cast', 'cyan_cast', 'lap_var']:
+                    stat = region.get(key)
+                    if stat:
+                        brief.append(f"{key}={stat['mean']:.3f}")
+                if brief:
+                    print(f"    {region_name}: " + ', '.join(brief))
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -346,6 +506,10 @@ def main():
                         help='Number of top segments/frames to print')
     parser.add_argument('--out', default=None,
                         help='Optional JSON output path')
+    parser.add_argument('--img-dir', default=None,
+                        help='Optional image directory for degradation stats')
+    parser.add_argument('--crop-pad', type=int, default=32,
+                        help='Padding pixels around GT crop for image stats')
     args = parser.parse_args()
 
     summary = analyze(args)

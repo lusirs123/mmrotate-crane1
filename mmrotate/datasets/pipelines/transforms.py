@@ -567,7 +567,7 @@ class RandomBrightnessContrast(object):
     """Random adjust brightness and contrast of the image.
 
     Simulates low-light / over-exposure conditions by applying:
-      1. Gamma correction (brightness):  img = img ^ gamma
+      1. Gamma correction (brightness):  img = img ^ (1 / gamma)
       2. Contrast adjustment:            img = (img - mean) * factor + mean
       3. Optional Gaussian noise
 
@@ -606,11 +606,13 @@ class RandomBrightnessContrast(object):
         # Work on float32 to avoid overflow
         img = img.astype(np.float32)
 
-        # 1. Gamma correction for brightness
+        # 1. Gamma correction for brightness. Use the reciprocal exponent so
+        # gamma < 1 darkens the image, matching the config semantics.
         gamma = np.random.uniform(*self.brightness_range)
+        exponent = 1.0 / max(gamma, 1e-6)
         # Normalize to [0, 1], apply gamma, scale back
         img_norm = img / 255.0
-        img_gamma = np.power(np.clip(img_norm, 0, 1), gamma) * 255.0
+        img_gamma = np.power(np.clip(img_norm, 0, 1), exponent) * 255.0
 
         # 2. Contrast adjustment
         factor = np.random.uniform(*self.contrast_range)
