@@ -1,6 +1,8 @@
 # mmrotate/models/detectors/sym_eood_detector.py
 import copy
 import inspect
+import random
+
 import torch
 import torch.nn as nn
 from mmdet.models.detectors.single_stage import SingleStageDetector
@@ -74,19 +76,34 @@ class SymEOOD(SingleStageDetector):
                       gt_bboxes,
                       gt_labels,
                       gt_bboxes_ignore=None):
-        """0.x 标准联合训练入口"""
+        """0.x 标准联合训练入口 + 可选翻转角度等变损失.
+
+        L_equi 只额外前向 flip(img) 取角度预测, 不让 flip 图参与普通
+        检测损失, 避免把 MVP 消融混成翻转数据增强。
+        """
         super(SingleStageDetector, self).forward_train(img, img_metas)
+
         x = self.extract_feat(img)
         losses = dict()
 
         # 主头损失
         main_outs = self.bbox_head(x)
+        equi_flip_outs = None
+        equi_flip_dirs = None
+        if (hasattr(self.bbox_head, 'use_equi_loss')
+                and self.bbox_head.use_equi_loss):
+            flip_img, equi_flip_dirs = self._build_equi_flip_view(img)
+            flip_x = self.extract_feat(flip_img)
+            equi_flip_outs = self.bbox_head(flip_x)
+
         main_losses = self.bbox_head.loss(
             *main_outs,
             gt_bboxes=gt_bboxes,
             gt_labels=gt_labels,
             img_metas=img_metas,
-            gt_bboxes_ignore=gt_bboxes_ignore)
+            gt_bboxes_ignore=gt_bboxes_ignore,
+            equi_flip_outs=equi_flip_outs,
+            equi_flip_dirs=equi_flip_dirs)
         losses.update(main_losses)
 
         # Mode A: Anchor-based 辅助头损失
@@ -144,3 +161,29 @@ class SymEOOD(SingleStageDetector):
             for det_bboxes, det_labels in results_list
         ]
         return bbox_results
+
+    def _build_equi_flip_view(self, img):
+        """构建 L_equi 使用的翻转视图.
+
+        输入已经经过 Normalize/Pad, 这里对网络输入张量做整数翻转；
+        不生成翻转 GT, 因为 flip 图只用于角度一致性。
+        """
+        head = self.bbox_head
+        probs = getattr(head, 'equi_flip_probs', (0.25, 0.25, 0.25))
+        directions = ['horizontal', 'vertical', 'diagonal']
+
+        flip_imgs = []
+        flip_dirs = []
+
+        B = img.size(0)
+        for i in range(B):
+            direction = random.choices(directions, weights=probs, k=1)[0]
+            if direction == 'horizontal':
+                flip_imgs.append(torch.flip(img[i:i + 1], dims=[3]))
+            elif direction == 'vertical':
+                flip_imgs.append(torch.flip(img[i:i + 1], dims=[2]))
+            else:
+                flip_imgs.append(torch.flip(img[i:i + 1], dims=[2, 3]))
+            flip_dirs.append(direction)
+
+        return torch.cat(flip_imgs, dim=0), flip_dirs

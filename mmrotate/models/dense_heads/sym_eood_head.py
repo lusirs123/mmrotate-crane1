@@ -22,9 +22,36 @@ from mmrotate.models.dense_heads.rotated_retina_head import RotatedRetinaHead
 @ROTATED_HEADS.register_module(force=True)
 class SymEOODHead(RotatedRetinaHead):
     """
-    SymEOOD 检测头（MMRotate 0.x）
-    核心改造：loss() 中实现预测感知的 SymPOLA 分配 + Level-first 转置
+    SymEOOD 检测头.
+
+    可选 L_equi:
+      use_equi_loss (bool): 是否启用翻转等变一致性损失. 默认 False.
+      equi_loss_weight (float): L_equi 权重 λ1. 默认 0.2 (建议起步值).
+      equi_flip_probs (tuple[float,float,float]):
+        三种翻转方向的概率. 默认 (0.25, 0.25, 0.25).
+        关闭时完全不影响现有 M2 行为.
     """
+
+    def __init__(self, *args,
+                 use_equi_loss: bool = False,
+                 equi_loss_weight: float = 0.2,
+                 equi_flip_probs: tuple = (0.25, 0.25, 0.25),
+                 **kwargs):
+        super().__init__(*args, **kwargs)
+        self.use_equi_loss = use_equi_loss
+        self.equi_loss_weight = equi_loss_weight
+        self.equi_flip_probs = equi_flip_probs
+        # 惰性导入避免循环依赖
+        self._equi_fn = None
+
+    def _get_equi_fn(self):
+        if self._equi_fn is None:
+            from mmrotate.models.losses.angle_equi import (
+                angle_to_emb, equi_flip_loss, mirror_grid_indices,
+                valid_feat_mask)
+            self._equi_fn = (angle_to_emb, equi_flip_loss,
+                             mirror_grid_indices, valid_feat_mask)
+        return self._equi_fn
 
     def init_weights(self):
         super().init_weights()
@@ -39,7 +66,9 @@ class SymEOODHead(RotatedRetinaHead):
              gt_bboxes,
              gt_labels,
              img_metas,
-             gt_bboxes_ignore=None):
+             gt_bboxes_ignore=None,
+             equi_flip_outs=None,
+             equi_flip_dirs=None):
         """
         覆写标准 loss()：
         1. 生成 Anchor
@@ -104,20 +133,35 @@ class SymEOODHead(RotatedRetinaHead):
             level_anchor_list.append(
                 torch.cat([anchors[lvl] for anchors in anchor_list]))
 
-        # 5. 执行 loss_single（逐层计算）
-        losses_cls, losses_bbox = multi_apply(
-            self.loss_single,
-            cls_scores,
-            bbox_preds,
-            level_anchor_list,
-            labels_list,
-            label_weights_list,
-            bbox_targets_list,
-            bbox_weights_list,
-            num_total_samples=num_total_samples,
-            decode_max_size=decode_max_size)
+        # 5. 执行 loss_single（逐层计算），附带可选 L_equi 信息。
+        equi_infos = None
+        equi_flip_bbox_preds = None
+        if (self.use_equi_loss and equi_flip_outs is not None
+                and equi_flip_dirs is not None):
+            equi_infos = self._build_equi_infos(img_metas, equi_flip_dirs)
+            equi_flip_bbox_preds = equi_flip_outs[1]
 
-        return dict(loss_cls=losses_cls, loss_bbox=losses_bbox)
+        # multi_apply 不支持每层不同额外参数 → 手动循环
+        losses_cls, losses_bbox, losses_equi = [], [], []
+        for lvl in range(num_levels):
+            lc, lb, le = self.loss_single(
+                cls_scores[lvl], bbox_preds[lvl],
+                level_anchor_list[lvl],
+                labels_list[lvl], label_weights_list[lvl],
+                bbox_targets_list[lvl], bbox_weights_list[lvl],
+                num_total_samples=num_total_samples,
+                decode_max_size=decode_max_size,
+                equi_infos=equi_infos,
+                equi_flip_bbox_pred=None if equi_flip_bbox_preds is None
+                else equi_flip_bbox_preds[lvl])
+            losses_cls.append(lc)
+            losses_bbox.append(lb)
+            losses_equi.append(le)
+
+        result = dict(loss_cls=losses_cls, loss_bbox=losses_bbox)
+        if self.use_equi_loss and any(le is not None and le.numel() > 0 for le in losses_equi):
+            result['loss_equi'] = losses_equi
+        return result
 
     def get_targets(self,
                     anchor_list,
@@ -261,9 +305,21 @@ class SymEOODHead(RotatedRetinaHead):
 
     def loss_single(self, cls_score, bbox_pred, anchors, labels, label_weights,
                     bbox_targets, bbox_weights, num_total_samples,
-                    decode_max_size=None):
-        """逐层 Loss 计算：SymNFLLoss（带空间惩罚）+ SymKLDLoss"""
+                    decode_max_size=None,
+                    equi_infos=None,
+                    equi_flip_bbox_pred=None):
+        """逐层 Loss 计算：SymNFLLoss（带空间惩罚）+ SymKLDLoss + 可选 L_equi.
+
+        Args:
+            equi_infos: None 或 list[dict]，每张原图的翻转方向和有效区域.
+            equi_flip_bbox_pred: flip(img) 分支在当前 FPN level 的 bbox 预测.
+        """
         # 1. 维度展平对齐
+        # 记忆特征图空间尺寸以便 L_equi 使用 (在 permute 之前获取)
+        H_feat = cls_score.size(2)   # input: (B, C_in, H_feat, W_feat)
+        W_feat = cls_score.size(3)
+        num_imgs_in = cls_score.size(0)
+
         cls_score = cls_score.permute(0, 2, 3, 1).reshape(
             -1, self.cls_out_channels)
         bbox_pred = bbox_pred.permute(0, 2, 3, 1).reshape(-1, 5)
@@ -352,7 +408,135 @@ class SymEOODHead(RotatedRetinaHead):
         else:
             loss_bbox = bbox_pred.sum() * 0.0
 
-        return loss_cls, loss_bbox
+        # ================================================================
+        # 6. 翻转等变一致性损失 L_equi (可选, use_equi_loss=True 时启用)
+        # ================================================================
+        loss_equi = None
+        if (self.use_equi_loss and equi_infos is not None
+                and equi_flip_bbox_pred is not None
+                and pos_inds.numel() > 0):
+            loss_equi = self._compute_equi_loss(
+                anchors, bbox_pred, labels, decoded_pred_bboxes,
+                pos_inds, H_feat, W_feat, num_imgs_in,
+                equi_infos, equi_flip_bbox_pred)
+        if loss_equi is None:
+            loss_equi = bbox_pred.new_zeros(())
+
+        return loss_cls, loss_bbox, loss_equi
+
+    def _build_equi_infos(self, img_metas, equi_flip_dirs):
+        """从 img_metas 和 detector 生成的方向构建 L_equi 配对信息."""
+        equi_infos = []
+        for i, meta in enumerate(img_metas):
+            direction = equi_flip_dirs[i]
+            img_shape = meta.get('img_shape', meta.get('pad_shape'))
+            pad_shape = meta.get('pad_shape', img_shape)
+            img_H, img_W = img_shape[:2]
+            pad_H, pad_W = pad_shape[:2]
+            equi_infos.append(dict(
+                img_idx=i,
+                direction=direction,
+                img_H=int(img_H),
+                img_W=int(img_W),
+                pad_H=int(pad_H),
+                pad_W=int(pad_W),
+            ))
+        return equi_infos
+
+    def _compute_equi_loss(self, anchors, bbox_pred, labels, decoded_pred_bboxes,
+                           pos_inds, H_feat, W_feat, num_imgs,
+                           equi_infos, equi_flip_bbox_pred):
+        """在当前 level 计算 L_equi: 用原图正样本作为 GT 桥接索引.
+
+        只约束角度预测；flip 分支不参与分类/回归监督。
+        """
+        angle_to_emb, equi_flip_loss, mirror_grid_indices, valid_feat_mask = \
+            self._get_equi_fn()
+
+        # 从 anchor_generator 直接取每位置 anchor 数，避免整除不稳定
+        num_anchors = self.anchor_generator.num_base_anchors[0]
+        if num_anchors <= 0:
+            return bbox_pred.new_zeros(())
+
+        per_img_size = H_feat * W_feat * num_anchors
+        flip_bbox_pred = equi_flip_bbox_pred.permute(0, 2, 3, 1).reshape(
+            -1, 5)
+        anchors_by_img = anchors.reshape(num_imgs, per_img_size, 5)
+
+        losses = []
+        for info in equi_infos:
+            img_idx = info['img_idx']
+            direction = info['direction']
+            orig_start = img_idx * per_img_size
+            orig_end = (img_idx + 1) * per_img_size
+            pos_within_img = pos_inds[orig_start:orig_end]
+            if not pos_within_img.any():
+                continue
+
+            idx_in_img = torch.nonzero(
+                pos_within_img, as_tuple=False).squeeze(-1)
+            row = idx_in_img // (W_feat * num_anchors)
+            rem = idx_in_img % (W_feat * num_anchors)
+            col = rem // num_anchors
+            anchor_id = rem % num_anchors
+
+            mirror_row, mirror_col = mirror_grid_indices(
+                row, col, H_feat, W_feat, direction)
+
+            # 原图位置 valid（padding 左/上锚定，右/下 padding）
+            valid_mask = valid_feat_mask(
+                row, col, H_feat, W_feat,
+                info['img_H'], info['img_W'],
+                info['pad_H'], info['pad_W'])
+            # flip 图 padding 同样在右/下侧，镜像位置也需满足 flip 图 valid 区
+            valid_mask_mir = valid_feat_mask(
+                mirror_row, mirror_col, H_feat, W_feat,
+                info['img_H'], info['img_W'],
+                info['pad_H'], info['pad_W'])
+            valid_mask = (valid_mask & valid_mask_mir &
+                          (mirror_row >= 0) & (mirror_row < H_feat) &
+                          (mirror_col >= 0) & (mirror_col < W_feat))
+            if not valid_mask.any():
+                continue
+
+            row = row[valid_mask]
+            col = col[valid_mask]
+            anchor_id = anchor_id[valid_mask]
+            mirror_row = mirror_row[valid_mask]
+            mirror_col = mirror_col[valid_mask]
+
+            orig_global_idx = (
+                orig_start +
+                (row * W_feat + col) * num_anchors +
+                anchor_id)
+            flip_global_idx = (
+                img_idx * per_img_size +
+                (mirror_row * W_feat + mirror_col) * num_anchors +
+                anchor_id)
+
+            theta_orig = decoded_pred_bboxes[orig_global_idx, 4]
+            emb_orig = angle_to_emb(theta_orig)
+
+            flip_anchor_idx = (
+                (mirror_row * W_feat + mirror_col) * num_anchors +
+                anchor_id)
+            flip_anchors = anchors_by_img[img_idx, flip_anchor_idx, :]
+            flip_decoded = self.bbox_coder.decode(
+                flip_anchors, flip_bbox_pred[flip_global_idx, :])
+            emb_flip = angle_to_emb(flip_decoded[:, 4])
+            losses.append(equi_flip_loss(
+                emb_orig, emb_flip, direction, valid_mask=None))
+
+        if not losses:
+            return bbox_pred.new_zeros(())
+
+        loss_equi = torch.stack(losses).mean()
+
+        # NaN guard
+        if torch.isnan(loss_equi) or torch.isinf(loss_equi):
+            loss_equi = bbox_pred.new_zeros(())
+
+        return loss_equi * self.equi_loss_weight
 
     def _get_bboxes_single(self,
                            cls_score_list,

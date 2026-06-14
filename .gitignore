@@ -19,3 +19,5 @@ work_dirs
 *.pth
 
 .hermes
+.pytest_cache
+.claude
