@@ -76,10 +76,10 @@ class SymEOOD(SingleStageDetector):
                       gt_bboxes,
                       gt_labels,
                       gt_bboxes_ignore=None):
-        """0.x 标准联合训练入口 + 可选翻转角度等变损失.
+        """0.x 标准联合训练入口 + 可选 L_equi + 可选 L_invar.
 
-        L_equi 只额外前向 flip(img) 取角度预测, 不让 flip 图参与普通
-        检测损失, 避免把 MVP 消融混成翻转数据增强。
+        L_equi: flip(img) 取角度预测, 不参与检测损失.
+        L_invar: T_photo(img) 取角度预测, 不参与检测损失.
         """
         super(SingleStageDetector, self).forward_train(img, img_metas)
 
@@ -88,6 +88,8 @@ class SymEOOD(SingleStageDetector):
 
         # 主头损失
         main_outs = self.bbox_head(x)
+
+        # --- L_equi 路径 (翻转) ---
         equi_flip_outs = None
         equi_flip_dirs = None
         if (hasattr(self.bbox_head, 'use_equi_loss')
@@ -96,6 +98,14 @@ class SymEOOD(SingleStageDetector):
             flip_x = self.extract_feat(flip_img)
             equi_flip_outs = self.bbox_head(flip_x)
 
+        # --- L_invar 路径 (光度) ---
+        photo_outs = None
+        if (hasattr(self.bbox_head, 'use_invar_loss')
+                and self.bbox_head.use_invar_loss):
+            photo_img = self._build_photo_view(img, img_metas)
+            photo_x = self.extract_feat(photo_img)
+            photo_outs = self.bbox_head(photo_x)
+
         main_losses = self.bbox_head.loss(
             *main_outs,
             gt_bboxes=gt_bboxes,
@@ -103,7 +113,8 @@ class SymEOOD(SingleStageDetector):
             img_metas=img_metas,
             gt_bboxes_ignore=gt_bboxes_ignore,
             equi_flip_outs=equi_flip_outs,
-            equi_flip_dirs=equi_flip_dirs)
+            equi_flip_dirs=equi_flip_dirs,
+            photo_outs=photo_outs)
         losses.update(main_losses)
 
         # Mode A: Anchor-based 辅助头损失
@@ -187,3 +198,36 @@ class SymEOOD(SingleStageDetector):
             flip_dirs.append(direction)
 
         return torch.cat(flip_imgs, dim=0), flip_dirs
+
+    def _build_photo_view(self, img, img_metas=None):
+        """构建 L_invar 使用的 photometric 扰动视图 (GPU torch op).
+
+        T_photo 参数基于 train+val 分布 P5-P95 (Route B: in-distribution).
+        Spatial gradient 是主对抗源, gamma/ch_gain 是辅助.
+        """
+        from mmrotate.models.losses.angle_equi import build_photo_params, apply_t_photo
+
+        # 安全检查: 确认 pipeline 的 Normalize 配置与 T_photo 硬编码值一致
+        if img_metas is not None:
+            norm_cfg = img_metas[0].get('img_norm_cfg', {})
+            if norm_cfg:
+                mean = tuple(norm_cfg.get('mean', []))
+                std = tuple(norm_cfg.get('std', []))
+                expected_mean = (123.675, 116.28, 103.53)
+                expected_std = (58.395, 57.12, 57.375)
+                if mean and std:
+                    assert mean == expected_mean and std == expected_std, \
+                        f"T_photo 假设 ImageNet Normalize(mean={expected_mean}, std={expected_std}), " \
+                        f"但 pipeline 使用 mean={mean}, std={std}. 需同步更新 angle_equi_core.py 的常量."
+
+        head = self.bbox_head
+        params = build_photo_params(
+            img.size(0), img.device,
+            gamma_range=getattr(head, 'invar_gamma_range', (0.7, 1.5)),
+            rg_range=getattr(head, 'invar_rg_range', (0.95, 1.40)),
+            bg_range=getattr(head, 'invar_bg_range', (0.75, 1.05)),
+            grad_lr_range=getattr(head, 'invar_grad_lr_range', (0.5, 2.0)),
+            grad_ud_range=getattr(head, 'invar_grad_ud_range', (0.7, 1.5)),
+            contrast_range=getattr(head, 'invar_contrast_range', (0.5, 2.0)),
+        )
+        return apply_t_photo(img, params)

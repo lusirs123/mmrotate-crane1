@@ -26,21 +26,42 @@ class SymEOODHead(RotatedRetinaHead):
 
     可选 L_equi:
       use_equi_loss (bool): 是否启用翻转等变一致性损失. 默认 False.
-      equi_loss_weight (float): L_equi 权重 λ1. 默认 0.2 (建议起步值).
-      equi_flip_probs (tuple[float,float,float]):
-        三种翻转方向的概率. 默认 (0.25, 0.25, 0.25).
-        关闭时完全不影响现有 M2 行为.
+      equi_loss_weight (float): L_equi 权重 λ1. 默认 0.2.
+      equi_flip_probs (tuple): 翻转方向概率. 默认 (0.25, 0.25, 0.25).
+
+    可选 L_invar:
+      use_invar_loss (bool): 是否启用光度不变性损失. 默认 False.
+      invar_loss_weight (float): L_invar 权重 λ2. 默认 0.05.
+      invar_*_range (tuple): T_photo 各分量范围 (Route B in-distribution).
     """
 
     def __init__(self, *args,
                  use_equi_loss: bool = False,
                  equi_loss_weight: float = 0.2,
                  equi_flip_probs: tuple = (0.25, 0.25, 0.25),
+                 use_invar_loss: bool = False,
+                 invar_loss_weight: float = 0.05,
+                 invar_gamma_range: tuple = (0.7, 1.5),
+                 invar_rg_range: tuple = (0.95, 1.40),
+                 invar_bg_range: tuple = (0.75, 1.05),
+                 invar_grad_lr_range: tuple = (0.5, 2.0),
+                 invar_grad_ud_range: tuple = (0.7, 1.5),
+                 invar_contrast_range: tuple = (0.5, 2.0),
                  **kwargs):
         super().__init__(*args, **kwargs)
+        # L_equi
         self.use_equi_loss = use_equi_loss
         self.equi_loss_weight = equi_loss_weight
         self.equi_flip_probs = equi_flip_probs
+        # L_invar
+        self.use_invar_loss = use_invar_loss
+        self.invar_loss_weight = invar_loss_weight
+        self.invar_gamma_range = invar_gamma_range
+        self.invar_rg_range = invar_rg_range
+        self.invar_bg_range = invar_bg_range
+        self.invar_grad_lr_range = invar_grad_lr_range
+        self.invar_grad_ud_range = invar_grad_ud_range
+        self.invar_contrast_range = invar_contrast_range
         # 惰性导入避免循环依赖
         self._equi_fn = None
 
@@ -68,7 +89,8 @@ class SymEOODHead(RotatedRetinaHead):
              img_metas,
              gt_bboxes_ignore=None,
              equi_flip_outs=None,
-             equi_flip_dirs=None):
+             equi_flip_dirs=None,
+             photo_outs=None):
         """
         覆写标准 loss()：
         1. 生成 Anchor
@@ -133,7 +155,7 @@ class SymEOODHead(RotatedRetinaHead):
             level_anchor_list.append(
                 torch.cat([anchors[lvl] for anchors in anchor_list]))
 
-        # 5. 执行 loss_single（逐层计算），附带可选 L_equi 信息。
+        # 5. 执行 loss_single（逐层计算），附带可选 L_equi / L_invar 信息。
         equi_infos = None
         equi_flip_bbox_preds = None
         if (self.use_equi_loss and equi_flip_outs is not None
@@ -141,10 +163,14 @@ class SymEOODHead(RotatedRetinaHead):
             equi_infos = self._build_equi_infos(img_metas, equi_flip_dirs)
             equi_flip_bbox_preds = equi_flip_outs[1]
 
+        photo_bbox_preds = None
+        if self.use_invar_loss and photo_outs is not None:
+            photo_bbox_preds = photo_outs[1]
+
         # multi_apply 不支持每层不同额外参数 → 手动循环
-        losses_cls, losses_bbox, losses_equi = [], [], []
+        losses_cls, losses_bbox, losses_equi, losses_invar = [], [], [], []
         for lvl in range(num_levels):
-            lc, lb, le = self.loss_single(
+            lc, lb, le, li = self.loss_single(
                 cls_scores[lvl], bbox_preds[lvl],
                 level_anchor_list[lvl],
                 labels_list[lvl], label_weights_list[lvl],
@@ -153,14 +179,19 @@ class SymEOODHead(RotatedRetinaHead):
                 decode_max_size=decode_max_size,
                 equi_infos=equi_infos,
                 equi_flip_bbox_pred=None if equi_flip_bbox_preds is None
-                else equi_flip_bbox_preds[lvl])
+                else equi_flip_bbox_preds[lvl],
+                photo_bbox_pred=None if photo_bbox_preds is None
+                else photo_bbox_preds[lvl])
             losses_cls.append(lc)
             losses_bbox.append(lb)
             losses_equi.append(le)
+            losses_invar.append(li)
 
         result = dict(loss_cls=losses_cls, loss_bbox=losses_bbox)
         if self.use_equi_loss and any(le is not None and le.numel() > 0 for le in losses_equi):
             result['loss_equi'] = losses_equi
+        if self.use_invar_loss and any(li is not None and li.numel() > 0 for li in losses_invar):
+            result['loss_invar'] = losses_invar
         return result
 
     def get_targets(self,
@@ -307,12 +338,14 @@ class SymEOODHead(RotatedRetinaHead):
                     bbox_targets, bbox_weights, num_total_samples,
                     decode_max_size=None,
                     equi_infos=None,
-                    equi_flip_bbox_pred=None):
-        """逐层 Loss 计算：SymNFLLoss（带空间惩罚）+ SymKLDLoss + 可选 L_equi.
+                    equi_flip_bbox_pred=None,
+                    photo_bbox_pred=None):
+        """逐层 Loss 计算：SymNFLLoss + SymKLDLoss + 可选 L_equi + 可选 L_invar.
 
         Args:
             equi_infos: None 或 list[dict]，每张原图的翻转方向和有效区域.
             equi_flip_bbox_pred: flip(img) 分支在当前 FPN level 的 bbox 预测.
+            photo_bbox_pred: T_photo(img) 分支在当前 FPN level 的 bbox 预测.
         """
         # 1. 维度展平对齐
         # 记忆特征图空间尺寸以便 L_equi 使用 (在 permute 之前获取)
@@ -409,7 +442,7 @@ class SymEOODHead(RotatedRetinaHead):
             loss_bbox = bbox_pred.sum() * 0.0
 
         # ================================================================
-        # 6. 翻转等变一致性损失 L_equi (可选, use_equi_loss=True 时启用)
+        # 6. 翻转等变一致性损失 L_equi (可选)
         # ================================================================
         loss_equi = None
         if (self.use_equi_loss and equi_infos is not None
@@ -422,7 +455,20 @@ class SymEOODHead(RotatedRetinaHead):
         if loss_equi is None:
             loss_equi = bbox_pred.new_zeros(())
 
-        return loss_cls, loss_bbox, loss_equi
+        # ================================================================
+        # 7. 光度不变性损失 L_invar (可选)
+        # ================================================================
+        loss_invar = None
+        if (self.use_invar_loss and photo_bbox_pred is not None
+                and pos_inds.numel() > 0):
+            loss_invar = self._compute_invar_loss(
+                anchors, bbox_pred, decoded_pred_bboxes,
+                pos_inds, H_feat, W_feat, num_imgs_in,
+                photo_bbox_pred)
+        if loss_invar is None:
+            loss_invar = bbox_pred.new_zeros(())
+
+        return loss_cls, loss_bbox, loss_equi, loss_invar
 
     def _build_equi_infos(self, img_metas, equi_flip_dirs):
         """从 img_metas 和 detector 生成的方向构建 L_equi 配对信息."""
@@ -537,6 +583,76 @@ class SymEOODHead(RotatedRetinaHead):
             loss_equi = bbox_pred.new_zeros(())
 
         return loss_equi * self.equi_loss_weight
+
+    def _compute_invar_loss(self, anchors, bbox_pred, decoded_pred_bboxes,
+                            pos_inds, H_feat, W_feat, num_imgs,
+                            photo_bbox_pred):
+        """在当前 level 计算 L_invar: 正样本位置的光度不变性约束.
+
+        与 L_equi 不同: 两路图的空间位置完全一致, 不需要 mirror 映射.
+        pos_idx 直接复用, 计算更简单.
+        """
+        angle_to_emb, _, _, _ = self._get_equi_fn()
+        from mmrotate.models.losses.angle_equi import invar_photo_loss
+        invar_fn = invar_photo_loss
+
+        num_anchors = self.anchor_generator.num_base_anchors[0]
+        if num_anchors <= 0:
+            return bbox_pred.new_zeros(())
+
+        per_img_size = H_feat * W_feat * num_anchors
+        photo_bp = photo_bbox_pred.permute(0, 2, 3, 1).reshape(-1, 5)
+        anchors_by_img = anchors.reshape(num_imgs, per_img_size, 5)
+
+        losses = []
+        for img_idx in range(num_imgs):
+            orig_start = img_idx * per_img_size
+            pos_within_img = pos_inds[orig_start:orig_start + per_img_size]
+            if not pos_within_img.any():
+                continue
+
+            idx_in_img = torch.nonzero(
+                pos_within_img, as_tuple=False).squeeze(-1)
+            row = idx_in_img // (W_feat * num_anchors)
+            rem = idx_in_img % (W_feat * num_anchors)
+            col = rem // num_anchors
+            anchor_id = rem % num_anchors
+
+            # 原图正样本的 global idx
+            orig_global_idx = (
+                orig_start +
+                (row * W_feat + col) * num_anchors +
+                anchor_id)
+
+            # L_invar: photo 路径用完全相同的 (row, col, anchor_id)
+            photo_global_idx = (
+                img_idx * per_img_size +
+                (row * W_feat + col) * num_anchors +
+                anchor_id)
+
+            # 原图 decoded θ → emb
+            theta_orig = decoded_pred_bboxes[orig_global_idx, 4]
+            emb_orig = angle_to_emb(theta_orig)
+
+            # photo 路径 decoded θ → emb
+            photo_anchor_idx = (row * W_feat + col) * num_anchors + anchor_id
+            photo_anchors = anchors_by_img[img_idx, photo_anchor_idx, :]
+            photo_decoded = self.bbox_coder.decode(
+                photo_anchors, photo_bp[photo_global_idx, :])
+            emb_photo = angle_to_emb(photo_decoded[:, 4])
+
+            # L_invar: emb 应一致 (不需要 flip_emb)
+            losses.append(invar_fn(emb_orig, emb_photo))
+
+        if not losses:
+            return bbox_pred.new_zeros(())
+
+        loss_invar = torch.stack(losses).mean()
+
+        if torch.isnan(loss_invar) or torch.isinf(loss_invar):
+            loss_invar = bbox_pred.new_zeros(())
+
+        return loss_invar * self.invar_loss_weight
 
     def _get_bboxes_single(self,
                            cls_score_list,
