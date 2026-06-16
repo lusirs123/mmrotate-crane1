@@ -22,9 +22,12 @@ def main():
         'crane_project/configs/crane_symeood_m2_equi_invar.py'
 
     cfg = Config.fromfile(cfg_path)
-    model = build_detector(cfg.model, train_cfg=cfg.train_cfg)
+    model = build_detector(cfg.model)
+    if torch.cuda.is_available():
+        model = model.cuda()
     model.train()
     device = next(model.parameters()).device
+    print(f'Model device: {device}')
 
     # 构造假输入 (单 batch, 不走 dataloader)
     B = 2
@@ -39,7 +42,10 @@ def main():
         torch.tensor([[200., 200., 100., 50., 0.3]], device=device),
         torch.tensor([[300., 300., 80., 40., -0.2]], device=device),
     ]
-    gt_labels = [torch.tensor([0], device=device), torch.tensor([0], device=device)]
+    gt_labels = [
+        torch.tensor([0], device=device),
+        torch.tensor([0], device=device),
+    ]
 
     # Forward + loss (不 backward, 只看 loss 值)
     losses = model.forward_train(img, img_metas, gt_bboxes, gt_labels)

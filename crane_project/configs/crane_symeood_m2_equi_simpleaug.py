@@ -1,15 +1,18 @@
-# crane_project/configs/crane_symeood_m2_equi_invar.py
+# crane_project/configs/crane_symeood_m2_equi_simpleaug.py
 #
-# M2 + L_equi (翻转等变) + L_invar (光度不变)
+# M2 + L_equi (翻转等变) + weak SimpleAug (保守光度增强)
 #
-# 彻底发散不用重跑
-# 与 crane_symeood_m2_equi.py 的唯一差异:
-#   - bbox_head 新增: use_invar_loss=True, invar_loss_weight=0.05
-#   - T_photo 参数基于 train+val 分布 P5-P95 (Route B: in-distribution)
-#   - 其余配置完全一致
+# 设计依据:
+#   - 已有强 SimpleAug + L_equi 联训出现指标冲突: TDR 有恢复, 但 A-RMSE/ACI/R_center 退化
+#   - 本配置只验证保守版本: 弱光度扰动 + 仅 real train 使用, train_sim 保持干净几何监督
+#   - 目标不是证明二者正交叠加, 而是尽量保住 L_equi 的几何收益, 同时给 cls head 少量外观扰动
+#   - 显存: 2-path forward (与 L_equi 相同)
 #
-# 关闭 L_invar (use_invar_loss=False) 时, 与 equi 版逐位等价.
-# 全部关闭 (use_equi_loss=False, use_invar_loss=False) 时, 与 M2 逐位等价.
+# 与 crane_symeood_m2_equi.py 的差异:
+#   1. train real pipeline 加入弱 RandomBrightnessContrast
+#   2. train_sim pipeline 不加 SimpleAug, 避免污染 sim A-RMSE/ACI 选择信号
+#   3. use_invar_loss=False (关闭 L_invar)
+#   4. 其余全部不变 (L_equi 参数、anchor、head、scheduler)
 
 custom_imports = dict(
     imports=[
@@ -58,21 +61,13 @@ model = dict(
         stacked_convs=4,
         feat_channels=256,
         assign_by_circumhbbox=None,
-        # === L_equi 开关 ===
+        # === L_equi 开关 (与 equi 版一致) ===
         use_equi_loss=True,
         equi_loss_weight=0.2,
         equi_flip_probs=(0.25, 0.25, 0.25),
-        # === L_invar 开关 (Route B: in-distribution T_photo) ===
-        use_invar_loss=True,
-        invar_loss_weight=0.05,  # λ2 保守起步值 (梯度匹配需真实 batch, 假输入不可信)
-        # T_photo 参数范围: 基于 train+val 分布 P5-P95, 不外扩
-        invar_gamma_range=(0.7, 1.5),      # 亮度 P5-P95
-        invar_rg_range=(0.95, 1.40),       # R/G 通道比 P5-P95
-        invar_bg_range=(0.75, 1.05),       # B/G 通道比 P5-P95
-        invar_grad_lr_range=(0.5, 2.0),    # 左右渐变 (主对抗源)
-        invar_grad_ud_range=(0.7, 1.5),    # 上下渐变
-        invar_contrast_range=(0.5, 2.0),   # 对比度
-        # ==== L_invar 结束 ===
+        # === L_invar 关闭 ===
+        use_invar_loss=False,
+        # ==== 配置结束 ====
         anchor_generator=dict(
             type='RotatedAnchorGenerator',
             octave_base_scale=4,
@@ -200,12 +195,12 @@ model = dict(
 )
 
 # =========================================================
-# 数据流形 (与 M2 完全一致)
+# 数据流形: real 弱 SimpleAug + sim 干净几何监督
 # =========================================================
 dataset_type = 'CraneDataset'
 data_root = 'crane_project/data/crane_grab/'
 
-train_pipeline = [
+train_pipeline_clean = [
     dict(type='LoadImageFromFile'),
     dict(type='LoadAnnotations', with_bbox=True),
     dict(type='RResize', img_scale=(1024, 1024)),
@@ -213,6 +208,32 @@ train_pipeline = [
          flip_ratio=[0.25, 0.25, 0.25],
          direction=['horizontal', 'vertical', 'diagonal'],
          version='le90'),
+    dict(type='Normalize',
+         mean=[123.675, 116.28, 103.53],
+         std=[58.395, 57.12, 57.375],
+         to_rgb=True),
+    dict(type='Pad',
+         size=(1024, 1024),
+         pad_val=dict(img=(114.0, 114.0, 114.0))),
+    dict(type='DefaultFormatBundle'),
+    dict(type='Collect', keys=['img', 'gt_bboxes', 'gt_labels']),
+]
+
+train_pipeline_real_weakaug = [
+    dict(type='LoadImageFromFile'),
+    dict(type='LoadAnnotations', with_bbox=True),
+    dict(type='RResize', img_scale=(1024, 1024)),
+    dict(type='RRandomFlip',
+         flip_ratio=[0.25, 0.25, 0.25],
+         direction=['horizontal', 'vertical', 'diagonal'],
+         version='le90'),
+    # Weak SimpleAug: 降低强度和概率, 避免继续破坏边缘/角度线索
+    dict(
+        type='RandomBrightnessContrast',
+        brightness_range=(0.65, 1.0),
+        contrast_range=(0.8, 1.15),
+        noise_std_range=(0, 8),
+        prob=0.3),
     dict(type='Normalize',
          mean=[123.675, 116.28, 103.53],
          std=[58.395, 57.12, 57.375],
@@ -252,14 +273,14 @@ data = dict(
             data_root=data_root,
             ann_file='train/annfiles/',
             img_prefix='train/images/',
-            pipeline=train_pipeline,
+            pipeline=train_pipeline_real_weakaug,
             version=angle_version),
         dict(
             type=dataset_type,
             data_root=data_root,
             ann_file='train_sim/annfiles/',
             img_prefix='train/images/',
-            pipeline=train_pipeline,
+            pipeline=train_pipeline_clean,
             version=angle_version),
     ],
     val=dict(
@@ -302,4 +323,4 @@ log_config = dict(interval=50)
 log_level = 'INFO'
 load_from = None
 resume_from = None
-work_dir = 'work_dirs/crane_symeood_m2_equi_invar'
+work_dir = 'work_dirs/crane_symeood_m2_equi_simpleaug_light_realonly'

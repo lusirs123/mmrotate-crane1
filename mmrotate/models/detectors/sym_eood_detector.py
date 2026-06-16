@@ -211,14 +211,17 @@ class SymEOOD(SingleStageDetector):
         if img_metas is not None:
             norm_cfg = img_metas[0].get('img_norm_cfg', {})
             if norm_cfg:
-                mean = tuple(norm_cfg.get('mean', []))
-                std = tuple(norm_cfg.get('std', []))
-                expected_mean = (123.675, 116.28, 103.53)
-                expected_std = (58.395, 57.12, 57.375)
+                mean = list(norm_cfg.get('mean', []))
+                std = list(norm_cfg.get('std', []))
+                expected_mean = [123.675, 116.28, 103.53]
+                expected_std = [58.395, 57.12, 57.375]
                 if mean and std:
-                    assert mean == expected_mean and std == expected_std, \
-                        f"T_photo 假设 ImageNet Normalize(mean={expected_mean}, std={expected_std}), " \
-                        f"但 pipeline 使用 mean={mean}, std={std}. 需同步更新 angle_equi_core.py 的常量."
+                    for i, (a, b) in enumerate(zip(mean, expected_mean)):
+                        assert abs(a - b) < 0.01, \
+                            f"T_photo Normalize mean[{i}]: pipeline={a}, expected={b}"
+                    for i, (a, b) in enumerate(zip(std, expected_std)):
+                        assert abs(a - b) < 0.01, \
+                            f"T_photo Normalize std[{i}]: pipeline={a}, expected={b}"
 
         head = self.bbox_head
         params = build_photo_params(
