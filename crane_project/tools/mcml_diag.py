@@ -62,6 +62,24 @@ def parse_args():
                         help='对所有帧输出 top-k decoded box, 不仅是 DEAD-local/EDGE')
     parser.add_argument('--vis-dir', default=None,
                         help='可视化输出目录, 绘制 GT + top-k decoded box')
+    parser.add_argument(
+        '--preproc', default='none',
+        choices=[
+            'none', 'linear-brighten', 'clahe', 'gray-world',
+            'linear-clahe', 'linear-clahe-gray',
+        ],
+        help='Test-time image normalization probe before the config test pipeline')
+    parser.add_argument('--linear-gain', type=float, default=2.0,
+                        help='Linear-light gain for --preproc linear-*')
+    parser.add_argument('--clahe-clip-limit', type=float, default=2.0)
+    parser.add_argument('--clahe-tile-grid', type=int, default=8)
+    parser.add_argument('--save-preproc-dir', default=None,
+                        help='Optional directory to save preprocessed images for QA')
+    parser.add_argument('--adabn', action='store_true',
+                        help='Adapt BatchNorm running stats on the target frames before diagnosis')
+    parser.add_argument('--adabn-frames', type=int, default=32,
+                        help='Max frames used for AdaBN per source')
+    parser.add_argument('--adabn-momentum', type=float, default=0.1)
     return parser.parse_args()
 
 
@@ -165,6 +183,82 @@ def parse_dota_ann(ann_path):
 # Preprocessing: 从 config 解析 test_pipeline 并逐个调用
 # =====================================================================
 
+def srgb_to_linear(img):
+    img = np.clip(img.astype(np.float32) / 255.0, 0.0, 1.0)
+    return np.where(img <= 0.04045, img / 12.92,
+                    ((img + 0.055) / 1.055) ** 2.4)
+
+
+def linear_to_srgb(img):
+    img = np.clip(img, 0.0, 1.0)
+    srgb = np.where(img <= 0.0031308, img * 12.92,
+                    1.055 * np.power(img, 1.0 / 2.4) - 0.055)
+    return np.clip(srgb * 255.0, 0, 255).astype(np.uint8)
+
+
+def linear_brighten_bgr(img, gain):
+    linear = srgb_to_linear(img)
+    return linear_to_srgb(linear * gain)
+
+
+def clahe_bgr(img, clip_limit=2.0, tile_grid=8):
+    lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    l_chan, a_chan, b_chan = cv2.split(lab)
+    clahe = cv2.createCLAHE(
+        clipLimit=clip_limit, tileGridSize=(tile_grid, tile_grid))
+    l_chan = clahe.apply(l_chan)
+    lab = cv2.merge([l_chan, a_chan, b_chan])
+    return cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+
+
+def gray_world_bgr(img):
+    work = img.astype(np.float32)
+    means = work.reshape(-1, 3).mean(axis=0)
+    gray = float(means.mean())
+    scale = gray / np.maximum(means, 1e-6)
+    return np.clip(work * scale.reshape(1, 1, 3), 0, 255).astype(np.uint8)
+
+
+def image_stats_bgr(img):
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY).astype(np.float32)
+    h = gray.shape[0]
+    top = float(gray[:h // 2].mean()) if h >= 2 else float(gray.mean())
+    bottom = float(gray[h // 2:].mean()) if h >= 2 else float(gray.mean())
+    return dict(
+        brightness=float(img.mean()),
+        contrast=float(gray.std()),
+        ud_delta=top - bottom,
+    )
+
+
+def apply_test_time_preproc(raw, preproc_cfg):
+    mode = preproc_cfg.get('mode', 'none')
+    img = raw.copy()
+
+    if mode == 'none':
+        return img
+    if mode == 'linear-brighten':
+        return linear_brighten_bgr(img, preproc_cfg.get('linear_gain', 2.0))
+    if mode == 'clahe':
+        return clahe_bgr(
+            img, preproc_cfg.get('clahe_clip_limit', 2.0),
+            preproc_cfg.get('clahe_tile_grid', 8))
+    if mode == 'gray-world':
+        return gray_world_bgr(img)
+    if mode == 'linear-clahe':
+        img = linear_brighten_bgr(img, preproc_cfg.get('linear_gain', 2.0))
+        return clahe_bgr(
+            img, preproc_cfg.get('clahe_clip_limit', 2.0),
+            preproc_cfg.get('clahe_tile_grid', 8))
+    if mode == 'linear-clahe-gray':
+        img = gray_world_bgr(img)
+        img = linear_brighten_bgr(img, preproc_cfg.get('linear_gain', 2.0))
+        return clahe_bgr(
+            img, preproc_cfg.get('clahe_clip_limit', 2.0),
+            preproc_cfg.get('clahe_tile_grid', 8))
+
+    raise ValueError(f'Unsupported preproc mode: {mode}')
+
 def build_test_transforms(cfg):
     """从 cfg.test_pipeline 解析内部 transform 实例列表。
     跳过 LoadImageFromFile 和 MultiScaleFlipAug wrapper,
@@ -193,18 +287,27 @@ def build_test_transforms(cfg):
     return compose, img_scale, flip
 
 
-def preprocess_image(img_path, transform_compose, img_scale, flip):
+def preprocess_image(img_path, transform_compose, img_scale, flip,
+                     preproc_cfg=None, save_preproc_dir=None):
     """用 mmrotate test pipeline 的内部 transforms 处理图片。
     手动加载图片 + 填充必要的 meta 字段, 然后走 pipeline.
     """
     raw = cv2.imread(img_path)
     if raw is None:
         return None, None, None
-    brightness = float(raw.mean())
+    preproc_cfg = preproc_cfg or dict(mode='none')
+    proc = apply_test_time_preproc(raw, preproc_cfg)
+    raw_stats = image_stats_bgr(raw)
+    proc_stats = image_stats_bgr(proc)
     ori_h, ori_w = raw.shape[:2]
 
+    if save_preproc_dir and preproc_cfg.get('mode', 'none') != 'none':
+        os.makedirs(save_preproc_dir, exist_ok=True)
+        out_path = os.path.join(save_preproc_dir, os.path.basename(img_path))
+        cv2.imwrite(out_path, proc)
+
     # 构造 results dict, 模拟 LoadImageFromFile 的输出
-    img = cv2.cvtColor(raw, cv2.COLOR_BGR2RGB)
+    img = cv2.cvtColor(proc, cv2.COLOR_BGR2RGB)
     results = dict(
         img=img,
         filename=img_path,
@@ -245,7 +348,15 @@ def preprocess_image(img_path, transform_compose, img_scale, flip):
         'flip_direction': None,
     }
 
-    return img_tensor, img_metas, brightness
+    stats = dict(
+        raw_brightness=raw_stats['brightness'],
+        raw_contrast=raw_stats['contrast'],
+        raw_ud_delta=raw_stats['ud_delta'],
+        proc_brightness=proc_stats['brightness'],
+        proc_contrast=proc_stats['contrast'],
+        proc_ud_delta=proc_stats['ud_delta'],
+    )
+    return img_tensor, img_metas, stats
 
 
 # =====================================================================
@@ -264,6 +375,85 @@ class HeadHook:
         cls_list, bbox_list = output
         self.cls_scores = [s[0].detach().cpu() for s in cls_list]
         self.bbox_preds = [b[0].detach().cpu() for b in bbox_list]
+
+
+# =====================================================================
+# AdaBN probe
+# =====================================================================
+
+def batchnorm_modules(model):
+    from torch.nn.modules.batchnorm import _BatchNorm
+    return [m for m in model.modules() if isinstance(m, _BatchNorm)]
+
+
+def snapshot_bn_state(model):
+    state = []
+    for m in batchnorm_modules(model):
+        state.append(dict(
+            module=m,
+            running_mean=None if m.running_mean is None else m.running_mean.detach().clone(),
+            running_var=None if m.running_var is None else m.running_var.detach().clone(),
+            num_batches_tracked=(
+                None if m.num_batches_tracked is None
+                else m.num_batches_tracked.detach().clone()),
+            momentum=m.momentum,
+        ))
+    return state
+
+
+def restore_bn_state(state):
+    for item in state:
+        m = item['module']
+        if item['running_mean'] is not None:
+            m.running_mean.data.copy_(item['running_mean'])
+        if item['running_var'] is not None:
+            m.running_var.data.copy_(item['running_var'])
+        if item['num_batches_tracked'] is not None:
+            m.num_batches_tracked.data.copy_(item['num_batches_tracked'])
+        m.momentum = item['momentum']
+
+
+def adapt_bn_on_frames(model, hook_mgr, transform_compose, img_scale, flip,
+                       data_root, split, seq, frame_ids, gpu, preproc_cfg,
+                       save_preproc_dir=None, max_frames=32, momentum=0.1):
+    bn_layers = batchnorm_modules(model)
+    if not bn_layers:
+        print('  [AdaBN] no BatchNorm layers found, skip')
+        return 0
+
+    adapt_ids = frame_ids[:max_frames] if max_frames > 0 else frame_ids
+    if not adapt_ids:
+        print('  [AdaBN] no frames for adaptation, skip')
+        return 0
+
+    model.eval()
+    for m in bn_layers:
+        m.train()
+        m.momentum = momentum
+
+    hook_mgr._active = False
+    used = 0
+    with torch.no_grad():
+        for fid in adapt_ids:
+            img_path, _ = find_files(data_root, split, seq, fid)
+            if img_path is None:
+                continue
+            img_tensor, _, _ = preprocess_image(
+                img_path, transform_compose, img_scale, flip,
+                preproc_cfg=preproc_cfg, save_preproc_dir=save_preproc_dir)
+            if img_tensor is None:
+                continue
+            img_tensor = img_tensor.cuda(f'cuda:{gpu}')
+            feat = model.backbone(img_tensor)
+            feat = model.neck(feat)
+            model.bbox_head(feat)
+            used += 1
+
+    hook_mgr._active = True
+    model.eval()
+    print(f'  [AdaBN] adapted BN on {used}/{len(adapt_ids)} frames '
+          f'(momentum={momentum})')
+    return used
 
 
 # =====================================================================
@@ -553,7 +743,8 @@ def diagnose_source(model, hook_mgr, transform_compose, img_scale, flip,
                     feat_strides, num_anchors_per_level, threshold, gpu,
                     source_label, bbox_coder=None, anchor_generator=None,
                     topk=5, topk_all=False, vis_dir=None,
-                    giant_size_thr=4096.0, giant_ratio_thr=20.0):
+                    giant_size_thr=4096.0, giant_ratio_thr=20.0,
+                    preproc_cfg=None, save_preproc_dir=None):
     print()
     print('=' * 80)
     print(f'  Source: {source_label}')
@@ -573,10 +764,12 @@ def diagnose_source(model, hook_mgr, transform_compose, img_scale, flip,
         gts = parse_dota_ann(ann_path)
 
         # Preprocess 用 config 中的 test transforms
-        img_tensor, meta, brightness = preprocess_image(
-            img_path, transform_compose, img_scale, flip)
+        img_tensor, meta, img_stats = preprocess_image(
+            img_path, transform_compose, img_scale, flip,
+            preproc_cfg=preproc_cfg, save_preproc_dir=save_preproc_dir)
         if img_tensor is None:
             continue
+        brightness = img_stats['raw_brightness']
 
         img_tensor = img_tensor.cuda(f'cuda:{gpu}')
 
@@ -618,6 +811,11 @@ def diagnose_source(model, hook_mgr, transform_compose, img_scale, flip,
         results.append(dict(
             frame=fid, fname=fname, status=status,
             brightness=brightness,
+            raw_contrast=img_stats['raw_contrast'],
+            raw_ud_delta=img_stats['raw_ud_delta'],
+            proc_brightness=img_stats['proc_brightness'],
+            proc_contrast=img_stats['proc_contrast'],
+            proc_ud_delta=img_stats['proc_ud_delta'],
             gt_score=gt_score, roi_score=roi_score,
             global_max=global_max, global_max_level=global_max_level,
             gt_analysis=gt_analysis, split=split, seq=seq,
@@ -628,7 +826,12 @@ def diagnose_source(model, hook_mgr, transform_compose, img_scale, flip,
                   'EDGE': '△ ', 'OK': '✓ '}[status]
         print(f'  [{fname}] {marker} brightness={brightness or 0:6.1f}  '
               f'gt={gt_score:.4f}  roi={roi_score:.4f}  '
-              f'global={global_max:.4f}@P{global_max_level}  gt#={len(gts)}')
+              f'global={global_max:.4f}@P{global_max_level}  gt#={len(gts)}  '
+              f'proc_brightness={img_stats["proc_brightness"]:.1f}  '
+              f'contrast={img_stats["raw_contrast"]:.1f}'
+              f'->{img_stats["proc_contrast"]:.1f}  '
+              f'ud={img_stats["raw_ud_delta"]:.1f}'
+              f'->{img_stats["proc_ud_delta"]:.1f}')
 
         # 对 DEAD-local / EDGE 帧做 top-k decoded box vs GT 分析
         # --topk-all 时对所有帧都做
@@ -852,6 +1055,15 @@ def main():
 
     data_root = args.data_root
     all_results = []
+    preproc_cfg = dict(
+        mode=args.preproc,
+        linear_gain=args.linear_gain,
+        clahe_clip_limit=args.clahe_clip_limit,
+        clahe_tile_grid=args.clahe_tile_grid,
+    )
+    bn_initial_state = snapshot_bn_state(model) if args.adabn else None
+    if args.preproc != 'none' or args.adabn:
+        print(f'  [probe] preproc={args.preproc}  adabn={args.adabn}')
 
     if args.split == 'all':
         sources = []
@@ -874,13 +1086,23 @@ def main():
             if not fids:
                 print(f'  [skip] {label}: no frames found')
                 continue
+            if args.adabn:
+                restore_bn_state(bn_initial_state)
+                adapt_bn_on_frames(
+                    model, hook_mgr, transform_compose, img_scale, flip,
+                    data_root, split, seq, fids, args.gpu, preproc_cfg,
+                    save_preproc_dir=args.save_preproc_dir,
+                    max_frames=args.adabn_frames,
+                    momentum=args.adabn_momentum)
             results = diagnose_source(
                 model, hook_mgr, transform_compose, img_scale, flip,
                 data_root, split, seq, fids,
                 feat_strides, num_anchors_per_level, args.threshold,
                 args.gpu, label, bbox_coder, anchor_gen, topk,
                 args.topk_all, args.vis_dir,
-                args.giant_size_thr, args.giant_ratio_thr)
+                args.giant_size_thr, args.giant_ratio_thr,
+                preproc_cfg=preproc_cfg,
+                save_preproc_dir=args.save_preproc_dir)
             all_results.extend(results)
 
     else:
@@ -898,13 +1120,23 @@ def main():
         else:
             frame_ids = discover_frames(data_root, args.split, seq, args.sample)
 
+        if args.adabn:
+            restore_bn_state(bn_initial_state)
+            adapt_bn_on_frames(
+                model, hook_mgr, transform_compose, img_scale, flip,
+                data_root, args.split, seq, frame_ids, args.gpu, preproc_cfg,
+                save_preproc_dir=args.save_preproc_dir,
+                max_frames=args.adabn_frames,
+                momentum=args.adabn_momentum)
         results = diagnose_source(
             model, hook_mgr, transform_compose, img_scale, flip,
             data_root, args.split, seq, frame_ids,
             feat_strides, num_anchors_per_level, args.threshold,
             args.gpu, f'{args.split}/{seq}', bbox_coder, anchor_gen, topk,
             args.topk_all, args.vis_dir,
-            args.giant_size_thr, args.giant_ratio_thr)
+            args.giant_size_thr, args.giant_ratio_thr,
+            preproc_cfg=preproc_cfg,
+            save_preproc_dir=args.save_preproc_dir)
         all_results.extend(results)
 
     handle.remove()

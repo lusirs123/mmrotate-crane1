@@ -33,6 +33,11 @@ class SymEOODHead(RotatedRetinaHead):
       use_invar_loss (bool): 是否启用光度不变性损失. 默认 False.
       invar_loss_weight (float): L_invar 权重 λ2. 默认 0.05.
       invar_*_range (tuple): T_photo 各分量范围 (Route B in-distribution).
+
+    可选 degraded-cls:
+      use_degraded_cls_loss (bool): 是否启用低光退化分支分类损失. 默认 False.
+      degraded_cls_loss_weight (float): degraded 分支 cls loss 的额外权重.
+      degraded_*: 低光退化参数, 复刻 SimpleAug 的 gamma/sRGB 风格.
     """
 
     def __init__(self, *args,
@@ -47,6 +52,12 @@ class SymEOODHead(RotatedRetinaHead):
                  invar_grad_lr_range: tuple = (0.5, 2.0),
                  invar_grad_ud_range: tuple = (0.7, 1.5),
                  invar_contrast_range: tuple = (0.5, 2.0),
+                 use_degraded_cls_loss: bool = False,
+                 degraded_cls_loss_weight: float = 0.25,
+                 degraded_brightness_range: tuple = (0.4, 1.0),
+                 degraded_contrast_range: tuple = (0.6, 1.2),
+                 degraded_noise_std_range: tuple = (0.0, 20.0),
+                 degraded_prob: float = 0.5,
                  **kwargs):
         super().__init__(*args, **kwargs)
         # L_equi
@@ -62,6 +73,13 @@ class SymEOODHead(RotatedRetinaHead):
         self.invar_grad_lr_range = invar_grad_lr_range
         self.invar_grad_ud_range = invar_grad_ud_range
         self.invar_contrast_range = invar_contrast_range
+        # degraded cls-only branch
+        self.use_degraded_cls_loss = use_degraded_cls_loss
+        self.degraded_cls_loss_weight = degraded_cls_loss_weight
+        self.degraded_brightness_range = degraded_brightness_range
+        self.degraded_contrast_range = degraded_contrast_range
+        self.degraded_noise_std_range = degraded_noise_std_range
+        self.degraded_prob = degraded_prob
         # 惰性导入避免循环依赖
         self._equi_fn = None
 
@@ -90,7 +108,8 @@ class SymEOODHead(RotatedRetinaHead):
              gt_bboxes_ignore=None,
              equi_flip_outs=None,
              equi_flip_dirs=None,
-             photo_outs=None):
+             photo_outs=None,
+             degraded_outs=None):
         """
         覆写标准 loss()：
         1. 生成 Anchor
@@ -167,10 +186,15 @@ class SymEOODHead(RotatedRetinaHead):
         if self.use_invar_loss and photo_outs is not None:
             photo_bbox_preds = photo_outs[1]
 
+        degraded_cls_scores = None
+        if self.use_degraded_cls_loss and degraded_outs is not None:
+            degraded_cls_scores = degraded_outs[0]
+
         # multi_apply 不支持每层不同额外参数 → 手动循环
-        losses_cls, losses_bbox, losses_equi, losses_invar = [], [], [], []
+        losses_cls, losses_bbox = [], []
+        losses_equi, losses_invar, losses_degraded_cls = [], [], []
         for lvl in range(num_levels):
-            lc, lb, le, li = self.loss_single(
+            lc, lb, le, li, ldc = self.loss_single(
                 cls_scores[lvl], bbox_preds[lvl],
                 level_anchor_list[lvl],
                 labels_list[lvl], label_weights_list[lvl],
@@ -181,17 +205,24 @@ class SymEOODHead(RotatedRetinaHead):
                 equi_flip_bbox_pred=None if equi_flip_bbox_preds is None
                 else equi_flip_bbox_preds[lvl],
                 photo_bbox_pred=None if photo_bbox_preds is None
-                else photo_bbox_preds[lvl])
+                else photo_bbox_preds[lvl],
+                degraded_cls_score=None if degraded_cls_scores is None
+                else degraded_cls_scores[lvl])
             losses_cls.append(lc)
             losses_bbox.append(lb)
             losses_equi.append(le)
             losses_invar.append(li)
+            losses_degraded_cls.append(ldc)
 
         result = dict(loss_cls=losses_cls, loss_bbox=losses_bbox)
         if self.use_equi_loss and any(le is not None and le.numel() > 0 for le in losses_equi):
             result['loss_equi'] = losses_equi
         if self.use_invar_loss and any(li is not None and li.numel() > 0 for li in losses_invar):
             result['loss_invar'] = losses_invar
+        if (self.use_degraded_cls_loss and any(
+                ldc is not None and ldc.numel() > 0
+                for ldc in losses_degraded_cls)):
+            result['loss_degraded_cls'] = losses_degraded_cls
         return result
 
     def get_targets(self,
@@ -339,13 +370,15 @@ class SymEOODHead(RotatedRetinaHead):
                     decode_max_size=None,
                     equi_infos=None,
                     equi_flip_bbox_pred=None,
-                    photo_bbox_pred=None):
-        """逐层 Loss 计算：SymNFLLoss + SymKLDLoss + 可选 L_equi + 可选 L_invar.
+                    photo_bbox_pred=None,
+                    degraded_cls_score=None):
+        """逐层 Loss 计算：SymNFLLoss + SymKLDLoss + 可选额外分支.
 
         Args:
             equi_infos: None 或 list[dict]，每张原图的翻转方向和有效区域.
             equi_flip_bbox_pred: flip(img) 分支在当前 FPN level 的 bbox 预测.
             photo_bbox_pred: T_photo(img) 分支在当前 FPN level 的 bbox 预测.
+            degraded_cls_score: degraded(img) 分支在当前 FPN level 的 cls 预测.
         """
         # 1. 维度展平对齐
         # 记忆特征图空间尺寸以便 L_equi 使用 (在 permute 之前获取)
@@ -468,7 +501,49 @@ class SymEOODHead(RotatedRetinaHead):
         if loss_invar is None:
             loss_invar = bbox_pred.new_zeros(())
 
-        return loss_cls, loss_bbox, loss_equi, loss_invar
+        # ================================================================
+        # 8. 低光退化分支分类损失 (可选)
+        # ================================================================
+        loss_degraded_cls = None
+        if self.use_degraded_cls_loss and degraded_cls_score is not None:
+            loss_degraded_cls = self._compute_degraded_cls_loss(
+                degraded_cls_score,
+                labels,
+                label_weights,
+                decoded_pred_bboxes.detach(),
+                pos_gt_bboxes.detach(),
+                cls_avg_factor)
+        if loss_degraded_cls is None:
+            loss_degraded_cls = bbox_pred.new_zeros(())
+
+        return (loss_cls, loss_bbox, loss_equi, loss_invar,
+                loss_degraded_cls)
+
+    def _compute_degraded_cls_loss(self, degraded_cls_score, labels,
+                                   label_weights, decoded_pred_bboxes,
+                                   pos_gt_bboxes, cls_avg_factor):
+        """只在 degraded 分支上计算分类/objectness 损失.
+
+        标签和正负样本沿用 clean 分支的分配结果；bbox/angle/equi 不在该
+        分支计算。SymNFLLoss 仍需要 pred_bboxes 来构造空间排他权重，这里
+        使用 clean 分支已 detach 的 decoded boxes，避免给 degraded bbox 分支
+        引入回归/角度梯度。
+        """
+        degraded_cls_score = degraded_cls_score.permute(0, 2, 3, 1).reshape(
+            -1, self.cls_out_channels)
+        loss_degraded_cls = self.loss_cls(
+            degraded_cls_score,
+            labels,
+            pred_bboxes=decoded_pred_bboxes,
+            gt_bboxes=pos_gt_bboxes,
+            weight=label_weights,
+            avg_factor=cls_avg_factor,
+            advance_iter=False)
+
+        if torch.isnan(loss_degraded_cls) or torch.isinf(loss_degraded_cls):
+            loss_degraded_cls = degraded_cls_score.sum() * 0.0
+
+        return loss_degraded_cls * self.degraded_cls_loss_weight
 
     def _build_equi_infos(self, img_metas, equi_flip_dirs):
         """从 img_metas 和 detector 生成的方向构建 L_equi 配对信息."""

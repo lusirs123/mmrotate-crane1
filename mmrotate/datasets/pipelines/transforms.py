@@ -14,6 +14,88 @@ from mmrotate.core import norm_angle, obb2poly_np, poly2obb_np
 from ..builder import ROTATED_PIPELINES
 
 
+def _srgb_to_linear(img):
+    img = np.clip(img.astype(np.float32) / 255.0, 0.0, 1.0)
+    return np.where(img <= 0.04045, img / 12.92,
+                    ((img + 0.055) / 1.055) ** 2.4)
+
+
+def _linear_to_srgb(img):
+    img = np.clip(img, 0.0, 1.0)
+    srgb = np.where(img <= 0.0031308, img * 12.92,
+                    1.055 * np.power(img, 1.0 / 2.4) - 0.055)
+    return np.clip(srgb * 255.0, 0, 255).astype(np.uint8)
+
+
+@ROTATED_PIPELINES.register_module()
+class TestTimeNormalize(object):
+    """Deterministic test-time image normalization before resize/Normalize.
+
+    This transform is intended for diagnosis/evaluation only. It modifies the
+    input image at inference time and does not change model weights.
+    """
+
+    def __init__(self,
+                 mode='linear-clahe-gray',
+                 linear_gain=2.0,
+                 clahe_clip_limit=2.0,
+                 clahe_tile_grid=8):
+        valid_modes = [
+            'linear-brighten', 'clahe', 'gray-world',
+            'linear-clahe', 'linear-clahe-gray',
+        ]
+        if mode not in valid_modes:
+            raise ValueError(f'Unsupported TestTimeNormalize mode: {mode}')
+        self.mode = mode
+        self.linear_gain = linear_gain
+        self.clahe_clip_limit = clahe_clip_limit
+        self.clahe_tile_grid = clahe_tile_grid
+
+    def _linear_brighten(self, img):
+        linear = _srgb_to_linear(img)
+        return _linear_to_srgb(linear * self.linear_gain)
+
+    def _clahe(self, img):
+        lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+        l_chan, a_chan, b_chan = cv2.split(lab)
+        clahe = cv2.createCLAHE(
+            clipLimit=self.clahe_clip_limit,
+            tileGridSize=(self.clahe_tile_grid, self.clahe_tile_grid))
+        l_chan = clahe.apply(l_chan)
+        lab = cv2.merge([l_chan, a_chan, b_chan])
+        return cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+
+    def _gray_world(self, img):
+        work = img.astype(np.float32)
+        means = work.reshape(-1, 3).mean(axis=0)
+        gray = float(means.mean())
+        scale = gray / np.maximum(means, 1e-6)
+        return np.clip(work * scale.reshape(1, 1, 3), 0, 255).astype(np.uint8)
+
+    def __call__(self, results):
+        img = results['img']
+        if self.mode == 'linear-brighten':
+            img = self._linear_brighten(img)
+        elif self.mode == 'clahe':
+            img = self._clahe(img)
+        elif self.mode == 'gray-world':
+            img = self._gray_world(img)
+        elif self.mode == 'linear-clahe':
+            img = self._clahe(self._linear_brighten(img))
+        elif self.mode == 'linear-clahe-gray':
+            img = self._clahe(self._linear_brighten(self._gray_world(img)))
+        results['img'] = img
+        results['img_shape'] = img.shape
+        results['ori_shape'] = img.shape
+        return results
+
+    def __repr__(self):
+        return (f'{self.__class__.__name__}(mode={self.mode}, '
+                f'linear_gain={self.linear_gain}, '
+                f'clahe_clip_limit={self.clahe_clip_limit}, '
+                f'clahe_tile_grid={self.clahe_tile_grid})')
+
+
 @ROTATED_PIPELINES.register_module()
 class RResize(Resize):
     """Resize images & rotated bbox Inherit Resize pipeline class to handle

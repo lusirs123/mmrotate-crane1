@@ -97,10 +97,11 @@ class SymNFLLoss(nn.Module):
                 gt_bboxes,
                 weight=None,
                 avg_factor=None,
-                reduction_override=None):
+                reduction_override=None,
+                advance_iter=True):
         
         # 仅在训练模式下累加迭代步数
-        if self.training:
+        if self.training and advance_iter:
             self._local_iter += 1
 
         assert reduction_override in (None, 'none', 'mean', 'sum')

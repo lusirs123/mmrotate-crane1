@@ -76,10 +76,11 @@ class SymEOOD(SingleStageDetector):
                       gt_bboxes,
                       gt_labels,
                       gt_bboxes_ignore=None):
-        """0.x 标准联合训练入口 + 可选 L_equi + 可选 L_invar.
+        """0.x 标准联合训练入口 + 可选 L_equi / L_invar / degraded-cls.
 
         L_equi: flip(img) 取角度预测, 不参与检测损失.
         L_invar: T_photo(img) 取角度预测, 不参与检测损失.
+        degraded-cls: T_degrade(img) 只参与分类损失, 不参与 bbox/angle/equi.
         """
         super(SingleStageDetector, self).forward_train(img, img_metas)
 
@@ -106,6 +107,14 @@ class SymEOOD(SingleStageDetector):
             photo_x = self.extract_feat(photo_img)
             photo_outs = self.bbox_head(photo_x)
 
+        # --- degraded cls-only 路径 (光度退化只监督分类/objectness) ---
+        degraded_outs = None
+        if (hasattr(self.bbox_head, 'use_degraded_cls_loss')
+                and self.bbox_head.use_degraded_cls_loss):
+            degraded_img = self._build_degraded_cls_view(img, img_metas)
+            degraded_x = self.extract_feat(degraded_img)
+            degraded_outs = self.bbox_head(degraded_x)
+
         main_losses = self.bbox_head.loss(
             *main_outs,
             gt_bboxes=gt_bboxes,
@@ -114,7 +123,8 @@ class SymEOOD(SingleStageDetector):
             gt_bboxes_ignore=gt_bboxes_ignore,
             equi_flip_outs=equi_flip_outs,
             equi_flip_dirs=equi_flip_dirs,
-            photo_outs=photo_outs)
+            photo_outs=photo_outs,
+            degraded_outs=degraded_outs)
         losses.update(main_losses)
 
         # Mode A: Anchor-based 辅助头损失
@@ -234,3 +244,64 @@ class SymEOOD(SingleStageDetector):
             contrast_range=getattr(head, 'invar_contrast_range', (0.5, 2.0)),
         )
         return apply_t_photo(img, params)
+
+    def _build_degraded_cls_view(self, img, img_metas=None):
+        """构建 cls-only 低光退化视图 (复刻 SimpleAug 的 gamma/sRGB 风格).
+
+        输入是 Normalize 后的 RGB tensor。这里反归一化到 [0, 1]，
+        执行 gamma 变暗、对比度、噪声，再归一化回网络输入空间。
+        该视图只用于分类/objectness loss，不计算 bbox/angle/equi。
+        """
+        # 安全检查: 确认 pipeline 的 Normalize 配置与硬编码值一致
+        if img_metas is not None:
+            norm_cfg = img_metas[0].get('img_norm_cfg', {})
+            if norm_cfg:
+                mean = list(norm_cfg.get('mean', []))
+                std = list(norm_cfg.get('std', []))
+                expected_mean = [123.675, 116.28, 103.53]
+                expected_std = [58.395, 57.12, 57.375]
+                if mean and std:
+                    for i, (a, b) in enumerate(zip(mean, expected_mean)):
+                        assert abs(a - b) < 0.01, \
+                            f"T_degrade Normalize mean[{i}]: pipeline={a}, expected={b}"
+                    for i, (a, b) in enumerate(zip(std, expected_std)):
+                        assert abs(a - b) < 0.01, \
+                            f"T_degrade Normalize std[{i}]: pipeline={a}, expected={b}"
+
+        head = self.bbox_head
+        brightness_range = getattr(
+            head, 'degraded_brightness_range', (0.4, 1.0))
+        contrast_range = getattr(
+            head, 'degraded_contrast_range', (0.6, 1.2))
+        noise_std_range = getattr(
+            head, 'degraded_noise_std_range', (0.0, 20.0))
+        prob = float(getattr(head, 'degraded_prob', 0.5))
+
+        B = img.size(0)
+        mean = img.new_tensor([123.675, 116.28, 103.53]).view(
+            1, 3, 1, 1) / 255.0
+        std = img.new_tensor([58.395, 57.12, 57.375]).view(
+            1, 3, 1, 1) / 255.0
+
+        x = (img * std + mean).clamp(0.0, 1.0)
+
+        on_mask = (torch.rand(B, 1, 1, 1, device=img.device) < prob).float()
+
+        gamma = torch.empty(B, 1, 1, 1, device=img.device).uniform_(
+            float(brightness_range[0]), float(brightness_range[1]))
+        exponent = 1.0 / gamma.clamp(min=1e-6)
+        x_gamma = x.clamp(0.0, 1.0).pow(exponent)
+
+        contrast = torch.empty(B, 1, 1, 1, device=img.device).uniform_(
+            float(contrast_range[0]), float(contrast_range[1]))
+        mean_val = x_gamma.mean(dim=(1, 2, 3), keepdim=True)
+        x_contrast = (x_gamma - mean_val) * contrast + mean_val
+
+        noise_std = torch.empty(B, 1, 1, 1, device=img.device).uniform_(
+            float(noise_std_range[0]), float(noise_std_range[1])) / 255.0
+        if float(noise_std_range[1]) > 0:
+            x_contrast = x_contrast + torch.randn_like(x_contrast) * noise_std
+
+        x_degraded = x_contrast.clamp(0.0, 1.0)
+        x = x_degraded * on_mask + x * (1.0 - on_mask)
+        return (x - mean) / std
