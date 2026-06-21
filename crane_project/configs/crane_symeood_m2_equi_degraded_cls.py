@@ -8,6 +8,10 @@
 #     几何梯度。这里保持 clean branch 完全沿用 M2+L_equi，只新增一条
 #     degraded branch，并且该分支只计算分类/objectness loss。
 #    它证明“训练端低质图直接参与几何会冲突，cls-only 解耦更健康”，但它自己不是最优解。
+# 结构：
+# 低质退化视图只训练 cls/objectness，
+# 不让它参与 bbox / angle / L_equi。
+# 也就是把低质图的作用限定为“提升暗帧生存能力”，避免它污染几何回归。
 # 损失结构:
 #   clean branch:
 #     L_cls + L_bbox + L_equi

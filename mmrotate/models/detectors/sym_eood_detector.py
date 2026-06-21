@@ -5,6 +5,7 @@ import random
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from mmdet.models.detectors.single_stage import SingleStageDetector
 from mmrotate.models.builder import ROTATED_DETECTORS, build_head
 from mmrotate.models.dense_heads.rotated_atss_head import RotatedATSSHead
@@ -107,13 +108,32 @@ class SymEOOD(SingleStageDetector):
             photo_x = self.extract_feat(photo_img)
             photo_outs = self.bbox_head(photo_x)
 
-        # --- degraded cls-only 路径 (光度退化只监督分类/objectness) ---
+        # --- degraded 路径 ---
+        # 旧 degraded-cls: 退化图复用主头分类塔, 仅做兼容既有实验.
+        # 新 degraded-aux2: 退化图进入独立 aux2 分类塔, 并做幅度域一致性.
         degraded_outs = None
-        if (hasattr(self.bbox_head, 'use_degraded_cls_loss')
-                and self.bbox_head.use_degraded_cls_loss):
+        degraded_aux2_cls_scores = None
+        degraded_aux2_amp_loss = None
+        use_degraded_cls = (
+            hasattr(self.bbox_head, 'use_degraded_cls_loss')
+            and self.bbox_head.use_degraded_cls_loss)
+        use_degraded_aux2 = (
+            hasattr(self.bbox_head, 'use_degraded_aux2_loss')
+            and self.bbox_head.use_degraded_aux2_loss)
+        use_degraded_aux_head = (
+            self.aux_heads is not None and any(
+                getattr(aux_head, 'use_degraded_view', False)
+                for aux_head in self.aux_heads))
+        if use_degraded_cls or use_degraded_aux2 or use_degraded_aux_head:
             degraded_img = self._build_degraded_cls_view(img, img_metas)
             degraded_x = self.extract_feat(degraded_img)
-            degraded_outs = self.bbox_head(degraded_x)
+            if use_degraded_cls:
+                degraded_outs = self.bbox_head(degraded_x)
+            if use_degraded_aux2:
+                degraded_aux2_cls_scores = (
+                    self.bbox_head.forward_degraded_aux2(degraded_x))
+                degraded_aux2_amp_loss = (
+                    self._compute_degraded_aux2_amp_loss(x, degraded_x))
 
         main_losses = self.bbox_head.loss(
             *main_outs,
@@ -124,13 +144,19 @@ class SymEOOD(SingleStageDetector):
             equi_flip_outs=equi_flip_outs,
             equi_flip_dirs=equi_flip_dirs,
             photo_outs=photo_outs,
-            degraded_outs=degraded_outs)
+            degraded_outs=degraded_outs,
+            degraded_aux2_cls_scores=degraded_aux2_cls_scores)
         losses.update(main_losses)
+        if degraded_aux2_amp_loss is not None:
+            losses['loss_degraded_aux2_amp'] = torch.nan_to_num(
+                degraded_aux2_amp_loss, nan=0.0, posinf=0.0, neginf=0.0)
 
         # Mode A: Anchor-based 辅助头损失
         if self.aux_heads is not None:
             for i, aux_head in enumerate(self.aux_heads):
-                aux_feats = self._build_aux_feats(x, aux_head)
+                use_aux_degraded = getattr(aux_head, 'use_degraded_view', False)
+                aux_base_feats = degraded_x if use_aux_degraded else x
+                aux_feats = self._build_aux_feats(aux_base_feats, aux_head)
                 aux_kwargs = {}
                 aux_sig_params = inspect.signature(
                     aux_head.forward_train).parameters
@@ -148,6 +174,11 @@ class SymEOOD(SingleStageDetector):
                         v = [torch.nan_to_num(vi, nan=0.0, posinf=0.0, neginf=0.0)
                              if isinstance(vi, torch.Tensor) else vi for vi in v]
                     losses['aux{:d}_{:s}'.format(i, k)] = v
+                if use_aux_degraded:
+                    aux_amp = self._compute_degraded_aux2_amp_loss(
+                        x, aux_base_feats, aux_head=aux_head)
+                    losses['aux{:d}_loss_amp'.format(i)] = torch.nan_to_num(
+                        aux_amp, nan=0.0, posinf=0.0, neginf=0.0)
 
         # Mode B: 高斯热图辅助头损失
         if self.gaussian_head is not None:
@@ -246,11 +277,12 @@ class SymEOOD(SingleStageDetector):
         return apply_t_photo(img, params)
 
     def _build_degraded_cls_view(self, img, img_metas=None):
-        """构建 cls-only 低光退化视图 (复刻 SimpleAug 的 gamma/sRGB 风格).
+        """构建低光/OOD 退化视图.
 
         输入是 Normalize 后的 RGB tensor。这里反归一化到 [0, 1]，
-        执行 gamma 变暗、对比度、噪声，再归一化回网络输入空间。
-        该视图只用于分类/objectness loss，不计算 bbox/angle/equi。
+        执行 gamma 变暗、垂直照度梯度、通道色偏、对比度和噪声，再
+        归一化回网络输入空间。该视图只用于 degraded-cls / aux2 前景
+        鲁棒监督，不计算主头 bbox/angle/equi。
         """
         # 安全检查: 确认 pipeline 的 Normalize 配置与硬编码值一致
         if img_metas is not None:
@@ -275,6 +307,10 @@ class SymEOOD(SingleStageDetector):
             head, 'degraded_contrast_range', (0.6, 1.2))
         noise_std_range = getattr(
             head, 'degraded_noise_std_range', (0.0, 20.0))
+        vertical_grad_range = getattr(
+            head, 'degraded_vertical_grad_range', (1.0, 1.0))
+        rg_range = getattr(head, 'degraded_rg_range', (1.0, 1.0))
+        bg_range = getattr(head, 'degraded_bg_range', (1.0, 1.0))
         prob = float(getattr(head, 'degraded_prob', 0.5))
 
         B = img.size(0)
@@ -292,6 +328,26 @@ class SymEOOD(SingleStageDetector):
         exponent = 1.0 / gamma.clamp(min=1e-6)
         x_gamma = x.clamp(0.0, 1.0).pow(exponent)
 
+        # 物理先验 1: 上/下方向照度不均。默认范围为 (1,1) 时不生效,
+        # 保持旧 degraded-cls 配置逐位兼容。
+        grad_ratio = torch.empty(B, 1, 1, 1, device=img.device).uniform_(
+            float(vertical_grad_range[0]), float(vertical_grad_range[1]))
+        y = torch.linspace(0.0, 1.0, x.size(2), device=img.device).view(
+            1, 1, x.size(2), 1)
+        # ratio > 1 表示图像上侧更亮、下侧更暗；均值归一避免整体曝光重复计入。
+        illum = grad_ratio + (1.0 - grad_ratio) * y
+        illum = illum / illum.mean(dim=(2, 3), keepdim=True).clamp(min=1e-6)
+        x_gamma = (x_gamma * illum).clamp(0.0, 1.0)
+
+        # 物理先验 2: 港口夜间灯光/水面反射导致的 RGB 通道偏色。
+        # 输入为 RGB, rg/bg 分别控制 R/G、B/G 的相对通道增益。
+        rg = torch.empty(B, 1, 1, 1, device=img.device).uniform_(
+            float(rg_range[0]), float(rg_range[1]))
+        bg = torch.empty(B, 1, 1, 1, device=img.device).uniform_(
+            float(bg_range[0]), float(bg_range[1]))
+        ch_gain = torch.cat([rg, torch.ones_like(rg), bg], dim=1)
+        x_gamma = (x_gamma * ch_gain).clamp(0.0, 1.0)
+
         contrast = torch.empty(B, 1, 1, 1, device=img.device).uniform_(
             float(contrast_range[0]), float(contrast_range[1]))
         mean_val = x_gamma.mean(dim=(1, 2, 3), keepdim=True)
@@ -305,3 +361,44 @@ class SymEOOD(SingleStageDetector):
         x_degraded = x_contrast.clamp(0.0, 1.0)
         x = x_degraded * on_mask + x * (1.0 - on_mask)
         return (x - mean) / std
+
+    def _compute_degraded_aux2_amp_loss(self, clean_feats, degraded_feats,
+                                        aux_head=None):
+        """退化特征到 clean teacher 的幅度域一致性.
+
+        clean_feats 使用 detach, 只把退化视图特征拉向 clean 幅度谱, 不让
+        clean 分支为了迁就退化样本而反向移动。这里不约束相位, 以降低
+        对结构/角度敏感信息的干扰风险。
+        """
+        head = self.bbox_head if aux_head is None else aux_head
+        weight = float(getattr(head, 'degraded_aux2_amp_loss_weight', 0.0))
+        if weight <= 0:
+            return clean_feats[0].sum() * 0.0
+
+        levels = getattr(head, 'degraded_aux2_amp_levels', (0, 1, 2))
+        losses = []
+        for lvl in levels:
+            lvl = int(lvl)
+            if lvl < 0 or lvl >= len(clean_feats) or lvl >= len(degraded_feats):
+                continue
+            clean_amp = self._rfft_amplitude(clean_feats[lvl].detach().float())
+            degraded_amp = self._rfft_amplitude(degraded_feats[lvl].float())
+            denom = clean_amp.detach().abs().mean().clamp(min=1.0)
+            losses.append(F.l1_loss(degraded_amp / denom, clean_amp / denom))
+
+        if not losses:
+            return clean_feats[0].sum() * 0.0
+
+        return torch.stack(losses).mean() * weight
+
+    @staticmethod
+    def _rfft_amplitude(feat):
+        """兼容新旧 PyTorch 的 2D FFT 幅度谱."""
+        if hasattr(torch, 'fft') and hasattr(torch.fft, 'rfft2'):
+            fft = torch.fft.rfft2(feat, norm='ortho')
+            amp = torch.abs(fft)
+        else:
+            fft = torch.rfft(feat, signal_ndim=2, normalized=True,
+                             onesided=True)
+            amp = torch.sqrt(fft[..., 0].pow(2) + fft[..., 1].pow(2) + 1e-12)
+        return torch.log1p(amp)

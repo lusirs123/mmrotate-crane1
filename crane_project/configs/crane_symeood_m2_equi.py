@@ -13,6 +13,7 @@ custom_imports = dict(
         'mmrotate.datasets.crane_custom_dota',
         'mmrotate.models.detectors.sym_eood_detector',
         'mmrotate.models.dense_heads.sym_eood_head',
+        'mmrotate.models.dense_heads.degraded_atss_foreground_head',
         'mmrotate.models.losses.sym_nfl_loss',
         'mmrotate.models.losses.sym_kld_loss',
         'mmrotate.models.losses.angle_equi',

@@ -12,6 +12,7 @@
 # 所有层的 loss 汇总成 loss_cls 和 loss_bbox 返回。
 
 import torch
+import torch.nn as nn
 from mmcv.cnn import bias_init_with_prob
 from mmcv.runner import force_fp32
 from mmdet.core import images_to_levels, multi_apply, unmap
@@ -38,6 +39,12 @@ class SymEOODHead(RotatedRetinaHead):
       use_degraded_cls_loss (bool): 是否启用低光退化分支分类损失. 默认 False.
       degraded_cls_loss_weight (float): degraded 分支 cls loss 的额外权重.
       degraded_*: 低光退化参数, 复刻 SimpleAug 的 gamma/sRGB 风格.
+
+    可选 degraded-aux2:
+      use_degraded_aux2_loss (bool): 是否启用独立 aux2 退化视图前景分支.
+      degraded_aux2_cls_loss_weight (float): aux2 分类/objectness 损失权重.
+      degraded_aux2_amp_loss_weight (float): 退化特征到 clean teacher 的幅度域一致性权重.
+      该分支有独立分类卷积, 不更新主头分类/回归参数, 也不计算角度/OBB 回归.
     """
 
     def __init__(self, *args,
@@ -58,6 +65,13 @@ class SymEOODHead(RotatedRetinaHead):
                  degraded_contrast_range: tuple = (0.6, 1.2),
                  degraded_noise_std_range: tuple = (0.0, 20.0),
                  degraded_prob: float = 0.5,
+                 degraded_vertical_grad_range: tuple = (1.0, 1.0),
+                 degraded_rg_range: tuple = (1.0, 1.0),
+                 degraded_bg_range: tuple = (1.0, 1.0),
+                 use_degraded_aux2_loss: bool = False,
+                 degraded_aux2_cls_loss_weight: float = 0.25,
+                 degraded_aux2_amp_loss_weight: float = 0.05,
+                 degraded_aux2_amp_levels: tuple = (0, 1, 2),
                  **kwargs):
         super().__init__(*args, **kwargs)
         # L_equi
@@ -80,6 +94,20 @@ class SymEOODHead(RotatedRetinaHead):
         self.degraded_contrast_range = degraded_contrast_range
         self.degraded_noise_std_range = degraded_noise_std_range
         self.degraded_prob = degraded_prob
+        self.degraded_vertical_grad_range = degraded_vertical_grad_range
+        self.degraded_rg_range = degraded_rg_range
+        self.degraded_bg_range = degraded_bg_range
+        # degraded aux2: 独立前景分类支路, 推理期物理熔断
+        self.use_degraded_aux2_loss = use_degraded_aux2_loss
+        self.degraded_aux2_cls_loss_weight = degraded_aux2_cls_loss_weight
+        self.degraded_aux2_amp_loss_weight = degraded_aux2_amp_loss_weight
+        self.degraded_aux2_amp_levels = degraded_aux2_amp_levels
+        if self.use_degraded_aux2_loss:
+            self.aux2_retina_cls = nn.Conv2d(
+                self.feat_channels,
+                self.num_anchors * self.cls_out_channels,
+                3,
+                padding=1)
         # 惰性导入避免循环依赖
         self._equi_fn = None
 
@@ -97,6 +125,19 @@ class SymEOODHead(RotatedRetinaHead):
         if self.use_sigmoid_cls and hasattr(self, 'retina_cls') and self.retina_cls.bias is not None:
             bias_cls = bias_init_with_prob(0.01)
             torch.nn.init.constant_(self.retina_cls.bias, bias_cls)
+        if (self.use_sigmoid_cls and hasattr(self, 'aux2_retina_cls')
+                and self.aux2_retina_cls.bias is not None):
+            bias_cls = bias_init_with_prob(0.01)
+            torch.nn.init.constant_(self.aux2_retina_cls.bias, bias_cls)
+
+    def forward_degraded_aux2(self, feats):
+        """退化视图 aux2 前景分支前向.
+
+        这里只输出分类/objectness logits, 不复用主头 cls/reg 卷积, 因此
+        退化视图不会直接更新主头参数。梯度仍会以低权重回传到共享
+        backbone/FPN, 作为外观鲁棒正则。
+        """
+        return [self.aux2_retina_cls(feat) for feat in feats]
 
     @force_fp32(apply_to=('cls_scores', 'bbox_preds'))
     def loss(self,
@@ -109,7 +150,8 @@ class SymEOODHead(RotatedRetinaHead):
              equi_flip_outs=None,
              equi_flip_dirs=None,
              photo_outs=None,
-             degraded_outs=None):
+             degraded_outs=None,
+             degraded_aux2_cls_scores=None):
         """
         覆写标准 loss()：
         1. 生成 Anchor
@@ -190,11 +232,15 @@ class SymEOODHead(RotatedRetinaHead):
         if self.use_degraded_cls_loss and degraded_outs is not None:
             degraded_cls_scores = degraded_outs[0]
 
+        if not self.use_degraded_aux2_loss:
+            degraded_aux2_cls_scores = None
+
         # multi_apply 不支持每层不同额外参数 → 手动循环
         losses_cls, losses_bbox = [], []
-        losses_equi, losses_invar, losses_degraded_cls = [], [], []
+        losses_equi, losses_invar = [], []
+        losses_degraded_cls, losses_degraded_aux2_cls = [], []
         for lvl in range(num_levels):
-            lc, lb, le, li, ldc = self.loss_single(
+            lc, lb, le, li, ldc, lda = self.loss_single(
                 cls_scores[lvl], bbox_preds[lvl],
                 level_anchor_list[lvl],
                 labels_list[lvl], label_weights_list[lvl],
@@ -207,12 +253,16 @@ class SymEOODHead(RotatedRetinaHead):
                 photo_bbox_pred=None if photo_bbox_preds is None
                 else photo_bbox_preds[lvl],
                 degraded_cls_score=None if degraded_cls_scores is None
-                else degraded_cls_scores[lvl])
+                else degraded_cls_scores[lvl],
+                degraded_aux2_cls_score=(
+                    None if degraded_aux2_cls_scores is None
+                    else degraded_aux2_cls_scores[lvl]))
             losses_cls.append(lc)
             losses_bbox.append(lb)
             losses_equi.append(le)
             losses_invar.append(li)
             losses_degraded_cls.append(ldc)
+            losses_degraded_aux2_cls.append(lda)
 
         result = dict(loss_cls=losses_cls, loss_bbox=losses_bbox)
         if self.use_equi_loss and any(le is not None and le.numel() > 0 for le in losses_equi):
@@ -223,6 +273,10 @@ class SymEOODHead(RotatedRetinaHead):
                 ldc is not None and ldc.numel() > 0
                 for ldc in losses_degraded_cls)):
             result['loss_degraded_cls'] = losses_degraded_cls
+        if (self.use_degraded_aux2_loss and any(
+                lda is not None and lda.numel() > 0
+                for lda in losses_degraded_aux2_cls)):
+            result['loss_degraded_aux2_cls'] = losses_degraded_aux2_cls
         return result
 
     def get_targets(self,
@@ -371,7 +425,8 @@ class SymEOODHead(RotatedRetinaHead):
                     equi_infos=None,
                     equi_flip_bbox_pred=None,
                     photo_bbox_pred=None,
-                    degraded_cls_score=None):
+                    degraded_cls_score=None,
+                    degraded_aux2_cls_score=None):
         """逐层 Loss 计算：SymNFLLoss + SymKLDLoss + 可选额外分支.
 
         Args:
@@ -379,6 +434,7 @@ class SymEOODHead(RotatedRetinaHead):
             equi_flip_bbox_pred: flip(img) 分支在当前 FPN level 的 bbox 预测.
             photo_bbox_pred: T_photo(img) 分支在当前 FPN level 的 bbox 预测.
             degraded_cls_score: degraded(img) 分支在当前 FPN level 的 cls 预测.
+            degraded_aux2_cls_score: 独立 aux2 在退化视图上的 cls 预测.
         """
         # 1. 维度展平对齐
         # 记忆特征图空间尺寸以便 L_equi 使用 (在 permute 之前获取)
@@ -516,8 +572,24 @@ class SymEOODHead(RotatedRetinaHead):
         if loss_degraded_cls is None:
             loss_degraded_cls = bbox_pred.new_zeros(())
 
+        # ================================================================
+        # 9. aux2 退化视图前景分类损失 (独立分类塔, 不碰 OBB/角度)
+        # ================================================================
+        loss_degraded_aux2_cls = None
+        if (self.use_degraded_aux2_loss
+                and degraded_aux2_cls_score is not None):
+            loss_degraded_aux2_cls = self._compute_degraded_aux2_cls_loss(
+                degraded_aux2_cls_score,
+                labels,
+                label_weights,
+                decoded_pred_bboxes.detach(),
+                pos_gt_bboxes.detach(),
+                cls_avg_factor)
+        if loss_degraded_aux2_cls is None:
+            loss_degraded_aux2_cls = bbox_pred.new_zeros(())
+
         return (loss_cls, loss_bbox, loss_equi, loss_invar,
-                loss_degraded_cls)
+                loss_degraded_cls, loss_degraded_aux2_cls)
 
     def _compute_degraded_cls_loss(self, degraded_cls_score, labels,
                                    label_weights, decoded_pred_bboxes,
@@ -544,6 +616,32 @@ class SymEOODHead(RotatedRetinaHead):
             loss_degraded_cls = degraded_cls_score.sum() * 0.0
 
         return loss_degraded_cls * self.degraded_cls_loss_weight
+
+    def _compute_degraded_aux2_cls_loss(self, degraded_aux2_cls_score, labels,
+                                        label_weights, decoded_pred_bboxes,
+                                        pos_gt_bboxes, cls_avg_factor):
+        """aux2 只计算退化视图前景分类/objectness.
+
+        标签复用 clean 主头的分配结果；空间排他权重使用 detach 的 clean
+        decoded boxes，只给 aux2 分类塔和退化视图特征提供梯度，不更新主头
+        bbox/angle 参数。
+        """
+        degraded_aux2_cls_score = degraded_aux2_cls_score.permute(
+            0, 2, 3, 1).reshape(-1, self.cls_out_channels)
+        loss_degraded_aux2_cls = self.loss_cls(
+            degraded_aux2_cls_score,
+            labels,
+            pred_bboxes=decoded_pred_bboxes,
+            gt_bboxes=pos_gt_bboxes,
+            weight=label_weights,
+            avg_factor=cls_avg_factor,
+            advance_iter=False)
+
+        if (torch.isnan(loss_degraded_aux2_cls)
+                or torch.isinf(loss_degraded_aux2_cls)):
+            loss_degraded_aux2_cls = degraded_aux2_cls_score.sum() * 0.0
+
+        return loss_degraded_aux2_cls * self.degraded_aux2_cls_loss_weight
 
     def _build_equi_infos(self, img_metas, equi_flip_dirs):
         """从 img_metas 和 detector 生成的方向构建 L_equi 配对信息."""

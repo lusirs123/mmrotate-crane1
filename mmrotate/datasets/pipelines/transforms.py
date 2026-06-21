@@ -39,7 +39,8 @@ class TestTimeNormalize(object):
                  mode='linear-clahe-gray',
                  linear_gain=2.0,
                  clahe_clip_limit=2.0,
-                 clahe_tile_grid=8):
+                 clahe_tile_grid=8,
+                 brightness_thr=None):
         valid_modes = [
             'linear-brighten', 'clahe', 'gray-world',
             'linear-clahe', 'linear-clahe-gray',
@@ -50,6 +51,7 @@ class TestTimeNormalize(object):
         self.linear_gain = linear_gain
         self.clahe_clip_limit = clahe_clip_limit
         self.clahe_tile_grid = clahe_tile_grid
+        self.brightness_thr = brightness_thr
 
     def _linear_brighten(self, img):
         linear = _srgb_to_linear(img)
@@ -74,6 +76,14 @@ class TestTimeNormalize(object):
 
     def __call__(self, results):
         img = results['img']
+        if self.brightness_thr is not None:
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            brightness = float(gray.mean())
+            if brightness >= self.brightness_thr:
+                results['ttn_applied'] = False
+                results['ttn_brightness'] = brightness
+                return results
+
         if self.mode == 'linear-brighten':
             img = self._linear_brighten(img)
         elif self.mode == 'clahe':
@@ -87,13 +97,17 @@ class TestTimeNormalize(object):
         results['img'] = img
         results['img_shape'] = img.shape
         results['ori_shape'] = img.shape
+        if self.brightness_thr is not None:
+            results['ttn_applied'] = True
+            results['ttn_brightness'] = brightness
         return results
 
     def __repr__(self):
         return (f'{self.__class__.__name__}(mode={self.mode}, '
                 f'linear_gain={self.linear_gain}, '
                 f'clahe_clip_limit={self.clahe_clip_limit}, '
-                f'clahe_tile_grid={self.clahe_tile_grid})')
+                f'clahe_tile_grid={self.clahe_tile_grid}, '
+                f'brightness_thr={self.brightness_thr})')
 
 
 @ROTATED_PIPELINES.register_module()
