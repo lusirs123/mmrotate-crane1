@@ -73,8 +73,8 @@ python crane_project/tools/ckpt_sweep.py \
 
   # 扫描后自动在 test 集上跑最终评估
     python crane_project/tools/ckpt_sweep.py \
-        --config crane_project/configs/crane_eood_k2.py \
-        --work-dir work_dirs/crane_eood_k2 \
+        --config crane_project/configs/crane_symeood_equi_k1.py \
+        --work-dir work_dirs/crane_symeood_equi_k1 \
         --epochs 16 18 20 22 24 \
         --gpus 0 1 2 \
         --run-final-test
