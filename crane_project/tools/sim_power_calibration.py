@@ -10,12 +10,16 @@ sim_power_calibration.py
 
 示例:
 PYTHONPATH=. python3 crane_project/tools/sim_power_calibration.py \
-  --config crane_project/configs/crane_symeood_m2_equi_degraded_cls.py \
-  --checkpoint work_dirs/crane_symeood_m2_equi_degraded_cls/epoch_22.pth \
+  --config crane_project/configs/crane_symeood_degraded_cls_k1.py \
+  --checkpoint work_dirs/crane_symeood_degraded_cls_k1/epoch_24.pth \
   --real-seq real_seq02 --real-start 138 --real-end 171 \
   --sim-seq sim_seq09 --sim-sample 120 \
   --head aux1 --device cuda:0 \
-  --out-dir work_dirs/subthreshold_peak_probe/sim_power_degraded_cls_aux1
+  --out-dir work_dirs/subthreshold_peak_probe/sim_power_degraded_cls_k1_aux1
+
+注意:
+  crane_symeood_degraded_cls_k1.py 当前属于训练中分支; 只有对应 checkpoint
+  和评估结果产出后, 才能用于结论性比较。
 """
 
 import argparse

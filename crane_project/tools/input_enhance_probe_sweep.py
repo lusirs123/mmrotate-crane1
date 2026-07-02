@@ -10,11 +10,15 @@ Real hard-slice input-enhancement sweep for §14.4:
 
 Example:
 PYTHONPATH=. python3 crane_project/tools/input_enhance_probe_sweep.py \
-  --config crane_project/configs/crane_symeood_m2_equi_degraded_cls.py \
-  --checkpoint work_dirs/crane_symeood_m2_equi_degraded_cls/epoch_22.pth \
+  --config crane_project/configs/crane_symeood_degraded_cls_k1.py \
+  --checkpoint work_dirs/crane_symeood_degraded_cls_k1/epoch_24.pth \
   --seq real_seq02 --start 138 --end 161 \
   --heads aux1 --require-angle --device cuda:0 \
-  --out-root work_dirs/subthreshold_peak_probe/input_enhance_degraded_cls_ep22_138_161
+  --out-root work_dirs/subthreshold_peak_probe/input_enhance_degraded_cls_k1_ep24_138_161
+
+Note:
+  crane_symeood_degraded_cls_k1.py is still a pending branch until its training
+  checkpoint and metrics are available.
 """
 
 import argparse

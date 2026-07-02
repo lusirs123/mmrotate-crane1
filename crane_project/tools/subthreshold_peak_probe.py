@@ -11,10 +11,10 @@ subthreshold_peak_probe.py
 
 示例:
 PYTHONPATH=. python3 crane_project/tools/subthreshold_peak_probe.py \
-  --config crane_project/configs/crane_symeood_m2_equi.py \
-  --checkpoint work_dirs/crane_symeood_m2_equi/epoch_24.pth \
+  --config crane_project/configs/crane_eood_k1.py \
+  --checkpoint work_dirs/crane_eood_k1/epoch_24.pth \
   --seq real_seq02 --start 133 --end 171 --ok-radius 10 \
-  --heads main aux1 --out-dir work_dirs/subthreshold_peak_probe/equi_ep24
+  --heads main aux1 --out-dir work_dirs/subthreshold_peak_probe/eood_k1_ep24
 """
 
 import argparse

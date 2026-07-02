@@ -17,14 +17,14 @@ Run:
 
     # 一键全对比
     PYTHONPATH=. python3 crane_project/tools/mcml_diag.py \\
-        --config crane_project/configs/crane_symeood_m2_equi.py \\
-        --checkpoint work_dirs/crane_symeood_m2_equi/epoch_24.pth \\
+        --config crane_project/configs/crane_eood_k1.py \\
+        --checkpoint work_dirs/crane_eood_k1/epoch_24.pth \\
         --split all --gpu 0 --sample 10
 
     # 单数据源
     PYTHONPATH=. python3 crane_project/tools/mcml_diag.py \\
-        --config crane_project/configs/crane_symeood_m2_equi.py \\
-        --checkpoint work_dirs/crane_symeood_m2_equi/epoch_24.pth \\
+        --config crane_project/configs/crane_eood_k1.py \\
+        --checkpoint work_dirs/crane_eood_k1/epoch_24.pth \\
         --split train --seq real_seq01 --gpu 0
 """
 import argparse
@@ -519,6 +519,35 @@ def generate_anchors(anchor_generator, cls_scores, device='cpu'):
     return anchor_generator.grid_priors(featmap_sizes, device=device)
 
 
+def get_inference_head(model):
+    """Return the head that supplies anchors/coder for inference outputs."""
+    head = model.bbox_head
+    predictors = getattr(head, 'predictors', None)
+    if predictors is not None and len(predictors) > 0:
+        return predictors[0]
+    return head
+
+
+def repeat_scores_for_anchors(scores, bbox_flat, anchors, lvl):
+    """Align per-location scores with per-anchor bbox/anchor tensors."""
+    if anchors.shape[0] == scores.shape[0] == bbox_flat.shape[0]:
+        return scores
+
+    if anchors.shape[0] != bbox_flat.shape[0]:
+        raise RuntimeError(
+            f'Anchor/bbox mismatch at level {lvl}: '
+            f'anchors={anchors.shape}, bbox={bbox_flat.shape}')
+
+    if anchors.shape[0] % scores.shape[0] != 0:
+        raise RuntimeError(
+            f'Anchor/order mismatch at level {lvl}: '
+            f'anchors={anchors.shape}, scores={scores.shape}, '
+            f'bbox={bbox_flat.shape}')
+
+    repeat_factor = anchors.shape[0] // scores.shape[0]
+    return scores[:, None].expand(-1, repeat_factor).reshape(-1)
+
+
 def topk_decoded_boxes(cls_scores, bbox_preds, anchors_per_level, bbox_coder,
                        img_shape=None, topk=10, score_thr=0.01):
     """Decode 所有 anchor 的 bbox_pred, 返回 top-k 高分 decoded box。
@@ -538,6 +567,7 @@ def topk_decoded_boxes(cls_scores, bbox_preds, anchors_per_level, bbox_coder,
         cls_flat = cls_feat.permute(1, 2, 0).reshape(-1, 1)
         scores = cls_flat.sigmoid().reshape(-1)
         bbox_flat = bbox_feat.permute(1, 2, 0).reshape(-1, 5)
+        scores = repeat_scores_for_anchors(scores, bbox_flat, anchors, lvl)
 
         if anchors.shape[0] != scores.shape[0] or anchors.shape[0] != bbox_flat.shape[0]:
             raise RuntimeError(
@@ -1040,7 +1070,8 @@ def main():
     transform_compose, img_scale, flip = build_test_transforms(cfg)
 
     # Anchor info
-    anchor_gen = model.bbox_head.anchor_generator
+    infer_head = get_inference_head(model)
+    anchor_gen = infer_head.anchor_generator
     feat_strides = anchor_gen.strides
     feat_strides = [s[0] if isinstance(s, (tuple, list)) else s for s in feat_strides]
     num_base_anchors = anchor_gen.num_base_anchors
@@ -1050,7 +1081,7 @@ def main():
         num_anchors_per_level = [num_base_anchors] * len(feat_strides)
 
     # Bbox coder & model anchor generator (for top-k decoded box analysis)
-    bbox_coder = model.bbox_head.bbox_coder
+    bbox_coder = infer_head.bbox_coder
     topk = args.topk
 
     data_root = args.data_root

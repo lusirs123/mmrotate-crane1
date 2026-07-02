@@ -18,11 +18,12 @@ ctx_entry_probe.py - context ROI 外扩头入口诊断工具。
   RIoU 也很低, 外扩头没有可靠 crop 入口, 应先改候选播种策略。
 
 示例:
-  PYTHONPATH=. python3 crane_project/tools/ctx_entry_probe.py \\
-      --config crane_project/configs/crane_symeood_m2_equi.py \\
-      --checkpoint work_dirs/crane_symeood_m2_equi/epoch_24.pth \\
-      --split test --seq real_seq02 --start 133 --end 171 \\
-      --gpu 0 --topk 50 --out-json work_dirs/ctx_entry_seq02_133_171.json
+  PYTHONPATH=. python3 crane_project/tools/ctx_entry_probe.py \
+      --config crane_project/configs/crane_eood_k1.py \
+      --checkpoint work_dirs/crane_eood_k1/epoch_24.pth \
+      --split test --seq real_seq02 --start 133 --end 171 \
+      --candidate-source aux1 --gpu 2 --topk 50 \
+      --out-json work_dirs/ctx_entry_seq02_133_171_eood_k1_aux1.json
 """
 
 import argparse
@@ -58,6 +59,9 @@ def parse_args():
     parser.add_argument('--end', type=int, default=None)
     parser.add_argument('--sample', type=int, default=10)
     parser.add_argument('--gpu', type=int, default=0)
+    parser.add_argument('--candidate-source', default='main',
+                        choices=['main', 'aux1'],
+                        help='Dense candidate source: main=predictors[0], aux1=predictors[1]')
     parser.add_argument('--topk', type=int, default=50,
                         help='score-topK decoded candidates to inspect')
     parser.add_argument('--entry-iou-thr', type=float, default=0.10,
@@ -117,38 +121,126 @@ def discover_frame_ids(args) -> Tuple[str, List[int]]:
     return seq, frame_ids
 
 
-def flatten_decode_candidates(model, cls_scores, bbox_preds, img_shape):
-    """按 SymEOODHead 推理顺序展平并 decode 全量候选。"""
+def get_candidate_head(model, candidate_source: str):
+    """Return the predictor that supplies candidates for this probe."""
+    head = model.bbox_head
+    predictors = getattr(head, 'predictors', None)
+    if candidate_source == 'main':
+        if predictors is None:
+            return head
+        if len(predictors) < 1:
+            raise ValueError('candidate_source=main requires predictors[0]')
+        return predictors[0]
+    if candidate_source == 'aux1':
+        if predictors is not None and len(predictors) >= 2:
+            return predictors[1]
+        aux_heads = getattr(model, 'aux_heads', None)
+        if aux_heads is not None and len(aux_heads) >= 1:
+            return aux_heads[0]
+        raise ValueError(
+            'candidate_source=aux1 requires either bbox_head.predictors[1] '
+            'or model.aux_heads[0]')
+    raise ValueError(f'Unsupported candidate_source: {candidate_source}')
+
+
+def forward_candidate_head(model, feats, candidate_source: str):
+    """Run the selected dense head before score thresholding/NMS."""
+    outer_head = model.bbox_head
+    predictors = getattr(outer_head, 'predictors', None)
+    candidate_head = get_candidate_head(model, candidate_source)
+
+    if candidate_source == 'main' and predictors is None:
+        cls_scores, bbox_preds = outer_head(feats)
+        return candidate_head, cls_scores, bbox_preds
+
+    if predictors is not None:
+        # EoodHead.eval() only forwards predictors[0]. Rebuild its shared
+        # cls/reg features so aux1 can be probed as a dense O2M candidate pool.
+        multi_level_features = [outer_head.forward_single(x) for x in feats]
+        cls_scores, bbox_preds = candidate_head.forward(multi_level_features)
+        return candidate_head, cls_scores, bbox_preds
+
+    aux_heads = getattr(model, 'aux_heads', None)
+    if candidate_source == 'aux1' and aux_heads is not None:
+        if hasattr(model, '_build_aux_feats'):
+            aux_feats = model._build_aux_feats(feats, candidate_head)
+        else:
+            aux_feats = [(feat, feat) for feat in feats]
+        cls_scores, bbox_preds = candidate_head.forward(aux_feats)
+        return candidate_head, cls_scores, bbox_preds
+
+    cls_scores, bbox_preds = outer_head(feats)
+    return candidate_head, cls_scores, bbox_preds
+
+
+def candidate_head_name(head) -> str:
+    if hasattr(head, '__class__'):
+        return head.__class__.__name__
+    return str(head)
+
+
+def _repeat_scores_for_anchors(scores, bbox_flat, anchors, lvl):
+    """Align per-location scores with per-anchor bbox/anchor tensors."""
+    if anchors.shape[0] == scores.shape[0] == bbox_flat.shape[0]:
+        return scores, 1
+
+    if anchors.shape[0] != bbox_flat.shape[0]:
+        raise RuntimeError(
+            f'Anchor/bbox mismatch at level {lvl}: '
+            f'anchors={anchors.shape}, bbox={bbox_flat.shape}')
+
+    if anchors.shape[0] % scores.shape[0] != 0:
+        raise RuntimeError(
+            f'Anchor/order mismatch at level {lvl}: '
+            f'anchors={anchors.shape}, scores={scores.shape}, '
+            f'bbox={bbox_flat.shape}')
+
+    repeat_factor = anchors.shape[0] // scores.shape[0]
+    scores = scores[:, None].expand(-1, repeat_factor).reshape(-1)
+    return scores, repeat_factor
+
+
+def flatten_decode_candidates(candidate_head, cls_scores, bbox_preds, img_shape):
+    """按候选 head 顺序展平并 decode 全量候选。"""
     device = cls_scores[0].device
     featmap_sizes = [score.shape[-2:] for score in cls_scores]
-    anchors_per_level = model.bbox_head.anchor_generator.grid_priors(
+    anchors_per_level = candidate_head.anchor_generator.grid_priors(
         featmap_sizes, device=device)
 
     all_boxes, all_scores, all_levels, all_anchor_centers = [], [], [], []
+    alignments = []
     for lvl, (cls_lvl, bbox_lvl, anchors) in enumerate(
             zip(cls_scores, bbox_preds, anchors_per_level)):
         cls_feat = cls_lvl[0]
         bbox_feat = bbox_lvl[0]
         scores = cls_feat.permute(1, 2, 0).reshape(-1, 1).sigmoid().reshape(-1)
         bbox_flat = bbox_feat.permute(1, 2, 0).reshape(-1, 5)
-        if anchors.shape[0] != scores.shape[0]:
-            raise RuntimeError(
-                f'Anchor/order mismatch at level {lvl}: '
-                f'anchors={anchors.shape}, scores={scores.shape}')
+        raw_score_count = int(scores.numel())
+        scores, repeat_factor = _repeat_scores_for_anchors(
+            scores, bbox_flat, anchors, lvl)
 
-        decoded = model.bbox_head.bbox_coder.decode(
+        decoded = candidate_head.bbox_coder.decode(
             anchors, bbox_flat, max_shape=img_shape)
         all_boxes.append(decoded)
         all_scores.append(scores)
         all_levels.append(torch.full(
             (scores.numel(),), lvl, dtype=torch.long, device=device))
         all_anchor_centers.append(anchors[:, :2])
+        alignments.append(dict(
+            level=int(lvl),
+            anchors=int(anchors.shape[0]),
+            raw_scores=raw_score_count,
+            scores=int(scores.numel()),
+            bbox=int(bbox_flat.shape[0]),
+            score_repeat_factor=int(repeat_factor),
+        ))
 
     return (
         torch.cat(all_boxes, dim=0),
         torch.cat(all_scores, dim=0),
         torch.cat(all_levels, dim=0),
         torch.cat(all_anchor_centers, dim=0),
+        alignments,
     )
 
 
@@ -269,9 +361,10 @@ def analyze_frame(model, transform_compose, img_scale, flip, args,
 
     with torch.no_grad():
         feat = model.extract_feat(img_tensor)
-        cls_scores, bbox_preds = model.bbox_head(feat)
-        boxes, scores, levels, anchor_centers = flatten_decode_candidates(
-            model, cls_scores, bbox_preds, meta['img_shape'])
+        candidate_head, cls_scores, bbox_preds = forward_candidate_head(
+            model, feat, args.candidate_source)
+        boxes, scores, levels, anchor_centers, decode_alignment = flatten_decode_candidates(
+            candidate_head, cls_scores, bbox_preds, meta['img_shape'])
 
     gt_box = gt_to_tensor(gt, boxes.device)
     gt_diag = float(np.sqrt(gt['w'] ** 2 + gt['h'] ** 2))
@@ -294,11 +387,14 @@ def analyze_frame(model, transform_compose, img_scale, flip, args,
         fname=fname,
         split=args.split,
         seq=seq,
+        candidate_source=args.candidate_source,
+        candidate_head=candidate_head_name(candidate_head),
         img_path=img_path,
         gt=dict(cx=gt['cx'], cy=gt['cy'], w=gt['w'], h=gt['h'],
                 angle=gt['angle'], diag=gt_diag),
         radius=radius,
         global_max=float(scores.max().item()),
+        decode_alignment=decode_alignment,
         brightness=float(img_stats['raw_brightness']),
         score_topk=score_topk,
         decoded_center_neighborhood=decoded_neigh,
@@ -366,12 +462,12 @@ def print_summary(rows: List[Dict], entry_iou_thr: float):
     not_ranked = decisions.get('ENTRY_EXISTS_NOT_SCORE_RANKED', 0)
     if no_geom > total * 0.5:
         print('  verdict: GT 邻域几何入口大多不存在; 先改候选播种策略, '
-              '不要直接进入 ROI refine MVP。')
+              '不要进入后续 temporal/non-score seeding。')
     elif not_ranked > total * 0.5:
         print('  verdict: 邻域有几何入口, 但按分数 topK 抓不到; '
-              'MVP 需要非分数候选播种或低分邻域保留。')
+              '后续应验证非分数候选播种或平台抬分。')
     else:
-        print('  verdict: score-topK 已有足够几何入口; 可以进入 R1 单区 refine MVP。')
+        print('  verdict: score-topK 已有足够几何入口; 候选源可支撑后续机制验证。')
     print(f'  entry_iou_thr={entry_iou_thr:.2f}')
 
 
@@ -382,6 +478,7 @@ def main():
     torch.manual_seed(args.seed)
 
     model, cfg = load_model(args.config, args.checkpoint, args.gpu)
+    candidate_head = get_candidate_head(model, args.candidate_source)
     diag = get_diag()
     transform_compose, img_scale, flip = diag.build_test_transforms(cfg)
     seq, frame_ids = discover_frame_ids(args)
@@ -392,6 +489,8 @@ def main():
     print(f'config:     {args.config}')
     print(f'checkpoint: {args.checkpoint}')
     print(f'source:     {args.split}/{seq} frames={len(frame_ids)}')
+    print(f'candidates: {args.candidate_source}')
+    print(f'head:       {candidate_head_name(candidate_head)}')
     print(f'topK:       {args.topk}')
     print(f'entry_thr:  {args.entry_iou_thr}')
 
