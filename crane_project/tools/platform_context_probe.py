@@ -67,6 +67,15 @@ def parse_args():
                         choices=['center', 'polygon_center'], default='center',
                         help=('For center_expand, prefer explicit manual center '
                               'or the center of manual polygon corners.'))
+    parser.add_argument('--disable-seq-platform-k', action='store_true',
+                        help=('Do not fit a sequence-level rigid platform K from '
+                              'manual polygons for unannotated frames.'))
+    parser.add_argument('--seq-platform-angle-mode',
+                        choices=['beam', 'median'], default='beam',
+                        help=('Angle used when replaying fitted seq-level K. '
+                              'beam keeps the generated platform box aligned '
+                              'with the beam; median uses median manual polygon '
+                              'angle offset.'))
     parser.add_argument('--platform-width-scale', type=float, default=1.8,
                         help='Width multiplier for center-expanded platform box.')
     parser.add_argument('--platform-height-scale', type=float, default=2.2,
@@ -81,6 +90,16 @@ def parse_args():
     parser.add_argument('--gpu', type=int, default=0)
     parser.add_argument('--feature-levels', default='0,1,2',
                         help='Comma-separated FPN levels used for saliency.')
+    parser.add_argument('--platform-edge-abs-thr', type=float, default=0.01,
+                        help=('Absolute Canny edge-density threshold for platform '
+                              'image readability. This avoids requiring platform '
+                              'edges to beat an already-clear beam.'))
+    parser.add_argument('--platform-contrast-abs-thr', type=float, default=1.0,
+                        help=('Absolute platform-vs-ring gray contrast threshold '
+                              'for image readability.'))
+    parser.add_argument('--relative-visible-ratio-thr', type=float, default=1.05,
+                        help=('Relative platform/beam ratio threshold retained as '
+                              'a diagnostic for platform-more-visible-than-beam.'))
     parser.add_argument('--vis-sample', type=int, default=12,
                         help='Number of overlay frames to save evenly.')
     parser.add_argument('--vis-frames', default='',
@@ -111,6 +130,58 @@ def order_corners(poly: np.ndarray) -> np.ndarray:
     c = pts.mean(axis=0)
     ang = np.arctan2(pts[:, 1] - c[1], pts[:, 0] - c[0])
     return pts[np.argsort(ang)]
+
+
+def normalize_angle(theta: float) -> float:
+    while theta > math.pi / 2:
+        theta -= math.pi
+    while theta <= -math.pi / 2:
+        theta += math.pi
+    return float(theta)
+
+
+def oriented_frame(poly: np.ndarray) -> Dict:
+    ordered = order_corners(poly)
+    edges = np.roll(ordered, -1, axis=0) - ordered
+    lengths = np.linalg.norm(edges, axis=1)
+    long_idx = int(np.argmax(lengths))
+    short_idx = int(np.argmin(lengths))
+    ux = edges[long_idx].astype(np.float32)
+    ux = ux / max(float(np.linalg.norm(ux)), 1e-6)
+    if ux[0] < 0 or (abs(float(ux[0])) < 1e-6 and ux[1] < 0):
+        ux = -ux
+    uy = np.asarray([-ux[1], ux[0]], dtype=np.float32)
+    center = polygon_center(poly)
+    proj_x = (poly.astype(np.float32) - center) @ ux
+    proj_y = (poly.astype(np.float32) - center) @ uy
+    return dict(
+        center=center,
+        ux=ux,
+        uy=uy,
+        long_len=max(float(np.max(proj_x) - np.min(proj_x)), 1e-6),
+        short_len=max(float(np.max(proj_y) - np.min(proj_y)), 1e-6),
+        theta=math.atan2(float(ux[1]), float(ux[0])),
+        edge_long_len=float(lengths[long_idx]),
+        edge_short_len=float(lengths[short_idx]),
+    )
+
+
+def polygon_in_frame_stats(poly: np.ndarray, frame: Dict) -> Dict:
+    pts = poly.astype(np.float32)
+    center = polygon_center(pts)
+    proj_x = (pts - center) @ frame['ux']
+    proj_y = (pts - center) @ frame['uy']
+    local_center = center - frame['center']
+    poly_frame = oriented_frame(poly)
+    return dict(
+        center=center,
+        long_len=max(float(np.max(proj_x) - np.min(proj_x)), 1e-6),
+        short_len=max(float(np.max(proj_y) - np.min(proj_y)), 1e-6),
+        offset_long=float(np.dot(local_center, frame['ux'])),
+        offset_short=float(np.dot(local_center, frame['uy'])),
+        theta=float(poly_frame['theta']),
+        dtheta=normalize_angle(float(poly_frame['theta']) - float(frame['theta'])),
+    )
 
 
 def fit_affine(src: np.ndarray, dst: np.ndarray) -> Optional[np.ndarray]:
@@ -192,11 +263,26 @@ def normalize_frame_key(value) -> Optional[int]:
         return None
 
 
-def load_manual_platforms(path: str) -> Dict[int, Dict]:
+def parse_annotation_key(key: str) -> Dict:
+    parts = str(key).split('/')
+    row: Dict = {}
+    if len(parts) >= 3:
+        row['split'] = parts[-3]
+        row['seq'] = parts[-2]
+        row['frame'] = normalize_frame_key(parts[-1])
+    else:
+        row['frame'] = normalize_frame_key(key)
+    return row
+
+
+def load_manual_platforms(path: str, split: str, seq: str) -> Dict[int, Dict]:
     if not path:
         return {}
     with open(path, 'r') as f:
         data = json.load(f)
+
+    default_split = str(data.get('split', split)) if isinstance(data, dict) else split
+    default_seq = str(data.get('seq', data.get('sequence', seq))) if isinstance(data, dict) else seq
 
     if isinstance(data, dict):
         items = data.get('frames', data.get('annotations', data))
@@ -207,7 +293,10 @@ def load_manual_platforms(path: str) -> Dict[int, Dict]:
                     row = dict(value)
                 else:
                     row = {'polygon': value}
-                row.setdefault('frame', key)
+                keyed = parse_annotation_key(str(key))
+                for k, v in keyed.items():
+                    if v is not None:
+                        row.setdefault(k, v)
                 iterable.append(row)
         else:
             iterable = items
@@ -218,10 +307,20 @@ def load_manual_platforms(path: str) -> Dict[int, Dict]:
     for item in iterable:
         if not isinstance(item, dict):
             continue
+        item = dict(item)
+        item.setdefault('split', default_split)
+        item.setdefault('seq', item.get('sequence', default_seq))
+        if str(item.get('split')) != str(split):
+            continue
+        if str(item.get('seq', item.get('sequence'))) != str(seq):
+            continue
         fid = normalize_frame_key(
             item.get('frame', item.get('frame_id', item.get('image', item.get('img_path')))))
         if fid is None:
             continue
+        item['frame'] = int(fid)
+        item['split'] = str(split)
+        item['seq'] = str(seq)
         rows[int(fid)] = item
     return rows
 
@@ -289,11 +388,84 @@ def beam_oriented_box_from_center(
     ], axis=0).astype(np.float32)
 
 
+def platform_poly_from_seq_k(beam: np.ndarray, seq_k: Dict) -> np.ndarray:
+    frame = oriented_frame(beam)
+    center = (
+        frame['center']
+        + frame['ux'] * float(seq_k['offset_long_k']) * frame['long_len']
+        + frame['uy'] * float(seq_k['offset_short_k']) * frame['short_len'])
+    width = max(float(seq_k['width_k']) * frame['long_len'], 1e-6)
+    height = max(float(seq_k['height_k']) * frame['short_len'], 1e-6)
+    theta = float(frame['theta']) + float(seq_k.get('dtheta', 0.0))
+    ux = np.asarray([math.cos(theta), math.sin(theta)], dtype=np.float32)
+    uy = np.asarray([-math.sin(theta), math.cos(theta)], dtype=np.float32)
+    c = center.astype(np.float32)
+    return np.stack([
+        c - ux * width / 2 - uy * height / 2,
+        c + ux * width / 2 - uy * height / 2,
+        c + ux * width / 2 + uy * height / 2,
+        c - ux * width / 2 + uy * height / 2,
+    ], axis=0).astype(np.float32)
+
+
+def frame_platform_k(beam: np.ndarray, platform: np.ndarray, fid: int) -> Dict:
+    beam_frame = oriented_frame(beam)
+    plat_stats = polygon_in_frame_stats(platform, beam_frame)
+    return dict(
+        frame=int(fid),
+        width_k=float(plat_stats['long_len'] / beam_frame['long_len']),
+        height_k=float(plat_stats['short_len'] / beam_frame['short_len']),
+        offset_long_k=float(plat_stats['offset_long'] / beam_frame['long_len']),
+        offset_short_k=float(plat_stats['offset_short'] / beam_frame['short_len']),
+        dtheta=float(plat_stats['dtheta']),
+    )
+
+
+def fit_seq_platform_k(manual_platforms: Dict[int, Dict], args) -> Optional[Dict]:
+    samples = []
+    for fid, item in sorted(manual_platforms.items()):
+        poly = manual_polygon(item)
+        if poly is None:
+            continue
+        _, ann_path = diag.find_files(args.data_root, args.split, args.seq, int(fid))
+        beam = ann_to_poly(ann_path) if ann_path else None
+        if beam is None:
+            continue
+        samples.append(frame_platform_k(beam, poly, int(fid)))
+    if not samples:
+        return None
+
+    def median_value(key: str) -> float:
+        return float(np.median([float(s[key]) for s in samples]))
+
+    model = dict(
+        source='manual_polygon_median',
+        sample_count=len(samples),
+        sample_frames=[int(s['frame']) for s in samples],
+        width_k=median_value('width_k'),
+        height_k=median_value('height_k'),
+        offset_long_k=median_value('offset_long_k'),
+        offset_short_k=median_value('offset_short_k'),
+        dtheta=(median_value('dtheta')
+                if args.seq_platform_angle_mode == 'median' else 0.0),
+        observed_dtheta=median_value('dtheta'),
+        angle_mode=args.seq_platform_angle_mode,
+        samples=samples,
+    )
+    for key in ['width_k', 'height_k', 'offset_long_k', 'offset_short_k', 'dtheta']:
+        vals = np.asarray([float(s[key]) for s in samples], dtype=np.float32)
+        model[f'{key}_std'] = float(vals.std())
+        model[f'{key}_min'] = float(vals.min())
+        model[f'{key}_max'] = float(vals.max())
+    return model
+
+
 def resolve_platform(
         beam: np.ndarray,
         fid: int,
         calibration: Dict,
         manual_platforms: Dict[int, Dict],
+        seq_platform_k: Optional[Dict],
         args) -> Tuple[np.ndarray, str]:
     item = manual_platforms.get(int(fid))
     if item:
@@ -320,6 +492,9 @@ def resolve_platform(
             min_height=args.platform_min_height,
             angle_deg=args.platform_angle_deg,
         ), 'manual_center_expand'
+
+    if seq_platform_k is not None and not args.disable_seq_platform_k:
+        return platform_poly_from_seq_k(beam, seq_platform_k), 'seq_k_pred'
 
     return apply_affine(beam, calibration['affine']), 'calibration_affine'
 
@@ -445,10 +620,13 @@ def write_csv(path: str, rows: Sequence[Dict]):
     preferred = [
         'frame', 'img_path', 'platform_source', 'brightness',
         'beam_area', 'platform_area', 'platform_over_beam_area',
+        'platform_geometry_gate',
         'center_offset_x', 'center_offset_y', 'center_offset_norm',
         'beam_edge_mean', 'platform_edge_mean', 'platform_over_beam_edge',
         'beam_ring_contrast', 'platform_ring_contrast',
         'platform_over_beam_ring_contrast',
+        'platform_image_readable_proxy',
+        'platform_more_visible_than_beam_proxy',
         'feat_beam_mean', 'feat_platform_mean', 'feat_platform_over_beam',
         'platform_image_visible_proxy',
         'platform_feature_salient_proxy',
@@ -465,7 +643,7 @@ def write_csv(path: str, rows: Sequence[Dict]):
             writer.writerow(row)
 
 
-def summarize(rows: Sequence[Dict], calibration: Dict) -> Dict:
+def summarize_subset(rows: Sequence[Dict]) -> Dict:
     def vals(key):
         return [
             float(r[key]) for r in rows
@@ -481,23 +659,16 @@ def summarize(rows: Sequence[Dict], calibration: Dict) -> Dict:
             max=float(np.max(v)) if v else None,
         )
 
-    offsets = calibration.get('offsets')
-    offset_norms = (
-        np.linalg.norm(offsets, axis=1).astype(float).tolist()
-        if offsets is not None and len(offsets) else [])
     return dict(
         frames=len(rows),
         frame_start=int(rows[0]['frame']) if rows else None,
         frame_end=int(rows[-1]['frame']) if rows else None,
-        calibration=dict(
-            source=calibration['source'],
-            sequence=calibration['sequence'],
-            sample_count=calibration['sample_count'],
-            offset_norm_mean=float(np.mean(offset_norms)) if offset_norms else None,
-            offset_norm_std=float(np.std(offset_norms)) if offset_norms else None,
-        ),
         platform_image_visible_proxy=summarize_bool(
             rows, 'platform_image_visible_proxy'),
+        platform_image_readable_proxy=summarize_bool(
+            rows, 'platform_image_readable_proxy'),
+        platform_more_visible_than_beam_proxy=summarize_bool(
+            rows, 'platform_more_visible_than_beam_proxy'),
         platform_feature_salient_proxy=summarize_bool(
             rows, 'platform_feature_salient_proxy'),
         platform_visible_proxy=summarize_bool(rows, 'platform_visible_proxy'),
@@ -509,13 +680,49 @@ def summarize(rows: Sequence[Dict], calibration: Dict) -> Dict:
     )
 
 
+def summarize(rows: Sequence[Dict],
+              calibration: Dict,
+              seq_platform_k: Optional[Dict]) -> Dict:
+    offsets = calibration.get('offsets')
+    offset_norms = (
+        np.linalg.norm(offsets, axis=1).astype(float).tolist()
+        if offsets is not None and len(offsets) else [])
+    summary = summarize_subset(rows)
+    summary.update(dict(
+        calibration=dict(
+            source=calibration['source'],
+            sequence=calibration['sequence'],
+            sample_count=calibration['sample_count'],
+            offset_norm_mean=float(np.mean(offset_norms)) if offset_norms else None,
+            offset_norm_std=float(np.std(offset_norms)) if offset_norms else None,
+        ),
+        seq_platform_k=seq_platform_k,
+        by_platform_source={
+            source: summarize_subset([r for r in rows if r.get('platform_source') == source])
+            for source in sorted({str(r.get('platform_source')) for r in rows})
+        },
+    ))
+    return summary
+
+
 def main():
     args = parse_args()
     os.makedirs(args.out_dir, exist_ok=True)
     vis_dir = os.path.join(args.out_dir, 'vis')
     levels = [int(x) for x in args.feature_levels.split(',') if x.strip()]
     calibration = load_calibration(args.calibration, args.seq)
-    manual_platforms = load_manual_platforms(args.manual_platform_json)
+    manual_platforms = load_manual_platforms(
+        args.manual_platform_json, args.split, args.seq)
+    seq_platform_k = (
+        None if args.disable_seq_platform_k
+        else fit_seq_platform_k(manual_platforms, args))
+    if seq_platform_k is not None:
+        print(f'[seq_k] fitted from frames {seq_platform_k["sample_frames"]}: '
+              f'width_k={seq_platform_k["width_k"]:.4f} '
+              f'height_k={seq_platform_k["height_k"]:.4f} '
+              f'offset_long_k={seq_platform_k["offset_long_k"]:.4f} '
+              f'offset_short_k={seq_platform_k["offset_short_k"]:.4f} '
+              f'dtheta={seq_platform_k["dtheta"]:.4f}')
 
     model, cfg = load_model(args.config, args.checkpoint, args.gpu)
     transform_compose, _, flip = diag.build_test_transforms(cfg)
@@ -540,7 +747,7 @@ def main():
             print(f'[skip] {args.seq}_{fid:05d}: missing beam OBB')
             continue
         platform, platform_source = resolve_platform(
-            beam, fid, calibration, manual_platforms, args)
+            beam, fid, calibration, manual_platforms, seq_platform_k, args)
         img_bgr = cv2.imread(img_path)
         if img_bgr is None:
             print(f'[skip] {args.seq}_{fid:05d}: unreadable image')
@@ -570,11 +777,31 @@ def main():
             if beam_stats.get('ring_contrast') is not None
             and platform_stats.get('ring_contrast') is not None else None)
         feat_ratio = feat_stats.get('feat_platform_over_beam')
-        platform_image_visible_proxy = bool(
-            area_ratio >= 1.05
-            and (ratio_ge(edge_ratio, 1.05) or ratio_ge(ring_ratio, 1.05)))
+        platform_geometry_gate = (
+            platform_source in ('manual_polygon', 'manual_center_expand', 'seq_k_pred')
+            or area_ratio >= 1.05)
+
+        # Two different questions are intentionally kept separate:
+        # 1) Is the platform itself readable in the image?
+        # 2) Is the platform more salient than the beam?
+        #
+        # Normal real-domain frames often have a sharp beam and a sharp platform.
+        # A relative-only gate incorrectly marks those as image-invisible when the
+        # platform does not beat the beam. The hard precondition for supervision is
+        # platform readability; relative visibility remains diagnostic.
+        platform_image_readable_proxy = bool(
+            platform_geometry_gate
+            and (ratio_ge(platform_stats.get('edge_mean'), args.platform_edge_abs_thr)
+                 or ratio_ge(platform_stats.get('ring_contrast'),
+                             args.platform_contrast_abs_thr)))
+        platform_more_visible_than_beam_proxy = bool(
+            platform_geometry_gate
+            and (ratio_ge(edge_ratio, args.relative_visible_ratio_thr)
+                 or ratio_ge(ring_ratio, args.relative_visible_ratio_thr)))
+        platform_image_visible_proxy = platform_image_readable_proxy
         platform_feature_salient_proxy = bool(
-            area_ratio >= 1.05 and ratio_ge(feat_ratio, 1.05))
+            platform_geometry_gate
+            and ratio_ge(feat_ratio, args.relative_visible_ratio_thr))
         # Visibility is an image-domain precondition.  Feature saliency is
         # reported separately and must not rescue an image-invisible frame.
         visible_proxy = platform_image_visible_proxy
@@ -588,6 +815,7 @@ def main():
             beam_area=float(beam_stats['area']),
             platform_area=float(platform_stats['area']),
             platform_over_beam_area=float(area_ratio),
+            platform_geometry_gate=bool(platform_geometry_gate),
             center_offset_x=float(offset[0]),
             center_offset_y=float(offset[1]),
             center_offset_norm=float(np.linalg.norm(offset)),
@@ -597,6 +825,8 @@ def main():
             beam_ring_contrast=beam_stats.get('ring_contrast'),
             platform_ring_contrast=platform_stats.get('ring_contrast'),
             platform_over_beam_ring_contrast=ring_ratio,
+            platform_image_readable_proxy=platform_image_readable_proxy,
+            platform_more_visible_than_beam_proxy=platform_more_visible_than_beam_proxy,
             platform_image_visible_proxy=platform_image_visible_proxy,
             platform_feature_salient_proxy=platform_feature_salient_proxy,
             platform_visible_proxy=visible_proxy,
@@ -606,6 +836,8 @@ def main():
         print(
             f"[{args.seq}_{fid:05d}] "
             f"image_visible={int(platform_image_visible_proxy)} "
+            f"image_readable={int(platform_image_readable_proxy)} "
+            f"more_visible={int(platform_more_visible_than_beam_proxy)} "
             f"feature_salient={int(platform_feature_salient_proxy)} "
             f"visible={int(visible_proxy)} "
             f"source={platform_source} "
@@ -620,7 +852,7 @@ def main():
     csv_path = os.path.join(args.out_dir, 'per_frame.csv')
     json_path = os.path.join(args.out_dir, 'summary.json')
     write_csv(csv_path, rows)
-    summary = summarize(rows, calibration)
+    summary = summarize(rows, calibration, seq_platform_k)
     with open(json_path, 'w') as f:
         json.dump(summary, f, indent=2)
 
@@ -629,11 +861,18 @@ def main():
     print(f'frames: {summary["frames"]} '
           f'({summary["frame_start"]}..{summary["frame_end"]})')
     print(f'calibration: {summary["calibration"]}')
+    print(f'seq_platform_k: {summary["seq_platform_k"]}')
     image_visible = summary['platform_image_visible_proxy']
     feature_salient = summary['platform_feature_salient_proxy']
     visible = summary['platform_visible_proxy']
     print(f'image_visible_proxy: {image_visible["count"]}/'
           f'{summary["frames"]} rate={image_visible["rate"]}')
+    image_readable = summary['platform_image_readable_proxy']
+    more_visible = summary['platform_more_visible_than_beam_proxy']
+    print(f'image_readable_proxy: {image_readable["count"]}/'
+          f'{summary["frames"]} rate={image_readable["rate"]}')
+    print(f'more_visible_than_beam_proxy: {more_visible["count"]}/'
+          f'{summary["frames"]} rate={more_visible["rate"]}')
     print(f'feature_salient_proxy: {feature_salient["count"]}/'
           f'{summary["frames"]} rate={feature_salient["rate"]}')
     print(f'visible_proxy: {visible["count"]}/'
@@ -643,6 +882,19 @@ def main():
     print(f'platform/beam contrast: '
           f'{summary["platform_over_beam_ring_contrast"]}')
     print(f'platform/beam feature: {summary["feat_platform_over_beam"]}')
+    print('by_platform_source:')
+    for source, sub in summary['by_platform_source'].items():
+        iv = sub['platform_image_visible_proxy']
+        ir = sub['platform_image_readable_proxy']
+        mv = sub['platform_more_visible_than_beam_proxy']
+        fv = sub['platform_feature_salient_proxy']
+        vv = sub['platform_visible_proxy']
+        print(f'  {source}: frames={sub["frames"]} '
+              f'image_visible={iv["count"]}/{sub["frames"]} rate={iv["rate"]} '
+              f'image_readable={ir["count"]}/{sub["frames"]} rate={ir["rate"]} '
+              f'more_visible={mv["count"]}/{sub["frames"]} rate={mv["rate"]} '
+              f'feature_salient={fv["count"]}/{sub["frames"]} rate={fv["rate"]} '
+              f'visible={vv["count"]}/{sub["frames"]} rate={vv["rate"]}')
     print(f'[out] wrote {csv_path}')
     print(f'[out] wrote {json_path}')
     if vis_ids:

@@ -28,6 +28,7 @@ class SymEOOD(SingleStageDetector):
                  aux_bbox_head=None,
                  gaussian_head=None,
                  uadh_head=None,
+                 platform_context_head=None,
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None,
@@ -65,6 +66,13 @@ class SymEOOD(SingleStageDetector):
             self.uadh_head = build_head(uadh_head)
         else:
             self.uadh_head = None
+
+        # Platform context auxiliary supervision. Training-only; inference
+        # remains the main head path in simple_test().
+        if platform_context_head is not None:
+            self.platform_context_head = build_head(platform_context_head)
+        else:
+            self.platform_context_head = None
 
     def _build_aux_feats(self, feats, aux_head):
         if isinstance(aux_head, RotatedATSSHead):
@@ -193,6 +201,15 @@ class SymEOOD(SingleStageDetector):
                 uadh_pred, gt_bboxes, img_metas, main_outs=main_outs,
                 bbox_head=self.bbox_head)
             for k, v in uadh_losses.items():
+                if isinstance(v, torch.Tensor):
+                    v = torch.nan_to_num(v, nan=0.0, posinf=0.0,
+                                         neginf=0.0)
+                losses[k] = v
+
+        if self.platform_context_head is not None:
+            platform_losses = self.platform_context_head.forward_train(
+                x, img_metas, gt_bboxes, gt_labels, gt_bboxes_ignore)
+            for k, v in platform_losses.items():
                 if isinstance(v, torch.Tensor):
                     v = torch.nan_to_num(v, nan=0.0, posinf=0.0,
                                          neginf=0.0)

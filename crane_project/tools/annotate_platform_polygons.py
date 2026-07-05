@@ -26,6 +26,7 @@ Controls:
 """
 
 import argparse
+import glob
 import json
 import os
 import sys
@@ -37,9 +38,6 @@ import numpy as np
 PROJ_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 if PROJ_ROOT not in sys.path:
     sys.path.insert(0, PROJ_ROOT)
-
-from crane_project.tools import mcml_diag as diag  # noqa: E402
-from crane_project.tools.platform_context_probe import ann_to_poly, polygon_center  # noqa: E402
 
 
 HELP_TEXT = (
@@ -86,13 +84,66 @@ def normalize_polygon(value) -> Optional[List[List[float]]]:
     return [[float(x), float(y)] for x, y in arr.tolist()]
 
 
-def load_existing(path: str) -> Dict[int, Dict]:
+def polygon_center(poly) -> np.ndarray:
+    return np.asarray(poly, dtype=np.float32).reshape(-1, 2).mean(axis=0)
+
+
+def ann_to_poly(ann_path: str) -> Optional[np.ndarray]:
+    if not ann_path or not os.path.exists(ann_path):
+        return None
+    with open(ann_path, 'r') as f:
+        line = f.readline().strip()
+    parts = line.split()
+    if len(parts) < 8:
+        return None
+    return np.asarray([float(x) for x in parts[:8]], dtype=np.float32).reshape(4, 2)
+
+
+def find_files(data_root: str, split: str, seq: str, frame_id: int):
+    img_split = 'train' if split == 'train_sim' else split
+    ann_split = 'train_sim' if split == 'train_sim' else split
+    img_dir = os.path.join(data_root, img_split, 'images')
+    ann_dir = os.path.join(data_root, ann_split, 'annfiles')
+    stem = f'{seq}_{int(frame_id):05d}'
+
+    img_path = None
+    for ext in ['.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff']:
+        p = os.path.join(img_dir, stem + ext)
+        if os.path.exists(p):
+            img_path = p
+            break
+    if img_path is None:
+        matches = sorted(glob.glob(os.path.join(img_dir, stem + '.*')))
+        img_path = matches[0] if matches else None
+
+    ann_path = os.path.join(ann_dir, stem + '.txt')
+    if not os.path.exists(ann_path):
+        ann_path = None
+    return img_path, ann_path
+
+
+def annotation_key(split: str, seq: str, frame_id: int) -> str:
+    return f'{split}/{seq}/{int(frame_id):05d}'
+
+
+def row_key(row: Dict, default_split: str, default_seq: str) -> Optional[str]:
+    if row is None:
+        return None
+    frame = row.get('frame', row.get('frame_id'))
+    if frame is None:
+        return None
+    split = str(row.get('split', default_split))
+    seq = str(row.get('seq', row.get('sequence', default_seq)))
+    return annotation_key(split, seq, int(frame))
+
+
+def load_existing(path: str, split: str, seq: str) -> Dict[str, Dict]:
     if not path or not os.path.exists(path):
         return {}
     with open(path, 'r') as f:
         data = json.load(f)
     frames = data.get('frames', data)
-    rows: Dict[int, Dict] = {}
+    rows: Dict[str, Dict] = {}
     if isinstance(frames, dict):
         iterator = frames.items()
     else:
@@ -101,36 +152,53 @@ def load_existing(path: str) -> Dict[int, Dict]:
     for key, value in iterator:
         if value is None:
             continue
-        fid = int(key)
+        row = dict(value)
+        if 'frame' not in row:
+            try:
+                row['frame'] = int(str(key).split('/')[-1])
+            except ValueError:
+                continue
+        row.setdefault('split', split)
+        row.setdefault('seq', seq)
         poly = normalize_polygon(
-            value.get('platform_corners')
-            or value.get('polygon')
-            or value.get('corners'))
+            row.get('platform_corners')
+            or row.get('polygon')
+            or row.get('corners'))
         if poly is None:
             continue
-        rows[fid] = {'platform_corners': poly}
+        k = row_key(row, split, seq)
+        if k is None:
+            continue
+        rows[k] = {
+            'frame': int(row['frame']),
+            'seq': str(row.get('seq', seq)),
+            'split': str(row.get('split', split)),
+            'platform_corners': poly,
+        }
     return rows
 
 
-def write_json(path: str, seq: str, split: str, rows: Dict[int, Dict]):
+def write_json(path: str, rows: Dict[str, Dict]):
     out_dir = os.path.dirname(path)
     if out_dir:
         os.makedirs(out_dir, exist_ok=True)
 
     payload = {
-        'format': 'manual_platform_polygons_v1',
+        'format': 'manual_platform_polygons_v2',
         'coordinate_space': 'original_image_pixels',
-        'seq': seq,
-        'split': split,
         'frames': {},
     }
-    for fid in sorted(rows):
-        poly = normalize_polygon(rows[fid].get('platform_corners'))
+    for key in sorted(rows):
+        row = rows[key]
+        poly = normalize_polygon(row.get('platform_corners'))
         if poly is None:
             continue
         center = np.asarray(poly, dtype=np.float32).mean(axis=0).tolist()
-        payload['frames'][str(fid)] = {
-            'frame': int(fid),
+        split = str(row['split'])
+        seq = str(row['seq'])
+        fid = int(row['frame'])
+        payload['frames'][annotation_key(split, seq, fid)] = {
+            'frame': fid,
             'seq': seq,
             'split': split,
             'platform_corners': poly,
@@ -140,6 +208,22 @@ def write_json(path: str, seq: str, split: str, rows: Dict[int, Dict]):
     with open(path, 'w') as f:
         json.dump(payload, f, indent=2)
         f.write('\n')
+
+
+def save_current_points(args, annotations: Dict[str, Dict], fid: int,
+                        points: List[List[float]]) -> bool:
+    if len(points) != 4:
+        return False
+    key = annotation_key(args.split, args.seq, fid)
+    annotations[key] = {
+        'frame': int(fid),
+        'seq': args.seq,
+        'split': args.split,
+        'platform_corners': normalize_polygon(points),
+    }
+    write_json(args.out, annotations)
+    print(f'[save] {args.split}/{args.seq}/{fid:05d} -> {os.path.abspath(args.out)}')
+    return True
 
 
 def draw_poly(vis: np.ndarray, points: List[List[float]], color, closed: bool):
@@ -197,7 +281,7 @@ def draw_frame(img: np.ndarray,
 def main():
     args = parse_args()
     frame_ids = parse_frame_ids(args)
-    annotations = load_existing(args.resume or args.out)
+    annotations = load_existing(args.resume or args.out, args.split, args.seq)
     window = 'annotate full platform polygon'
     state = {'points': [], 'scale': float(args.window_scale)}
 
@@ -214,7 +298,7 @@ def main():
     idx = 0
     while 0 <= idx < len(frame_ids):
         fid = int(frame_ids[idx])
-        img_path, ann_path = diag.find_files(args.data_root, args.split, args.seq, fid)
+        img_path, ann_path = find_files(args.data_root, args.split, args.seq, fid)
         if img_path is None:
             print(f'[skip] missing image: {args.split}/{args.seq}/{fid:05d}')
             idx += 1
@@ -228,7 +312,8 @@ def main():
         state['points'] = []
 
         while True:
-            saved_poly = annotations.get(fid, {}).get('platform_corners')
+            key = annotation_key(args.split, args.seq, fid)
+            saved_poly = annotations.get(key, {}).get('platform_corners')
             vis = draw_frame(
                 img, beam, saved_poly, state['points'], fid, state['scale'])
             cv2.imshow(window, vis)
@@ -240,35 +325,32 @@ def main():
             elif key == ord('r'):
                 state['points'] = []
             elif key == ord('d'):
-                annotations.pop(fid, None)
+                annotations.pop(annotation_key(args.split, args.seq, fid), None)
                 state['points'] = []
             elif key == ord('s'):
-                if len(state['points']) != 4:
+                if not save_current_points(args, annotations, fid, state['points']):
                     print(f'[warn] frame {fid}: need 4 points, got {len(state["points"])}')
-                    continue
-                annotations[fid] = {
-                    'platform_corners': normalize_polygon(state['points'])
-                }
-                write_json(args.out, args.seq, args.split, annotations)
-                print(f'[save] frame {fid} -> {args.out}')
             elif key in (ord('+'), ord('=')):
                 state['scale'] = min(state['scale'] * 1.15, 4.0)
             elif key in (ord('-'), ord('_')):
                 state['scale'] = max(state['scale'] / 1.15, 0.1)
             elif key in (ord('n'), ord(' '), 13):
+                save_current_points(args, annotations, fid, state['points'])
                 idx += 1
                 break
             elif key == ord('p'):
+                save_current_points(args, annotations, fid, state['points'])
                 idx = max(0, idx - 1)
                 break
             elif key in (ord('q'), 27):
-                write_json(args.out, args.seq, args.split, annotations)
-                print(f'[save] {args.out}')
+                save_current_points(args, annotations, fid, state['points'])
+                write_json(args.out, annotations)
+                print(f'[save] {os.path.abspath(args.out)}')
                 cv2.destroyAllWindows()
                 return
 
-    write_json(args.out, args.seq, args.split, annotations)
-    print(f'[save] {args.out}')
+    write_json(args.out, annotations)
+    print(f'[save] {os.path.abspath(args.out)}')
     cv2.destroyAllWindows()
 
 
