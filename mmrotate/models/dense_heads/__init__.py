@@ -27,6 +27,7 @@ from .rotated_atss_symkld_head import RotatedATSSSymKLDHead
 from .cm_daga_head import CMDAGAHead
 from .degraded_atss_foreground_head import DegradedATSSForegroundHead
 from .platform_context_head import PlatformContextHead
+from .platform_context_injector import PlatformContextInjector
 __all__ = [
     'RotatedAnchorHead', 'RotatedRetinaHead', 'RotatedRPNHead',
     'OrientedRPNHead', 'RotatedRetinaRefineHead', 'ODMRefineHead',
@@ -36,6 +37,6 @@ __all__ = [
     'CSLRFCOSHead', 'OrientedRepPointsHead', "EoodHead", "RotatedEoodHead",
     'SymEOODHead','GaussianHeatmapHead','UADHead','AGASHead',
     'RotatedATSSSymKLDHead','CMDAGAHead','DegradedATSSForegroundHead',
-    'PlatformContextHead'
+    'PlatformContextHead','PlatformContextInjector'
 
 ]

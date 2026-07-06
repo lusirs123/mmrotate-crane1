@@ -15,7 +15,13 @@ ctx_entry_probe.py - context ROI 外扩头入口诊断工具。
 解释:
   dense detector 每个 anchor/位置都会 decode 出框, 所以“有候选”几乎恒真。
   真正要判断的是 GT 空间邻域内有没有几何可修的候选。如果邻域最佳
-  RIoU 也很低, 外扩头没有可靠 crop 入口, 应先改候选播种策略。
+  RIoU 也很低, 说明当前特征/回归还没有形成可用几何入口。
+
+注意:
+  本工具只诊断 raw decoded candidates 和局部几何上界, 不等价于最终
+  simple_test 输出。对于 stage1 纯训练塑形实验, 重点看 score-topK /
+  global_max / 局部最佳 RIoU 是否相对 baseline 发生移动, 不能把结果解读
+  成推理期候选过滤或平台 fallback。
 
 示例:
   PYTHONPATH=. python3 crane_project/tools/ctx_entry_probe.py \
@@ -66,6 +72,10 @@ def parse_args():
                         help='score-topK decoded candidates to inspect')
     parser.add_argument('--entry-iou-thr', type=float, default=0.10,
                         help='RIoU threshold for saying a geometric entry exists')
+    parser.add_argument('--usable-iou-thr', type=float, default=0.50,
+                        help=('RIoU threshold for reporting control-usable local '
+                              'geometry. This is reported separately and does '
+                              'not change decision labels.'))
     parser.add_argument('--neighbor-radius-mul', type=float, default=1.5,
                         help='GT diagonal multiplier for local decoded-center neighborhood')
     parser.add_argument('--neighbor-radius-px', type=float, default=None,
@@ -425,7 +435,8 @@ def print_frame(row: Dict, entry_iou_thr: float):
         f"thr={entry_iou_thr:.2f}")
 
 
-def print_summary(rows: List[Dict], entry_iou_thr: float):
+def print_summary(rows: List[Dict], entry_iou_thr: float,
+                  usable_iou_thr: float):
     print('\n' + '=' * 80)
     print('SUMMARY')
     print('=' * 80)
@@ -458,17 +469,27 @@ def print_summary(rows: List[Dict], entry_iou_thr: float):
     print(f'  global_max: mean={np.mean(global_vals):.4f} '
           f'min={np.min(global_vals):.4f} max={np.max(global_vals):.4f}')
 
+    topk_usable = sum(float(v) >= usable_iou_thr for v in topk_vals)
+    dec_usable = sum(float(v) >= usable_iou_thr for v in dec_vals)
+    anc_usable = sum(float(v) >= usable_iou_thr for v in anc_vals)
+    print(f'  usable@{usable_iou_thr:.2f}: '
+          f'score-topK={topk_usable}/{total}, '
+          f'decoded-neighborhood={dec_usable}/{total}, '
+          f'anchor-neighborhood={anc_usable}/{total}')
+
     no_geom = decisions.get('NO_GEOM_ENTRY', 0)
     not_ranked = decisions.get('ENTRY_EXISTS_NOT_SCORE_RANKED', 0)
     if no_geom > total * 0.5:
-        print('  verdict: GT 邻域几何入口大多不存在; 先改候选播种策略, '
-              '不要进入后续 temporal/non-score seeding。')
+        print('  verdict: GT 邻域几何入口大多不存在; stage1 尚未把主头局部'
+              '几何上界推到可用区域, 先对比 baseline/后续 epoch。')
     elif not_ranked > total * 0.5:
-        print('  verdict: 邻域有几何入口, 但按分数 topK 抓不到; '
-              '后续应验证非分数候选播种或平台抬分。')
+        print('  verdict: 邻域存在弱几何入口, 但 score-topK 没抓到; '
+              '对 stage1 表示一对一主峰/分数景观尚未明显移动。')
     else:
-        print('  verdict: score-topK 已有足够几何入口; 候选源可支撑后续机制验证。')
+        print('  verdict: score-topK 已出现几何入口; stage1 可能已经改变主头'
+              '峰位置, 需要和 baseline 逐帧对比确认。')
     print(f'  entry_iou_thr={entry_iou_thr:.2f}')
+    print(f'  usable_iou_thr={usable_iou_thr:.2f}')
 
 
 def main():
@@ -493,6 +514,7 @@ def main():
     print(f'head:       {candidate_head_name(candidate_head)}')
     print(f'topK:       {args.topk}')
     print(f'entry_thr:  {args.entry_iou_thr}')
+    print(f'usable_thr: {args.usable_iou_thr}')
 
     rows = []
     for fid in frame_ids:
@@ -503,7 +525,7 @@ def main():
         rows.append(row)
         print_frame(row, args.entry_iou_thr)
 
-    print_summary(rows, args.entry_iou_thr)
+    print_summary(rows, args.entry_iou_thr, args.usable_iou_thr)
 
     if args.out_json:
         os.makedirs(os.path.dirname(os.path.abspath(args.out_json)), exist_ok=True)

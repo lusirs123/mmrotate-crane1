@@ -29,6 +29,7 @@ class SymEOOD(SingleStageDetector):
                  gaussian_head=None,
                  uadh_head=None,
                  platform_context_head=None,
+                 platform_context_injector=None,
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None,
@@ -74,6 +75,15 @@ class SymEOOD(SingleStageDetector):
         else:
             self.platform_context_head = None
 
+        # Stage2 platform context feature modulation. This branch is allowed
+        # to run in both train and test, but it only modulates FPN features.
+        # Final outputs still come exclusively from the main beam bbox head.
+        if platform_context_injector is not None:
+            self.platform_context_injector = build_head(
+                platform_context_injector)
+        else:
+            self.platform_context_injector = None
+
     def _build_aux_feats(self, feats, aux_head):
         if isinstance(aux_head, RotatedATSSHead):
             return [(feat, feat) for feat in feats]
@@ -96,6 +106,16 @@ class SymEOOD(SingleStageDetector):
         x = self.extract_feat(img)
         losses = dict()
 
+        if self.platform_context_injector is not None:
+            x, injector_losses = (
+                self.platform_context_injector.forward_train_features(
+                    x, img_metas, gt_bboxes))
+            for k, v in injector_losses.items():
+                if isinstance(v, torch.Tensor):
+                    v = torch.nan_to_num(v, nan=0.0, posinf=0.0,
+                                         neginf=0.0)
+                losses[k] = v
+
         # 主头损失
         main_outs = self.bbox_head(x)
 
@@ -106,6 +126,9 @@ class SymEOOD(SingleStageDetector):
                 and self.bbox_head.use_equi_loss):
             flip_img, equi_flip_dirs = self._build_equi_flip_view(img)
             flip_x = self.extract_feat(flip_img)
+            if self.platform_context_injector is not None:
+                flip_x = self.platform_context_injector.forward_inject(
+                    flip_x, train=True)
             equi_flip_outs = self.bbox_head(flip_x)
 
         # --- L_invar 路径 (光度) ---
@@ -114,6 +137,9 @@ class SymEOOD(SingleStageDetector):
                 and self.bbox_head.use_invar_loss):
             photo_img = self._build_photo_view(img, img_metas)
             photo_x = self.extract_feat(photo_img)
+            if self.platform_context_injector is not None:
+                photo_x = self.platform_context_injector.forward_inject(
+                    photo_x, train=True)
             photo_outs = self.bbox_head(photo_x)
 
         # --- degraded 路径 ---
@@ -135,6 +161,9 @@ class SymEOOD(SingleStageDetector):
         if use_degraded_cls or use_degraded_aux2 or use_degraded_aux_head:
             degraded_img = self._build_degraded_cls_view(img, img_metas)
             degraded_x = self.extract_feat(degraded_img)
+            if self.platform_context_injector is not None:
+                degraded_x = self.platform_context_injector.forward_inject(
+                    degraded_x, train=True)
             if use_degraded_cls:
                 degraded_outs = self.bbox_head(degraded_x)
             if use_degraded_aux2:
@@ -223,6 +252,8 @@ class SymEOOD(SingleStageDetector):
         辅助头天然不参与推理，零额外开销。
         """
         feat = self.extract_feat(img)
+        if self.platform_context_injector is not None:
+            feat = self.platform_context_injector.forward_test_features(feat)
         results_list = self.bbox_head.simple_test(
             feat, img_metas, rescale=rescale)
         bbox_results = [
