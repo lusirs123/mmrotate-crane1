@@ -30,6 +30,7 @@ class SymEOOD(SingleStageDetector):
                  uadh_head=None,
                  platform_context_head=None,
                  platform_context_injector=None,
+                 inject_aux_only=False,
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None,
@@ -84,6 +85,11 @@ class SymEOOD(SingleStageDetector):
         else:
             self.platform_context_injector = None
 
+        # When True, context injection only applies to aux head features;
+        # main head and all its variants (equi/photo/degraded) see clean
+        # FPN features, and simple_test skips injection entirely.
+        self.inject_aux_only = bool(inject_aux_only)
+
     def _build_aux_feats(self, feats, aux_head):
         if isinstance(aux_head, RotatedATSSHead):
             return [(feat, feat) for feat in feats]
@@ -106,10 +112,47 @@ class SymEOOD(SingleStageDetector):
         x = self.extract_feat(img)
         losses = dict()
 
+        # --- Score-level platform context modulation ---
+        # Context head predicts platform activation maps on selected FPN
+        # levels, trained independently via BCE+Dice. The maps are then
+        # detached & sigmoided → additive spatial bias on cls logits
+        # (before sigmoid) in the main bbox head. Feature modulation is
+        # zero — geometry stays safe.
+        platform_context_map = None
+        if (self.platform_context_head is not None
+                and self.bbox_head.use_score_context_modulation):
+            context_logits = self.platform_context_head(x)
+            # Compute context loss independently
+            platform_losses = self.platform_context_head.loss(
+                context_logits, img_metas, gt_bboxes)
+            for k, v in platform_losses.items():
+                if isinstance(v, torch.Tensor):
+                    v = torch.nan_to_num(v, nan=0.0, posinf=0.0,
+                                         neginf=0.0)
+                losses[k] = v
+            # Build platform_context_map: [B,1,H,W] tensors for modulated
+            # levels, None for unmodulated levels (rest of FPN).
+            ctx_levels = self.platform_context_head.levels
+            platform_context_map = [None] * len(x)
+            for idx, lvl in enumerate(ctx_levels):
+                if lvl < len(x):
+                    platform_context_map[lvl] = torch.sigmoid(
+                        context_logits[idx].detach())
+
+        # --- Context injection (legacy, mutually exclusive with score mod) ---
+        # Old mode: inject x before main head (corrupts main head geometry)
+        # Aux-only mode: inject only for aux head, main head gets clean x
+        x_aux = x
         if self.platform_context_injector is not None:
-            x, injector_losses = (
-                self.platform_context_injector.forward_train_features(
-                    x, img_metas, gt_bboxes))
+            if self.inject_aux_only:
+                x_aux, injector_losses = (
+                    self.platform_context_injector.forward_train_features(
+                        x, img_metas, gt_bboxes))
+            else:
+                x, injector_losses = (
+                    self.platform_context_injector.forward_train_features(
+                        x, img_metas, gt_bboxes))
+                x_aux = x
             for k, v in injector_losses.items():
                 if isinstance(v, torch.Tensor):
                     v = torch.nan_to_num(v, nan=0.0, posinf=0.0,
@@ -126,7 +169,8 @@ class SymEOOD(SingleStageDetector):
                 and self.bbox_head.use_equi_loss):
             flip_img, equi_flip_dirs = self._build_equi_flip_view(img)
             flip_x = self.extract_feat(flip_img)
-            if self.platform_context_injector is not None:
+            if (self.platform_context_injector is not None
+                    and not self.inject_aux_only):
                 flip_x = self.platform_context_injector.forward_inject(
                     flip_x, train=True)
             equi_flip_outs = self.bbox_head(flip_x)
@@ -137,7 +181,8 @@ class SymEOOD(SingleStageDetector):
                 and self.bbox_head.use_invar_loss):
             photo_img = self._build_photo_view(img, img_metas)
             photo_x = self.extract_feat(photo_img)
-            if self.platform_context_injector is not None:
+            if (self.platform_context_injector is not None
+                    and not self.inject_aux_only):
                 photo_x = self.platform_context_injector.forward_inject(
                     photo_x, train=True)
             photo_outs = self.bbox_head(photo_x)
@@ -161,7 +206,8 @@ class SymEOOD(SingleStageDetector):
         if use_degraded_cls or use_degraded_aux2 or use_degraded_aux_head:
             degraded_img = self._build_degraded_cls_view(img, img_metas)
             degraded_x = self.extract_feat(degraded_img)
-            if self.platform_context_injector is not None:
+            if (self.platform_context_injector is not None
+                    and not self.inject_aux_only):
                 degraded_x = self.platform_context_injector.forward_inject(
                     degraded_x, train=True)
             if use_degraded_cls:
@@ -182,7 +228,8 @@ class SymEOOD(SingleStageDetector):
             equi_flip_dirs=equi_flip_dirs,
             photo_outs=photo_outs,
             degraded_outs=degraded_outs,
-            degraded_aux2_cls_scores=degraded_aux2_cls_scores)
+            degraded_aux2_cls_scores=degraded_aux2_cls_scores,
+            platform_context_map=platform_context_map)
         losses.update(main_losses)
         if degraded_aux2_amp_loss is not None:
             losses['loss_degraded_aux2_amp'] = torch.nan_to_num(
@@ -192,7 +239,12 @@ class SymEOOD(SingleStageDetector):
         if self.aux_heads is not None:
             for i, aux_head in enumerate(self.aux_heads):
                 use_aux_degraded = getattr(aux_head, 'use_degraded_view', False)
-                aux_base_feats = degraded_x if use_aux_degraded else x
+                # In aux_only mode, aux head gets injected features (x_aux);
+                # otherwise it inherits the same (possibly injected) x.
+                if self.inject_aux_only:
+                    aux_base_feats = x_aux
+                else:
+                    aux_base_feats = degraded_x if use_aux_degraded else x
                 aux_feats = self._build_aux_feats(aux_base_feats, aux_head)
                 aux_kwargs = {}
                 aux_sig_params = inspect.signature(
@@ -235,14 +287,8 @@ class SymEOOD(SingleStageDetector):
                                          neginf=0.0)
                 losses[k] = v
 
-        if self.platform_context_head is not None:
-            platform_losses = self.platform_context_head.forward_train(
-                x, img_metas, gt_bboxes, gt_labels, gt_bboxes_ignore)
-            for k, v in platform_losses.items():
-                if isinstance(v, torch.Tensor):
-                    v = torch.nan_to_num(v, nan=0.0, posinf=0.0,
-                                         neginf=0.0)
-                losses[k] = v
+        # (platform_context_head loss is now computed inline before
+        # bbox_head.loss, with logits also used for score modulation.)
 
         return losses
 
@@ -250,12 +296,32 @@ class SymEOOD(SingleStageDetector):
         """
         0.x 标准推理入口。
         辅助头天然不参与推理，零额外开销。
+        Score-level context modulation: 在 cls logit 上施加加性空间偏置，
+        FPN 特征不被调制 → 几何不受影响。
         """
         feat = self.extract_feat(img)
-        if self.platform_context_injector is not None:
+
+        # Legacy: feature-level injection (only if NOT inject_aux_only)
+        if (self.platform_context_injector is not None
+                and not self.inject_aux_only):
             feat = self.platform_context_injector.forward_test_features(feat)
+
+        # Score-level context modulation: run context head, build
+        # platform activation maps, pass to bbox head for cls logit bias.
+        platform_context_map = None
+        if (self.platform_context_head is not None
+                and self.bbox_head.use_score_context_modulation):
+            context_logits = self.platform_context_head(feat)
+            ctx_levels = self.platform_context_head.levels
+            platform_context_map = [None] * len(feat)
+            for idx, lvl in enumerate(ctx_levels):
+                if lvl < len(feat):
+                    platform_context_map[lvl] = torch.sigmoid(
+                        context_logits[idx])
+
         results_list = self.bbox_head.simple_test(
-            feat, img_metas, rescale=rescale)
+            feat, img_metas, rescale=rescale,
+            platform_context_map=platform_context_map)
         bbox_results = [
             rbbox2result(det_bboxes, det_labels, self.bbox_head.num_classes)
             for det_bboxes, det_labels in results_list

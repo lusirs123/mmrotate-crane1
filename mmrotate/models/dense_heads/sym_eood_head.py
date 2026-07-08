@@ -72,6 +72,8 @@ class SymEOODHead(RotatedRetinaHead):
                  degraded_aux2_cls_loss_weight: float = 0.25,
                  degraded_aux2_amp_loss_weight: float = 0.05,
                  degraded_aux2_amp_levels: tuple = (0, 1, 2),
+                 use_score_context_modulation: bool = False,
+                 score_context_gate_init: float = 0.0,
                  **kwargs):
         super().__init__(*args, **kwargs)
         # L_equi
@@ -108,6 +110,15 @@ class SymEOODHead(RotatedRetinaHead):
                 self.num_anchors * self.cls_out_channels,
                 3,
                 padding=1)
+        # Score-level platform context modulation.
+        # Applies an additive spatial bias to cls logits BEFORE sigmoid,
+        # preserving the regression/angle branches untouched (zero feature
+        # modulation → geometry stays safe).
+        self.use_score_context_modulation = use_score_context_modulation
+        if self.use_score_context_modulation:
+            self.score_context_gate_alpha = nn.Parameter(
+                torch.tensor(float(score_context_gate_init),
+                             dtype=torch.float32))
         # 惰性导入避免循环依赖
         self._equi_fn = None
 
@@ -151,14 +162,28 @@ class SymEOODHead(RotatedRetinaHead):
              equi_flip_dirs=None,
              photo_outs=None,
              degraded_outs=None,
-             degraded_aux2_cls_scores=None):
+             degraded_aux2_cls_scores=None,
+             platform_context_map=None):
         """
         覆写标准 loss()：
-        1. 生成 Anchor
-        2. 展平预测并解码
-        3. 调用 SymPOLAAssigner（预测感知）
-        4. Level-first 转置后调用 loss_single
+        1. [可选] 对 cls_scores 施加 score-level platform context 偏置
+        2. 生成 Anchor
+        3. 展平预测并解码
+        4. 调用 SymPOLAAssigner（预测感知）
+        5. Level-first 转置后调用 loss_single
         """
+        # Score-level context modulation: additive spatial bias on cls logits.
+        # Applied BEFORE assignment so the assigner can benefit from the
+        # context-aware scores (assigner uses .detach(), no gradient risk).
+        # platform_context_map is a tuple of [B,1,H,W] tensors, one per level.
+        if (platform_context_map is not None
+                and self.use_score_context_modulation):
+            gate = self.score_context_gate_alpha
+            cls_scores = [
+                cs + gate * pcm if pcm is not None else cs
+                for cs, pcm in zip(cls_scores, platform_context_map)
+            ]
+
         featmap_sizes = [featmap.size()[-2:] for featmap in cls_scores]
         assert len(featmap_sizes) == self.anchor_generator.num_levels
         device = cls_scores[0].device
@@ -277,6 +302,9 @@ class SymEOODHead(RotatedRetinaHead):
                 lda is not None and lda.numel() > 0
                 for lda in losses_degraded_aux2_cls)):
             result['loss_degraded_aux2_cls'] = losses_degraded_aux2_cls
+        if self.use_score_context_modulation:
+            result['score_context_gate_alpha'] = (
+                self.score_context_gate_alpha.detach())
         return result
 
     def get_targets(self,
@@ -897,16 +925,34 @@ class SymEOODHead(RotatedRetinaHead):
         det_bboxes = torch.cat([bboxes, scores[:, None]], dim=1)
         return det_bboxes, labels
 
-    def simple_test(self, feats, img_metas, rescale=False):
+    def simple_test(self, feats, img_metas, rescale=False,
+                    platform_context_map=None):
         """推理入口：兼容 BaseDenseHead.simple_test 调用链。
 
         直接覆写 simple_test，物理切断对 simple_test_bboxes 的依赖，
         端到端直通 FPN 与 O2O 解码器。
+
+        Args:
+            feats: FPN 特征元组.
+            img_metas: 图像元信息.
+            rescale: 是否将 bbox 缩放回原图尺寸.
+            platform_context_map: 可选, tuple of [1,1,H,W] tensors,
+                每层一个. 若提供且 use_score_context_modulation=True,
+                则在 sigmoid 前对 cls logit 施加加性空间偏置.
         """
-        # 1. 前向传播提取密集特征
         outs = self.forward(feats)
-        # 2. 端到端解码预测结果
-        # 【物理防线】：显式传入 with_nms=False，彻底封死 NMS 后处理通道
+
+        # Score-level context modulation at inference:
+        # additive spatial bias on cls logits → sigmoid → scores.
+        # Regression / angle branches are never touched.
+        if (platform_context_map is not None
+                and self.use_score_context_modulation):
+            cls_scores_mod = tuple(
+                cs + self.score_context_gate_alpha * pcm
+                if pcm is not None else cs
+                for cs, pcm in zip(outs[0], platform_context_map))
+            outs = (cls_scores_mod, outs[1])
+
         results_list = self.get_bboxes(
             *outs, img_metas=img_metas, rescale=rescale, with_nms=False)
         return results_list

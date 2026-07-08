@@ -31,6 +31,9 @@ class PlatformContextHead(BaseModule):
                  neg_weight=0.05,
                  min_pos_pixels=1,
                  use_dtheta=False,
+                 use_dice_loss=False,
+                 dice_weight=1.0,
+                 target_dilate_k=1.0,
                  init_cfg=None):
         super().__init__(init_cfg)
         self.in_channels = int(in_channels)
@@ -44,6 +47,9 @@ class PlatformContextHead(BaseModule):
         self.neg_weight = float(neg_weight)
         self.min_pos_pixels = int(min_pos_pixels)
         self.use_dtheta = bool(use_dtheta)
+        self.use_dice_loss = bool(use_dice_loss)
+        self.dice_weight = float(dice_weight)
+        self.target_dilate_k = float(target_dilate_k)
 
         layers = []
         in_ch = self.in_channels
@@ -116,8 +122,10 @@ class PlatformContextHead(BaseModule):
             center
             + ux * (offset_long_k * long_len)[:, None]
             + uy * (offset_short_k * short_len)[:, None])
-        plat_w = (width_k * long_len).clamp(min=1e-6)
-        plat_h = (height_k * short_len).clamp(min=1e-6)
+        # Dilate platform box for target generation to give context head
+        # a larger positive region (helps with extreme class imbalance).
+        plat_w = (width_k * long_len * self.target_dilate_k).clamp(min=1e-6)
+        plat_h = (height_k * short_len * self.target_dilate_k).clamp(min=1e-6)
         plat_theta = long_theta + dtheta
         return torch.stack([
             plat_center[:, 0], plat_center[:, 1], plat_w, plat_h, plat_theta
@@ -183,10 +191,21 @@ class PlatformContextHead(BaseModule):
                 pred.new_tensor(self.pos_weight),
                 pred.new_tensor(self.neg_weight))
             weights = weights * valid
-            loss = F.binary_cross_entropy_with_logits(
+            bce = F.binary_cross_entropy_with_logits(
                 pred, target, reduction='none')
             denom = torch.clamp((weights * (target > 0).float()).sum(), min=1.0)
-            losses.append((loss * weights).sum() / denom)
+            level_loss = (bce * weights).sum() / denom
+
+            # Dice loss component: handles extreme class imbalance by
+            # optimizing IoU of predicted vs target activation regions.
+            if self.use_dice_loss:
+                pred_sig = torch.sigmoid(pred)
+                inter = ((pred_sig * target) * valid).sum()
+                union = ((pred_sig + target) * valid).sum()
+                dice = 1.0 - (2.0 * inter + 1.0) / (union.clamp(min=1.0) + 1.0)
+                level_loss = level_loss + self.dice_weight * dice
+
+            losses.append(level_loss)
             total_pos = total_pos + target.sum()
 
         if not losses:
