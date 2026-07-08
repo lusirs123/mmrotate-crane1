@@ -67,6 +67,11 @@ class PlatformContextInjector(PlatformContextHead):
         modulated_feats = self._modulate_with_preds(
             feats, preds, apply=self.apply_at_train)
         losses = self.loss(preds, img_metas, gt_bboxes)
+        losses.update(dict(
+            platform_gate_alpha=self.gate_alpha.detach(),
+            platform_gate_scale_eff=(
+                self.gate_scale * torch.tanh(self.gate_alpha.detach())),
+        ))
         return modulated_feats, losses
 
     def forward_test_features(self, feats):

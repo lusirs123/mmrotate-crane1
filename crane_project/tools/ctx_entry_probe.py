@@ -85,6 +85,12 @@ def parse_args():
     parser.add_argument('--max-neighbor-cands', type=int, default=3000,
                         help='Cap local candidates by score if the neighborhood is huge')
     parser.add_argument('--out-json', default=None)
+    parser.add_argument('--apply-injection', action='store_true',
+                        help='Apply platform_context_injector modulation after '
+                             'extract_feat to simulate actual inference behavior. '
+                             'Without this flag, the probe measures unmodulated '
+                             'features even for injector models (train-test '
+                             'mismatch scenario).')
     parser.add_argument('--seed', type=int, default=42)
     return parser.parse_args()
 
@@ -371,6 +377,9 @@ def analyze_frame(model, transform_compose, img_scale, flip, args,
 
     with torch.no_grad():
         feat = model.extract_feat(img_tensor)
+        if args.apply_injection and hasattr(model, 'platform_context_injector') \
+                and model.platform_context_injector is not None:
+            feat = model.platform_context_injector.forward_test_features(feat)
         candidate_head, cls_scores, bbox_preds = forward_candidate_head(
             model, feat, args.candidate_source)
         boxes, scores, levels, anchor_centers, decode_alignment = flatten_decode_candidates(
@@ -480,13 +489,13 @@ def print_summary(rows: List[Dict], entry_iou_thr: float,
     no_geom = decisions.get('NO_GEOM_ENTRY', 0)
     not_ranked = decisions.get('ENTRY_EXISTS_NOT_SCORE_RANKED', 0)
     if no_geom > total * 0.5:
-        print('  verdict: GT 邻域几何入口大多不存在; stage1 尚未把主头局部'
+        print('  verdict: GT 邻域几何入口大多不存在; 当前模型尚未把主头局部'
               '几何上界推到可用区域, 先对比 baseline/后续 epoch。')
     elif not_ranked > total * 0.5:
         print('  verdict: 邻域存在弱几何入口, 但 score-topK 没抓到; '
-              '对 stage1 表示一对一主峰/分数景观尚未明显移动。')
+              '对当前模型表示一对一主峰/分数景观尚未明显移动。')
     else:
-        print('  verdict: score-topK 已出现几何入口; stage1 可能已经改变主头'
+        print('  verdict: score-topK 已出现几何入口; 当前模型可能已经改变主头'
               '峰位置, 需要和 baseline 逐帧对比确认。')
     print(f'  entry_iou_thr={entry_iou_thr:.2f}')
     print(f'  usable_iou_thr={usable_iou_thr:.2f}')
@@ -515,6 +524,12 @@ def main():
     print(f'topK:       {args.topk}')
     print(f'entry_thr:  {args.entry_iou_thr}')
     print(f'usable_thr: {args.usable_iou_thr}')
+    has_injector = hasattr(model, 'platform_context_injector') and \
+        model.platform_context_injector is not None
+    if args.apply_injection and not has_injector:
+        print('[warn] --apply-injection set but model has no '
+              'platform_context_injector; modulation skipped.')
+    print(f'injection:  {args.apply_injection and has_injector}')
 
     rows = []
     for fid in frame_ids:

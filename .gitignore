@@ -18,6 +18,7 @@ work_dirs
 .DS_Store
 *.pth
 
+.workbuddy
 .hermes
 .pytest_cache
 .claude
