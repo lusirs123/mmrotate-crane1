@@ -74,10 +74,13 @@ model = dict(
     # Bbox head: 添加 score-level context modulation
     # ============================================
     bbox_head=dict(
-        # Score-level context modulation
-        # gate_alpha 从 0 初始化 → cls loss 决定方向和大小
+        # Score-level context modulation with sigmoid gate
+        # effective_gate = gate_scale * σ(gate_alpha) ∈ [0, gate_scale]
+        # 上轮教训: gate_alpha 无约束膨胀到 0.186 → VAL A-RMSE 14-21° 崩溃
+        # 此次修复: sigmoid 门控 + gate_scale=0.05 硬上限
         use_score_context_modulation=True,
         score_context_gate_init=0.0,
+        score_context_gate_scale=0.05,
     ),
 
     # ============================================

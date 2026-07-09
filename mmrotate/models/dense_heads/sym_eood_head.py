@@ -74,6 +74,7 @@ class SymEOODHead(RotatedRetinaHead):
                  degraded_aux2_amp_levels: tuple = (0, 1, 2),
                  use_score_context_modulation: bool = False,
                  score_context_gate_init: float = 0.0,
+                 score_context_gate_scale: float = 0.05,
                  **kwargs):
         super().__init__(*args, **kwargs)
         # L_equi
@@ -114,7 +115,10 @@ class SymEOODHead(RotatedRetinaHead):
         # Applies an additive spatial bias to cls logits BEFORE sigmoid,
         # preserving the regression/angle branches untouched (zero feature
         # modulation → geometry stays safe).
+        # Gate is sigmoid-bounded: effective_gate = gate_scale * σ(gate_alpha),
+        # so the max bias is gate_scale (prevents unbounded growth).
         self.use_score_context_modulation = use_score_context_modulation
+        self.score_context_gate_scale = score_context_gate_scale
         if self.use_score_context_modulation:
             self.score_context_gate_alpha = nn.Parameter(
                 torch.tensor(float(score_context_gate_init),
@@ -178,7 +182,8 @@ class SymEOODHead(RotatedRetinaHead):
         # platform_context_map is a tuple of [B,1,H,W] tensors, one per level.
         if (platform_context_map is not None
                 and self.use_score_context_modulation):
-            gate = self.score_context_gate_alpha
+            gate = self.score_context_gate_scale * torch.sigmoid(
+                self.score_context_gate_alpha)
             cls_scores = [
                 cs + gate * pcm if pcm is not None else cs
                 for cs, pcm in zip(cls_scores, platform_context_map)
@@ -303,8 +308,10 @@ class SymEOODHead(RotatedRetinaHead):
                 for lda in losses_degraded_aux2_cls)):
             result['loss_degraded_aux2_cls'] = losses_degraded_aux2_cls
         if self.use_score_context_modulation:
-            result['score_context_gate_alpha'] = (
-                self.score_context_gate_alpha.detach())
+            raw_alpha = self.score_context_gate_alpha.detach()
+            effective_gate = self.score_context_gate_scale * torch.sigmoid(raw_alpha)
+            result['score_context_gate_alpha'] = raw_alpha
+            result['score_context_gate_eff'] = effective_gate.detach()
         return result
 
     def get_targets(self,
@@ -947,8 +954,10 @@ class SymEOODHead(RotatedRetinaHead):
         # Regression / angle branches are never touched.
         if (platform_context_map is not None
                 and self.use_score_context_modulation):
+            gate = self.score_context_gate_scale * torch.sigmoid(
+                self.score_context_gate_alpha)
             cls_scores_mod = tuple(
-                cs + self.score_context_gate_alpha * pcm
+                cs + gate * pcm
                 if pcm is not None else cs
                 for cs, pcm in zip(outs[0], platform_context_map))
             outs = (cls_scores_mod, outs[1])

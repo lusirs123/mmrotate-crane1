@@ -23,15 +23,16 @@ class SymNFLLoss(nn.Module):
                  use_sigmoid=True,
                  gamma=2.0,
                  alpha=0.25,
-                 tau_init=10.0,    
-                 tau_min=1.0,      
+                 tau_init=10.0,
+                 tau_min=1.0,
                  warmup_iters=2000,
-                 spatial_topk=300,  # [新增] 空间掩码物理爆炸半径
+                 spatial_topk=300,
                  loss_call_factor=5,
                  eps=1e-6,
                  reduction='mean',
                  loss_weight=1.0,
-                 kld_chunk_size=1024):
+                 kld_chunk_size=1024,
+                 use_quality_target=False):
         super(SymNFLLoss, self).__init__()
         assert use_sigmoid is True, 'Only sigmoid focal loss is supported.'
         self.use_sigmoid = use_sigmoid
@@ -46,6 +47,7 @@ class SymNFLLoss(nn.Module):
         self.reduction = reduction
         self.loss_weight = loss_weight
         self.kld_chunk_size = kld_chunk_size
+        self.use_quality_target = use_quality_target
         
         # [降维改造] 注册不参与梯度的长整型 Buffer，使其随权重一起保存
         self.register_buffer('_local_iter', torch.tensor(0, dtype=torch.long))
@@ -115,6 +117,8 @@ class SymNFLLoss(nn.Module):
         
         # 1. 默认底盘初始化：所有 Anchor 的乘子为 1.0 (等价于普通 Focal Loss)
         mu_sym = pred_logits.new_ones(num_samples)
+        # QFL 质量目标：默认 1.0（等价 binary target），top-K 区域由 KLD 覆写
+        quality = pred_logits.new_ones(num_samples)
         
         if gt_bboxes is not None and gt_bboxes.size(0) > 0:
             current_tau = self._get_current_tau()
@@ -155,17 +159,42 @@ class SymNFLLoss(nn.Module):
             # 原位写回
             mu_sym[topk_inds] = topk_mu
 
+            # QFL: 从已有 KLD 推导定位质量作为分类软目标
+            # quality = exp(-kld/tau) ∈ [0, 1]
+            # warmup 期 tau 大 → quality ≈ 1.0 → 等价标准 FL（天然 warmup）
+            # warmup 后 tau 小 → quality 分化 → QFL 生效
+            if self.use_quality_target:
+                topk_quality = torch.exp(
+                    -(min_kld.detach() / current_tau).clamp(
+                        min=-20.0, max=20.0))
+                quality[topk_inds] = topk_quality
+
         # ==============================================================
-        # 【基础惩罚层】: 标准 Focal Loss 与重加权融合
+        # 分类损失：标准 Focal Loss 或 Quality Focal Loss
         # ==============================================================
         pred_sigmoid = pred_logits.sigmoid()
         target = F.one_hot(labels, num_classes=num_classes + 1)[:, :-1].float()
 
-        pt = (1 - pred_sigmoid) * target + pred_sigmoid * (1 - target)
-        focal_weight = (self.alpha * target + (1 - self.alpha) * (1 - target)) * pt.pow(self.gamma)
-        
-        loss = F.binary_cross_entropy_with_logits(
-            pred_logits, target, reduction='none') * focal_weight
+        if self.use_quality_target and quality is not None:
+            # Quality Focal Loss (GFL v1)
+            # 软目标：正样本 target = quality（定位质量），负样本 target = 0
+            target = target * quality.unsqueeze(-1)
+            # QFL 调制因子：|y - σ|^γ（替代 FL 的 pt^γ）
+            modulating = (target - pred_sigmoid).abs().pow(self.gamma)
+            # alpha 权重连续化
+            alpha_weight = (self.alpha * target +
+                            (1 - self.alpha) * (1 - target))
+            loss = F.binary_cross_entropy_with_logits(
+                pred_logits, target, reduction='none') * modulating * alpha_weight
+        else:
+            # 标准 Focal Loss（原始逻辑不变）
+            pt = ((1 - pred_sigmoid) * target +
+                  pred_sigmoid * (1 - target))
+            focal_weight = (
+                self.alpha * target +
+                (1 - self.alpha) * (1 - target)) * pt.pow(self.gamma)
+            loss = F.binary_cross_entropy_with_logits(
+                pred_logits, target, reduction='none') * focal_weight
 
         # 空间排他性压制注入
         loss = loss * mu_sym.unsqueeze(-1)
