@@ -7,9 +7,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from mmdet.models.detectors.single_stage import SingleStageDetector
-from mmrotate.models.builder import ROTATED_DETECTORS, build_head
+from mmdet.core.bbox.assigners import build_assigner
+from mmdet.core.bbox.samplers import PseudoSampler
+from mmrotate.models.builder import ROTATED_DETECTORS, build_head, build_loss
 from mmrotate.models.dense_heads.rotated_atss_head import RotatedATSSHead
 from mmrotate.core import rbbox2result
+from mmrotate.core.bbox.iou_calculators import RBboxOverlaps2D
 
 @ROTATED_DETECTORS.register_module(force=True)
 class SymEOOD(SingleStageDetector):
@@ -31,6 +34,7 @@ class SymEOOD(SingleStageDetector):
                  platform_context_head=None,
                  platform_context_injector=None,
                  inject_aux_only=False,
+                 aux_detach_cls_head=None,
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None,
@@ -90,10 +94,55 @@ class SymEOOD(SingleStageDetector):
         # FPN features, and simple_test skips injection entirely.
         self.inject_aux_only = bool(inject_aux_only)
 
+        # Detachable auxiliary classification head.
+        # Features are detach()'d before entering this head during training,
+        # so gradients NEVER flow back to backbone/FPN. Combined with strong
+        # augmentations, it learns to output high cls confidence on frames
+        # where the main head collapses (dark/blurry dead segments).
+        # At inference: cls_fused = max(main_cls_logits, aux_cls_logits).
+        self.aux_detach_cls_head = None
+        self.aux_detach_loss_cls = None
+        self.aux_detach_assigner = None
+        self.aux_detach_sampler = PseudoSampler()
+        self.aux_detach_pos_iou_thr = 0.5
+        self.aux_detach_neg_iou_thr = 0.4
+        self.aux_detach_min_pos_iou = 0.0
+        # Strong augmentation params (configurable via detector attributes)
+        self.aux_detach_gamma_range = (0.1, 0.8)
+        self.aux_detach_blur_sigma_range = (0.5, 3.0)
+        self.aux_detach_blur_kernel = 7
+        self.aux_detach_noise_std_range = (0.0, 30.0)
+        self.aux_detach_downscale_range = (0.5, 0.8)
+        self.aux_detach_contrast_range = (0.5, 1.5)
+        self.aux_detach_rg_range = (0.7, 1.3)
+        self.aux_detach_bg_range = (0.7, 1.3)
+
+        if aux_detach_cls_head is not None:
+            cfg = copy.deepcopy(aux_detach_cls_head)
+            loss_cfg = cfg.pop('loss_cls', None)
+            assigner_cfg = cfg.pop('assigner', None)
+            self._parse_aux_detach_params(cfg)
+            self.aux_detach_cls_head = build_head(cfg)
+            if loss_cfg is not None:
+                self.aux_detach_loss_cls = build_loss(loss_cfg)
+            if assigner_cfg is not None:
+                self.aux_detach_assigner = build_assigner(assigner_cfg)
+
     def _build_aux_feats(self, feats, aux_head):
         if isinstance(aux_head, RotatedATSSHead):
             return [(feat, feat) for feat in feats]
         return feats
+
+    def _parse_aux_detach_params(self, cfg):
+        """Extract strong-augmentation and assignment params from config."""
+        for key in ('pos_iou_thr', 'neg_iou_thr', 'min_pos_iou',
+                     'gamma_range', 'blur_sigma_range', 'blur_kernel',
+                     'noise_std_range', 'downscale_range',
+                     'contrast_range', 'rg_range', 'bg_range'):
+            cfg_key = 'aux_detach_' + key
+            val = cfg.pop(cfg_key, None)
+            if val is not None:
+                setattr(self, cfg_key, val)
 
     def forward_train(self,
                       img,
@@ -290,6 +339,21 @@ class SymEOOD(SingleStageDetector):
         # (platform_context_head loss is now computed inline before
         # bbox_head.loss, with logits also used for score modulation.)
 
+        # --- aux_detach_cls_head training ---
+        # Strongly augmented view → backbone → FPN → detach() → aux_cls_head.
+        # detach() is the HARD isolation: gradients from aux head NEVER flow
+        # back to backbone/FPN. Main head continues normal training.
+        if self.aux_detach_cls_head is not None:
+            aug_img = self._build_strong_aug_view(img, img_metas)
+            aug_x = self.extract_feat(aug_img)
+            # HARD ISOLATION: cut gradient flow to backbone/FPN
+            aug_x_detached = [feat.detach() for feat in aug_x]
+            aux_cls_scores = self.aux_detach_cls_head(aug_x_detached)
+            aux_loss = self._compute_aux_detach_loss(
+                aux_cls_scores, img_metas, gt_bboxes, gt_labels)
+            losses['loss_aux_detach_cls'] = torch.nan_to_num(
+                aux_loss, nan=0.0, posinf=0.0, neginf=0.0)
+
         return losses
 
     def simple_test(self, img, img_metas, rescale=False):
@@ -298,6 +362,10 @@ class SymEOOD(SingleStageDetector):
         辅助头天然不参与推理，零额外开销。
         Score-level context modulation: 在 cls logit 上施加加性空间偏置，
         FPN 特征不被调制 → 几何不受影响。
+
+        AuxDetachClsHead: 推理时对同一张干净图 forward aux head，
+        cls 分数做 element-wise max fusion: cls_fused = max(main, aux)。
+        Bbox 始终来自主头，几何完全不受影响。
         """
         feat = self.extract_feat(img)
 
@@ -319,9 +387,36 @@ class SymEOOD(SingleStageDetector):
                     platform_context_map[lvl] = torch.sigmoid(
                         context_logits[idx])
 
-        results_list = self.bbox_head.simple_test(
-            feat, img_metas, rescale=rescale,
-            platform_context_map=platform_context_map)
+        if self.aux_detach_cls_head is not None:
+            # Forward main head and aux head on the SAME clean features
+            outs = self.bbox_head(feat)
+            aux_cls_scores = self.aux_detach_cls_head(feat)
+
+            # Score-level context modulation (if active)
+            if (platform_context_map is not None
+                    and self.bbox_head.use_score_context_modulation):
+                gate = (self.bbox_head.score_context_gate_scale
+                        * torch.sigmoid(self.bbox_head.score_context_gate_alpha))
+                outs_cls = tuple(
+                    cs + gate * pcm if pcm is not None else cs
+                    for cs, pcm in zip(outs[0], platform_context_map))
+            else:
+                outs_cls = outs[0]
+
+            # CLS FUSION: element-wise max in logit space
+            #  max(logit_A, logit_B) respects monotonicity of sigmoid
+            cls_fused = tuple(
+                torch.maximum(cs, acs)
+                for cs, acs in zip(outs_cls, aux_cls_scores))
+            outs = (cls_fused, outs[1])
+
+            results_list = self.bbox_head.get_bboxes(
+                *outs, img_metas=img_metas, rescale=rescale, with_nms=False)
+        else:
+            results_list = self.bbox_head.simple_test(
+                feat, img_metas, rescale=rescale,
+                platform_context_map=platform_context_map)
+
         bbox_results = [
             rbbox2result(det_bboxes, det_labels, self.bbox_head.num_classes)
             for det_bboxes, det_labels in results_list
@@ -516,3 +611,220 @@ class SymEOOD(SingleStageDetector):
                              onesided=True)
             amp = torch.sqrt(fft[..., 0].pow(2) + fft[..., 1].pow(2) + 1e-12)
         return torch.log1p(amp)
+
+    # ================================================================
+    # aux_detach_cls_head: training + inference support
+    # ================================================================
+
+    def _build_strong_aug_view(self, img, img_metas=None):
+        """Build strongly augmented view for aux_detach_cls_head training.
+
+        Input is a Normalize'd RGB tensor. We undo normalization, apply
+        aggressive augmentations on [0,1] range, then re-normalize.
+
+        Pipeline:
+          1. Gamma dimming (brightness 0.1-0.8) → simulates very dark frames
+          2. Gaussian blur (sigma 0.5-3.0) → simulates motion blur / defocus
+          3. Downscale + upsample (0.5-0.8×) → simulates small-target appearance
+          4. Gaussian noise (0-30/255) → simulates sensor noise in low light
+          5. Contrast jitter (0.5-1.5)
+          6. Channel gain (R/G, B/G jitter)
+
+        All ops run on GPU. No augmentation on validation behaves as identity.
+        """
+        mean = img.new_tensor([123.675, 116.28, 103.53]).view(1, 3, 1, 1) / 255.0
+        std = img.new_tensor([58.395, 57.12, 57.375]).view(1, 3, 1, 1) / 255.0
+
+        # Denormalize to [0, 1]
+        x = (img * std + mean).clamp(0.0, 1.0)
+        B, C, H, W = x.shape
+
+        # 1. Gamma dimming
+        gamma = torch.empty(B, 1, 1, 1, device=img.device).uniform_(
+            float(self.aux_detach_gamma_range[0]),
+            float(self.aux_detach_gamma_range[1]))
+        x = x.clamp(min=1e-6).pow(1.0 / gamma.clamp(min=1e-6))
+
+        # 2. Gaussian blur (applied to all images with prob=1.0 since we
+        #    explicitly want the aux head to handle blurry frames)
+        blur_sigma = torch.empty(B, device=img.device).uniform_(
+            float(self.aux_detach_blur_sigma_range[0]),
+            float(self.aux_detach_blur_sigma_range[1]))
+        for i in range(B):
+            if blur_sigma[i] > 0.1:
+                xi = x[i:i + 1]
+                kernel_size = int(self.aux_detach_blur_kernel)
+                x[i:i + 1] = self._gaussian_blur_2d(
+                    xi, kernel_size, blur_sigma[i].item())
+
+        # 3. Downscale + upsample
+        downscale = torch.empty(B, 1, 1, 1, device=img.device).uniform_(
+            float(self.aux_detach_downscale_range[0]),
+            float(self.aux_detach_downscale_range[1]))
+        for i in range(B):
+            scale = downscale[i].item()
+            if scale < 0.95:
+                new_h = max(int(H * scale), 16)
+                new_w = max(int(W * scale), 16)
+                xi_down = F.interpolate(
+                    x[i:i + 1], size=(new_h, new_w),
+                    mode='bilinear', align_corners=False)
+                x[i:i + 1] = F.interpolate(
+                    xi_down, size=(H, W),
+                    mode='bilinear', align_corners=False)
+
+        # 4. Gaussian noise
+        noise_std = torch.empty(B, 1, 1, 1, device=img.device).uniform_(
+            float(self.aux_detach_noise_std_range[0]),
+            float(self.aux_detach_noise_std_range[1])) / 255.0
+        if float(self.aux_detach_noise_std_range[1]) > 0:
+            x = x + torch.randn_like(x) * noise_std
+
+        # 5. Contrast
+        contrast = torch.empty(B, 1, 1, 1, device=img.device).uniform_(
+            float(self.aux_detach_contrast_range[0]),
+            float(self.aux_detach_contrast_range[1]))
+        mean_val = x.mean(dim=(1, 2, 3), keepdim=True)
+        x = (x - mean_val) * contrast + mean_val
+
+        # 6. Channel gain (R/G, B/G jitter)
+        rg = torch.empty(B, 1, 1, 1, device=img.device).uniform_(
+            float(self.aux_detach_rg_range[0]),
+            float(self.aux_detach_rg_range[1]))
+        bg = torch.empty(B, 1, 1, 1, device=img.device).uniform_(
+            float(self.aux_detach_bg_range[0]),
+            float(self.aux_detach_bg_range[1]))
+        ch_gain = torch.cat([rg, torch.ones_like(rg), bg], dim=1)
+        x = (x * ch_gain).clamp(0.0, 1.0)
+
+        x = x.clamp(0.0, 1.0)
+        return (x - mean) / std
+
+    @staticmethod
+    def _gaussian_blur_2d(x, kernel_size, sigma):
+        """Apply 2D Gaussian blur on GPU using depthwise convolution.
+
+        Args:
+            x: [1, C, H, W] input tensor.
+            kernel_size: int, odd kernel size.
+            sigma: float, Gaussian sigma.
+
+        Returns:
+            [1, C, H, W] blurred tensor.
+        """
+        if kernel_size % 2 == 0:
+            kernel_size += 1
+        # Build 1D Gaussian kernel
+        ax = torch.arange(kernel_size, dtype=torch.float32, device=x.device)
+        ax = ax - kernel_size // 2
+        gauss_1d = torch.exp(-0.5 * (ax / sigma) ** 2)
+        gauss_1d = gauss_1d / gauss_1d.sum()
+        # Build 2D kernel
+        kernel_2d = gauss_1d[:, None] * gauss_1d[None, :]  # [K, K]
+        kernel_2d = kernel_2d.expand(x.size(1), 1, kernel_size, kernel_size)
+        padding = kernel_size // 2
+        return F.conv2d(x, kernel_2d, padding=padding, groups=x.size(1))
+
+    @staticmethod
+    def _downscale_upscale(x, scale):
+        """Downscale then bilinear upsample back to original size.
+
+        Args:
+            x: [1, C, H, W] input tensor.
+            scale: float in (0, 1), scale factor.
+
+        Returns:
+            [1, C, H, W] processed tensor.
+        """
+        _, _, H_orig, W_orig = x.shape
+        new_h = max(int(H_orig * scale), 16)
+        new_w = max(int(W_orig * scale), 16)
+        x_down = F.interpolate(x, size=(new_h, new_w),
+                               mode='bilinear', align_corners=False)
+        x_up = F.interpolate(x_down, size=(H_orig, W_orig),
+                             mode='bilinear', align_corners=False)
+        return x_up
+
+    def _compute_aux_detach_loss(self, aux_cls_scores, img_metas,
+                                  gt_bboxes, gt_labels):
+        """Compute FocalLoss for aux_detach_cls_head.
+
+        Uses simple IoU-based anchor assignment (independent of main head's
+        prediction-aware SymPOLA). This is sufficient for binary FG/BG
+        classification on the strongly augmented view.
+
+        Args:
+            aux_cls_scores: tuple of [B, C_anchors, H, W] tensors per level.
+            img_metas, gt_bboxes, gt_labels: standard detection targets.
+
+        Returns:
+            Scalar loss tensor.
+        """
+        featmap_sizes = [featmap.size()[-2:] for featmap in aux_cls_scores]
+        device = aux_cls_scores[0].device
+        num_imgs = len(img_metas)
+
+        # Generate anchors (same anchor generator as main head)
+        anchor_list, _ = self.bbox_head.get_anchors(
+            featmap_sizes, img_metas, device=device)
+
+        num_levels = len(aux_cls_scores)
+        cls_out_channels = self.aux_detach_cls_head.cls_out_channels
+
+        # Flatten aux_cls_scores per image, per level
+        flatten_scores = []
+        for i in range(num_imgs):
+            img_scores = []
+            for lvl in range(num_levels):
+                s = aux_cls_scores[lvl][i].permute(1, 2, 0).reshape(
+                    -1, cls_out_channels)
+                img_scores.append(s)
+            flatten_scores.append(torch.cat(img_scores))
+
+        # IoU-based binary assignment per image
+        iou_calc = RBboxOverlaps2D()
+        pos_iou = float(self.aux_detach_pos_iou_thr)
+        neg_iou = float(self.aux_detach_neg_iou_thr)
+        num_classes = self.bbox_head.num_classes
+
+        total_loss = 0.0
+        total_pos = 0
+
+        for i in range(num_imgs):
+            flat_anchors = torch.cat(anchor_list[i])
+            scores_i = flatten_scores[i]
+            gt_i = gt_bboxes[i]
+            gt_labels_i = gt_labels[i]
+
+            if gt_i.size(0) == 0:
+                # No GT: all anchors are negative
+                labels = flat_anchors.new_full(
+                    (flat_anchors.size(0),), num_classes, dtype=torch.long)
+                label_weights = flat_anchors.new_zeros(flat_anchors.size(0))
+                pos_count = 0
+            else:
+                overlaps = iou_calc(flat_anchors, gt_i)  # [N_anchors, N_gt]
+                max_overlaps, argmax_overlaps = overlaps.max(dim=1)
+
+                pos_mask = max_overlaps >= pos_iou
+                neg_mask = max_overlaps < neg_iou
+
+                labels = flat_anchors.new_full(
+                    (flat_anchors.size(0),), num_classes, dtype=torch.long)
+                labels[pos_mask] = gt_labels_i[argmax_overlaps[pos_mask]]
+
+                label_weights = max_overlaps.new_zeros(flat_anchors.size(0))
+                label_weights[pos_mask] = 1.0
+                label_weights[neg_mask] = 1.0
+
+                pos_count = int(pos_mask.sum().item())
+                total_pos += pos_count
+
+            loss_i = self.aux_detach_loss_cls(
+                scores_i,
+                labels,
+                weight=label_weights,
+                avg_factor=max(pos_count, 1))
+            total_loss = total_loss + loss_i
+
+        return total_loss / max(num_imgs, 1)
