@@ -73,8 +73,8 @@ python crane_project/tools/ckpt_sweep.py \
 
   # 扫描后自动在 test 集上跑最终评估
     python crane_project/tools/ckpt_sweep.py \
-        --config crane_project/configs/crane_symeood_k1_qfl.py \
-        --work-dir work_dirs/crane_symeood_k1_qfl \
+        --config crane_project/configs/crane_symeood_k1_auxdetach.py \
+        --work-dir work_dirs/crane_symeood_k1_auxdetach \
         --epochs 16 18 20 22 24 \
         --gpus 0 1 2 \
         --run-final-test

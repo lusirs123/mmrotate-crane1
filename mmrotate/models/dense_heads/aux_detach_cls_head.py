@@ -58,8 +58,12 @@ class AuxDetachClsHead(nn.Module):
         self.cls_out_channels = num_classes
 
         self._init_layers()
-        if init_cfg is not None:
-            self.init_weights()
+        # Always initialise — even when the caller (build_head or detector
+        # __init__) omits init_cfg.  Without this the final conv bias stays
+        # at zero, giving cls_logit ≈ 0 → sigmoid ≈ 0.5 on every spatial
+        # position, which floods the max-fusion path and collapses R_center
+        # to 0 %.
+        self.init_weights()
 
     def _init_layers(self):
         """Build stacked conv layers + final classification conv."""

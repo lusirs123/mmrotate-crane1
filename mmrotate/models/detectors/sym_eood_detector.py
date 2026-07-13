@@ -7,9 +7,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from mmdet.models.detectors.single_stage import SingleStageDetector
-from mmdet.core.bbox.assigners import build_assigner
-from mmdet.core.bbox.samplers import PseudoSampler
 from mmrotate.models.builder import ROTATED_DETECTORS, build_head, build_loss
+from mmrotate.core import build_assigner
 from mmrotate.models.dense_heads.rotated_atss_head import RotatedATSSHead
 from mmrotate.core import rbbox2result
 from mmrotate.core.bbox.iou_calculators import RBboxOverlaps2D
@@ -103,7 +102,6 @@ class SymEOOD(SingleStageDetector):
         self.aux_detach_cls_head = None
         self.aux_detach_loss_cls = None
         self.aux_detach_assigner = None
-        self.aux_detach_sampler = PseudoSampler()
         self.aux_detach_pos_iou_thr = 0.5
         self.aux_detach_neg_iou_thr = 0.4
         self.aux_detach_min_pos_iou = 0.0
