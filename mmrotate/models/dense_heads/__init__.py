@@ -29,6 +29,7 @@ from .degraded_atss_foreground_head import DegradedATSSForegroundHead
 from .platform_context_head import PlatformContextHead
 from .platform_context_injector import PlatformContextInjector
 from .aux_detach_cls_head import AuxDetachClsHead
+from .platform_obb_atss_head import PlatformOBBATSSHead
 __all__ = [
     'RotatedAnchorHead', 'RotatedRetinaHead', 'RotatedRPNHead',
     'OrientedRPNHead', 'RotatedRetinaRefineHead', 'ODMRefineHead',
@@ -38,6 +39,7 @@ __all__ = [
     'CSLRFCOSHead', 'OrientedRepPointsHead', "EoodHead", "RotatedEoodHead",
     'SymEOODHead','GaussianHeatmapHead','UADHead','AGASHead',
     'RotatedATSSSymKLDHead','CMDAGAHead','DegradedATSSForegroundHead',
-    'PlatformContextHead','PlatformContextInjector','AuxDetachClsHead'
+    'PlatformContextHead','PlatformContextInjector','AuxDetachClsHead',
+    'PlatformOBBATSSHead'
 
 ]

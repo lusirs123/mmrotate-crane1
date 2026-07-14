@@ -11,7 +11,7 @@
 # Test annotations are intentionally not used for training.
 # =========================================================
 
-_base_ = ['./crane_symeood_k1.py']
+_base_ = ['../crane_symeood_k1.py']
 
 custom_imports = dict(
     imports=[
