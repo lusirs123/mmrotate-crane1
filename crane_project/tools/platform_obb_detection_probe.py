@@ -69,7 +69,9 @@ def parse_args():
     parser.add_argument('--max-train-frames', type=int, default=1200)
     parser.add_argument('--max-val-frames', type=int, default=200)
     parser.add_argument('--epochs', type=int, default=8)
+    parser.add_argument('--optimizer', choices=['sgd', 'adamw'], default='sgd')
     parser.add_argument('--lr', type=float, default=1e-3)
+    parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--weight-decay', type=float, default=1e-4)
     parser.add_argument('--grad-clip', type=float, default=10.0)
     parser.add_argument('--dark-aug-prob', type=float, default=0.5)
@@ -334,7 +336,8 @@ def train_one_epoch(model, platform_head, optimizer, records, seq_k,
                     transform_compose, img_scale, flip, args, epoch):
     platform_head.train()
     random.Random(args.seed + epoch).shuffle(records)
-    running = dict(loss=0.0, loss_cls=0.0, loss_bbox=0.0, frames=0)
+    running = dict(loss=0.0, loss_cls=0.0, loss_bbox=0.0,
+                   grad_norm=0.0, max_loss=0.0, frames=0)
     for index, record in enumerate(records, 1):
         loaded = load_frame(
             record, args, transform_compose, img_scale, flip)
@@ -354,24 +357,42 @@ def train_one_epoch(model, platform_head, optimizer, records, seq_k,
         if losses is None:
             continue
         loss, scalars = sum_loss_dict(losses)
+        if not torch.isfinite(loss):
+            raise RuntimeError(
+                f'Non-finite platform loss at {record}: {scalars}')
         optimizer.zero_grad(set_to_none=True)
         loss.backward()
         if args.grad_clip > 0:
-            torch.nn.utils.clip_grad_norm_(
+            grad_norm = torch.nn.utils.clip_grad_norm_(
                 platform_head.parameters(), args.grad_clip)
+        else:
+            grad_norm = torch.nn.utils.clip_grad_norm_(
+                platform_head.parameters(), float('inf'))
         optimizer.step()
         assert_isolated(model, platform_head)
         running['loss'] += float(loss.detach().item())
         running['loss_cls'] += scalars.get('loss_cls', 0.0)
         running['loss_bbox'] += scalars.get('loss_bbox', 0.0)
+        running['grad_norm'] += float(grad_norm)
+        running['max_loss'] = max(running['max_loss'], float(loss.detach()))
         running['frames'] += 1
+        if running['frames'] <= 3:
+            print(
+                f'[train-diag] epoch={epoch:02d} record={record} '
+                f'loss={float(loss.detach()):.6f} '
+                f'cls={scalars.get("loss_cls", 0.0):.6f} '
+                f'bbox={scalars.get("loss_bbox", 0.0):.6f} '
+                f'grad_norm={float(grad_norm):.6f} '
+                f'platform_gt={platform_gt.detach().cpu().tolist()}')
         if index % 100 == 0:
             denom = max(running['frames'], 1)
             print(f'[train] epoch={epoch:02d} {index}/{len(records)} '
                   f'loss={running["loss"] / denom:.5f}')
     denom = max(running['frames'], 1)
-    return {key: (value / denom if key != 'frames' else int(value))
-            for key, value in running.items()}
+    return {
+        key: (value if key in ('frames', 'max_loss') else value / denom)
+        for key, value in running.items()
+    }
 
 
 def evaluate_pseudo_platform(model, platform_head, records, seq_k,
@@ -756,9 +777,14 @@ def main():
             args.max_val_frames, args.seed + 1)
         print(f'[data] train={len(train_records)} val={len(val_records)} '
               f'holdout={args.holdout_seq}')
-        optimizer = torch.optim.AdamW(
-            platform_head.parameters(), lr=args.lr,
-            weight_decay=args.weight_decay)
+        if args.optimizer == 'sgd':
+            optimizer = torch.optim.SGD(
+                platform_head.parameters(), lr=args.lr,
+                momentum=args.momentum, weight_decay=args.weight_decay)
+        else:
+            optimizer = torch.optim.AdamW(
+                platform_head.parameters(), lr=args.lr,
+                weight_decay=args.weight_decay)
         best_score = -1.0
         best_state = None
         for epoch in range(1, args.epochs + 1):
@@ -774,6 +800,10 @@ def main():
             val_history.append(val_row)
             selection_score = val_row['recall'] * 10.0 + val_row['riou_mean']
             print(f'[epoch] {epoch:02d} train_loss={train_row["loss"]:.5f} '
+                  f'cls={train_row["loss_cls"]:.5f} '
+                  f'bbox={train_row["loss_bbox"]:.5f} '
+                  f'grad={train_row["grad_norm"]:.3f} '
+                  f'max={train_row["max_loss"]:.3f} '
                   f'val_recall={val_row["recall"]:.3f} '
                   f'val_RIoU={val_row["riou_mean"]:.3f}')
             if selection_score > best_score:
