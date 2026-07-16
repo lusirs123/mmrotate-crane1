@@ -14,6 +14,7 @@ work_dirs
 # 日志文件
 *.log
 
+*.md
 # Mac OS 系统文件
 .DS_Store
 *.pth

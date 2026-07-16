@@ -218,6 +218,10 @@ def _repeat_scores_for_anchors(scores, bbox_flat, anchors, lvl):
 
 def flatten_decode_candidates(candidate_head, cls_scores, bbox_preds, img_shape):
     """按候选 head 顺序展平并 decode 全量候选。"""
+    if not cls_scores or len(cls_scores) != len(bbox_preds):
+        raise RuntimeError(
+            'Candidate head output mismatch: '
+            f'cls_levels={len(cls_scores)}, bbox_levels={len(bbox_preds)}')
     device = cls_scores[0].device
     featmap_sizes = [score.shape[-2:] for score in cls_scores]
     anchors_per_level = candidate_head.anchor_generator.grid_priors(
@@ -227,6 +231,14 @@ def flatten_decode_candidates(candidate_head, cls_scores, bbox_preds, img_shape)
     alignments = []
     for lvl, (cls_lvl, bbox_lvl, anchors) in enumerate(
             zip(cls_scores, bbox_preds, anchors_per_level)):
+        if cls_lvl.shape[0] != 1 or bbox_lvl.shape[0] != 1:
+            raise RuntimeError(
+                'Probe candidate decode requires batch size 1, got '
+                f'cls={tuple(cls_lvl.shape)}, bbox={tuple(bbox_lvl.shape)}')
+        if bbox_lvl.shape[1] % 5 != 0:
+            raise RuntimeError(
+                f'Invalid rotated bbox channels at level {lvl}: '
+                f'{tuple(bbox_lvl.shape)}')
         cls_feat = cls_lvl[0]
         bbox_feat = bbox_lvl[0]
         scores = cls_feat.permute(1, 2, 0).reshape(-1, 1).sigmoid().reshape(-1)
@@ -237,6 +249,10 @@ def flatten_decode_candidates(candidate_head, cls_scores, bbox_preds, img_shape)
 
         decoded = candidate_head.bbox_coder.decode(
             anchors, bbox_flat, max_shape=img_shape)
+        if decoded.shape[0] != scores.numel():
+            raise RuntimeError(
+                f'Decoded candidate mismatch at level {lvl}: '
+                f'decoded={decoded.shape[0]}, scores={scores.numel()}')
         all_boxes.append(decoded)
         all_scores.append(scores)
         all_levels.append(torch.full(
@@ -251,13 +267,17 @@ def flatten_decode_candidates(candidate_head, cls_scores, bbox_preds, img_shape)
             score_repeat_factor=int(repeat_factor),
         ))
 
-    return (
-        torch.cat(all_boxes, dim=0),
-        torch.cat(all_scores, dim=0),
-        torch.cat(all_levels, dim=0),
-        torch.cat(all_anchor_centers, dim=0),
-        alignments,
-    )
+    boxes = torch.cat(all_boxes, dim=0)
+    scores = torch.cat(all_scores, dim=0)
+    levels = torch.cat(all_levels, dim=0)
+    anchor_centers = torch.cat(all_anchor_centers, dim=0)
+    if not (boxes.shape[0] == scores.numel() == levels.numel()
+            == anchor_centers.shape[0]):
+        raise RuntimeError(
+            'Flattened candidate alignment failed: '
+            f'boxes={boxes.shape[0]}, scores={scores.numel()}, '
+            f'levels={levels.numel()}, anchors={anchor_centers.shape[0]}')
+    return boxes, scores, levels, anchor_centers, alignments
 
 
 def gt_to_tensor(gt: Dict, device) -> torch.Tensor:
@@ -366,7 +386,7 @@ def analyze_frame(model, transform_compose, img_scale, flip, args,
     if not gts:
         print(f'[skip] frame {fid:05d}: GT not found')
         return None
-    gt = gts[0]
+    gt_ori = gts[0]
 
     img_tensor, meta, img_stats = diag.preprocess_image(
         img_path, transform_compose, img_scale, flip)
@@ -385,6 +405,7 @@ def analyze_frame(model, transform_compose, img_scale, flip, args,
         boxes, scores, levels, anchor_centers, decode_alignment = flatten_decode_candidates(
             candidate_head, cls_scores, bbox_preds, meta['img_shape'])
 
+    gt = diag.scale_obb_to_img(gt_ori, meta)
     gt_box = gt_to_tensor(gt, boxes.device)
     gt_diag = float(np.sqrt(gt['w'] ** 2 + gt['h'] ** 2))
     if args.neighbor_radius_px is None:
@@ -411,9 +432,12 @@ def analyze_frame(model, transform_compose, img_scale, flip, args,
         img_path=img_path,
         gt=dict(cx=gt['cx'], cy=gt['cy'], w=gt['w'], h=gt['h'],
                 angle=gt['angle'], diag=gt_diag),
+        gt_ori=dict(cx=gt_ori['cx'], cy=gt_ori['cy'], w=gt_ori['w'],
+                    h=gt_ori['h'], angle=gt_ori['angle']),
         radius=radius,
         global_max=float(scores.max().item()),
         decode_alignment=decode_alignment,
+        preprocess=img_stats['preprocess'],
         brightness=float(img_stats['raw_brightness']),
         score_topk=score_topk,
         decoded_center_neighborhood=decoded_neigh,

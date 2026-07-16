@@ -41,6 +41,7 @@ if PROJ_ROOT not in sys.path:
 
 from crane_project.tools.analyze_crane_failures import parse_dota_file  # noqa: E402
 from crane_project.tools.ctx_entry_probe import (  # noqa: E402
+    flatten_decode_candidates,
     forward_candidate_head,
     load_model,
 )
@@ -82,11 +83,25 @@ def parse_args():
                         help='Frame used as left temporal anchor; default=start-1')
     parser.add_argument('--right-anchor', type=int, default=None,
                         help='Required by --pass-mode bidir; usually the first true detection after the blind window')
+    parser.add_argument(
+        '--bidir-select',
+        choices=['lower-cost', 'joint-rank', 'time-weighted-rank'],
+        default='lower-cost',
+        help='lower-cost preserves the legacy comparison between directional '
+             'minima; joint-rank scores the same candidate pool against both '
+             'temporal predictions and minimizes the worst normalized rank; '
+             'time-weighted-rank weights the forward/backward normalized '
+             'ranks by the frame position between the two anchors.')
     parser.add_argument('--motion', choices=['hold', 'linear'], default='linear')
     parser.add_argument('--update-mode',
                         choices=['none', 'selected', 'oracle-hit'],
                         default='selected',
                         help='How reanchored candidates update temporal state')
+    parser.add_argument(
+        '--teacher-force-gt', action='store_true',
+        help='Diagnostic only: after evaluating each frame, append its GT as '
+             'history for the next step. This measures one-step temporal '
+             'trackability without chain lockout.')
 
     parser.add_argument('--radius-mul', type=float, default=1.5,
                         help='Search radius = radius_mul * previous box diag')
@@ -124,17 +139,23 @@ def final_txt_path(pred_dir: str, seq: str, fid: int) -> str:
 
 
 def best_final_box(pred_dir: str, seq: str, fid: int) -> Optional[Dict]:
+    from mmrotate.core import poly2obb_np
+
     path = final_txt_path(pred_dir, seq, fid)
     boxes = parse_dota_file(path, is_pred=True)
     if not boxes:
         return None
     best = max(boxes, key=lambda b: b.get('score') or 0.0)
+    obb = poly2obb_np(
+        np.asarray(best['poly'], dtype=np.float32), version='le90')
+    if obb is None:
+        return None
     return dict(
-        cx=float(best['cx']),
-        cy=float(best['cy']),
-        w=float(best['w']),
-        h=float(best['h']),
-        angle=float(math.radians(best['angle_deg'])),
+        cx=float(obb[0]),
+        cy=float(obb[1]),
+        w=float(obb[2]),
+        h=float(obb[3]),
+        angle=float(obb[4]),
         score=float(best.get('score') or 0.0),
         pred_count=len(boxes),
         path=path,
@@ -154,12 +175,18 @@ def gt_to_array(gt: Dict) -> np.ndarray:
 
 
 def riou_one(box: Sequence[float], gt: Sequence[float]) -> float:
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    b = torch.as_tensor(
+        np.asarray(box, dtype=np.float32).reshape(1, 5), device=device)
+    g = torch.as_tensor(
+        np.asarray(gt, dtype=np.float32).reshape(1, 5), device=device)
+    return float(rotated_ious(b, g)[0].detach().cpu().item())
+
+
+def rotated_ious(boxes: torch.Tensor, gt: torch.Tensor) -> torch.Tensor:
     from mmcv.ops import box_iou_rotated
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    b = torch.tensor([box], dtype=torch.float32, device=device)
-    g = torch.tensor([gt], dtype=torch.float32, device=device)
-    return float(box_iou_rotated(b, g).reshape(-1)[0].detach().cpu().item())
+    return box_iou_rotated(boxes.float(), gt.float()).reshape(-1)
 
 
 def eval_hit(box: Optional[Sequence[float]], gt: Sequence[float],
@@ -208,46 +235,30 @@ def head_forward(model, feats, head_name: str):
     return forward_candidate_head(model, feats, head_name)
 
 
-def _repeat_scores_for_anchors(scores, bbox_flat, anchors, lvl):
-    if anchors.shape[0] == scores.shape[0] == bbox_flat.shape[0]:
-        return scores
-    if anchors.shape[0] != bbox_flat.shape[0]:
+def decoded_boxes_to_ori(boxes: torch.Tensor, meta: Dict) -> torch.Tensor:
+    """Map raw decoded boxes from resized test coordinates to original pixels.
+
+    Final DOTA predictions, annotations, and all temporal radius thresholds in
+    this probe use original-image coordinates.  Keeping decoded candidates in
+    resized coordinates would make temporal distances and RIoU comparisons
+    invalid after the shared test-pipeline fix.
+    """
+    scale_factor = meta.get('scale_factor')
+    if isinstance(scale_factor, torch.Tensor):
+        scale_factor = scale_factor.detach().cpu().numpy()
+    scale = np.asarray(scale_factor, dtype=np.float64).reshape(-1)
+    if scale.size == 0 or not np.all(np.isfinite(scale)) or np.any(scale <= 0):
         raise RuntimeError(
-            f'Anchor/bbox mismatch at level {lvl}: '
-            f'anchors={anchors.shape}, bbox={bbox_flat.shape}')
-    if anchors.shape[0] % scores.shape[0] != 0:
-        raise RuntimeError(
-            f'Anchor/order mismatch at level {lvl}: '
-            f'anchors={anchors.shape}, scores={scores.shape}, bbox={bbox_flat.shape}')
-    repeat_factor = anchors.shape[0] // scores.shape[0]
-    return scores[:, None].expand(-1, repeat_factor).reshape(-1)
-
-
-def flatten_decode_candidates_for_head(head, cls_scores, bbox_preds, img_shape):
-    device = cls_scores[0].device
-    featmap_sizes = [score.shape[-2:] for score in cls_scores]
-    anchors_per_level = head.anchor_generator.grid_priors(
-        featmap_sizes, device=device)
-
-    all_boxes, all_scores, all_levels = [], [], []
-    for lvl, (cls_lvl, bbox_lvl, anchors) in enumerate(
-            zip(cls_scores, bbox_preds, anchors_per_level)):
-        cls_feat = cls_lvl[0]
-        bbox_feat = bbox_lvl[0]
-        scores = cls_feat.permute(1, 2, 0).reshape(-1, 1).sigmoid().reshape(-1)
-        bbox_flat = bbox_feat.permute(1, 2, 0).reshape(-1, 5)
-        scores = _repeat_scores_for_anchors(scores, bbox_flat, anchors, lvl)
-        decoded = head.bbox_coder.decode(anchors, bbox_flat, max_shape=img_shape)
-        all_boxes.append(decoded)
-        all_scores.append(scores)
-        all_levels.append(torch.full(
-            (scores.numel(),), lvl, dtype=torch.long, device=device))
-
-    return (
-        torch.cat(all_boxes, dim=0),
-        torch.cat(all_scores, dim=0),
-        torch.cat(all_levels, dim=0),
-    )
+            f'Invalid scale_factor for temporal decode: {scale_factor!r}')
+    sx = float(scale[0])
+    sy = float(scale[1]) if scale.size >= 2 else sx
+    size_scale = float(math.sqrt(sx * sy))
+    mapped = boxes.clone()
+    mapped[:, 0] /= sx
+    mapped[:, 1] /= sy
+    mapped[:, 2] /= size_scale
+    mapped[:, 3] /= size_scale
+    return mapped
 
 
 def decode_frame_candidates(model, transform_compose, img_scale, flip,
@@ -269,12 +280,18 @@ def decode_frame_candidates(model, transform_compose, img_scale, flip,
     with torch.no_grad():
         feat = model.extract_feat(img_tensor)
         head, cls_scores, bbox_preds = head_forward(model, feat, head_name)
-        boxes, scores, levels = flatten_decode_candidates_for_head(
+        boxes, scores, levels, _, decode_alignment = flatten_decode_candidates(
             head, cls_scores, bbox_preds, meta['img_shape'])
+        boxes = decoded_boxes_to_ori(boxes, meta)
+    img_stats = dict(img_stats)
+    img_stats['candidate_coordinates'] = 'original_image'
+    img_stats['decode_scale_factor'] = np.asarray(
+        meta['scale_factor'], dtype=np.float64).reshape(-1).tolist()
+    img_stats['decode_alignment'] = decode_alignment
     return (boxes.detach(), scores.detach(), levels.detach()), gts[0], img_stats
 
 
-def select_reanchor_candidate(cands, pred_box: np.ndarray, args) -> Optional[Dict]:
+def build_temporal_ranking(cands, pred_box: np.ndarray, args) -> Dict:
     boxes, scores, levels = cands
     radius = min(
         float(args.max_radius_px),
@@ -282,49 +299,226 @@ def select_reanchor_candidate(cands, pred_box: np.ndarray, args) -> Optional[Dic
     d = torch.norm(boxes[:, :2] - boxes.new_tensor(pred_box[:2])[None, :],
                    dim=1)
     mask = (d <= radius) & (scores >= float(args.score_floor))
-    inds = torch.nonzero(mask, as_tuple=False).reshape(-1)
-    raw_count = int(inds.numel())
+    raw_inds = torch.nonzero(mask, as_tuple=False).reshape(-1)
+    raw_count = int(raw_inds.numel())
     if raw_count == 0:
-        return dict(found=False, radius=radius, raw_count=0)
+        return dict(
+            found=False, radius=radius, raw_count=0,
+            raw_inds=raw_inds, inds=raw_inds, cost=None, distances=d)
+    inds = raw_inds
     if raw_count > int(args.max_cands) > 0:
         _, order = torch.topk(scores[inds], k=int(args.max_cands), largest=True)
         inds = inds[order]
 
-    sub_boxes = boxes[inds]
-    sub_scores = scores[inds]
-    sub_levels = levels[inds]
-    pred_t = boxes.new_tensor(pred_box)
-
-    center_cost = torch.norm(sub_boxes[:, :2] - pred_t[:2][None, :], dim=1) / max(radius, 1e-6)
-    size_cost = (
-        torch.abs(torch.log((sub_boxes[:, 2].clamp(min=1e-3) / pred_t[2].clamp(min=1e-3))))
-        + torch.abs(torch.log((sub_boxes[:, 3].clamp(min=1e-3) / pred_t[3].clamp(min=1e-3)))))
-    angle_diffs = []
-    for a in sub_boxes[:, 4].detach().cpu().numpy().tolist():
-        angle_diffs.append(angle_diff_rad(a, float(pred_box[4])))
-    angle_cost = boxes.new_tensor(angle_diffs) / math.radians(float(args.angle_norm_deg))
-    score_bonus = sub_scores.clamp(min=0.0, max=1.0)
-
-    cost = (
-        float(args.w_center) * center_cost
-        + float(args.w_size) * size_cost
-        + float(args.w_angle) * angle_cost
-        - float(args.w_score) * score_bonus
-    )
-    best_pos = int(torch.argmin(cost).item())
-    best_idx = inds[best_pos]
-    best_box = boxes[best_idx].detach().cpu().numpy().astype(float)
+    cost = temporal_cost_for_indices(
+        cands, pred_box, inds, radius, args)
     return dict(
         found=True,
         radius=radius,
         raw_count=raw_count,
         used_count=int(inds.numel()),
+        raw_inds=raw_inds,
+        inds=inds,
+        cost=cost,
+        distances=d,
+    )
+
+
+def temporal_cost_for_indices(cands, pred_box: np.ndarray,
+                              inds: torch.Tensor, radius: float,
+                              args) -> torch.Tensor:
+    boxes, scores, _ = cands
+    sub_boxes = boxes[inds]
+    sub_scores = scores[inds]
+    pred_t = boxes.new_tensor(pred_box)
+    center_cost = torch.norm(
+        sub_boxes[:, :2] - pred_t[:2][None, :], dim=1) / max(radius, 1e-6)
+    size_cost = (
+        torch.abs(torch.log(
+            sub_boxes[:, 2].clamp(min=1e-3)
+            / pred_t[2].clamp(min=1e-3)))
+        + torch.abs(torch.log(
+            sub_boxes[:, 3].clamp(min=1e-3)
+            / pred_t[3].clamp(min=1e-3))))
+    angle_diffs = [
+        angle_diff_rad(angle, float(pred_box[4]))
+        for angle in sub_boxes[:, 4].detach().cpu().numpy().tolist()
+    ]
+    angle_cost = boxes.new_tensor(angle_diffs) / math.radians(
+        float(args.angle_norm_deg))
+    score_bonus = sub_scores.clamp(min=0.0, max=1.0)
+    return (
+        float(args.w_center) * center_cost
+        + float(args.w_size) * size_cost
+        + float(args.w_angle) * angle_cost
+        - float(args.w_score) * score_bonus)
+
+
+def normalized_ordinal_ranks(cost: torch.Tensor) -> torch.Tensor:
+    """Return zero-to-one ordinal ranks; lower cost receives lower rank."""
+    if cost.numel() <= 1:
+        return torch.zeros_like(cost)
+    order = torch.argsort(cost, stable=True)
+    ranks = torch.empty_like(cost)
+    ranks[order] = torch.arange(
+        cost.numel(), dtype=cost.dtype, device=cost.device)
+    return ranks / float(cost.numel() - 1)
+
+
+def bidir_time_weights(fid: int, left_anchor: int,
+                       right_anchor: int) -> Tuple[float, float, float]:
+    """Return forward/backward weights at one frame between two anchors."""
+    span = int(right_anchor) - int(left_anchor)
+    if span <= 0:
+        raise ValueError(
+            'right_anchor must be greater than left_anchor for '
+            'time-weighted bidirectional selection')
+    alpha = float(np.clip(
+        (int(fid) - int(left_anchor)) / float(span), 0.0, 1.0))
+    return 1.0 - alpha, alpha, alpha
+
+
+def select_joint_rank_candidate(cands, fwd_pred: np.ndarray,
+                                bwd_pred: np.ndarray,
+                                fwd_ranking: Dict,
+                                bwd_ranking: Dict, args,
+                                directional_weights: Optional[
+                                    Tuple[float, float]] = None) -> Dict:
+    """Select one existing candidate using comparable directional ranks."""
+    boxes, scores, levels = cands
+    if not fwd_ranking['found'] and not bwd_ranking['found']:
+        return dict(found=False, candidate_count=0)
+    candidate_inds = torch.unique(torch.cat([
+        fwd_ranking['inds'], bwd_ranking['inds']
+    ]), sorted=True)
+    if candidate_inds.numel() == 0:
+        return dict(found=False, candidate_count=0)
+
+    fwd_cost = temporal_cost_for_indices(
+        cands, fwd_pred, candidate_inds, fwd_ranking['radius'], args)
+    bwd_cost = temporal_cost_for_indices(
+        cands, bwd_pred, candidate_inds, bwd_ranking['radius'], args)
+    fwd_rank = normalized_ordinal_ranks(fwd_cost)
+    bwd_rank = normalized_ordinal_ranks(bwd_cost)
+    worst_rank = torch.maximum(fwd_rank, bwd_rank)
+    if directional_weights is None:
+        # The mean rank is only a deterministic tie-breaker. The minimax term
+        # prevents a candidate favored by one direction and rejected by the
+        # other from winning purely through incomparable raw costs.
+        fwd_weight = bwd_weight = 0.5
+        joint_metric = worst_rank + 1e-3 * (fwd_rank + bwd_rank)
+    else:
+        fwd_weight, bwd_weight = map(float, directional_weights)
+        if (fwd_weight < 0.0 or bwd_weight < 0.0
+                or not math.isclose(
+                    fwd_weight + bwd_weight, 1.0,
+                    rel_tol=1e-6, abs_tol=1e-6)):
+            raise ValueError(
+                'directional_weights must be non-negative and sum to one')
+        # Near the left anchor, the forward state is more informative; near
+        # the right anchor, the backward state is more informative. The worst
+        # rank remains a small tie-breaker instead of dominating every frame.
+        joint_metric = (
+            fwd_weight * fwd_rank + bwd_weight * bwd_rank
+            + 1e-3 * worst_rank)
+    best_pos = int(torch.argmin(joint_metric).item())
+    best_idx = candidate_inds[best_pos]
+    best_box = boxes[best_idx].detach().cpu().numpy().astype(float)
+    return dict(
+        found=True,
+        index=int(best_idx.item()),
+        candidate_count=int(candidate_inds.numel()),
+        box=best_box.tolist(),
+        score=float(scores[best_idx].item()),
+        level=int(levels[best_idx].item()),
+        joint_metric=float(joint_metric[best_pos].item()),
+        fwd_weight=fwd_weight,
+        bwd_weight=bwd_weight,
+        fwd_rank=float(fwd_rank[best_pos].item()),
+        bwd_rank=float(bwd_rank[best_pos].item()),
+        fwd_cost=float(fwd_cost[best_pos].item()),
+        bwd_cost=float(bwd_cost[best_pos].item()),
+    )
+
+
+def select_reanchor_candidate(cands, pred_box: np.ndarray, args,
+                              ranking: Optional[Dict] = None) -> Optional[Dict]:
+    boxes, scores, levels = cands
+    ranking = ranking or build_temporal_ranking(cands, pred_box, args)
+    if not ranking['found']:
+        return dict(
+            found=False, radius=ranking['radius'],
+            raw_count=ranking['raw_count'])
+    inds = ranking['inds']
+    cost = ranking['cost']
+    best_pos = int(torch.argmin(cost).item())
+    best_idx = inds[best_pos]
+    best_box = boxes[best_idx].detach().cpu().numpy().astype(float)
+    return dict(
+        found=True,
+        index=int(best_idx.item()),
+        radius=ranking['radius'],
+        raw_count=ranking['raw_count'],
+        used_count=ranking['used_count'],
         box=best_box.tolist(),
         score=float(scores[best_idx].detach().cpu().item()),
         level=int(levels[best_idx].detach().cpu().item()),
         cost=float(cost[best_pos].detach().cpu().item()),
-        dist_to_pred=float(d[best_idx].detach().cpu().item()),
+        dist_to_pred=float(
+            ranking['distances'][best_idx].detach().cpu().item()),
     )
+
+
+def candidate_oracle_diagnostics(cands, gt: np.ndarray, ranking: Dict,
+                                 riou_thr: float) -> Dict:
+    """Measure dense/local candidate availability independently of selection."""
+    boxes, scores, levels = cands
+    gt_tensor = boxes.new_tensor(gt).reshape(1, 5)
+    ious = rotated_ious(boxes, gt_tensor)
+    dense_idx = int(torch.argmax(ious).item())
+    dense_best_riou = float(ious[dense_idx].item())
+    dense_score = scores[dense_idx]
+    result = dict(
+        dense_best_riou=dense_best_riou,
+        dense_oracle_hit=bool(dense_best_riou >= float(riou_thr)),
+        dense_best_score=float(dense_score.item()),
+        dense_best_score_rank=int((scores > dense_score).sum().item()) + 1,
+        dense_best_level=int(levels[dense_idx].item()),
+        local_best_riou=0.0,
+        local_oracle_hit=False,
+        local_usable_count=0,
+        local_best_score=None,
+        local_best_level=None,
+        local_best_dist_to_pred=None,
+        local_best_temporal_rank=None,
+    )
+
+    raw_inds = ranking['raw_inds']
+    if raw_inds.numel() == 0:
+        return result
+    local_ious = ious[raw_inds]
+    local_pos = int(torch.argmax(local_ious).item())
+    local_idx = raw_inds[local_pos]
+    local_best_riou = float(local_ious[local_pos].item())
+    result.update(
+        local_best_riou=local_best_riou,
+        local_oracle_hit=bool(local_best_riou >= float(riou_thr)),
+        local_usable_count=int(
+            (local_ious >= float(riou_thr)).sum().item()),
+        local_best_score=float(scores[local_idx].item()),
+        local_best_level=int(levels[local_idx].item()),
+        local_best_dist_to_pred=float(
+            ranking['distances'][local_idx].item()),
+    )
+
+    used_matches = torch.nonzero(
+        ranking['inds'] == local_idx, as_tuple=False).reshape(-1)
+    if used_matches.numel():
+        local_used_pos = int(used_matches[0].item())
+        local_cost = ranking['cost'][local_used_pos]
+        result['local_best_temporal_rank'] = int(
+            (ranking['cost'] < local_cost).sum().item()) + 1
+    return result
 
 
 def longest_false_run(flags: Sequence[bool]) -> int:
@@ -357,6 +551,32 @@ def longest_false_span(flags: Sequence[bool], frames: Sequence[int]) -> Dict:
     return dict(length=int(best_len), start=best_start, end=best_end)
 
 
+def build_summary_metrics(rows: List[Dict]) -> Dict:
+    frames = [int(row['frame']) for row in rows]
+
+    def metric(hit_key: str) -> Dict:
+        flags = [bool(row.get(hit_key)) for row in rows]
+        return dict(
+            hits=int(sum(flags)), total=len(flags),
+            longest_miss=longest_false_span(flags, frames))
+
+    metrics = dict(
+        final=metric('final_hit'),
+        after=metric('after_hit'),
+        dense_oracle=metric('dense_oracle_hit'),
+        local_oracle=metric('local_oracle_hit'),
+    )
+    if any('bidir_hit' in row for row in rows):
+        metrics.update(
+            heuristic_or=metric('heuristic_or_hit'),
+            bidir_strict=metric('bidir_hit'),
+            joint_selected=metric('joint_hit'),
+            bidir_consistent=metric('bidir_consistent'))
+    else:
+        metrics['heuristic_selected'] = metric('reanchor_hit')
+    return metrics
+
+
 def write_csv(path: str, rows: List[Dict]):
     preferred = [
         'frame', 'zone', 'final_has_box', 'final_score', 'final_riou',
@@ -365,12 +585,21 @@ def write_csv(path: str, rows: List[Dict]):
         'reanchor_score', 'reanchor_level', 'reanchor_cost',
         'reanchor_dist_to_pred', 'reanchor_raw_count', 'reanchor_riou',
         'reanchor_center_dist', 'reanchor_gamma_error_deg', 'reanchor_hit',
-        'after_hit', 'bidir_hit', 'bidir_or_hit', 'bidir_consistent',
+        'dense_best_riou', 'dense_oracle_hit', 'dense_best_score_rank',
+        'local_best_riou', 'local_oracle_hit', 'local_usable_count',
+        'local_best_dist_to_pred', 'local_best_temporal_rank',
+        'after_hit', 'bidir_hit', 'heuristic_or_hit', 'bidir_consistent',
         'fb_center_dist', 'fb_size_log_dist', 'fb_angle_diff_deg',
         'fwd_found', 'bwd_found', 'fwd_riou', 'bwd_riou',
-        'or_best_pass', 'or_best_riou', 'or_best_gamma_error_deg',
+        'fwd_local_best_riou', 'bwd_local_best_riou',
+        'heuristic_best_pass', 'heuristic_best_riou',
+        'heuristic_best_gamma_error_deg',
+        'selection_mode', 'joint_found', 'joint_candidate_count',
+        'joint_riou', 'joint_hit', 'joint_time_alpha',
+        'joint_fwd_weight', 'joint_bwd_weight',
+        'joint_fwd_rank', 'joint_bwd_rank',
         'selected_riou', 'selected_gamma_error_deg',
-        'history_updated', 'update_source', 'brightness',
+        'teacher_forced', 'history_updated', 'update_source', 'brightness',
     ]
     seen = set()
     fieldnames = []
@@ -413,8 +642,12 @@ def load_anchor_history(model, transform_compose, img_scale, flip,
             args.seed_mode == 'all-final'
             or (args.seed_mode == 'oracle-valid' and final_hit)))
     if seed_allowed:
+        print(f'[anchor] {args.seq}_{fid:05d} source={source} '
+              f'riou={final_eval["riou"]:.3f}')
         return [dict(fid=fid, box=final_box.tolist(), source=source)]
     if args.bootstrap != 'none':
+        print(f'[anchor] {args.seq}_{fid:05d} source={source}_gt '
+              f'final_riou={final_eval["riou"]:.3f}')
         return [dict(fid=fid, box=gt.tolist(), source=f'{source}_{args.bootstrap}')]
     raise RuntimeError(
         f'Anchor {args.seq}_{fid:05d} is not trusted: '
@@ -453,18 +686,41 @@ def run_temporal_pass(model, transform_compose, img_scale, flip, args,
 
         pred = predict_box(history, fid, args.motion)
         selected = None
+        ranking = None
         selected_eval = dict(riou=0.0, center_dist=None,
                              gamma_error_deg=None, hit=False)
+        oracle_diag = dict(
+            dense_best_riou=None, dense_oracle_hit=False,
+            dense_best_score=None, dense_best_score_rank=None,
+            dense_best_level=None, local_best_riou=None,
+            local_oracle_hit=False, local_usable_count=0,
+            local_best_score=None, local_best_level=None,
+            local_best_dist_to_pred=None,
+            local_best_temporal_rank=None)
         seed_used = bool((not final_hit) and pred is not None and cands is not None)
+        if pred is not None and cands is not None:
+            ranking = build_temporal_ranking(cands, pred, args)
+            oracle_diag = candidate_oracle_diagnostics(
+                cands, gt, ranking, args.riou_thr)
         if seed_used:
-            selected = select_reanchor_candidate(cands, pred, args)
+            selected = select_reanchor_candidate(
+                cands, pred, args, ranking=ranking)
             if selected and selected.get('found'):
                 selected_eval = eval_hit(
                     selected['box'], gt, args.riou_thr, args.center_thr)
 
         history_updated = False
         update_source = ''
-        if selected and selected.get('found'):
+        if args.teacher_force_gt:
+            teacher_item = dict(
+                fid=fid, box=gt.tolist(), source=f'{pass_name}_teacher_gt')
+            if history and int(history[-1]['fid']) == int(fid):
+                history[-1] = teacher_item
+            else:
+                history.append(teacher_item)
+            history_updated = True
+            update_source = 'teacher_gt'
+        elif selected and selected.get('found'):
             do_update = (
                 args.update_mode == 'selected'
                 or (args.update_mode == 'oracle-hit' and selected_eval['hit']))
@@ -498,9 +754,17 @@ def run_temporal_pass(model, transform_compose, img_scale, flip, args,
             reanchor_gamma_error_deg=selected_eval['gamma_error_deg'],
             reanchor_hit=bool(selected_eval['hit']),
             after_hit=bool(final_hit or selected_eval['hit']),
+            teacher_forced=bool(args.teacher_force_gt),
             history_updated=history_updated,
             update_source=update_source,
             brightness=None if img_stats is None else img_stats.get('raw_brightness'),
+            # Internal-only fields consumed by merge_bidir_rows. They are
+            # removed before serialization by constructing a fresh public row.
+            _pred_box=None if pred is None else pred.copy(),
+            _gt_box=gt.copy(),
+            _cands=cands,
+            _ranking=ranking,
+            **oracle_diag,
         )
     return rows
 
@@ -508,6 +772,13 @@ def run_temporal_pass(model, transform_compose, img_scale, flip, args,
 def merge_bidir_rows(frame_ids: Sequence[int], fwd_rows: Dict[int, Dict],
                      bwd_rows: Dict[int, Dict], args) -> List[Dict]:
     rows = []
+    rank_selection = args.bidir_select in (
+        'joint-rank', 'time-weighted-rank')
+    left_anchor = (
+        int(args.left_anchor) if args.left_anchor is not None
+        else int(args.start) - 1)
+    right_anchor = (
+        None if args.right_anchor is None else int(args.right_anchor))
     for fid in frame_ids:
         fwd = fwd_rows.get(int(fid), dict(frame=int(fid), reanchor_found=False))
         bwd = bwd_rows.get(int(fid), dict(frame=int(fid), reanchor_found=False))
@@ -530,24 +801,68 @@ def merge_bidir_rows(frame_ids: Sequence[int], fwd_rows: Dict[int, Dict],
             and fb_size <= float(args.diverge_size_log))
 
         chosen = None
-        if consistent:
+        joint = dict(found=False, candidate_count=0)
+        joint_time_alpha = None
+        directional_weights = None
+        if args.bidir_select == 'time-weighted-rank':
+            if right_anchor is None:
+                raise ValueError(
+                    'time-weighted-rank requires --right-anchor')
+            fwd_weight, bwd_weight, joint_time_alpha = bidir_time_weights(
+                int(fid), left_anchor, right_anchor)
+            directional_weights = (fwd_weight, bwd_weight)
+        joint_eval = dict(
+            riou=0.0, center_dist=None, gamma_error_deg=None, hit=False)
+        if rank_selection:
+            fwd_cands = fwd.get('_cands')
+            bwd_cands = bwd.get('_cands')
+            fwd_pred = fwd.get('_pred_box')
+            bwd_pred = bwd.get('_pred_box')
+            fwd_ranking = fwd.get('_ranking')
+            bwd_ranking = bwd.get('_ranking')
+            if (fwd_cands is not None and bwd_cands is not None
+                    and fwd_pred is not None and bwd_pred is not None
+                    and fwd_ranking is not None and bwd_ranking is not None):
+                # The two passes decode the same frame independently. Reuse
+                # the forward pool after checking that their shapes agree.
+                if (fwd_cands[0].shape != bwd_cands[0].shape
+                        or fwd_cands[1].shape != bwd_cands[1].shape):
+                    raise RuntimeError(
+                        'Bidirectional candidate pools have different shapes')
+                joint = select_joint_rank_candidate(
+                    fwd_cands, np.asarray(fwd_pred), np.asarray(bwd_pred),
+                    fwd_ranking, bwd_ranking, args,
+                    directional_weights=directional_weights)
+                if joint.get('found'):
+                    joint_eval = eval_hit(
+                        joint['box'], fwd.get('_gt_box'),
+                        args.riou_thr, args.center_thr)
+        elif consistent:
             f_cost = float(fwd.get('reanchor_cost') or 1e9)
             b_cost = float(bwd.get('reanchor_cost') or 1e9)
             chosen = fwd if f_cost <= b_cost else bwd
-        selected_hit = bool(chosen and chosen.get('reanchor_hit'))
-        or_hit = bool(fwd.get('reanchor_hit', False) or bwd.get('reanchor_hit', False))
+        selected_hit = bool(
+            joint_eval['hit'] if rank_selection
+            else chosen and chosen.get('reanchor_hit'))
+        heuristic_or_hit = bool(
+            fwd.get('reanchor_hit', False) or bwd.get('reanchor_hit', False))
         fwd_riou = float(fwd.get('reanchor_riou', 0.0) or 0.0)
         bwd_riou = float(bwd.get('reanchor_riou', 0.0) or 0.0)
-        # 诊断上界: 用 GT 事后挑前/后向中 RIoU 更高的那个。
-        # 这不是可部署选择规则, 只用于避免 strict=0 时把候选信息全部吞掉。
+        fwd_local_riou = float(fwd.get('local_best_riou', 0.0) or 0.0)
+        bwd_local_riou = float(bwd.get('local_best_riou', 0.0) or 0.0)
+        local_oracle_hit = bool(
+            fwd.get('local_oracle_hit', False)
+            or bwd.get('local_oracle_hit', False))
+        # This is only the better of two heuristic selections. It is not an
+        # oracle over the local candidate pool.
         if fwd_riou >= bwd_riou:
-            or_best = fwd
-            or_best_pass = 'fwd'
-            or_best_riou = fwd_riou
+            heuristic_best = fwd
+            heuristic_best_pass = 'fwd'
+            heuristic_best_riou = fwd_riou
         else:
-            or_best = bwd
-            or_best_pass = 'bwd'
-            or_best_riou = bwd_riou
+            heuristic_best = bwd
+            heuristic_best_pass = 'bwd'
+            heuristic_best_riou = bwd_riou
         row = dict(
             frame=int(fid),
             zone=zone_for_frame(fid, args.start, args.end),
@@ -570,14 +885,50 @@ def merge_bidir_rows(frame_ids: Sequence[int], fwd_rows: Dict[int, Dict],
             fb_size_log_dist=fb_size,
             fb_angle_diff_deg=fb_angle,
             bidir_consistent=consistent,
-            bidir_or_hit=or_hit,
+            dense_best_riou=fwd.get('dense_best_riou'),
+            dense_oracle_hit=bool(fwd.get('dense_oracle_hit', False)),
+            dense_best_score_rank=fwd.get('dense_best_score_rank'),
+            fwd_local_best_riou=fwd_local_riou,
+            bwd_local_best_riou=bwd_local_riou,
+            local_best_riou=max(fwd_local_riou, bwd_local_riou),
+            local_oracle_hit=local_oracle_hit,
+            local_usable_count=max(
+                int(fwd.get('local_usable_count', 0) or 0),
+                int(bwd.get('local_usable_count', 0) or 0)),
+            fwd_local_temporal_rank=fwd.get('local_best_temporal_rank'),
+            bwd_local_temporal_rank=bwd.get('local_best_temporal_rank'),
+            heuristic_or_hit=heuristic_or_hit,
             bidir_hit=bool(final_hit or selected_hit),
-            or_best_pass=or_best_pass,
-            or_best_riou=or_best_riou,
-            or_best_gamma_error_deg=or_best.get('reanchor_gamma_error_deg'),
-            selected_riou=0.0 if chosen is None else float(chosen.get('reanchor_riou', 0.0) or 0.0),
-            selected_gamma_error_deg=None if chosen is None else chosen.get('reanchor_gamma_error_deg'),
+            heuristic_best_pass=heuristic_best_pass,
+            heuristic_best_riou=heuristic_best_riou,
+            heuristic_best_gamma_error_deg=heuristic_best.get(
+                'reanchor_gamma_error_deg'),
+            selection_mode=args.bidir_select,
+            joint_found=bool(joint.get('found', False)),
+            joint_candidate_count=int(joint.get('candidate_count', 0)),
+            joint_riou=float(joint_eval['riou']),
+            joint_hit=bool(joint_eval['hit']),
+            joint_time_alpha=joint_time_alpha,
+            joint_fwd_weight=(
+                directional_weights[0] if directional_weights is not None
+                else joint.get('fwd_weight')),
+            joint_bwd_weight=(
+                directional_weights[1] if directional_weights is not None
+                else joint.get('bwd_weight')),
+            joint_fwd_rank=joint.get('fwd_rank'),
+            joint_bwd_rank=joint.get('bwd_rank'),
+            selected_riou=(
+                float(joint_eval['riou'])
+                if rank_selection
+                else (0.0 if chosen is None else float(
+                    chosen.get('reanchor_riou', 0.0) or 0.0))),
+            selected_gamma_error_deg=(
+                joint_eval['gamma_error_deg']
+                if rank_selection
+                else (None if chosen is None else
+                      chosen.get('reanchor_gamma_error_deg'))),
             after_hit=bool(final_hit or selected_hit),
+            teacher_forced=bool(args.teacher_force_gt),
             brightness=fwd.get('brightness', bwd.get('brightness')),
         )
         rows.append(row)
@@ -603,15 +954,26 @@ def run_bidir_probe(model, transform_compose, img_scale, flip, args) -> List[Dic
         right_history, 'bwd')
     rows = merge_bidir_rows(frame_ids, fwd_rows, bwd_rows, args)
     for row in rows:
+        time_info = ''
+        if row.get('joint_time_alpha') is not None:
+            time_info = (
+                f" alpha={row['joint_time_alpha']:.3f}"
+                f" weights={row['joint_fwd_weight']:.3f}/"
+                f"{row['joint_bwd_weight']:.3f}")
         print(
             f"[{args.seq}_{row['frame']:05d}] zone={row['zone']} "
             f"strict={'OK' if row['bidir_hit'] else 'MISS'} "
-            f"or={'OK' if row['bidir_or_hit'] else 'MISS'} "
+            f"dense={row['dense_best_riou']:.3f} "
+            f"local={row['local_best_riou']:.3f} "
+            f"heuristic={row['heuristic_best_riou']:.3f} "
+            f"selected={row['selected_riou']:.3f} "
             f"f/b={row['fwd_riou']:.3f}/{row['bwd_riou']:.3f} "
             f"found={int(row['fwd_found'])}/{int(row['bwd_found'])} "
-            f"or_best={row['or_best_riou']:.3f}/{row['or_best_pass']} "
+            f"mode={row['selection_mode']} "
+            f"h_best={row['heuristic_best_pass']} "
             f"agree={int(row['bidir_consistent'])} "
-            f"fb_d={row['fb_center_dist']}")
+            f"fb_d={row['fb_center_dist']}"
+            f"{time_info}")
     return rows
 
 
@@ -635,19 +997,36 @@ def print_summary(rows: List[Dict]):
     print(f'  after_hits:          {after_hits}/{total}')
     if any('bidir_hit' in r for r in rows):
         strict_flags = [bool(r.get('bidir_hit')) for r in rows]
-        or_flags = [bool(r.get('bidir_or_hit')) for r in rows]
+        dense_flags = [bool(r.get('dense_oracle_hit')) for r in rows]
+        local_flags = [bool(r.get('local_oracle_hit')) for r in rows]
+        heuristic_flags = [bool(r.get('heuristic_or_hit')) for r in rows]
         strict_span = longest_false_span(strict_flags, frames)
-        or_span = longest_false_span(or_flags, frames)
+        dense_span = longest_false_span(dense_flags, frames)
+        local_span = longest_false_span(local_flags, frames)
+        heuristic_span = longest_false_span(heuristic_flags, frames)
         final_span = longest_false_span([bool(r.get('final_hit')) for r in rows], frames)
+        print(f'  dense_oracle_hits:   {sum(dense_flags)}/{total}')
+        print(f'  local_oracle_hits:   {sum(local_flags)}/{total}')
+        print(f'  heuristic_or_hits:   {sum(heuristic_flags)}/{total}')
         print(f'  bidir_strict_hits:   {sum(strict_flags)}/{total}')
-        print(f'  bidir_or_hits:       {sum(or_flags)}/{total}')
+        if any(r.get('selection_mode') in (
+                'joint-rank', 'time-weighted-rank') for r in rows):
+            joint_flags = [bool(r.get('joint_hit')) for r in rows]
+            joint_span = longest_false_span(joint_flags, frames)
+            print(f'  joint_selected_hits: {sum(joint_flags)}/{total}')
+            print(f'  miss_run joint:      {joint_span["length"]} '
+                  f'({joint_span["start"]}..{joint_span["end"]})')
         print(f'  consistent:          {sum(bool(r.get("bidir_consistent")) for r in rows)}/{total}')
         print(f'  fwd_found:           {sum(bool(r.get("fwd_found")) for r in rows)}/{total}')
         print(f'  bwd_found:           {sum(bool(r.get("bwd_found")) for r in rows)}/{total}')
+        print(f'  miss_run dense:      {dense_span["length"]} '
+              f'({dense_span["start"]}..{dense_span["end"]})')
+        print(f'  miss_run local:      {local_span["length"]} '
+              f'({local_span["start"]}..{local_span["end"]})')
+        print(f'  miss_run heuristic:  {heuristic_span["length"]} '
+              f'({heuristic_span["start"]}..{heuristic_span["end"]})')
         print(f'  miss_run strict:     {final_span["length"]} -> {strict_span["length"]} '
               f'({strict_span["start"]}..{strict_span["end"]})')
-        print(f'  miss_run or-bound:   {or_span["length"]} '
-              f'({or_span["start"]}..{or_span["end"]})')
         for zone in ['left', 'mid', 'right']:
             zrows = [r for r in rows if r.get('zone') == zone]
             if not zrows:
@@ -655,22 +1034,39 @@ def print_summary(rows: List[Dict]):
             strict_gamma_vals = [
                 float(r['selected_gamma_error_deg']) for r in zrows
                 if r.get('selected_gamma_error_deg') is not None]
-            or_gamma_vals = [
-                float(r['or_best_gamma_error_deg']) for r in zrows
-                if r.get('or_best_gamma_error_deg') is not None]
+            heuristic_gamma_vals = [
+                float(r['heuristic_best_gamma_error_deg']) for r in zrows
+                if r.get('heuristic_best_gamma_error_deg') is not None]
             div_vals = [
                 float(r['fb_center_dist']) for r in zrows
                 if r.get('fb_center_dist') is not None]
             riou_vals = [float(r.get('selected_riou', 0.0) or 0.0) for r in zrows]
-            or_riou_vals = [float(r.get('or_best_riou', 0.0) or 0.0) for r in zrows]
+            local_riou_vals = [
+                float(r.get('local_best_riou', 0.0) or 0.0)
+                for r in zrows]
+            heuristic_riou_vals = [
+                float(r.get('heuristic_best_riou', 0.0) or 0.0)
+                for r in zrows]
             print(
                 f'  zone {zone}: strict={sum(bool(r.get("bidir_hit")) for r in zrows)}/{len(zrows)} '
                 f'riou_mean={np.mean(riou_vals):.3f} '
-                f'or_riou_mean={np.mean(or_riou_vals):.3f} '
+                f'local_mean={np.mean(local_riou_vals):.3f} '
+                f'heuristic_mean={np.mean(heuristic_riou_vals):.3f} '
                 f'fb_center_mean={(np.mean(div_vals) if div_vals else float("nan")):.1f} '
                 f'gamma_mean={(np.mean(strict_gamma_vals) if strict_gamma_vals else float("nan")):.1f} '
-                f'or_gamma_mean={(np.mean(or_gamma_vals) if or_gamma_vals else float("nan")):.1f}')
+                f'heuristic_gamma_mean={(np.mean(heuristic_gamma_vals) if heuristic_gamma_vals else float("nan")):.1f}')
     else:
+        dense_flags = [bool(r.get('dense_oracle_hit')) for r in rows]
+        local_flags = [bool(r.get('local_oracle_hit')) for r in rows]
+        if any(r.get('dense_best_riou') is not None for r in rows):
+            dense_span = longest_false_span(dense_flags, frames)
+            local_span = longest_false_span(local_flags, frames)
+            print(f'  dense_oracle_hits:   {sum(dense_flags)}/{total}')
+            print(f'  local_oracle_hits:   {sum(local_flags)}/{total}')
+            print(f'  miss_run dense:      {dense_span["length"]} '
+                  f'({dense_span["start"]}..{dense_span["end"]})')
+            print(f'  miss_run local:      {local_span["length"]} '
+                  f'({local_span["start"]}..{local_span["end"]})')
         print(f'  reanchor_attempted:  {attempted}')
         print(f'  reanchor_found:      {found}')
         print(f'  valid_revive:        {revived}')
@@ -681,6 +1077,20 @@ def print_summary(rows: List[Dict]):
 
 def main():
     args = parse_args()
+    if args.bidir_select == 'time-weighted-rank':
+        if args.pass_mode != 'bidir':
+            raise ValueError(
+                '--bidir-select time-weighted-rank requires '
+                '--pass-mode bidir')
+        left_anchor = (
+            int(args.left_anchor) if args.left_anchor is not None
+            else int(args.start) - 1)
+        if args.right_anchor is None:
+            raise ValueError(
+                '--bidir-select time-weighted-rank requires '
+                '--right-anchor')
+        bidir_time_weights(
+            int(args.start), left_anchor, int(args.right_anchor))
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -689,13 +1099,22 @@ def main():
     model, cfg = load_model(args.config, args.checkpoint, args.gpu)
     from crane_project.tools import mcml_diag as diag
     transform_compose, img_scale, flip = diag.build_test_transforms(cfg)
+    print('[coordinates] decoded candidates, GT, final predictions, and '
+          'temporal thresholds all use original-image pixels')
+    if args.teacher_force_gt:
+        print('[teacher-force] GT is appended only after each frame is '
+              'evaluated; update-mode is ignored for temporal history')
+    if args.bidir_select == 'time-weighted-rank':
+        print('[time-weighted-rank] directional ranks are weighted by each '
+              'frame position between the left and right anchors')
 
     if args.pass_mode == 'bidir':
         rows = run_bidir_probe(model, transform_compose, img_scale, flip, args)
         csv_path = os.path.join(args.out_dir, 'per_frame.csv')
         json_path = os.path.join(args.out_dir, 'summary.json')
         write_csv(csv_path, rows)
-        payload = dict(args=vars(args), rows=rows)
+        payload = dict(
+            args=vars(args), metrics=build_summary_metrics(rows), rows=rows)
         with open(json_path, 'w') as f:
             json.dump(payload, f, indent=2)
         print_summary(rows)
@@ -771,17 +1190,41 @@ def main():
 
         pred = predict_box(history, fid, args.motion)
         selected = None
-        selected_eval = dict(riou=0.0, center_dist=None, hit=False)
+        ranking = None
+        selected_eval = dict(
+            riou=0.0, center_dist=None, gamma_error_deg=None, hit=False)
+        oracle_diag = dict(
+            dense_best_riou=None, dense_oracle_hit=False,
+            dense_best_score=None, dense_best_score_rank=None,
+            dense_best_level=None, local_best_riou=None,
+            local_oracle_hit=False, local_usable_count=0,
+            local_best_score=None, local_best_level=None,
+            local_best_dist_to_pred=None,
+            local_best_temporal_rank=None)
         seed_used = bool((not final_hit) and pred is not None and cands is not None)
+        if pred is not None and cands is not None:
+            ranking = build_temporal_ranking(cands, pred, args)
+            oracle_diag = candidate_oracle_diagnostics(
+                cands, gt, ranking, args.riou_thr)
         if seed_used:
-            selected = select_reanchor_candidate(cands, pred, args)
+            selected = select_reanchor_candidate(
+                cands, pred, args, ranking=ranking)
             if selected and selected.get('found'):
                 selected_eval = eval_hit(
                     selected['box'], gt, args.riou_thr, args.center_thr)
 
         history_updated = False
         update_source = ''
-        if selected and selected.get('found'):
+        if args.teacher_force_gt:
+            teacher_item = dict(
+                fid=fid, box=gt.tolist(), source='forward_teacher_gt')
+            if history and int(history[-1]['fid']) == int(fid):
+                history[-1] = teacher_item
+            else:
+                history.append(teacher_item)
+            history_updated = True
+            update_source = 'teacher_gt'
+        elif selected and selected.get('found'):
             do_update = (
                 args.update_mode == 'selected'
                 or (args.update_mode == 'oracle-hit' and selected_eval['hit']))
@@ -810,23 +1253,31 @@ def main():
             reanchor_raw_count=0 if not selected else selected.get('raw_count', 0),
             reanchor_riou=selected_eval['riou'],
             reanchor_center_dist=selected_eval['center_dist'],
+            reanchor_gamma_error_deg=selected_eval['gamma_error_deg'],
             reanchor_hit=bool(selected_eval['hit']),
             after_hit=after_hit,
+            teacher_forced=bool(args.teacher_force_gt),
             history_updated=history_updated,
             update_source=update_source,
             brightness=None if img_stats is None else img_stats.get('raw_brightness'),
+            **oracle_diag,
         )
         rows.append(row)
         print(
             f"[{args.seq}_{fid:05d}] final={'OK' if final_hit else 'MISS'} "
             f"seed={int(seed_used)} reanchor="
             f"{'OK' if row['reanchor_hit'] else ('cand' if row['reanchor_found'] else '-')}"
-            f" riou={row['reanchor_riou']:.3f} score={row['reanchor_score']}")
+            f" dense={float(row['dense_best_riou'] or 0.0):.3f}"
+            f" local={float(row['local_best_riou'] or 0.0):.3f}"
+            f" selected={row['reanchor_riou']:.3f}"
+            f" score={row['reanchor_score']}")
 
     csv_path = os.path.join(args.out_dir, 'per_frame.csv')
     json_path = os.path.join(args.out_dir, 'summary.json')
     write_csv(csv_path, rows)
-    payload = dict(args=vars(args), warmup_rows=warmup_rows, rows=rows)
+    payload = dict(
+        args=vars(args), metrics=build_summary_metrics(rows),
+        warmup_rows=warmup_rows, rows=rows)
     with open(json_path, 'w') as f:
         json.dump(payload, f, indent=2)
     print_summary(rows)

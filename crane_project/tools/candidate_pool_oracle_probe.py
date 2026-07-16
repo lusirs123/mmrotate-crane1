@@ -88,9 +88,79 @@ def scale_gt_to_img(gt: Dict, meta: Dict) -> Dict:
     scaled = dict(gt)
     scaled['cx'] = float(gt['cx']) * sx
     scaled['cy'] = float(gt['cy']) * sy
-    scaled['w'] = float(gt['w']) * sx
-    scaled['h'] = float(gt['h']) * sy
+    # Match mmrotate RResize._resize_bboxes exactly.  The two scale factors can
+    # differ slightly after integer rounding even though keep_ratio=True.
+    size_scale = float(np.sqrt(sx * sy))
+    scaled['w'] = float(gt['w']) * size_scale
+    scaled['h'] = float(gt['h']) * size_scale
     return scaled
+
+
+def build_preprocess_summary(img_tensor, meta: Dict, img_scale, flip) -> Dict:
+    """Build and validate preprocessing diagnostics without relying on mcml_diag."""
+    def shape_list(value, name):
+        if isinstance(value, torch.Size):
+            value = tuple(value)
+        if isinstance(value, np.ndarray):
+            value = value.tolist()
+        if not isinstance(value, (list, tuple)) or len(value) < 2:
+            raise RuntimeError(f'Invalid preprocess {name}: {value!r}')
+        return [int(item) for item in value]
+
+    ori_shape = shape_list(meta.get('ori_shape'), 'ori_shape')
+    resized_shape = shape_list(meta.get('img_shape'), 'img_shape')
+    pad_shape = shape_list(meta.get('pad_shape'), 'pad_shape')
+    tensor_shape = [int(item) for item in img_tensor.shape]
+
+    scale_factor = meta.get('scale_factor')
+    if isinstance(scale_factor, torch.Tensor):
+        scale_factor = scale_factor.detach().cpu().numpy()
+    scale = np.asarray(scale_factor, dtype=np.float64).reshape(-1)
+    if scale.size == 0 or not np.all(np.isfinite(scale)) or np.any(scale <= 0):
+        raise RuntimeError(f'Invalid preprocess scale_factor: {scale_factor!r}')
+    sx = float(scale[0])
+    sy = float(scale[1]) if scale.size >= 2 else sx
+
+    tensor_hw = tensor_shape[-2:]
+    if tensor_hw != pad_shape[:2]:
+        raise RuntimeError(
+            'Probe preprocessing tensor/pad mismatch: '
+            f'tensor={tensor_hw}, pad_shape={pad_shape[:2]}')
+    expected_sx = float(resized_shape[1]) / float(ori_shape[1])
+    expected_sy = float(resized_shape[0]) / float(ori_shape[0])
+    tol_x = max(1e-3, 2.0 / float(ori_shape[1]))
+    tol_y = max(1e-3, 2.0 / float(ori_shape[0]))
+    if abs(sx - expected_sx) > tol_x or abs(sy - expected_sy) > tol_y:
+        raise RuntimeError(
+            'Probe imported stale/inconsistent preprocessing metadata: '
+            f'ori={ori_shape}, img={resized_shape}, '
+            f'scale_factor={scale.tolist()}. Ensure mcml_diag.py and '
+            'candidate_pool_oracle_probe.py are updated together.')
+
+    target_w, target_h = [int(item) for item in img_scale]
+    resize_ratio = min(
+        float(target_w) / float(ori_shape[1]),
+        float(target_h) / float(ori_shape[0]))
+    requested_h = int(float(ori_shape[0]) * resize_ratio + 0.5)
+    requested_w = int(float(ori_shape[1]) * resize_ratio + 0.5)
+    if (abs(resized_shape[0] - requested_h) > 1
+            or abs(resized_shape[1] - requested_w) > 1):
+        raise RuntimeError(
+            'Probe preprocessing ignored requested img_scale: '
+            f'ori={ori_shape}, requested_scale={list(img_scale)}, '
+            f'expected_img_shape={[requested_h, requested_w]}, '
+            f'actual_img_shape={resized_shape}. Update mcml_diag.py before '
+            'running this probe.')
+
+    return dict(
+        ori_shape=ori_shape,
+        img_shape=resized_shape,
+        pad_shape=pad_shape,
+        scale_factor=scale.tolist(),
+        tensor_shape=tensor_shape,
+        requested_scale=[int(item) for item in img_scale],
+        flip=bool(meta.get('flip', flip)),
+    )
 
 
 def longest_consecutive_miss(rows: Sequence[Dict], hit_key: str) -> int:
@@ -146,6 +216,8 @@ def analyze_frame(model, transform_compose, img_scale, flip, args,
     if img_tensor is None:
         print(f'[skip] frame {frame:05d}: preprocess failed')
         return None
+    preprocess = build_preprocess_summary(
+        img_tensor, meta, img_scale, flip)
     img_tensor = img_tensor.cuda(f'cuda:{args.gpu}')
 
     with torch.no_grad():
@@ -236,6 +308,7 @@ def analyze_frame(model, transform_compose, img_scale, flip, args,
             w=float(gt['w']), h=float(gt['h']),
             angle=float(gt['angle'])),
         decode_alignment=alignment,
+        preprocess=preprocess,
         per_k=per_k,
     )
     for topk in topks:
@@ -360,6 +433,17 @@ def main():
             args, seq, frame, topks)
         if row is not None:
             rows.append(row)
+            if len(rows) == 1:
+                prep = row['preprocess']
+                print(
+                    '[preprocess] '
+                    f"ori={prep['ori_shape']} img={prep['img_shape']} "
+                    f"pad={prep['pad_shape']} "
+                    f"scale_factor={prep['scale_factor']} "
+                    f"tensor={prep['tensor_shape']} "
+                    f"requested_scale={prep['requested_scale']} "
+                    f"flip={prep['flip']}")
+                print(f"[decode] {row['decode_alignment']}")
 
     summary = build_summary(rows, topks, args.riou_thr)
     print_summary(summary, topks)

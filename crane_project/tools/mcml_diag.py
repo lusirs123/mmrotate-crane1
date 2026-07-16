@@ -264,7 +264,6 @@ def build_test_transforms(cfg):
     跳过 LoadImageFromFile 和 MultiScaleFlipAug wrapper,
     返回内部的 transform 序列 + MultiScaleFlipAug 参数。
     """
-    from mmcv import Config
     from mmdet.datasets.pipelines import Compose
 
     pipeline_cfg = cfg.test_pipeline
@@ -282,9 +281,139 @@ def build_test_transforms(cfg):
             inner_transforms = t.get('transforms', [])
             break
 
-    # Build Compose from inner transforms
+    if not inner_transforms:
+        raise RuntimeError(
+            'test_pipeline must contain MultiScaleFlipAug with inner transforms')
+
+    if isinstance(img_scale, list):
+        if len(img_scale) == 2 and all(
+                isinstance(item, (int, float)) for item in img_scale):
+            img_scale = tuple(img_scale)
+        elif len(img_scale) == 1:
+            img_scale = tuple(img_scale[0])
+        else:
+            raise RuntimeError(
+                'Probe preprocessing supports exactly one test img_scale, got '
+                f'{img_scale!r}')
+    if not isinstance(img_scale, tuple) or len(img_scale) != 2:
+        raise RuntimeError(f'Invalid test img_scale: {img_scale!r}')
+    if flip:
+        raise RuntimeError(
+            'Probe preprocessing supports deterministic flip=False only; '
+            'MultiScaleFlipAug flip=True produces multiple test views')
+
     compose = Compose(inner_transforms)
     return compose, img_scale, flip
+
+
+def _unwrap_pipeline_value(value):
+    """Unwrap an MMCV DataContainer and a possible singleton wrapper."""
+    if hasattr(value, 'data'):
+        value = value.data
+    while isinstance(value, (list, tuple)) and len(value) == 1:
+        value = value[0]
+        if hasattr(value, 'data'):
+            value = value.data
+    return value
+
+
+def _shape_tuple(value, name):
+    if isinstance(value, torch.Size):
+        value = tuple(value)
+    if isinstance(value, np.ndarray):
+        value = value.tolist()
+    if not isinstance(value, (list, tuple)) or len(value) < 2:
+        raise RuntimeError(f'Invalid {name} from test pipeline: {value!r}')
+    return tuple(int(item) for item in value)
+
+
+def _validate_preprocess_metadata(img_tensor, img_metas, img_scale):
+    """Fail fast when the manual probe path diverges from test-time geometry."""
+    ori_shape = _shape_tuple(img_metas.get('ori_shape'), 'ori_shape')
+    img_shape = _shape_tuple(img_metas.get('img_shape'), 'img_shape')
+    pad_shape = _shape_tuple(img_metas.get('pad_shape'), 'pad_shape')
+
+    tensor_h, tensor_w = map(int, img_tensor.shape[-2:])
+    if (tensor_h, tensor_w) != tuple(pad_shape[:2]):
+        raise RuntimeError(
+            'Test pipeline metadata/tensor mismatch: '
+            f'tensor={(tensor_h, tensor_w)}, pad_shape={pad_shape[:2]}')
+    if img_shape[0] > pad_shape[0] or img_shape[1] > pad_shape[1]:
+        raise RuntimeError(
+            f'img_shape={img_shape[:2]} exceeds pad_shape={pad_shape[:2]}')
+
+    scale_factor = img_metas.get('scale_factor')
+    if isinstance(scale_factor, torch.Tensor):
+        scale_factor = scale_factor.detach().cpu().numpy()
+    scale = np.asarray(scale_factor, dtype=np.float64).reshape(-1)
+    if scale.size == 0 or not np.all(np.isfinite(scale)) or np.any(scale <= 0):
+        raise RuntimeError(
+            f'Invalid scale_factor from test pipeline: {scale_factor!r}')
+    sx = float(scale[0])
+    sy = float(scale[1]) if scale.size >= 2 else sx
+    expected_sx = float(img_shape[1]) / float(ori_shape[1])
+    expected_sy = float(img_shape[0]) / float(ori_shape[0])
+    tol_x = max(1e-3, 2.0 / float(ori_shape[1]))
+    tol_y = max(1e-3, 2.0 / float(ori_shape[0]))
+    if abs(sx - expected_sx) > tol_x or abs(sy - expected_sy) > tol_y:
+        raise RuntimeError(
+            'Test pipeline scale metadata is inconsistent: '
+            f'ori={ori_shape[:2]}, img={img_shape[:2]}, '
+            f'scale_factor={scale.tolist()}')
+
+    target_w, target_h = map(int, img_scale)
+    resize_ratio = min(
+        float(target_w) / float(ori_shape[1]),
+        float(target_h) / float(ori_shape[0]))
+    requested_h = int(float(ori_shape[0]) * resize_ratio + 0.5)
+    requested_w = int(float(ori_shape[1]) * resize_ratio + 0.5)
+    if (abs(img_shape[0] - requested_h) > 1
+            or abs(img_shape[1] - requested_w) > 1):
+        raise RuntimeError(
+            'Test pipeline ignored MultiScaleFlipAug img_scale: '
+            f'ori={ori_shape[:2]}, requested_scale={tuple(img_scale)}, '
+            f'expected_img_shape={(requested_h, requested_w)}, '
+            f'actual_img_shape={img_shape[:2]}. Ensure RResize receives '
+            'results["scale"], not a fabricated scale_factor=1.0.')
+
+
+def scale_obb_to_img(gt, img_metas):
+    """Map one original-image OBB to the resized test-image coordinates."""
+    scale_factor = img_metas.get('scale_factor')
+    if isinstance(scale_factor, torch.Tensor):
+        scale_factor = scale_factor.detach().cpu().numpy()
+    scale = np.asarray(scale_factor, dtype=np.float64).reshape(-1)
+    if scale.size == 0:
+        raise RuntimeError('Missing scale_factor for GT coordinate mapping')
+    sx = float(scale[0])
+    sy = float(scale[1]) if scale.size >= 2 else sx
+    size_scale = float(np.sqrt(sx * sy))
+    mapped = dict(gt)
+    mapped['cx'] = float(gt['cx']) * sx
+    mapped['cy'] = float(gt['cy']) * sy
+    mapped['w'] = float(gt['w']) * size_scale
+    mapped['h'] = float(gt['h']) * size_scale
+    return mapped
+
+
+def detections_to_ori(detections, img_metas):
+    """Map decoded probe boxes back for drawing on the original image."""
+    scale_factor = img_metas.get('scale_factor')
+    if isinstance(scale_factor, torch.Tensor):
+        scale_factor = scale_factor.detach().cpu().numpy()
+    scale = np.asarray(scale_factor, dtype=np.float64).reshape(-1)
+    sx = float(scale[0])
+    sy = float(scale[1]) if scale.size >= 2 else sx
+    size_scale = float(np.sqrt(sx * sy))
+    mapped = []
+    for detection in detections:
+        item = dict(detection)
+        item['det_cx'] = float(item['det_cx']) / sx
+        item['det_cy'] = float(item['det_cy']) / sy
+        item['det_w'] = float(item['det_w']) / size_scale
+        item['det_h'] = float(item['det_h']) / size_scale
+        mapped.append(item)
+    return mapped
 
 
 def preprocess_image(img_path, transform_compose, img_scale, flip,
@@ -299,29 +428,28 @@ def preprocess_image(img_path, transform_compose, img_scale, flip,
     proc = apply_test_time_preproc(raw, preproc_cfg)
     raw_stats = image_stats_bgr(raw)
     proc_stats = image_stats_bgr(proc)
-    ori_h, ori_w = raw.shape[:2]
-
     if save_preproc_dir and preproc_cfg.get('mode', 'none') != 'none':
         os.makedirs(save_preproc_dir, exist_ok=True)
         out_path = os.path.join(save_preproc_dir, os.path.basename(img_path))
         cv2.imwrite(out_path, proc)
 
     # 构造 results dict, 模拟 LoadImageFromFile 的输出
-    img = cv2.cvtColor(proc, cv2.COLOR_BGR2RGB)
+    # 与正式 LoadImageFromFile 保持一致：OpenCV 读入结果维持 BGR。
+    # 后续 Normalize(to_rgb=True) 会且只会执行一次 BGR -> RGB。
+    # 若在这里提前转 RGB，Normalize 会再次交换通道，导致所有复用本函数
+    # 的 probe 输入与正式 test pipeline 不一致。
+    img = proc.copy()
     results = dict(
         img=img,
         filename=img_path,
         ori_filename=os.path.basename(img_path),
         img_shape=img.shape,
         ori_shape=img.shape,
-        pad_shape=img.shape,
-        scale_factor=1.0,
+        # MultiScaleFlipAug normally injects scale before its inner transforms.
+        # RResize must see this key; scale_factor=1.0 selects a no-resize path.
+        scale=tuple(img_scale),
         flip=flip,
         flip_direction='horizontal' if flip else None,
-        img_norm_cfg=dict(
-            mean=[123.675, 116.28, 103.53],
-            std=[58.395, 57.12, 57.375],
-            to_rgb=True),
         img_fields=['img'],
     )
 
@@ -329,24 +457,23 @@ def preprocess_image(img_path, transform_compose, img_scale, flip,
     results = transform_compose(results)
 
     # 提取 tensor (DefaultFormatBundle 已包成 DataContainer)
-    img_tensor = results['img']
-    if hasattr(img_tensor, 'data'):
-        img_tensor = img_tensor.data  # unwrap DataContainer
+    img_tensor = _unwrap_pipeline_value(results['img'])
     if not isinstance(img_tensor, torch.Tensor):
         img_tensor = torch.from_numpy(img_tensor)
     if img_tensor.dim() == 3:
         img_tensor = img_tensor.unsqueeze(0)  # add batch dim
 
-    # 构造 img_metas
-    img_metas = {
-        'filename': img_path,
-        'ori_shape': results.get('ori_shape', (ori_h, ori_w, 3)),
-        'img_shape': results.get('img_shape', img_tensor.shape[2:]),
-        'pad_shape': results.get('pad_shape', img_tensor.shape[2:]),
-        'scale_factor': results.get('scale_factor', 1.0),
-        'flip': flip,
-        'flip_direction': None,
-    }
+    # Collect moves authoritative metadata into img_metas.  The outer results
+    # no longer contains ori_shape/img_shape/scale_factor after Collect.
+    img_metas = _unwrap_pipeline_value(results.get('img_metas'))
+    if not isinstance(img_metas, dict):
+        raise RuntimeError(
+            'Test pipeline must Collect img_metas; got '
+            f'{type(img_metas).__name__}')
+    img_metas = dict(img_metas)
+    img_metas.setdefault('filename', img_path)
+    img_metas.setdefault('ori_filename', os.path.basename(img_path))
+    _validate_preprocess_metadata(img_tensor, img_metas, img_scale)
 
     stats = dict(
         raw_brightness=raw_stats['brightness'],
@@ -355,6 +482,16 @@ def preprocess_image(img_path, transform_compose, img_scale, flip,
         proc_brightness=proc_stats['brightness'],
         proc_contrast=proc_stats['contrast'],
         proc_ud_delta=proc_stats['ud_delta'],
+        preprocess=dict(
+            ori_shape=list(_shape_tuple(img_metas['ori_shape'], 'ori_shape')),
+            img_shape=list(_shape_tuple(img_metas['img_shape'], 'img_shape')),
+            pad_shape=list(_shape_tuple(img_metas['pad_shape'], 'pad_shape')),
+            scale_factor=np.asarray(
+                img_metas['scale_factor'], dtype=np.float64).reshape(-1).tolist(),
+            tensor_shape=list(img_tensor.shape),
+            requested_scale=list(img_scale),
+            flip=bool(img_metas.get('flip', False)),
+        ),
     )
     return img_tensor, img_metas, stats
 
@@ -822,7 +959,7 @@ def diagnose_source(model, hook_mgr, transform_compose, img_scale, flip,
         roi_score = 0.0
         gt_analysis = None
         if gts:
-            gt = gts[0]
+            gt = scale_obb_to_img(gts[0], meta)
             gt_analysis = gt_center_score(
                 hook_mgr.cls_scores, gt['cx'], gt['cy'],
                 meta['img_shape'],
@@ -850,6 +987,7 @@ def diagnose_source(model, hook_mgr, transform_compose, img_scale, flip,
             global_max=global_max, global_max_level=global_max_level,
             gt_analysis=gt_analysis, split=split, seq=seq,
             n_gt=len(gts),
+            preprocess=img_stats['preprocess'],
         ))
 
         marker = {'DEAD-global': '✗✗', 'DEAD-local': '✗ ',
@@ -869,7 +1007,7 @@ def diagnose_source(model, hook_mgr, transform_compose, img_scale, flip,
         if need_topk and gts and bbox_coder is not None and anchor_generator is not None:
             anchors_per_level = generate_anchors(
                 anchor_generator, hook_mgr.cls_scores, device='cpu')
-            gt = gts[0]
+            gt = scale_obb_to_img(gts[0], meta)
             topk_analysis = analyze_topk_vs_gt(
                 hook_mgr.cls_scores, hook_mgr.bbox_preds,
                 anchors_per_level, bbox_coder,
@@ -901,7 +1039,9 @@ def diagnose_source(model, hook_mgr, transform_compose, img_scale, flip,
             # 可视化
             if vis_dir and topk_analysis:
                 vis_path = os.path.join(vis_dir, f'{fname}_det.jpg')
-                visualize_frame(img_path, gt, topk_analysis, vis_path)
+                visualize_frame(
+                    img_path, gts[0],
+                    detections_to_ori(topk_analysis, meta), vis_path)
 
     return results
 
