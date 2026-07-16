@@ -34,6 +34,12 @@ class SymEOOD(SingleStageDetector):
                  platform_context_injector=None,
                  inject_aux_only=False,
                  aux_detach_cls_head=None,
+                 reg_quality_head=None,
+                 reg_quality_detach=True,
+                 reg_quality_loss_weight=1.0,
+                 reg_quality_focal_gamma=2.0,
+                 reg_quality_min_target_iou=0.1,
+                 reg_quality_pre_topk=10000,
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None,
@@ -125,6 +131,39 @@ class SymEOOD(SingleStageDetector):
                 self.aux_detach_loss_cls = build_loss(loss_cfg)
             if assigner_cfg is not None:
                 self.aux_detach_assigner = build_assigner(assigner_cfg)
+
+        # Independent localization-quality branch.  During training this head
+        # receives detached FPN features and detached decoded main boxes.  Its
+        # loss therefore updates only the quality-head parameters.  During
+        # inference cls keeps a broad top-K pool and quality alone ranks it.
+        self.reg_quality_head = None
+        self.reg_quality_detach = bool(reg_quality_detach)
+        self.reg_quality_loss_weight = float(reg_quality_loss_weight)
+        self.reg_quality_focal_gamma = float(reg_quality_focal_gamma)
+        self.reg_quality_min_target_iou = float(
+            reg_quality_min_target_iou)
+        self.reg_quality_pre_topk = int(reg_quality_pre_topk)
+        if reg_quality_head is not None:
+            if self.aux_detach_cls_head is not None:
+                raise ValueError(
+                    'reg_quality_head and aux_detach_cls_head are mutually '
+                    'exclusive inference branches')
+            self.reg_quality_head = build_head(
+                copy.deepcopy(reg_quality_head))
+            if self.reg_quality_head.num_anchors != self.bbox_head.num_anchors:
+                raise ValueError(
+                    'reg-quality/main anchor mismatch: quality={} main={}'
+                    .format(self.reg_quality_head.num_anchors,
+                            self.bbox_head.num_anchors))
+            if self.reg_quality_pre_topk <= 0:
+                raise ValueError('reg_quality_pre_topk must be positive')
+            if self.reg_quality_loss_weight <= 0.0:
+                raise ValueError('reg_quality_loss_weight must be positive')
+            if self.reg_quality_focal_gamma < 0.0:
+                raise ValueError('reg_quality_focal_gamma must be non-negative')
+            if not 0.0 <= self.reg_quality_min_target_iou <= 1.0:
+                raise ValueError(
+                    'reg_quality_min_target_iou must be in [0, 1]')
 
     def _build_aux_feats(self, feats, aux_head):
         if isinstance(aux_head, RotatedATSSHead):
@@ -278,6 +317,21 @@ class SymEOOD(SingleStageDetector):
             degraded_aux2_cls_scores=degraded_aux2_cls_scores,
             platform_context_map=platform_context_map)
         losses.update(main_losses)
+
+        # --- Independent reg-quality training ---
+        # Hard detach prevents the quality target/loss from weakening cls or
+        # perturbing the already useful geometry branch.
+        if self.reg_quality_head is not None:
+            quality_feats = ([feat.detach() for feat in x]
+                             if self.reg_quality_detach else x)
+            quality_logits = self.reg_quality_head(quality_feats)
+            quality_loss, quality_stats = self._compute_reg_quality_loss(
+                quality_logits, main_outs[0], main_outs[1],
+                img_metas, gt_bboxes)
+            losses['loss_reg_quality'] = torch.nan_to_num(
+                quality_loss, nan=0.0, posinf=0.0, neginf=0.0)
+            for name, value in quality_stats.items():
+                losses[name] = value
         if degraded_aux2_amp_loss is not None:
             losses['loss_degraded_aux2_amp'] = torch.nan_to_num(
                 degraded_aux2_amp_loss, nan=0.0, posinf=0.0, neginf=0.0)
@@ -385,7 +439,13 @@ class SymEOOD(SingleStageDetector):
                     platform_context_map[lvl] = torch.sigmoid(
                         context_logits[idx])
 
-        if self.aux_detach_cls_head is not None:
+        if self.reg_quality_head is not None:
+            outs = self.bbox_head(feat)
+            quality_logits = self.reg_quality_head(feat)
+            results_list = self._reg_quality_primary_get_bboxes(
+                outs[0], outs[1], quality_logits, img_metas,
+                rescale=rescale)
+        elif self.aux_detach_cls_head is not None:
             # Forward main head and aux head on the SAME clean features
             outs = self.bbox_head(feat)
             aux_cls_scores = self.aux_detach_cls_head(feat)
@@ -420,6 +480,200 @@ class SymEOOD(SingleStageDetector):
             for det_bboxes, det_labels in results_list
         ]
         return bbox_results
+
+    def _compute_reg_quality_loss(self, quality_logits, cls_scores,
+                                  bbox_preds, img_metas, gt_bboxes):
+        """Supervise per-anchor quality with detached decoded-box RIoU.
+
+        This is a separate Quality-Focal-style objective.  It does not alter
+        the main classification target and, with ``reg_quality_detach=True``,
+        cannot send gradients into FPN or the main bbox predictor.
+        """
+        if not (len(quality_logits) == len(cls_scores) == len(bbox_preds)):
+            raise RuntimeError(
+                'reg-quality level mismatch: quality={} cls={} bbox={}'.format(
+                    len(quality_logits), len(cls_scores), len(bbox_preds)))
+
+        featmap_sizes = [item.shape[-2:] for item in quality_logits]
+        device = quality_logits[0].device
+        anchor_list, valid_flag_list = self.bbox_head.get_anchors(
+            featmap_sizes, img_metas, device=device)
+
+        zero = quality_logits[0].sum() * 0.0
+        loss_sum = zero
+        total_positive = 0
+        target_sum = zero.detach()
+        pred_positive_sum = zero.detach()
+
+        for img_index, img_meta in enumerate(img_metas):
+            anchors = torch.cat(anchor_list[img_index])
+            valid = torch.cat(valid_flag_list[img_index]).bool()
+            image_quality_logits = torch.cat([
+                level[img_index].permute(1, 2, 0).reshape(-1)
+                for level in quality_logits
+            ])
+            image_cls_logits = torch.cat([
+                level[img_index].permute(1, 2, 0).reshape(
+                    -1, self.bbox_head.cls_out_channels)
+                for level in cls_scores
+            ])
+            image_bbox_preds = torch.cat([
+                level[img_index].permute(1, 2, 0).reshape(-1, 5)
+                for level in bbox_preds
+            ])
+            if not (anchors.shape[0] == image_quality_logits.numel()
+                    == image_cls_logits.shape[0]
+                    == image_bbox_preds.shape[0]):
+                raise RuntimeError(
+                    'reg-quality anchor alignment mismatch: anchors={} '
+                    'quality={} cls={} bbox={}'.format(
+                        anchors.shape[0], image_quality_logits.numel(),
+                        image_cls_logits.shape[0], image_bbox_preds.shape[0]))
+
+            with torch.no_grad():
+                if self.bbox_head.use_sigmoid_cls:
+                    pool_scores = image_cls_logits.sigmoid().max(dim=1).values
+                else:
+                    pool_scores = image_cls_logits.softmax(
+                        dim=1)[:, :-1].max(dim=1).values
+                pool_size = min(
+                    self.reg_quality_pre_topk, int(pool_scores.numel()))
+                pool_indices = pool_scores.topk(
+                    pool_size, largest=True, sorted=False).indices
+                supervision = torch.zeros_like(valid)
+                supervision[pool_indices] = True
+                supervision &= valid
+
+                decoded = self.bbox_head.bbox_coder.decode(
+                    anchors, image_bbox_preds.detach(),
+                    max_shape=img_meta['img_shape'])
+                max_size = float(max(img_meta.get(
+                    'pad_shape', img_meta['img_shape'])[:2]))
+                decoded = torch.nan_to_num(
+                    decoded, nan=0.0, posinf=max_size, neginf=0.0)
+                decoded[:, 0].clamp_(0.0, max_size)
+                decoded[:, 1].clamp_(0.0, max_size)
+                decoded[:, 2].clamp_(1.0, max_size)
+                decoded[:, 3].clamp_(1.0, max_size)
+
+                targets = decoded.new_zeros(decoded.shape[0])
+                if (gt_bboxes[img_index].numel() > 0
+                        and supervision.any()):
+                    overlaps = RBboxOverlaps2D()(
+                        decoded[supervision], gt_bboxes[img_index])
+                    pool_targets = overlaps.max(dim=1).values.clamp_(0.0, 1.0)
+                    pool_targets[pool_targets <
+                                 self.reg_quality_min_target_iou] = 0.0
+                    targets[supervision] = pool_targets
+
+            probabilities = image_quality_logits.sigmoid()
+            element_loss = F.binary_cross_entropy_with_logits(
+                image_quality_logits, targets, reduction='none')
+            focal_weight = (targets - probabilities).abs().pow(
+                self.reg_quality_focal_gamma)
+            element_loss = (
+                element_loss * focal_weight * supervision.float())
+            loss_sum = loss_sum + element_loss.sum()
+
+            positive = (targets > 0.0) & supervision
+            positive_count = int(positive.sum().item())
+            total_positive += positive_count
+            if positive_count:
+                target_sum = target_sum + targets[positive].sum()
+                pred_positive_sum = (
+                    pred_positive_sum + probabilities[positive].detach().sum())
+
+        avg_factor = max(total_positive, 1)
+        loss = (loss_sum / float(avg_factor)
+                * self.reg_quality_loss_weight)
+        stats = dict(
+            reg_quality_positive=zero.new_tensor(float(total_positive)),
+            reg_quality_target_mean=(target_sum / float(avg_factor)),
+            reg_quality_pred_positive_mean=(
+                pred_positive_sum / float(avg_factor)),
+        )
+        return loss, stats
+
+    def _reg_quality_primary_get_bboxes(self, cls_scores, bbox_preds,
+                                        quality_logits, img_metas,
+                                        rescale=False):
+        """Select quality top-1 inside the pre-threshold cls-topK pool."""
+        if not (len(cls_scores) == len(bbox_preds) == len(quality_logits)):
+            raise RuntimeError('reg-quality inference level mismatch')
+        featmap_sizes = [item.shape[-2:] for item in cls_scores]
+        anchors_per_level = self.bbox_head.anchor_generator.grid_priors(
+            featmap_sizes, device=cls_scores[0].device)
+        num_imgs = cls_scores[0].shape[0]
+        results = []
+
+        for img_index in range(num_imgs):
+            all_boxes = []
+            all_cls_scores = []
+            all_labels = []
+            all_quality = []
+            for cls_level, bbox_level, quality_level, anchors in zip(
+                    cls_scores, bbox_preds, quality_logits,
+                    anchors_per_level):
+                cls_flat = cls_level[img_index].permute(
+                    1, 2, 0).reshape(-1, self.bbox_head.cls_out_channels)
+                if self.bbox_head.use_sigmoid_cls:
+                    class_prob = cls_flat.sigmoid()
+                else:
+                    class_prob = cls_flat.softmax(dim=-1)[:, :-1]
+                class_prob = torch.nan_to_num(
+                    class_prob, nan=0.0, posinf=1.0, neginf=0.0)
+                max_cls, labels = class_prob.max(dim=1)
+                bbox_flat = bbox_level[img_index].permute(
+                    1, 2, 0).reshape(-1, 5)
+                quality_flat = quality_level[img_index].permute(
+                    1, 2, 0).reshape(-1).sigmoid()
+                quality_flat = torch.nan_to_num(
+                    quality_flat, nan=0.0, posinf=1.0, neginf=0.0)
+                if not (anchors.shape[0] == bbox_flat.shape[0]
+                        == max_cls.numel() == quality_flat.numel()):
+                    raise RuntimeError(
+                        'reg-quality inference anchor alignment mismatch')
+                decoded = self.bbox_head.bbox_coder.decode(
+                    anchors, bbox_flat,
+                    max_shape=img_metas[img_index]['img_shape'])
+                max_size = float(max(img_metas[img_index].get(
+                    'pad_shape', img_metas[img_index]['img_shape'])[:2]))
+                decoded = torch.nan_to_num(
+                    decoded, nan=0.0, posinf=max_size, neginf=0.0)
+                decoded[:, 0].clamp_(0.0, max_size)
+                decoded[:, 1].clamp_(0.0, max_size)
+                decoded[:, 2].clamp_(1.0, max_size)
+                decoded[:, 3].clamp_(1.0, max_size)
+                all_boxes.append(decoded)
+                all_cls_scores.append(max_cls)
+                all_labels.append(labels)
+                all_quality.append(quality_flat)
+
+            boxes = torch.cat(all_boxes)
+            class_scores = torch.cat(all_cls_scores)
+            labels = torch.cat(all_labels)
+            quality = torch.cat(all_quality)
+
+            pre_topk = min(self.reg_quality_pre_topk, class_scores.numel())
+            _, pre_indices = class_scores.topk(
+                pre_topk, largest=True, sorted=False)
+            pool_quality = quality[pre_indices]
+            max_per_img = int(self.test_cfg.get('max_per_img', 1))
+            keep_count = min(max(max_per_img, 1), pre_topk)
+            selected_quality, selected_in_pool = pool_quality.topk(
+                keep_count, largest=True, sorted=True)
+            selected = pre_indices[selected_in_pool]
+            selected_boxes = boxes[selected]
+            selected_labels = labels[selected]
+
+            if rescale and selected_boxes.numel() > 0:
+                scale_factor = selected_boxes.new_tensor(
+                    img_metas[img_index]['scale_factor'])
+                selected_boxes[:, :4] /= scale_factor
+            det_bboxes = torch.cat(
+                [selected_boxes, selected_quality[:, None]], dim=1)
+            results.append((det_bboxes, selected_labels))
+        return results
 
     def _build_equi_flip_view(self, img):
         """构建 L_equi 使用的翻转视图.
