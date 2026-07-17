@@ -20,26 +20,53 @@ from mmrotate.models.builder import ROTATED_HEADS
 
 @ROTATED_HEADS.register_module(force=True)
 class PQAHeatmapHead(nn.Module):
-    """Shared 3x3 PQA heatmap predictor for all FPN levels."""
+    """PQA heatmap predictor shared across FPN levels.
 
-    def __init__(self, in_channels=256, prior_prob=0.01, init_cfg=None):
+    ``stacked_convs`` defaults to zero for checkpoint compatibility with the
+    first experiment.  V2 uses a small private localization tower because the
+    SymEOOD Retina head in this fork has no hidden regression subnet.
+    """
+
+    def __init__(self, in_channels=256, feat_channels=256, stacked_convs=0,
+                 prior_prob=0.01, init_cfg=None):
         super().__init__()
+        if stacked_convs < 0:
+            raise ValueError('stacked_convs must be non-negative')
         if not 0.0 < prior_prob < 1.0:
             raise ValueError('prior_prob must be in (0, 1)')
         self.in_channels = int(in_channels)
+        self.feat_channels = int(feat_channels)
+        self.stacked_convs = int(stacked_convs)
         self.prior_prob = float(prior_prob)
         self.init_cfg = init_cfg
+        layers = []
+        for index in range(self.stacked_convs):
+            in_channels_i = (self.in_channels if index == 0
+                             else self.feat_channels)
+            layers.append(nn.Conv2d(
+                in_channels_i, self.feat_channels, kernel_size=3, padding=1))
+            layers.append(nn.ReLU(inplace=True))
+        self.localization_tower = nn.Sequential(*layers)
+        output_channels = (self.feat_channels if self.stacked_convs > 0
+                           else self.in_channels)
         self.heatmap_pred = nn.Conv2d(
-            self.in_channels, 1, kernel_size=3, padding=1)
+            output_channels, 1, kernel_size=3, padding=1)
         self.init_weights()
 
     def init_weights(self):
+        for module in self.localization_tower.modules():
+            if isinstance(module, nn.Conv2d):
+                nn.init.normal_(module.weight, std=0.01)
+                if module.bias is not None:
+                    nn.init.constant_(module.bias, 0.0)
         nn.init.normal_(self.heatmap_pred.weight, std=0.01)
         nn.init.constant_(
             self.heatmap_pred.bias, bias_init_with_prob(self.prior_prob))
 
     def forward(self, feats):
-        return tuple(self.heatmap_pred(feat) for feat in feats)
+        return tuple(
+            self.heatmap_pred(self.localization_tower(feat))
+            for feat in feats)
 
     @staticmethod
     def build_targets(heatmap_logits, img_metas, gt_bboxes, strides,
@@ -179,7 +206,8 @@ class PQAHeatmapHead(nn.Module):
 
     @classmethod
     def quality_from_boxes(cls, heatmap_logits, boxes, levels, pad_shape,
-                           grid_size=9, batch_size=512, eps=1e-12):
+                           grid_size=9, batch_size=512,
+                           canonical_level=None, eps=1e-12):
         """Compute differentiable PQA Volume-IoU for decoded OBBs.
 
         Args:
@@ -206,9 +234,21 @@ class PQAHeatmapHead(nn.Module):
             int(grid_size), work_boxes.device, work_boxes.dtype)
         candidate_map = torch.exp(-2.0 * (xx.square() + yy.square()))
 
-        for level_index, level_heatmap in enumerate(heatmap_logits):
-            indices = torch.nonzero(
-                levels == int(level_index), as_tuple=False).reshape(-1)
+        if canonical_level is not None:
+            canonical_level = int(canonical_level)
+            if not 0 <= canonical_level < len(heatmap_logits):
+                raise ValueError('canonical PQA heatmap level is out of range')
+            heatmap_items = [(
+                canonical_level, heatmap_logits[canonical_level],
+                torch.arange(boxes.shape[0], device=boxes.device))]
+        else:
+            heatmap_items = []
+            for level_index, level_heatmap in enumerate(heatmap_logits):
+                indices = torch.nonzero(
+                    levels == int(level_index), as_tuple=False).reshape(-1)
+                heatmap_items.append((level_index, level_heatmap, indices))
+
+        for _, level_heatmap, indices in heatmap_items:
             if indices.numel() == 0:
                 continue
             if level_heatmap.shape[0] != 1 or level_heatmap.shape[1] != 1:

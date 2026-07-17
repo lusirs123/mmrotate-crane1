@@ -102,21 +102,33 @@ def main():
     gt_box = torch.tensor(
         [[size * 0.5, size * 0.5, size * 0.35, size * 0.10, 0.0]],
         device=device)
+    strides = model.bbox_head.anchor_generator.strides
+    if model.pqa_canonical_heatmap_level is not None:
+        level = model.pqa_canonical_heatmap_level
+        train_logits = (logits[level],)
+        train_strides = (strides[level],)
+    else:
+        train_logits = logits
+        train_strides = strides
     targets, valid = model.pqa_head.build_targets(
-        logits, [meta], [gt_box], model.bbox_head.anchor_generator.strides)
+        train_logits, [meta], [gt_box], train_strides)
     clean_loss, stats = model.pqa_head.ld_loss(
-        logits, targets, valid, gamma=model.pqa_ld_gamma,
+        train_logits, targets, valid, gamma=model.pqa_ld_gamma,
         loss_weight=model.pqa_ld_loss_weight)
     dark_image = model._build_pqa_dark_view(image, [meta])
     with torch.no_grad():
         dark_features = model.extract_feat(dark_image)
     dark_logits = model.pqa_head([feature.detach() for feature in dark_features])
+    if model.pqa_canonical_heatmap_level is not None:
+        dark_train_logits = (dark_logits[model.pqa_canonical_heatmap_level],)
+    else:
+        dark_train_logits = dark_logits
     dark_loss, _ = model.pqa_head.ld_loss(
-        dark_logits, targets, valid, gamma=model.pqa_ld_gamma,
+        dark_train_logits, targets, valid, gamma=model.pqa_ld_gamma,
         loss_weight=(model.pqa_ld_loss_weight
                      * model.pqa_dark_supervision_weight))
     consistency = model.pqa_head.consistency_loss(
-        logits, dark_logits, targets, valid,
+        train_logits, dark_train_logits, targets, valid,
         loss_weight=model.pqa_dark_consistency_weight)
     total = clean_loss + dark_loss + consistency
     if not bool(torch.isfinite(total)):

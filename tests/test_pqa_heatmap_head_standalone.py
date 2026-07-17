@@ -68,6 +68,16 @@ class TestPQAHeatmapHead(unittest.TestCase):
         self.assertIsNone(feature.grad)
         self.assertIsNotNone(head.heatmap_pred.weight.grad)
 
+    def test_private_localization_tower(self):
+        head = PQAHeatmapHead(
+            in_channels=4, feat_channels=6, stacked_convs=2,
+            prior_prob=0.01)
+        output = head((torch.zeros(1, 4, 10, 8),))[0]
+        self.assertEqual(tuple(output.shape), (1, 1, 10, 8))
+        self.assertEqual(len(head.localization_tower), 4)
+        self.assertTrue(torch.allclose(
+            output.sigmoid().mean(), torch.tensor(0.01), atol=1e-5))
+
     def test_oriented_gaussian_target_and_ld_loss(self):
         logits = (torch.zeros(1, 1, 32, 32, requires_grad=True),)
         meta = [dict(img_shape=(32, 32, 3))]
@@ -101,6 +111,20 @@ class TestPQAHeatmapHead(unittest.TestCase):
             grid_size=15, batch_size=2)
         self.assertTrue(torch.isfinite(quality).all())
         self.assertGreater(float(quality[0]), float(quality[1]) + 0.3)
+
+    def test_canonical_heatmap_scores_all_fpn_candidates(self):
+        high_res = torch.full((1, 1, 16, 16), -10.0)
+        high_res[:, :, 6:10, 6:10] = 10.0
+        low_res = torch.full((1, 1, 8, 8), -10.0)
+        boxes = torch.tensor([
+            [8.0, 8.0, 4.0, 4.0, 0.0],
+            [8.0, 8.0, 4.0, 4.0, 0.0],
+        ])
+        levels = torch.tensor([0, 1], dtype=torch.long)
+        quality = PQAHeatmapHead.quality_from_boxes(
+            (high_res, low_res), boxes, levels, (16, 16, 3),
+            grid_size=9, batch_size=2, canonical_level=0)
+        self.assertAlmostEqual(float(quality[0]), float(quality[1]), places=6)
 
     def test_consistency_updates_dark_only(self):
         clean = (torch.randn(1, 1, 8, 8, requires_grad=True),)

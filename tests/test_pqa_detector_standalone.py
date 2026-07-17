@@ -110,8 +110,9 @@ class _FakeBBoxHead:
 class _FakePQAHead(nn.Module):
     @staticmethod
     def quality_from_boxes(heatmaps, boxes, levels, pad_shape,
-                           grid_size=9, batch_size=512):
-        del heatmaps, levels, pad_shape, grid_size, batch_size
+                           grid_size=9, batch_size=512,
+                           canonical_level=None):
+        del heatmaps, levels, pad_shape, grid_size, batch_size, canonical_level
         return boxes[:, 0] / 10.0
 
 
@@ -130,6 +131,7 @@ def _make_detector(score_mode='quality'):
     detector.pqa_score_mode = score_mode
     detector.pqa_grid_size = 9
     detector.pqa_quality_batch_size = 32
+    detector.pqa_canonical_heatmap_level = None
     detector.test_cfg = dict(max_per_img=1)
     return detector
 

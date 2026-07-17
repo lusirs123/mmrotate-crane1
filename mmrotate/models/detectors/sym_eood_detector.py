@@ -48,8 +48,11 @@ class SymEOOD(SingleStageDetector):
                  pqa_score_mode='quality',
                  pqa_grid_size=9,
                  pqa_quality_batch_size=512,
+                 pqa_canonical_heatmap_level=None,
                  pqa_dark_supervision_weight=0.5,
                  pqa_dark_consistency_weight=0.1,
+                 pqa_dark_warmup_iters=0,
+                 pqa_dark_ramp_iters=0,
                  pqa_dark_gamma_range=(0.5, 0.9),
                  pqa_dark_contrast_range=(0.7, 1.1),
                  pqa_dark_noise_std_range=(0.0, 10.0),
@@ -190,10 +193,15 @@ class SymEOOD(SingleStageDetector):
         self.pqa_score_mode = str(pqa_score_mode)
         self.pqa_grid_size = int(pqa_grid_size)
         self.pqa_quality_batch_size = int(pqa_quality_batch_size)
+        self.pqa_canonical_heatmap_level = (
+            None if pqa_canonical_heatmap_level is None
+            else int(pqa_canonical_heatmap_level))
         self.pqa_dark_supervision_weight = float(
             pqa_dark_supervision_weight)
         self.pqa_dark_consistency_weight = float(
             pqa_dark_consistency_weight)
+        self.pqa_dark_warmup_iters = int(pqa_dark_warmup_iters)
+        self.pqa_dark_ramp_iters = int(pqa_dark_ramp_iters)
         self.pqa_dark_gamma_range = tuple(pqa_dark_gamma_range)
         self.pqa_dark_contrast_range = tuple(pqa_dark_contrast_range)
         self.pqa_dark_noise_std_range = tuple(pqa_dark_noise_std_range)
@@ -218,12 +226,20 @@ class SymEOOD(SingleStageDetector):
                 raise ValueError('pqa_grid_size must be at least 3')
             if self.pqa_quality_batch_size <= 0:
                 raise ValueError('pqa_quality_batch_size must be positive')
+            if (self.pqa_canonical_heatmap_level is not None
+                    and self.pqa_canonical_heatmap_level < 0):
+                raise ValueError(
+                    'pqa_canonical_heatmap_level must be non-negative')
             if self.pqa_dark_supervision_weight < 0.0:
                 raise ValueError(
                     'pqa_dark_supervision_weight must be non-negative')
             if self.pqa_dark_consistency_weight < 0.0:
                 raise ValueError(
                     'pqa_dark_consistency_weight must be non-negative')
+            if self.pqa_dark_warmup_iters < 0 or self.pqa_dark_ramp_iters < 0:
+                raise ValueError('PQA dark warmup/ramp must be non-negative')
+            self.register_buffer(
+                '_pqa_train_step', torch.zeros((), dtype=torch.long))
 
     def _build_aux_feats(self, feats, aux_head):
         if isinstance(aux_head, RotatedATSSHead):
@@ -401,11 +417,21 @@ class SymEOOD(SingleStageDetector):
             pqa_feats = ([feat.detach() for feat in x]
                          if self.pqa_detach else x)
             pqa_logits = self.pqa_head(pqa_feats)
+            pqa_strides = self.bbox_head.anchor_generator.strides
+            if self.pqa_canonical_heatmap_level is not None:
+                level = self.pqa_canonical_heatmap_level
+                if not 0 <= level < len(pqa_logits):
+                    raise RuntimeError(
+                        'pqa_canonical_heatmap_level is out of range')
+                pqa_train_logits = (pqa_logits[level],)
+                pqa_train_strides = (pqa_strides[level],)
+            else:
+                pqa_train_logits = pqa_logits
+                pqa_train_strides = pqa_strides
             pqa_targets, pqa_valid = self.pqa_head.build_targets(
-                pqa_logits, img_metas, gt_bboxes,
-                self.bbox_head.anchor_generator.strides)
+                pqa_train_logits, img_metas, gt_bboxes, pqa_train_strides)
             pqa_loss, pqa_stats = self.pqa_head.ld_loss(
-                pqa_logits, pqa_targets, pqa_valid,
+                pqa_train_logits, pqa_targets, pqa_valid,
                 gamma=self.pqa_ld_gamma,
                 loss_weight=self.pqa_ld_loss_weight)
             losses['loss_pqa_ld'] = torch.nan_to_num(
@@ -413,28 +439,58 @@ class SymEOOD(SingleStageDetector):
             for name, value in pqa_stats.items():
                 losses[name] = value
 
-            if (self.pqa_dark_supervision_weight > 0.0
-                    or self.pqa_dark_consistency_weight > 0.0):
+            train_step = int(self._pqa_train_step.item())
+            self._pqa_train_step.add_(1)
+            if train_step < self.pqa_dark_warmup_iters:
+                dark_factor = 0.0
+            elif self.pqa_dark_ramp_iters > 0:
+                dark_factor = min(
+                    1.0,
+                    float(train_step - self.pqa_dark_warmup_iters + 1)
+                    / float(self.pqa_dark_ramp_iters))
+            else:
+                dark_factor = 1.0
+            losses['pqa_dark_factor'] = pqa_loss.new_tensor(dark_factor)
+
+            use_dark = (
+                dark_factor > 0.0
+                and (self.pqa_dark_supervision_weight > 0.0
+                     or self.pqa_dark_consistency_weight > 0.0))
+            if use_dark:
                 pqa_dark_img = self._build_pqa_dark_view(img, img_metas)
                 # No dark-view gradient may alter backbone/FPN geometry.
                 with torch.no_grad():
                     pqa_dark_feats = self.extract_feat(pqa_dark_img)
                 pqa_dark_logits = self.pqa_head(
                     [feat.detach() for feat in pqa_dark_feats])
+                if self.pqa_canonical_heatmap_level is not None:
+                    pqa_dark_train_logits = (
+                        pqa_dark_logits[self.pqa_canonical_heatmap_level],)
+                else:
+                    pqa_dark_train_logits = pqa_dark_logits
                 if self.pqa_dark_supervision_weight > 0.0:
                     dark_loss, _ = self.pqa_head.ld_loss(
-                        pqa_dark_logits, pqa_targets, pqa_valid,
+                        pqa_dark_train_logits, pqa_targets, pqa_valid,
                         gamma=self.pqa_ld_gamma,
                         loss_weight=(self.pqa_ld_loss_weight
-                                     * self.pqa_dark_supervision_weight))
+                                     * self.pqa_dark_supervision_weight
+                                     * dark_factor))
                     losses['loss_pqa_dark_ld'] = torch.nan_to_num(
                         dark_loss, nan=0.0, posinf=0.0, neginf=0.0)
                 if self.pqa_dark_consistency_weight > 0.0:
                     consistency = self.pqa_head.consistency_loss(
-                        pqa_logits, pqa_dark_logits, pqa_targets, pqa_valid,
-                        loss_weight=self.pqa_dark_consistency_weight)
+                        pqa_train_logits, pqa_dark_train_logits,
+                        pqa_targets, pqa_valid,
+                        loss_weight=(self.pqa_dark_consistency_weight
+                                     * dark_factor))
                     losses['loss_pqa_dark_consistency'] = torch.nan_to_num(
                         consistency, nan=0.0, posinf=0.0, neginf=0.0)
+            else:
+                zero_dark = pqa_train_logits[0].sum() * 0.0
+                if self.pqa_dark_supervision_weight > 0.0:
+                    losses['loss_pqa_dark_ld'] = zero_dark
+                if self.pqa_dark_consistency_weight > 0.0:
+                    losses['loss_pqa_dark_consistency'] = zero_dark
         if degraded_aux2_amp_loss is not None:
             losses['loss_degraded_aux2_amp'] = torch.nan_to_num(
                 degraded_aux2_amp_loss, nan=0.0, posinf=0.0, neginf=0.0)
@@ -777,7 +833,8 @@ class SymEOOD(SingleStageDetector):
             quality = self.pqa_head.quality_from_boxes(
                 image_heatmaps, pool_boxes, pool_levels, pad_shape,
                 grid_size=self.pqa_grid_size,
-                batch_size=self.pqa_quality_batch_size)
+                batch_size=self.pqa_quality_batch_size,
+                canonical_level=self.pqa_canonical_heatmap_level)
             quality = torch.nan_to_num(
                 quality, nan=0.0, posinf=1.0, neginf=0.0)
             if self.pqa_score_mode == 'quality':
