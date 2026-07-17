@@ -31,6 +31,7 @@ from .platform_context_injector import PlatformContextInjector
 from .aux_detach_cls_head import AuxDetachClsHead
 from .platform_obb_atss_head import PlatformOBBATSSHead
 from .reg_quality_head import RegQualityHead
+from .pqa_heatmap_head import PQAHeatmapHead
 __all__ = [
     'RotatedAnchorHead', 'RotatedRetinaHead', 'RotatedRPNHead',
     'OrientedRPNHead', 'RotatedRetinaRefineHead', 'ODMRefineHead',
@@ -41,6 +42,6 @@ __all__ = [
     'SymEOODHead','GaussianHeatmapHead','UADHead','AGASHead',
     'RotatedATSSSymKLDHead','CMDAGAHead','DegradedATSSForegroundHead',
     'PlatformContextHead','PlatformContextInjector','AuxDetachClsHead',
-    'PlatformOBBATSSHead','RegQualityHead'
+    'PlatformOBBATSSHead','RegQualityHead','PQAHeatmapHead'
 
 ]

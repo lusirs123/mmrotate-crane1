@@ -40,6 +40,19 @@ class SymEOOD(SingleStageDetector):
                  reg_quality_focal_gamma=2.0,
                  reg_quality_min_target_iou=0.1,
                  reg_quality_pre_topk=10000,
+                 pqa_head=None,
+                 pqa_detach=True,
+                 pqa_ld_loss_weight=1.5,
+                 pqa_ld_gamma=2.0,
+                 pqa_pre_topk=10000,
+                 pqa_score_mode='quality',
+                 pqa_grid_size=9,
+                 pqa_quality_batch_size=512,
+                 pqa_dark_supervision_weight=0.5,
+                 pqa_dark_consistency_weight=0.1,
+                 pqa_dark_gamma_range=(0.5, 0.9),
+                 pqa_dark_contrast_range=(0.7, 1.1),
+                 pqa_dark_noise_std_range=(0.0, 10.0),
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None,
@@ -164,6 +177,53 @@ class SymEOOD(SingleStageDetector):
             if not 0.0 <= self.reg_quality_min_target_iou <= 1.0:
                 raise ValueError(
                     'reg_quality_min_target_iou must be in [0, 1]')
+
+        # Full pixel-level quality assessment (PQA).  Unlike the scalar
+        # reg-quality head, this branch predicts a dense GT-relative heatmap;
+        # every decoded candidate contributes its own OBB geometry when
+        # Volume-IoU quality is calculated.  Classification remains unchanged.
+        self.pqa_head = None
+        self.pqa_detach = bool(pqa_detach)
+        self.pqa_ld_loss_weight = float(pqa_ld_loss_weight)
+        self.pqa_ld_gamma = float(pqa_ld_gamma)
+        self.pqa_pre_topk = int(pqa_pre_topk)
+        self.pqa_score_mode = str(pqa_score_mode)
+        self.pqa_grid_size = int(pqa_grid_size)
+        self.pqa_quality_batch_size = int(pqa_quality_batch_size)
+        self.pqa_dark_supervision_weight = float(
+            pqa_dark_supervision_weight)
+        self.pqa_dark_consistency_weight = float(
+            pqa_dark_consistency_weight)
+        self.pqa_dark_gamma_range = tuple(pqa_dark_gamma_range)
+        self.pqa_dark_contrast_range = tuple(pqa_dark_contrast_range)
+        self.pqa_dark_noise_std_range = tuple(pqa_dark_noise_std_range)
+        if pqa_head is not None:
+            if self.reg_quality_head is not None:
+                raise ValueError(
+                    'pqa_head and reg_quality_head are mutually exclusive')
+            if self.aux_detach_cls_head is not None:
+                raise ValueError(
+                    'pqa_head and aux_detach_cls_head are mutually exclusive')
+            self.pqa_head = build_head(copy.deepcopy(pqa_head))
+            if self.pqa_pre_topk <= 0:
+                raise ValueError('pqa_pre_topk must be positive')
+            if self.pqa_ld_loss_weight <= 0.0:
+                raise ValueError('pqa_ld_loss_weight must be positive')
+            if self.pqa_ld_gamma < 0.0:
+                raise ValueError('pqa_ld_gamma must be non-negative')
+            if self.pqa_score_mode not in ('quality', 'cls_x_quality'):
+                raise ValueError(
+                    'pqa_score_mode must be quality or cls_x_quality')
+            if self.pqa_grid_size < 3:
+                raise ValueError('pqa_grid_size must be at least 3')
+            if self.pqa_quality_batch_size <= 0:
+                raise ValueError('pqa_quality_batch_size must be positive')
+            if self.pqa_dark_supervision_weight < 0.0:
+                raise ValueError(
+                    'pqa_dark_supervision_weight must be non-negative')
+            if self.pqa_dark_consistency_weight < 0.0:
+                raise ValueError(
+                    'pqa_dark_consistency_weight must be non-negative')
 
     def _build_aux_feats(self, feats, aux_head):
         if isinstance(aux_head, RotatedATSSHead):
@@ -332,6 +392,49 @@ class SymEOOD(SingleStageDetector):
                 quality_loss, nan=0.0, posinf=0.0, neginf=0.0)
             for name, value in quality_stats.items():
                 losses[name] = value
+
+        # --- Full PQA heatmap training ---
+        # Clean and dark PQA paths update only PQAHeatmapHead when detach is
+        # enabled.  The paired dark view is spatially identical, so it reuses
+        # exactly the same Gaussian labels without transforming any OBB.
+        if self.pqa_head is not None:
+            pqa_feats = ([feat.detach() for feat in x]
+                         if self.pqa_detach else x)
+            pqa_logits = self.pqa_head(pqa_feats)
+            pqa_targets, pqa_valid = self.pqa_head.build_targets(
+                pqa_logits, img_metas, gt_bboxes,
+                self.bbox_head.anchor_generator.strides)
+            pqa_loss, pqa_stats = self.pqa_head.ld_loss(
+                pqa_logits, pqa_targets, pqa_valid,
+                gamma=self.pqa_ld_gamma,
+                loss_weight=self.pqa_ld_loss_weight)
+            losses['loss_pqa_ld'] = torch.nan_to_num(
+                pqa_loss, nan=0.0, posinf=0.0, neginf=0.0)
+            for name, value in pqa_stats.items():
+                losses[name] = value
+
+            if (self.pqa_dark_supervision_weight > 0.0
+                    or self.pqa_dark_consistency_weight > 0.0):
+                pqa_dark_img = self._build_pqa_dark_view(img, img_metas)
+                # No dark-view gradient may alter backbone/FPN geometry.
+                with torch.no_grad():
+                    pqa_dark_feats = self.extract_feat(pqa_dark_img)
+                pqa_dark_logits = self.pqa_head(
+                    [feat.detach() for feat in pqa_dark_feats])
+                if self.pqa_dark_supervision_weight > 0.0:
+                    dark_loss, _ = self.pqa_head.ld_loss(
+                        pqa_dark_logits, pqa_targets, pqa_valid,
+                        gamma=self.pqa_ld_gamma,
+                        loss_weight=(self.pqa_ld_loss_weight
+                                     * self.pqa_dark_supervision_weight))
+                    losses['loss_pqa_dark_ld'] = torch.nan_to_num(
+                        dark_loss, nan=0.0, posinf=0.0, neginf=0.0)
+                if self.pqa_dark_consistency_weight > 0.0:
+                    consistency = self.pqa_head.consistency_loss(
+                        pqa_logits, pqa_dark_logits, pqa_targets, pqa_valid,
+                        loss_weight=self.pqa_dark_consistency_weight)
+                    losses['loss_pqa_dark_consistency'] = torch.nan_to_num(
+                        consistency, nan=0.0, posinf=0.0, neginf=0.0)
         if degraded_aux2_amp_loss is not None:
             losses['loss_degraded_aux2_amp'] = torch.nan_to_num(
                 degraded_aux2_amp_loss, nan=0.0, posinf=0.0, neginf=0.0)
@@ -439,7 +542,13 @@ class SymEOOD(SingleStageDetector):
                     platform_context_map[lvl] = torch.sigmoid(
                         context_logits[idx])
 
-        if self.reg_quality_head is not None:
+        if self.pqa_head is not None:
+            outs = self.bbox_head(feat)
+            pqa_logits = self.pqa_head(feat)
+            results_list = self._pqa_get_bboxes(
+                outs[0], outs[1], pqa_logits, img_metas,
+                rescale=rescale)
+        elif self.reg_quality_head is not None:
             outs = self.bbox_head(feat)
             quality_logits = self.reg_quality_head(feat)
             results_list = self._reg_quality_primary_get_bboxes(
@@ -593,6 +702,106 @@ class SymEOOD(SingleStageDetector):
                 pred_positive_sum / float(avg_factor)),
         )
         return loss, stats
+
+    def _pqa_get_bboxes(self, cls_scores, bbox_preds, heatmap_logits,
+                        img_metas, rescale=False):
+        """Rank cls-topK decoded candidates by PQA Volume-IoU.
+
+        ``quality`` is the task-adapted quality-primary mode selected by the
+        oracle gate. ``cls_x_quality`` is the faithful paper baseline and can
+        be evaluated from the same checkpoint without retraining.
+        """
+        if not (len(cls_scores) == len(bbox_preds) == len(heatmap_logits)):
+            raise RuntimeError('PQA inference level mismatch')
+        featmap_sizes = [item.shape[-2:] for item in cls_scores]
+        anchors_per_level = self.bbox_head.anchor_generator.grid_priors(
+            featmap_sizes, device=cls_scores[0].device)
+        num_imgs = cls_scores[0].shape[0]
+        results = []
+
+        for img_index in range(num_imgs):
+            all_boxes = []
+            all_cls_scores = []
+            all_labels = []
+            all_levels = []
+            for level_index, (cls_level, bbox_level, anchors) in enumerate(
+                    zip(cls_scores, bbox_preds, anchors_per_level)):
+                cls_flat = cls_level[img_index].permute(
+                    1, 2, 0).reshape(-1, self.bbox_head.cls_out_channels)
+                if self.bbox_head.use_sigmoid_cls:
+                    class_prob = cls_flat.sigmoid()
+                else:
+                    class_prob = cls_flat.softmax(dim=-1)[:, :-1]
+                class_prob = torch.nan_to_num(
+                    class_prob, nan=0.0, posinf=1.0, neginf=0.0)
+                max_cls, labels = class_prob.max(dim=1)
+                bbox_flat = bbox_level[img_index].permute(
+                    1, 2, 0).reshape(-1, 5)
+                if not (anchors.shape[0] == bbox_flat.shape[0]
+                        == max_cls.numel()):
+                    raise RuntimeError('PQA anchor alignment mismatch')
+                decoded = self.bbox_head.bbox_coder.decode(
+                    anchors, bbox_flat,
+                    max_shape=img_metas[img_index]['img_shape'])
+                max_size = float(max(img_metas[img_index].get(
+                    'pad_shape', img_metas[img_index]['img_shape'])[:2]))
+                decoded = torch.nan_to_num(
+                    decoded, nan=0.0, posinf=max_size, neginf=0.0)
+                decoded[:, 0].clamp_(0.0, max_size)
+                decoded[:, 1].clamp_(0.0, max_size)
+                decoded[:, 2].clamp_(1.0, max_size)
+                decoded[:, 3].clamp_(1.0, max_size)
+                all_boxes.append(decoded)
+                all_cls_scores.append(max_cls)
+                all_labels.append(labels)
+                all_levels.append(torch.full(
+                    (decoded.shape[0],), int(level_index),
+                    dtype=torch.long, device=decoded.device))
+
+            boxes = torch.cat(all_boxes)
+            class_scores = torch.cat(all_cls_scores)
+            labels = torch.cat(all_labels)
+            levels = torch.cat(all_levels)
+            pre_topk = min(self.pqa_pre_topk, class_scores.numel())
+            _, pre_indices = class_scores.topk(
+                pre_topk, largest=True, sorted=False)
+            pool_boxes = boxes[pre_indices]
+            pool_cls = class_scores[pre_indices]
+            pool_labels = labels[pre_indices]
+            pool_levels = levels[pre_indices]
+            image_heatmaps = tuple(
+                level[img_index:img_index + 1]
+                for level in heatmap_logits)
+            pad_shape = img_metas[img_index].get(
+                'pad_shape', img_metas[img_index]['img_shape'])
+            quality = self.pqa_head.quality_from_boxes(
+                image_heatmaps, pool_boxes, pool_levels, pad_shape,
+                grid_size=self.pqa_grid_size,
+                batch_size=self.pqa_quality_batch_size)
+            quality = torch.nan_to_num(
+                quality, nan=0.0, posinf=1.0, neginf=0.0)
+            if self.pqa_score_mode == 'quality':
+                ranking_scores = quality
+            elif self.pqa_score_mode == 'cls_x_quality':
+                ranking_scores = pool_cls * quality
+            else:
+                raise RuntimeError(
+                    'Unsupported pqa_score_mode: ' + self.pqa_score_mode)
+
+            max_per_img = int(self.test_cfg.get('max_per_img', 1))
+            keep_count = min(max(max_per_img, 1), pre_topk)
+            selected_scores, selected = ranking_scores.topk(
+                keep_count, largest=True, sorted=True)
+            selected_boxes = pool_boxes[selected]
+            selected_labels = pool_labels[selected]
+            if rescale and selected_boxes.numel() > 0:
+                scale_factor = selected_boxes.new_tensor(
+                    img_metas[img_index]['scale_factor'])
+                selected_boxes[:, :4] /= scale_factor
+            det_bboxes = torch.cat(
+                [selected_boxes, selected_scores[:, None]], dim=1)
+            results.append((det_bboxes, selected_labels))
+        return results
 
     def _reg_quality_primary_get_bboxes(self, cls_scores, bbox_preds,
                                         quality_logits, img_metas,
@@ -821,6 +1030,55 @@ class SymEOOD(SingleStageDetector):
 
         x_degraded = x_contrast.clamp(0.0, 1.0)
         x = x_degraded * on_mask + x * (1.0 - on_mask)
+        return (x - mean) / std
+
+    def _build_pqa_dark_view(self, img, img_metas=None):
+        """Build a geometry-preserving dark view for PQA consistency.
+
+        Only illumination, contrast, and sensor noise are changed.  There is
+        no crop, resize, blur, or flip, so clean-view Gaussian labels remain
+        exactly aligned with the dark view.  The caller extracts dark FPN
+        features under ``torch.no_grad`` to preserve the main detector.
+        """
+        if img_metas is not None:
+            norm_cfg = img_metas[0].get('img_norm_cfg', {})
+            if norm_cfg:
+                expected_mean = [123.675, 116.28, 103.53]
+                expected_std = [58.395, 57.12, 57.375]
+                mean_cfg = list(norm_cfg.get('mean', []))
+                std_cfg = list(norm_cfg.get('std', []))
+                if mean_cfg and std_cfg:
+                    for actual, expected in zip(mean_cfg, expected_mean):
+                        assert abs(actual - expected) < 0.01
+                    for actual, expected in zip(std_cfg, expected_std):
+                        assert abs(actual - expected) < 0.01
+
+        mean = img.new_tensor([123.675, 116.28, 103.53]).view(
+            1, 3, 1, 1) / 255.0
+        std = img.new_tensor([58.395, 57.12, 57.375]).view(
+            1, 3, 1, 1) / 255.0
+        x = (img * std + mean).clamp(0.0, 1.0)
+        batch = x.shape[0]
+        gamma = torch.empty(
+            batch, 1, 1, 1, device=x.device).uniform_(
+                float(self.pqa_dark_gamma_range[0]),
+                float(self.pqa_dark_gamma_range[1]))
+        x = x.clamp(min=1e-6).pow(1.0 / gamma.clamp(min=1e-6))
+
+        contrast = torch.empty(
+            batch, 1, 1, 1, device=x.device).uniform_(
+                float(self.pqa_dark_contrast_range[0]),
+                float(self.pqa_dark_contrast_range[1]))
+        image_mean = x.mean(dim=(1, 2, 3), keepdim=True)
+        x = (x - image_mean) * contrast + image_mean
+
+        noise_std = torch.empty(
+            batch, 1, 1, 1, device=x.device).uniform_(
+                float(self.pqa_dark_noise_std_range[0]),
+                float(self.pqa_dark_noise_std_range[1])) / 255.0
+        if float(self.pqa_dark_noise_std_range[1]) > 0.0:
+            x = x + torch.randn_like(x) * noise_std
+        x = x.clamp(0.0, 1.0)
         return (x - mean) / std
 
     def _compute_degraded_aux2_amp_loss(self, clean_feats, degraded_feats,
