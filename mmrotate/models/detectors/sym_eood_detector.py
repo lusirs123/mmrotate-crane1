@@ -53,6 +53,13 @@ class SymEOOD(SingleStageDetector):
                  pqa_dark_consistency_weight=0.1,
                  pqa_dark_warmup_iters=0,
                  pqa_dark_ramp_iters=0,
+                 pqa_rank_loss_weight=0.0,
+                 pqa_dark_rank_loss_weight=0.0,
+                 pqa_rank_samples=128,
+                 pqa_rank_mining_grid_size=5,
+                 pqa_rank_min_iou_gap=0.10,
+                 pqa_rank_score_margin=0.05,
+                 pqa_rank_temperature=0.10,
                  pqa_dark_gamma_range=(0.5, 0.9),
                  pqa_dark_contrast_range=(0.7, 1.1),
                  pqa_dark_noise_std_range=(0.0, 10.0),
@@ -202,6 +209,13 @@ class SymEOOD(SingleStageDetector):
             pqa_dark_consistency_weight)
         self.pqa_dark_warmup_iters = int(pqa_dark_warmup_iters)
         self.pqa_dark_ramp_iters = int(pqa_dark_ramp_iters)
+        self.pqa_rank_loss_weight = float(pqa_rank_loss_weight)
+        self.pqa_dark_rank_loss_weight = float(pqa_dark_rank_loss_weight)
+        self.pqa_rank_samples = int(pqa_rank_samples)
+        self.pqa_rank_mining_grid_size = int(pqa_rank_mining_grid_size)
+        self.pqa_rank_min_iou_gap = float(pqa_rank_min_iou_gap)
+        self.pqa_rank_score_margin = float(pqa_rank_score_margin)
+        self.pqa_rank_temperature = float(pqa_rank_temperature)
         self.pqa_dark_gamma_range = tuple(pqa_dark_gamma_range)
         self.pqa_dark_contrast_range = tuple(pqa_dark_contrast_range)
         self.pqa_dark_noise_std_range = tuple(pqa_dark_noise_std_range)
@@ -238,6 +252,20 @@ class SymEOOD(SingleStageDetector):
                     'pqa_dark_consistency_weight must be non-negative')
             if self.pqa_dark_warmup_iters < 0 or self.pqa_dark_ramp_iters < 0:
                 raise ValueError('PQA dark warmup/ramp must be non-negative')
+            if (self.pqa_rank_loss_weight < 0.0
+                    or self.pqa_dark_rank_loss_weight < 0.0):
+                raise ValueError('PQA rank weights must be non-negative')
+            if self.pqa_rank_samples < 2:
+                raise ValueError('pqa_rank_samples must be at least 2')
+            if self.pqa_rank_mining_grid_size < 3:
+                raise ValueError(
+                    'pqa_rank_mining_grid_size must be at least 3')
+            if self.pqa_rank_min_iou_gap < 0.0:
+                raise ValueError('pqa_rank_min_iou_gap must be non-negative')
+            if self.pqa_rank_score_margin < 0.0:
+                raise ValueError('pqa_rank_score_margin must be non-negative')
+            if self.pqa_rank_temperature <= 0.0:
+                raise ValueError('pqa_rank_temperature must be positive')
             self.register_buffer(
                 '_pqa_train_step', torch.zeros((), dtype=torch.long))
 
@@ -439,6 +467,24 @@ class SymEOOD(SingleStageDetector):
             for name, value in pqa_stats.items():
                 losses[name] = value
 
+            # Dense heatmap fitting alone does not supervise the actual
+            # top-1 decision.  Build detached decoded candidates once and
+            # directly optimize their PQA quality ordering against RIoU.
+            pqa_rank_batches = None
+            if (self.pqa_rank_loss_weight > 0.0
+                    or self.pqa_dark_rank_loss_weight > 0.0):
+                pqa_rank_batches = self._build_pqa_rank_batches(
+                    main_outs[0], main_outs[1], pqa_logits,
+                    img_metas, gt_bboxes)
+            if self.pqa_rank_loss_weight > 0.0:
+                rank_loss, rank_stats = self._compute_pqa_rank_loss(
+                    pqa_logits, pqa_rank_batches, img_metas,
+                    loss_weight=self.pqa_rank_loss_weight)
+                losses['loss_pqa_rank'] = torch.nan_to_num(
+                    rank_loss, nan=0.0, posinf=0.0, neginf=0.0)
+                for name, value in rank_stats.items():
+                    losses[name] = value
+
             train_step = int(self._pqa_train_step.item())
             self._pqa_train_step.add_(1)
             if train_step < self.pqa_dark_warmup_iters:
@@ -455,7 +501,8 @@ class SymEOOD(SingleStageDetector):
             use_dark = (
                 dark_factor > 0.0
                 and (self.pqa_dark_supervision_weight > 0.0
-                     or self.pqa_dark_consistency_weight > 0.0))
+                     or self.pqa_dark_consistency_weight > 0.0
+                     or self.pqa_dark_rank_loss_weight > 0.0))
             if use_dark:
                 pqa_dark_img = self._build_pqa_dark_view(img, img_metas)
                 # No dark-view gradient may alter backbone/FPN geometry.
@@ -485,12 +532,24 @@ class SymEOOD(SingleStageDetector):
                                      * dark_factor))
                     losses['loss_pqa_dark_consistency'] = torch.nan_to_num(
                         consistency, nan=0.0, posinf=0.0, neginf=0.0)
+                if self.pqa_dark_rank_loss_weight > 0.0:
+                    dark_rank_loss, dark_rank_stats = (
+                        self._compute_pqa_rank_loss(
+                            pqa_dark_logits, pqa_rank_batches, img_metas,
+                            loss_weight=(self.pqa_dark_rank_loss_weight
+                                         * dark_factor)))
+                    losses['loss_pqa_dark_rank'] = torch.nan_to_num(
+                        dark_rank_loss, nan=0.0, posinf=0.0, neginf=0.0)
+                    for name, value in dark_rank_stats.items():
+                        losses['dark_' + name] = value
             else:
                 zero_dark = pqa_train_logits[0].sum() * 0.0
                 if self.pqa_dark_supervision_weight > 0.0:
                     losses['loss_pqa_dark_ld'] = zero_dark
                 if self.pqa_dark_consistency_weight > 0.0:
                     losses['loss_pqa_dark_consistency'] = zero_dark
+                if self.pqa_dark_rank_loss_weight > 0.0:
+                    losses['loss_pqa_dark_rank'] = zero_dark
         if degraded_aux2_amp_loss is not None:
             losses['loss_degraded_aux2_amp'] = torch.nan_to_num(
                 degraded_aux2_amp_loss, nan=0.0, posinf=0.0, neginf=0.0)
@@ -758,6 +817,170 @@ class SymEOOD(SingleStageDetector):
                 pred_positive_sum / float(avg_factor)),
         )
         return loss, stats
+
+    def _build_pqa_rank_batches(self, cls_scores, bbox_preds, heatmap_logits,
+                                img_metas, gt_bboxes):
+        """Build a small, detached ranking pool from inference candidates.
+
+        Each image mixes the best-RIoU candidates, current PQA false-peak
+        candidates, high-classification candidates, and low-RIoU negatives
+        from the same cls-topK pool used by inference.  PQA hard mining uses
+        a cheap coarse grid over all candidates; gradients use the configured
+        full grid only on the selected subset.
+        """
+        if not (len(cls_scores) == len(bbox_preds) == len(heatmap_logits)):
+            raise RuntimeError('PQA rank cls/bbox/heatmap level mismatch')
+        featmap_sizes = [item.shape[-2:] for item in cls_scores]
+        anchors_per_level = self.bbox_head.anchor_generator.grid_priors(
+            featmap_sizes, device=cls_scores[0].device)
+        batches = []
+
+        with torch.no_grad():
+            for img_index, img_meta in enumerate(img_metas):
+                all_boxes = []
+                all_scores = []
+                all_levels = []
+                for level_index, (cls_level, bbox_level, anchors) in enumerate(
+                        zip(cls_scores, bbox_preds, anchors_per_level)):
+                    cls_flat = cls_level[img_index].detach().permute(
+                        1, 2, 0).reshape(
+                            -1, self.bbox_head.cls_out_channels)
+                    if self.bbox_head.use_sigmoid_cls:
+                        scores = cls_flat.sigmoid().max(dim=1).values
+                    else:
+                        scores = cls_flat.softmax(
+                            dim=-1)[:, :-1].max(dim=1).values
+                    scores = torch.nan_to_num(
+                        scores, nan=0.0, posinf=1.0, neginf=0.0)
+                    bbox_flat = bbox_level[img_index].detach().permute(
+                        1, 2, 0).reshape(-1, 5)
+                    if not (anchors.shape[0] == bbox_flat.shape[0]
+                            == scores.numel()):
+                        raise RuntimeError(
+                            'PQA rank anchor alignment mismatch')
+                    decoded = self.bbox_head.bbox_coder.decode(
+                        anchors, bbox_flat, max_shape=img_meta['img_shape'])
+                    max_size = float(max(img_meta.get(
+                        'pad_shape', img_meta['img_shape'])[:2]))
+                    decoded = torch.nan_to_num(
+                        decoded, nan=0.0, posinf=max_size, neginf=0.0)
+                    decoded[:, 0].clamp_(0.0, max_size)
+                    decoded[:, 1].clamp_(0.0, max_size)
+                    decoded[:, 2].clamp_(1.0, max_size)
+                    decoded[:, 3].clamp_(1.0, max_size)
+                    all_boxes.append(decoded)
+                    all_scores.append(scores)
+                    all_levels.append(torch.full(
+                        (decoded.shape[0],), int(level_index),
+                        dtype=torch.long, device=decoded.device))
+
+                boxes = torch.cat(all_boxes)
+                scores = torch.cat(all_scores)
+                levels = torch.cat(all_levels)
+                pool_size = min(self.pqa_pre_topk, int(scores.numel()))
+                pool_indices = scores.topk(
+                    pool_size, largest=True, sorted=False).indices
+                pool_boxes = boxes[pool_indices]
+                pool_scores = scores[pool_indices]
+                pool_levels = levels[pool_indices]
+
+                if gt_bboxes[img_index].numel() == 0 or pool_size < 2:
+                    batches.append(dict(
+                        boxes=pool_boxes[:0], levels=pool_levels[:0],
+                        target_ious=pool_scores[:0]))
+                    continue
+                overlaps = RBboxOverlaps2D()(
+                    pool_boxes, gt_bboxes[img_index].detach())
+                target_ious = overlaps.max(dim=1).values.clamp(0.0, 1.0)
+
+                image_heatmaps = tuple(
+                    level[img_index:img_index + 1]
+                    for level in heatmap_logits)
+                pad_shape = img_meta.get('pad_shape', img_meta['img_shape'])
+                mining_quality = self.pqa_head.quality_from_boxes(
+                    image_heatmaps, pool_boxes, pool_levels, pad_shape,
+                    grid_size=self.pqa_rank_mining_grid_size,
+                    batch_size=self.pqa_quality_batch_size,
+                    canonical_level=self.pqa_canonical_heatmap_level)
+                mining_quality = torch.nan_to_num(
+                    mining_quality, nan=0.0, posinf=1.0, neginf=0.0)
+
+                sample_count = min(self.pqa_rank_samples, pool_size)
+                iou_order = target_ious.argsort(descending=True)
+                pqa_order = mining_quality.argsort(descending=True)
+                cls_order = pool_scores.argsort(descending=True)
+                high_budget = max(sample_count // 2, 1)
+                pqa_budget = max(sample_count // 4, 1)
+                cls_budget = max(sample_count // 8, 1)
+                low_budget = max(
+                    sample_count - high_budget - pqa_budget - cls_budget, 1)
+                used = torch.zeros(
+                    pool_size, dtype=torch.bool, device=pool_boxes.device)
+                selected_parts = []
+
+                def add_unique(order, budget):
+                    fresh = order[~used[order]][:int(budget)]
+                    if fresh.numel() > 0:
+                        used[fresh] = True
+                        selected_parts.append(fresh)
+
+                add_unique(iou_order, high_budget)
+                add_unique(pqa_order, pqa_budget)
+                add_unique(cls_order, cls_budget)
+                add_unique(iou_order.flip(0), low_budget)
+                already = sum(int(part.numel()) for part in selected_parts)
+                if already < sample_count:
+                    add_unique(iou_order, sample_count - already)
+                selected = torch.cat(selected_parts)[:sample_count]
+                batches.append(dict(
+                    boxes=pool_boxes[selected].detach(),
+                    levels=pool_levels[selected].detach(),
+                    target_ious=target_ious[selected].detach()))
+        return batches
+
+    def _compute_pqa_rank_loss(self, heatmap_logits, rank_batches, img_metas,
+                               loss_weight):
+        """Apply decoded-candidate ordering loss to clean or dark heatmaps."""
+        if rank_batches is None or len(rank_batches) != len(img_metas):
+            raise RuntimeError('PQA rank batches must align with image metas')
+        zero = heatmap_logits[0].sum() * 0.0
+        image_losses = []
+        pair_total = 0.0
+        accuracy_sum = zero.detach()
+        for img_index, (batch, img_meta) in enumerate(
+                zip(rank_batches, img_metas)):
+            if batch['boxes'].shape[0] < 2:
+                continue
+            image_heatmaps = tuple(
+                level[img_index:img_index + 1]
+                for level in heatmap_logits)
+            pad_shape = img_meta.get('pad_shape', img_meta['img_shape'])
+            qualities = self.pqa_head.quality_from_boxes(
+                image_heatmaps, batch['boxes'], batch['levels'], pad_shape,
+                grid_size=self.pqa_grid_size,
+                batch_size=self.pqa_quality_batch_size,
+                canonical_level=self.pqa_canonical_heatmap_level)
+            image_loss, image_stats = self.pqa_head.pairwise_rank_loss(
+                qualities, batch['target_ious'],
+                min_iou_gap=self.pqa_rank_min_iou_gap,
+                score_margin=self.pqa_rank_score_margin,
+                temperature=self.pqa_rank_temperature,
+                loss_weight=loss_weight)
+            pairs = float(image_stats['pqa_rank_pairs'].item())
+            if pairs > 0.0:
+                image_losses.append(image_loss)
+                pair_total += pairs
+                accuracy_sum = (accuracy_sum
+                                + image_stats['pqa_rank_accuracy'] * pairs)
+        if image_losses:
+            loss = torch.stack(image_losses).mean()
+            accuracy = accuracy_sum / max(pair_total, 1.0)
+        else:
+            loss = zero
+            accuracy = zero.detach()
+        return loss, dict(
+            pqa_rank_pairs=zero.new_tensor(pair_total),
+            pqa_rank_accuracy=accuracy)
 
     def _pqa_get_bboxes(self, cls_scores, bbox_preds, heatmap_logits,
                         img_metas, rescale=False):

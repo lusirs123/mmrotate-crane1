@@ -138,6 +138,23 @@ class TestPQAHeatmapHead(unittest.TestCase):
         self.assertIsNone(clean[0].grad)
         self.assertIsNotNone(dark[0].grad)
 
+    def test_pairwise_rank_loss_matches_candidate_iou_order(self):
+        targets = torch.tensor([0.90, 0.55, 0.10])
+        ordered = torch.tensor(
+            [0.80, 0.50, 0.20], requires_grad=True)
+        reversed_quality = torch.tensor([0.20, 0.50, 0.80])
+        ordered_loss, ordered_stats = PQAHeatmapHead.pairwise_rank_loss(
+            ordered, targets, min_iou_gap=0.10)
+        reversed_loss, reversed_stats = PQAHeatmapHead.pairwise_rank_loss(
+            reversed_quality, targets, min_iou_gap=0.10)
+        self.assertLess(
+            float(ordered_loss.detach()), float(reversed_loss.detach()))
+        self.assertEqual(float(ordered_stats['pqa_rank_accuracy']), 1.0)
+        self.assertEqual(float(reversed_stats['pqa_rank_accuracy']), 0.0)
+        ordered_loss.backward()
+        self.assertIsNotNone(ordered.grad)
+        self.assertTrue(torch.isfinite(ordered.grad).all())
+
 
 if __name__ == '__main__':
     unittest.main()

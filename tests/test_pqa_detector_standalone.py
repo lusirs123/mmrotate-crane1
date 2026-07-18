@@ -26,7 +26,9 @@ class _RotatedATSSHead:
 
 
 class _FakeOverlaps:
-    pass
+    def __call__(self, boxes, gt_bboxes):
+        distance = (boxes[:, None, 0] - gt_bboxes[None, :, 0]).abs()
+        return (1.0 - distance / 10.0).clamp(0.0, 1.0)
 
 
 def _load_detector_class():
@@ -132,6 +134,8 @@ def _make_detector(score_mode='quality'):
     detector.pqa_grid_size = 9
     detector.pqa_quality_batch_size = 32
     detector.pqa_canonical_heatmap_level = None
+    detector.pqa_rank_samples = 3
+    detector.pqa_rank_mining_grid_size = 5
     detector.test_cfg = dict(max_per_img=1)
     return detector
 
@@ -166,6 +170,21 @@ class TestPQADetector(unittest.TestCase):
         self.assertEqual(int(det_bboxes[0, 0]), 8)
         expected = float(torch.sigmoid(torch.tensor(3.0)) * 0.8)
         self.assertAlmostEqual(float(det_bboxes[0, 5]), expected, places=6)
+
+    def test_rank_pool_contains_oracle_hard_and_low_iou_candidates(self):
+        detector = _make_detector('quality')
+        cls_scores = (torch.tensor([[[[5.0]], [[4.0]], [[3.0]], [[-8.0]]]]),)
+        bbox_preds = (torch.zeros(1, 20, 1, 1),)
+        meta = [dict(img_shape=(16, 16, 3), pad_shape=(16, 16, 3))]
+        gt = [torch.tensor([[1.0, 1.0, 2.0, 2.0, 0.0]])]
+        batch = detector._build_pqa_rank_batches(
+            cls_scores, bbox_preds, (torch.zeros(1, 1, 1, 1),),
+            meta, gt)[0]
+        selected_x = set(float(value) for value in batch['boxes'][:, 0])
+        # x=1 is the best-IoU/strongest-cls candidate, x=8 is the current PQA
+        # false maximum, and x=3 fills the remaining slot.
+        self.assertEqual(selected_x, {1.0, 3.0, 8.0})
+        self.assertAlmostEqual(float(batch['target_ious'].max()), 1.0)
 
 
 if __name__ == '__main__':

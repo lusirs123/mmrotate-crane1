@@ -193,6 +193,59 @@ class PQAHeatmapHead(nn.Module):
         return torch.stack(losses).mean() * float(loss_weight)
 
     @staticmethod
+    def pairwise_rank_loss(qualities, target_ious, min_iou_gap=0.10,
+                           score_margin=0.05, temperature=0.10,
+                           loss_weight=1.0):
+        """Make PQA quality preserve decoded-candidate RIoU ordering.
+
+        Dense LD supervision teaches an average heatmap but does not directly
+        constrain the extreme-value decision used at inference.  This loss
+        compares candidate pairs whose target RIoUs differ sufficiently and
+        requires the better-localized candidate to receive the larger PQA
+        Volume-IoU.  ``target_ious`` is expected to be detached.
+        """
+        if qualities.ndim != 1 or target_ious.ndim != 1:
+            raise ValueError('PQA rank inputs must be one-dimensional')
+        if qualities.numel() != target_ious.numel():
+            raise ValueError('PQA qualities and target IoUs must align')
+        if min_iou_gap < 0.0:
+            raise ValueError('min_iou_gap must be non-negative')
+        if score_margin < 0.0:
+            raise ValueError('score_margin must be non-negative')
+        if temperature <= 0.0:
+            raise ValueError('temperature must be positive')
+
+        zero = qualities.sum() * 0.0
+        if qualities.numel() < 2:
+            return zero, dict(
+                pqa_rank_pairs=zero.detach(),
+                pqa_rank_accuracy=zero.detach())
+
+        targets = target_ious.detach().to(
+            device=qualities.device, dtype=qualities.dtype).clamp(0.0, 1.0)
+        target_gap = targets[:, None] - targets[None, :]
+        valid = ((target_gap >= float(min_iou_gap))
+                 & (target_gap > 0.0))
+        pair_count = int(valid.sum().item())
+        if pair_count == 0:
+            return zero, dict(
+                pqa_rank_pairs=zero.new_tensor(0.0),
+                pqa_rank_accuracy=zero.new_tensor(0.0))
+
+        predicted_gap = qualities[:, None] - qualities[None, :]
+        pair_loss = F.softplus(
+            (float(score_margin) - predicted_gap) / float(temperature)
+        ) * float(temperature)
+        weights = target_gap[valid].clamp(min=1e-6)
+        loss = ((pair_loss[valid] * weights).sum()
+                / weights.sum().clamp(min=1e-6))
+        accuracy = (predicted_gap[valid] > 0.0).float().mean().detach()
+        stats = dict(
+            pqa_rank_pairs=zero.new_tensor(float(pair_count)),
+            pqa_rank_accuracy=accuracy)
+        return loss * float(loss_weight), stats
+
+    @staticmethod
     def _local_grid(grid_size, device, dtype):
         if grid_size < 3:
             raise ValueError('PQA grid_size must be at least 3')

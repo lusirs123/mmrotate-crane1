@@ -130,7 +130,33 @@ def main():
     consistency = model.pqa_head.consistency_loss(
         train_logits, dark_train_logits, targets, valid,
         loss_weight=model.pqa_dark_consistency_weight)
-    total = clean_loss + dark_loss + consistency
+    rank_loss = clean_loss.new_zeros(())
+    dark_rank_loss = clean_loss.new_zeros(())
+    rank_stats = dict(
+        pqa_rank_pairs=clean_loss.new_zeros(()),
+        pqa_rank_accuracy=clean_loss.new_zeros(()))
+    if model.pqa_rank_loss_weight > 0.0:
+        # Explicit candidates guarantee a non-empty ordering problem even if
+        # the synthetic image's main detector predictions are uninformative.
+        rank_boxes = torch.tensor([
+            [size * 0.50, size * 0.50, size * 0.35, size * 0.10, 0.00],
+            [size * 0.58, size * 0.50, size * 0.35, size * 0.10, 0.10],
+            [size * 0.78, size * 0.70, size * 0.35, size * 0.10, 0.30],
+        ], device=device)
+        rank_batches = [dict(
+            boxes=rank_boxes,
+            levels=torch.zeros(3, dtype=torch.long, device=device),
+            target_ious=torch.tensor([1.0, 0.55, 0.0], device=device))]
+        rank_loss, rank_stats = model._compute_pqa_rank_loss(
+            logits, rank_batches, [meta],
+            loss_weight=model.pqa_rank_loss_weight)
+        if model.pqa_dark_rank_loss_weight > 0.0:
+            dark_rank_loss, _ = model._compute_pqa_rank_loss(
+                dark_logits, rank_batches, [meta],
+                loss_weight=model.pqa_dark_rank_loss_weight)
+
+    total = (clean_loss + dark_loss + consistency
+             + rank_loss + dark_rank_loss)
     if not bool(torch.isfinite(total)):
         raise RuntimeError('Non-finite PQA smoke loss')
     total.backward()
@@ -156,6 +182,12 @@ def main():
               float(consistency.detach()), int(stats['pqa_positive'].item()),
               float(stats['pqa_target_mean']),
               float(stats['pqa_pred_positive_mean'])))
+    if model.pqa_rank_loss_weight > 0.0:
+        print('[pqa_rank] clean={:.6f} dark={:.6f} pairs={} '
+              'accuracy={:.4f}'.format(
+                  float(rank_loss.detach()), float(dark_rank_loss.detach()),
+                  int(rank_stats['pqa_rank_pairs'].item()),
+                  float(rank_stats['pqa_rank_accuracy'])))
     print(f'[gradients] {grad_state}')
     print('PQA QUALITY-PRIMARY SMOKE PASS')
 
