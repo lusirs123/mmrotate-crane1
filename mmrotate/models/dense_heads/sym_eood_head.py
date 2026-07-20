@@ -16,6 +16,7 @@ import torch.nn as nn
 from mmcv.cnn import bias_init_with_prob
 from mmcv.runner import force_fp32
 from mmdet.core import images_to_levels, multi_apply, unmap
+from mmrotate.core import rotated_anchor_center_inside_flags
 from mmrotate.models.builder import ROTATED_HEADS
 from mmrotate.models.dense_heads.rotated_retina_head import RotatedRetinaHead
 
@@ -75,6 +76,7 @@ class SymEOODHead(RotatedRetinaHead):
                  use_score_context_modulation: bool = False,
                  score_context_gate_init: float = 0.0,
                  score_context_gate_scale: float = 0.05,
+                 filter_padding_anchors: bool = False,
                  **kwargs):
         super().__init__(*args, **kwargs)
         # L_equi
@@ -119,6 +121,10 @@ class SymEOODHead(RotatedRetinaHead):
         # so the max bias is gate_scale (prevents unbounded growth).
         self.use_score_context_modulation = use_score_context_modulation
         self.score_context_gate_scale = score_context_gate_scale
+        # Coordinate-safe padding guard.  It only filters candidates whose
+        # source anchor center lies outside img_shape (inside pad_shape).
+        # No image pixels or decoded coordinates are modified.
+        self.filter_padding_anchors = bool(filter_padding_anchors)
         if self.use_score_context_modulation:
             self.score_context_gate_alpha = nn.Parameter(
                 torch.tensor(float(score_context_gate_init),
@@ -389,6 +395,9 @@ class SymEOODHead(RotatedRetinaHead):
                             unmap_outputs=True):
         """单图级别：预测解码 + SymPOLA 动态分配"""
         inside_flags = valid_flags
+        if self.filter_padding_anchors:
+            inside_flags = inside_flags & rotated_anchor_center_inside_flags(
+                flat_anchors, img_meta['img_shape'])
         if not inside_flags.any():
             return (None,) * 7
 
@@ -890,6 +899,13 @@ class SymEOODHead(RotatedRetinaHead):
                 scores = cls_score.softmax(-1)
 
             bbox_pred = bbox_pred.permute(1, 2, 0).reshape(-1, 5)
+
+            if self.filter_padding_anchors:
+                content_mask = rotated_anchor_center_inside_flags(
+                    anchors, img_shape)
+                scores = scores[content_mask]
+                bbox_pred = bbox_pred[content_mask]
+                anchors = anchors[content_mask]
 
             if cfg.get('score_thr', 0.0) > 0:
                 max_scores, _ = scores.max(dim=1)

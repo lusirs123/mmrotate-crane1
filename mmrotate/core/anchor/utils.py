@@ -1,4 +1,19 @@
 # Copyright (c) OpenMMLab. All rights reserved.
+
+
+def rotated_anchor_center_inside_flags(flat_anchors, img_shape):
+    """Return anchors whose centers lie inside the resized image content.
+
+    ``valid_flags`` generated from a padded batch shape also marks anchors in
+    the padding as valid.  This stricter mask deliberately uses ``img_shape``
+    (the resized content before padding), so it does not crop, translate, or
+    otherwise alter image pixels or decoded box coordinates.
+    """
+    img_h, img_w = img_shape[:2]
+    cx, cy = flat_anchors[:, 0], flat_anchors[:, 1]
+    return (cx >= 0) & (cy >= 0) & (cx < img_w) & (cy < img_h)
+
+
 def rotated_anchor_inside_flags(flat_anchors,
                                 valid_flags,
                                 img_shape,

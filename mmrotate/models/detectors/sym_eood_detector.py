@@ -13,6 +13,13 @@ from mmrotate.models.dense_heads.rotated_atss_head import RotatedATSSHead
 from mmrotate.core import rbbox2result
 from mmrotate.core.bbox.iou_calculators import RBboxOverlaps2D
 
+
+def _anchor_centers_inside_image(anchors, img_shape):
+    """Mask padded feature locations without changing box coordinates."""
+    img_h, img_w = img_shape[:2]
+    return ((anchors[:, 0] >= 0) & (anchors[:, 1] >= 0)
+            & (anchors[:, 0] < img_w) & (anchors[:, 1] < img_h))
+
 @ROTATED_DETECTORS.register_module(force=True)
 class SymEOOD(SingleStageDetector):
     """
@@ -1019,6 +1026,14 @@ class SymEOOD(SingleStageDetector):
                 if not (anchors.shape[0] == bbox_flat.shape[0]
                         == max_cls.numel()):
                     raise RuntimeError('PQA anchor alignment mismatch')
+                if bool(getattr(
+                        self.bbox_head, 'filter_padding_anchors', False)):
+                    content_mask = _anchor_centers_inside_image(
+                        anchors, img_metas[img_index]['img_shape'])
+                    anchors = anchors[content_mask]
+                    bbox_flat = bbox_flat[content_mask]
+                    max_cls = max_cls[content_mask]
+                    labels = labels[content_mask]
                 decoded = self.bbox_head.bbox_coder.decode(
                     anchors, bbox_flat,
                     max_shape=img_metas[img_index]['img_shape'])
@@ -1122,6 +1137,15 @@ class SymEOOD(SingleStageDetector):
                         == max_cls.numel() == quality_flat.numel()):
                     raise RuntimeError(
                         'reg-quality inference anchor alignment mismatch')
+                if bool(getattr(
+                        self.bbox_head, 'filter_padding_anchors', False)):
+                    content_mask = _anchor_centers_inside_image(
+                        anchors, img_metas[img_index]['img_shape'])
+                    anchors = anchors[content_mask]
+                    bbox_flat = bbox_flat[content_mask]
+                    max_cls = max_cls[content_mask]
+                    labels = labels[content_mask]
+                    quality_flat = quality_flat[content_mask]
                 decoded = self.bbox_head.bbox_coder.decode(
                     anchors, bbox_flat,
                     max_shape=img_metas[img_index]['img_shape'])

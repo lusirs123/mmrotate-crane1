@@ -217,7 +217,11 @@ def _repeat_scores_for_anchors(scores, bbox_flat, anchors, lvl):
 
 
 def flatten_decode_candidates(candidate_head, cls_scores, bbox_preds, img_shape):
-    """按候选 head 顺序展平并 decode 全量候选。"""
+    """按候选 head 顺序展平并 decode 候选。
+
+    当检测头启用 ``filter_padding_anchors`` 时，只保留锚点中心位于
+    ``img_shape`` 有效画面内的候选。该诊断行为与正式推理保持一致。
+    """
     if not cls_scores or len(cls_scores) != len(bbox_preds):
         raise RuntimeError(
             'Candidate head output mismatch: '
@@ -247,6 +251,16 @@ def flatten_decode_candidates(candidate_head, cls_scores, bbox_preds, img_shape)
         scores, repeat_factor = _repeat_scores_for_anchors(
             scores, bbox_flat, anchors, lvl)
 
+        raw_anchor_count = int(anchors.shape[0])
+        if bool(getattr(candidate_head, 'filter_padding_anchors', False)):
+            img_h, img_w = img_shape[:2]
+            content_mask = (
+                (anchors[:, 0] >= 0) & (anchors[:, 1] >= 0)
+                & (anchors[:, 0] < img_w) & (anchors[:, 1] < img_h))
+            anchors = anchors[content_mask]
+            bbox_flat = bbox_flat[content_mask]
+            scores = scores[content_mask]
+
         decoded = candidate_head.bbox_coder.decode(
             anchors, bbox_flat, max_shape=img_shape)
         if decoded.shape[0] != scores.numel():
@@ -261,6 +275,9 @@ def flatten_decode_candidates(candidate_head, cls_scores, bbox_preds, img_shape)
         alignments.append(dict(
             level=int(lvl),
             anchors=int(anchors.shape[0]),
+            anchors_before_content_filter=raw_anchor_count,
+            padding_anchors_removed=(raw_anchor_count
+                                     - int(anchors.shape[0])),
             raw_scores=raw_score_count,
             scores=int(scores.numel()),
             bbox=int(bbox_flat.shape[0]),
