@@ -306,9 +306,11 @@ def _region_stats(image_bgr: np.ndarray, box_ori: Sequence[float]) -> Dict:
 
 def _candidate_record(frame: int, peak_order: int, index: int,
                       boxes: torch.Tensor, scores: torch.Tensor,
-                      levels: torch.Tensor, ious: torch.Tensor,
+                      levels: torch.Tensor, anchor_centers: torch.Tensor,
+                      ious: torch.Tensor,
                       meta: Dict, image_bgr: np.ndarray) -> Dict:
     box_img = boxes[index].detach().cpu().float().tolist()
+    anchor_center = anchor_centers[index].detach().cpu().float().tolist()
     box_ori = decoded_box_to_original(box_img, meta)
     riou = float(ious[index].item())
     return dict(
@@ -321,7 +323,56 @@ def _candidate_record(frame: int, peak_order: int, index: int,
         box_img=[float(value) for value in box_img],
         box_ori=[float(value) for value in box_ori],
         normalized=_normalized_peak(box_ori, image_bgr.shape),
+        origin=candidate_origin_geometry(
+            box_img, anchor_center, meta['img_shape']),
         appearance=_region_stats(image_bgr, box_ori),
+    )
+
+
+def candidate_origin_geometry(box_img: Sequence[float],
+                              anchor_center_img: Sequence[float],
+                              img_shape: Sequence[int],
+                              border_ratio: float = 0.02) -> Dict:
+    """Describe where a decoded candidate originated, without changing it."""
+    image_h, image_w = float(img_shape[0]), float(img_shape[1])
+    anchor_x, anchor_y = [float(value) for value in anchor_center_img[:2]]
+    decoded_x, decoded_y = [float(value) for value in box_img[:2]]
+
+    anchor_margins = dict(
+        left=anchor_x / max(image_w, 1.0),
+        right=(image_w - anchor_x) / max(image_w, 1.0),
+        top=anchor_y / max(image_h, 1.0),
+        bottom=(image_h - anchor_y) / max(image_h, 1.0))
+    decoded_margins = dict(
+        left=decoded_x / max(image_w, 1.0),
+        right=(image_w - decoded_x) / max(image_w, 1.0),
+        top=decoded_y / max(image_h, 1.0),
+        bottom=(image_h - decoded_y) / max(image_h, 1.0))
+    anchor_nearest_edge = min(anchor_margins, key=anchor_margins.get)
+    decoded_nearest_edge = min(decoded_margins, key=decoded_margins.get)
+    center_shift = math.hypot(decoded_x - anchor_x, decoded_y - anchor_y)
+    image_diag = math.hypot(image_w, image_h)
+    boundary_eps = 1e-3
+
+    return dict(
+        anchor_center_img=[anchor_x, anchor_y],
+        anchor_nearest_edge=anchor_nearest_edge,
+        anchor_edge_distance_ratio=float(
+            anchor_margins[anchor_nearest_edge]),
+        anchor_near_border=bool(
+            anchor_margins[anchor_nearest_edge] <= border_ratio),
+        decoded_nearest_edge=decoded_nearest_edge,
+        decoded_edge_distance_ratio=float(
+            decoded_margins[decoded_nearest_edge]),
+        decoded_near_border=bool(
+            decoded_margins[decoded_nearest_edge] <= border_ratio),
+        decoded_on_boundary=bool(
+            decoded_x <= boundary_eps or decoded_y <= boundary_eps
+            or decoded_x >= image_w - boundary_eps
+            or decoded_y >= image_h - boundary_eps),
+        anchor_to_decoded_shift_px=float(center_shift),
+        anchor_to_decoded_shift_ratio=float(
+            center_shift / max(image_diag, 1.0)),
     )
 
 
@@ -403,7 +454,7 @@ def analyze_frame(model, transform_compose, img_scale, flip, args,
         candidate_head, cls_scores, bbox_preds = (
             entry_probe.forward_candidate_head(
                 model, features, args.candidate_source))
-        boxes, scores, levels, _, alignment = (
+        boxes, scores, levels, anchor_centers, alignment = (
             entry_probe.flatten_decode_candidates(
                 candidate_head, cls_scores, bbox_preds, meta['img_shape']))
         scaled_gts = [pool_probe.scale_gt_to_img(gt, meta) for gt in gts]
@@ -425,7 +476,8 @@ def analyze_frame(model, transform_compose, img_scale, flip, args,
         false_peaks = [
             _candidate_record(
                 frame, order + 1, int(pool_indices[position].item()),
-                boxes, scores, levels, ious, meta, image_bgr)
+                boxes, scores, levels, anchor_centers, ious,
+                meta, image_bgr)
             for order, position in enumerate(false_positions)
         ]
         for peak in false_peaks:
@@ -441,7 +493,8 @@ def analyze_frame(model, transform_compose, img_scale, flip, args,
             usable_position = int(usable_positions[0].item())
             usable_index = int(pool_indices[usable_position].item())
             usable = _candidate_record(
-                frame, 0, usable_index, boxes, scores, levels, ious,
+                frame, 0, usable_index, boxes, scores, levels,
+                anchor_centers, ious,
                 meta, image_bgr)
             usable['cls_rank'] = usable_position + 1
             usable['candidate_kind'] = 'usable_correct'
@@ -487,6 +540,8 @@ def build_summary(rows: Sequence[Dict], clusters: Sequence[Dict],
         / max(float(row['usable_candidate']['score']), 1e-12)
         for row in usable_rows]
     false_peaks = [peak for row in rows for peak in row.get('false_peaks', [])]
+    top1_false_peaks = [
+        peak for peak in false_peaks if int(peak.get('peak_order', 0)) == 1]
     removed_per_frame = [
         sum(int(level.get('padding_anchors_removed', 0))
             for level in row.get('decode_alignment', []))
@@ -530,6 +585,20 @@ def build_summary(rows: Sequence[Dict], clusters: Sequence[Dict],
             if removed_per_frame else 0.0),
         padding_anchor_removed_ratio=(
             float(total_removed / total_before) if total_before else 0.0),
+        top1_source_anchor_near_border=sum(
+            bool(peak.get('origin', {}).get('anchor_near_border', False))
+            for peak in top1_false_peaks),
+        top1_decoded_near_border=sum(
+            bool(peak.get('origin', {}).get('decoded_near_border', False))
+            for peak in top1_false_peaks),
+        top1_decoded_on_boundary=sum(
+            bool(peak.get('origin', {}).get('decoded_on_boundary', False))
+            for peak in top1_false_peaks),
+        top1_anchor_to_decoded_shift_ratio_median=(
+            float(np.median([
+                peak['origin']['anchor_to_decoded_shift_ratio']
+                for peak in top1_false_peaks if 'origin' in peak]))
+            if any('origin' in peak for peak in top1_false_peaks) else None),
         false_candidate_kind_histogram=histogram(
             false_peaks, 'candidate_kind'),
         false_fpn_level_histogram=histogram(false_peaks, 'fpn_level'),
@@ -625,6 +694,12 @@ def main():
         summary['padding_anchors_removed_total'],
         summary['padding_anchor_removed_ratio'],
         summary['padding_anchors_removed_median_per_frame']))
+    print('top1 source/decoded edge: {} / {} (boundary={})'.format(
+        summary['top1_source_anchor_near_border'],
+        summary['top1_decoded_near_border'],
+        summary['top1_decoded_on_boundary']))
+    print('top1 anchor->box shift:  {}'.format(
+        summary['top1_anchor_to_decoded_shift_ratio_median']))
     print('recurrent clusters:     {}'.format(summary['recurrent_clusters']))
     print('recurrent top1 cover:   {:.1%}'.format(
         summary['recurrent_top1_coverage']))

@@ -133,20 +133,24 @@ class ProxyGateTest(unittest.TestCase):
             usable_rank={'median': 2.0},
         )
         degraded = dict(
-            silence_rate=0.35,
-            longest_silent_run=8,
+            silence_rate=0.85,
+            longest_silent_run=18,
+            top1_recall=0.10,
+            top1_mcml=20,
             per_k={'10000': {'recall': 0.90}},
             dense_best_riou={'mean': 0.72},
-            usable_rank={'median': 200.0},
+            usable_rank={'median': 2000.0},
         )
         args = SimpleNamespace(
-            min_silence_rate=0.20,
-            max_silence_rate=0.60,
-            min_silent_run=5,
+            min_silence_rate=0.79,
+            max_silence_rate=1.0,
+            max_top1_recall=0.20,
+            min_top1_error_run=16,
+            min_rank_median=500.0,
+            max_rank_median=8000.0,
             min_pool_oracle_recall=0.80,
             min_oracle_retention=0.80,
             min_dense_riou_retention=0.80,
-            min_rank_ratio=10.0,
         )
         result = evaluate_gate(degraded, clean, 10000, args)
         self.assertTrue(result['passed'])
@@ -162,8 +166,10 @@ class ProxyGateTest(unittest.TestCase):
             usable_rank={'median': 2.0},
         )
         degraded = dict(
-            silence_rate=0.70,
+            silence_rate=0.85,
             longest_silent_run=20,
+            top1_recall=0.10,
+            top1_mcml=20,
             per_k={'10000': {'recall': 0.90}},
             dense_best_riou={'mean': 0.72},
             usable_rank={'median': 1000.0},
@@ -175,23 +181,58 @@ class ProxyGateTest(unittest.TestCase):
             usable_rank={'median': 5000.0},
         )
         args = SimpleNamespace(
-            min_silence_rate=0.20,
-            max_silence_rate=0.60,
-            min_silent_run=5,
+            min_silence_rate=0.79,
+            max_silence_rate=1.0,
+            max_top1_recall=0.20,
+            min_top1_error_run=16,
+            min_rank_median=500.0,
+            max_rank_median=8000.0,
             min_pool_oracle_recall=0.80,
             min_oracle_retention=0.80,
             min_dense_riou_retention=0.80,
-            min_rank_ratio=10.0,
-            max_target_silence_gap=0.15,
-            min_target_silent_run_ratio=0.25,
-            min_target_rank_ratio=0.10,
-            max_target_rank_ratio=10.0,
-            max_target_pool_recall_gap=0.15,
         )
         result = evaluate_gate(
             degraded, clean, 10000, args, target_reference=target)
         self.assertTrue(result['passed'])
         self.assertIsNotNone(result['target_match'])
+        self.assertTrue(result['target_match']['informational_only'])
+
+    def test_gate_rejects_good_top1_or_geometry_collapse(self):
+        clean = dict(
+            per_k={'10000': {'recall': 0.95}},
+            dense_best_riou={'mean': 0.80},
+            usable_rank={'median': 1.0},
+        )
+        degraded = dict(
+            silence_rate=0.90,
+            longest_silent_run=20,
+            top1_recall=0.40,
+            top1_mcml=20,
+            per_k={'10000': {'recall': 0.90}},
+            dense_best_riou={'mean': 0.72},
+            usable_rank={'median': 2500.0},
+        )
+        args = SimpleNamespace(
+            min_silence_rate=0.79,
+            max_silence_rate=1.0,
+            max_top1_recall=0.20,
+            min_top1_error_run=16,
+            min_rank_median=500.0,
+            max_rank_median=8000.0,
+            min_pool_oracle_recall=0.80,
+            min_oracle_retention=0.80,
+            min_dense_riou_retention=0.80,
+        )
+        result = evaluate_gate(degraded, clean, 10000, args)
+        self.assertFalse(result['passed'])
+        self.assertFalse(result['checks']['top1_recall'])
+        degraded['top1_recall'] = 0.20
+        result = evaluate_gate(degraded, clean, 10000, args)
+        self.assertFalse(result['checks']['top1_recall'])
+        degraded['top1_recall'] = 0.10
+        degraded['per_k']['10000']['recall'] = 0.30
+        result = evaluate_gate(degraded, clean, 10000, args)
+        self.assertFalse(result['checks']['pool_oracle_recall'])
 
 
 if __name__ == '__main__':

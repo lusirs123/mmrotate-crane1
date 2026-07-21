@@ -29,7 +29,6 @@ def _args(**overrides):
     values.update(overrides)
     return SimpleNamespace(**values)
 
-
 def test_canonical_argument_gate():
     assert atlas.validate_args(_args()) is True
     with pytest.raises(ValueError, match='Canonical atlas'):
@@ -118,3 +117,35 @@ def test_summary_reports_padding_candidates_removed():
     assert summary['padding_anchors_removed_total'] == 40
     assert summary['padding_anchors_removed_median_per_frame'] == 40.0
     assert summary['padding_anchor_removed_ratio'] == pytest.approx(0.4)
+
+
+def test_candidate_origin_separates_anchor_and_decoded_edge():
+    origin = atlas.candidate_origin_geometry(
+        box_img=[0.0, 300.0, 40.0, 20.0, 0.0],
+        anchor_center_img=[400.0, 300.0],
+        img_shape=(576, 1024, 3))
+    assert origin['anchor_near_border'] is False
+    assert origin['decoded_near_border'] is True
+    assert origin['decoded_on_boundary'] is True
+    assert origin['anchor_nearest_edge'] == 'left'
+    assert origin['decoded_nearest_edge'] == 'left'
+    assert origin['anchor_to_decoded_shift_px'] == pytest.approx(400.0)
+
+
+def test_summary_reports_top1_origin_attribution():
+    rows = [dict(
+        frame=137, top1_is_false=True, top1_score=0.8,
+        usable_candidate=None, decode_alignment=[],
+        false_peaks=[dict(
+            peak_order=1, candidate_kind='hard_false_background',
+            fpn_level=0,
+            origin=dict(
+                anchor_near_border=False,
+                decoded_near_border=True,
+                decoded_on_boundary=True,
+                anchor_to_decoded_shift_ratio=0.25))])]
+    summary = atlas.build_summary(rows, [], min_recurrent_frames=2)
+    assert summary['top1_source_anchor_near_border'] == 0
+    assert summary['top1_decoded_near_border'] == 1
+    assert summary['top1_decoded_on_boundary'] == 1
+    assert summary['top1_anchor_to_decoded_shift_ratio_median'] == 0.25

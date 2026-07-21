@@ -5,15 +5,15 @@ The local dataset roles are explicit because the project uses video sequences
 and its local ``test`` split is in practice a target-domain development set.
 ``real_seq02`` may be used as labelled ``target_dev``; ``real_seq03`` and
 ``sim_seq09`` remain ``target_holdout`` and are never eligible for model
-selection.  The tool measures whether a source-validation proxy reproduces:
+selection.  The tool measures whether each structured proxy produces:
 
-* a non-trivial, temporally continuous main-branch silence rate;
-* deep classification rank for otherwise usable candidates;
-* high pre-threshold top-10000 geometric oracle recall.
+* at least 79% main-branch silence and a long top-1 error run;
+* top-1 recall below 20% and median usable rank in [500, 8000];
+* at least 80% pre-threshold top-10000 geometric oracle recall.
 
-Passing this audit only authorizes a frozen P1-A probe.  Outputs record whether
-target-domain labels influenced the decision and therefore whether a run can
-still be called zero-shot.
+The fixed thresholds were derived from labelled ``real_seq02`` target-dev
+diagnosis, so a passing source-validation run is target-informed rather than
+zero-shot. Passing only authorizes a frozen P1-A probe.
 """
 
 from __future__ import annotations
@@ -39,7 +39,11 @@ from crane_project.tools import ctx_entry_probe as entry_probe  # noqa: E402
 from crane_project.utils.dark_degradation import (  # noqa: E402
     SUPPORTED_DARK_FAMILIES,
     SUPPORTED_TEMPORAL_PROFILES,
-    apply_dark_degradation,
+)
+from crane_project.utils.structured_dark_proxy import (  # noqa: E402
+    SUPPORTED_STRUCTURED_PROXY_FAMILIES,
+    apply_structured_dark_proxy,
+    build_background_patch_library,
 )
 
 
@@ -53,8 +57,9 @@ DATA_ROLE_RULES = {
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description='Audit source-val proxies against an explicit target-dev '
-                    'video signature while protecting target holdout videos.')
+        description='Audit two structured source-validation dark proxies '
+                    'with fixed qualification gates while protecting target '
+                    'holdout videos.')
     parser.add_argument('--config', required=True)
     parser.add_argument('--checkpoint', required=True)
     parser.add_argument('--data-root', default='crane_project/data/crane_grab/')
@@ -73,9 +78,9 @@ def parse_args():
                         help='Measure the clean sequence only. Required for '
                              'target_dev and target_holdout roles.')
     parser.add_argument('--reference-json', default=None,
-                        help='A full target_dev reference-only JSON. Source '
-                             'proxy gates are matched against its focus '
-                             'signature and become target-aware.')
+                        help='Optional full target_dev reference-only JSON '
+                             'for informational comparison. It does not alter '
+                             'the fixed absolute qualification gates.')
     parser.add_argument('--confirm-frozen-holdout', action='store_true',
                         help='Required for target_holdout. The output remains '
                              'ineligible for model selection.')
@@ -83,10 +88,16 @@ def parse_args():
                         help='Allow train/train_sim for a smoke test. Such a '
                              'run is never protocol-ready.')
     parser.add_argument('--families', nargs='+',
-                        default=list(SUPPORTED_DARK_FAMILIES),
-                        choices=list(SUPPORTED_DARK_FAMILIES))
+                        default=list(SUPPORTED_STRUCTURED_PROXY_FAMILIES),
+                        choices=list(SUPPORTED_STRUCTURED_PROXY_FAMILIES),
+                        help='Independent structured-background proxy '
+                             'families. Both are required for authorization.')
+    parser.add_argument('--dark-family', default='photometric',
+                        choices=list(SUPPORTED_DARK_FAMILIES),
+                        help='Shared moderate darkening underneath each '
+                             'structured interference family.')
     parser.add_argument('--severities', type=float, nargs='+',
-                        default=[0.55, 0.75, 0.95])
+                        default=[0.45, 0.60, 0.75])
     parser.add_argument('--temporal-profile', default='ramp-plateau',
                         choices=list(SUPPORTED_TEMPORAL_PROFILES))
     parser.add_argument('--candidate-source', default='main', choices=['main'])
@@ -97,20 +108,17 @@ def parse_args():
     parser.add_argument('--score-thr', type=float, default=0.05,
                         help='Original main score threshold used to define '
                              'main-branch silence.')
-    parser.add_argument('--min-silence-rate', type=float, default=0.20)
-    parser.add_argument('--max-silence-rate', type=float, default=0.60)
-    parser.add_argument('--min-silent-run', type=int, default=5)
+    parser.add_argument('--min-silence-rate', type=float, default=0.79)
+    parser.add_argument('--max-silence-rate', type=float, default=1.0)
+    parser.add_argument('--max-top1-recall', type=float, default=0.20)
+    parser.add_argument('--min-top1-error-run', type=int, default=16)
+    parser.add_argument('--min-rank-median', type=float, default=500.0)
+    parser.add_argument('--max-rank-median', type=float, default=8000.0)
     parser.add_argument('--min-pool-oracle-recall', type=float, default=0.80)
     parser.add_argument('--min-oracle-retention', type=float, default=0.80)
     parser.add_argument('--min-dense-riou-retention', type=float, default=0.80)
-    parser.add_argument('--min-rank-ratio', type=float, default=10.0)
-    parser.add_argument('--max-target-silence-gap', type=float, default=0.15)
-    parser.add_argument('--min-target-silent-run-ratio', type=float,
-                        default=0.25)
-    parser.add_argument('--min-target-rank-ratio', type=float, default=0.10)
-    parser.add_argument('--max-target-rank-ratio', type=float, default=10.0)
-    parser.add_argument('--max-target-pool-recall-gap', type=float,
-                        default=0.15)
+    parser.add_argument('--background-max-patches', type=int, default=128)
+    parser.add_argument('--background-sequence-prefix', default='real_')
     parser.add_argument('--gpu', type=int, default=0)
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--preview-dir', default=None)
@@ -207,15 +215,21 @@ def validate_args(args) -> Tuple[List[int], Dict]:
         raise ValueError('--score-thr must be non-negative')
     if not 0.0 <= args.min_silence_rate <= args.max_silence_rate <= 1.0:
         raise ValueError('invalid silence-rate gate')
-    if args.min_silent_run < 0:
-        raise ValueError('--min-silent-run must be non-negative')
+    if not 0.0 <= args.max_top1_recall <= 1.0:
+        raise ValueError('--max-top1-recall must be in [0, 1]')
+    if args.min_top1_error_run < 0:
+        raise ValueError('--min-top1-error-run must be non-negative')
+    if not 0.0 <= args.min_rank_median <= args.max_rank_median:
+        raise ValueError('invalid usable-rank median gate')
+    if args.background_max_patches <= 0:
+        raise ValueError('--background-max-patches must be positive')
     if not args.reference_only:
         for severity in args.severities:
             if not 0.0 < severity <= 1.0:
                 raise ValueError('--severities must be in (0, 1]')
-        if len(set(args.families)) < 2:
+        if set(args.families) != set(SUPPORTED_STRUCTURED_PROXY_FAMILIES):
             raise ValueError(
-                'Source proxy preflight requires at least two independent '
+                'Source proxy preflight requires both independent structured '
                 'families')
     if args.role == 'target_dev' and args.focus_start is None:
         raise ValueError(
@@ -553,17 +567,20 @@ def evaluate_gate(summary: Dict, clean: Dict, pool_size: int, args,
         oracle_retention=oracle_retention >= args.min_oracle_retention,
         dense_riou_retention=(
             dense_riou_retention >= args.min_dense_riou_retention),
-        rank_shift=rank_ratio >= args.min_rank_ratio,
+        silence_rate=(
+            args.min_silence_rate <= summary['silence_rate']
+            <= args.max_silence_rate),
+        top1_recall=(
+            float(summary['top1_recall']) < args.max_top1_recall),
+        top1_error_run=(
+            int(summary['top1_mcml']) >= args.min_top1_error_run),
+        usable_rank_median=(
+            rank_median is not None
+            and args.min_rank_median <= float(rank_median)
+            <= args.max_rank_median),
     )
     target_match = None
-    if target_reference is None:
-        checks.update(
-            silence_rate=(
-                args.min_silence_rate <= summary['silence_rate']
-                <= args.max_silence_rate),
-            silent_run=summary['longest_silent_run'] >= args.min_silent_run,
-        )
-    else:
+    if target_reference is not None:
         target_pool_recall = float(
             target_reference['per_k'][key]['recall'])
         target_silence = float(target_reference['silence_rate'])
@@ -577,17 +594,6 @@ def evaluate_gate(summary: Dict, clean: Dict, pool_size: int, args,
         target_rank_ratio = (
             float(rank_median) / max(float(target_rank), 1.0)
             if rank_median is not None and target_rank is not None else 0.0)
-        checks.update(
-            target_silence=(
-                silence_gap <= args.max_target_silence_gap),
-            target_silent_run=(
-                silent_run_ratio >= args.min_target_silent_run_ratio),
-            target_pool_recall=(
-                pool_recall_gap <= args.max_target_pool_recall_gap),
-            target_rank=(
-                args.min_target_rank_ratio <= target_rank_ratio
-                <= args.max_target_rank_ratio),
-        )
         target_match = dict(
             target_silence_rate=target_silence,
             silence_gap=float(silence_gap),
@@ -597,6 +603,7 @@ def evaluate_gate(summary: Dict, clean: Dict, pool_size: int, args,
             pool_recall_gap=float(pool_recall_gap),
             target_usable_rank_median=target_rank,
             target_rank_ratio=float(target_rank_ratio),
+            informational_only=True,
         )
     return dict(
         passed=bool(all(checks.values())),
@@ -629,9 +636,9 @@ def print_variant(name: str, summary: Dict, gate: Optional[Dict],
     print(
         f'{name:<24} scope={scope:<7} '
         f'silence={display["silence_rate"]:6.1%} '
-        f'run={display["longest_silent_run"]:3d} '
+        f'silent_run={display["longest_silent_run"]:3d} '
         f'top1={display["top1_recall"]:6.1%} '
-        f'top1_MCML={display["top1_mcml"]:3d} '
+        f'top1_run={display["top1_mcml"]:3d} '
         f'R@{pool_key}={pool["recall"]:6.1%} '
         f'dense={display["dense_oracle_recall"]:6.1%} '
         f'rank_med={str(rank["median"]):>8} {status}')
@@ -654,6 +661,14 @@ def main():
         role_policy['uses_target_labels'] = True
         role_policy['zero_shot_compliant'] = False
 
+    # The fixed qualification thresholds were derived from the labelled
+    # real_seq02 target-dev diagnosis. A source-val run is therefore
+    # target-informed even when the reference JSON is not loaded at runtime.
+    if args.role == 'source_val' and not args.reference_only:
+        role_policy['uses_target_domain'] = True
+        role_policy['uses_target_labels'] = True
+        role_policy['zero_shot_compliant'] = False
+
     import cv2
 
     model, cfg = entry_probe.load_model(
@@ -666,6 +681,15 @@ def main():
     trajectory_start = int(frame_ids[0])
     trajectory_end = int(frame_ids[-1])
 
+    background_library = None
+    if (not args.reference_only
+            and 'source_background' in args.families):
+        background_library = build_background_patch_library(
+            args.data_root,
+            max_patches=args.background_max_patches,
+            seed=args.seed,
+            sequence_prefix=args.background_sequence_prefix)
+
     variants = [('clean', None)]
     if not args.reference_only:
         variants.extend([
@@ -675,6 +699,10 @@ def main():
         ])
     rows_by_variant = {
         _variant_name(family, severity): []
+        for family, severity in variants
+    }
+    sequence_states = {
+        _variant_name(family, severity): {}
         for family, severity in variants
     }
 
@@ -692,6 +720,7 @@ def main():
     print(f'ref_only:   {args.reference_only}')
     print(f'reference:  {args.reference_json or "-"}')
     print(f'families:   {args.families if not args.reference_only else "-"}')
+    print(f'dark base:  {args.dark_family if not args.reference_only else "-"}')
     print(f'severities: {args.severities if not args.reference_only else "-"}')
     print(f'profile:    {args.temporal_profile}')
     print(f'topks:      {topks}')
@@ -716,11 +745,14 @@ def main():
                     family='clean', severity=0.0, strength=0.0,
                     geometry_preserving=True)
             else:
-                image, degradation = apply_dark_degradation(
-                    raw, family=family, sequence=args.seq, frame=frame,
-                    start=trajectory_start, end=trajectory_end,
-                    severity=severity, seed=args.seed,
-                    profile=args.temporal_profile)
+                image, degradation = apply_structured_dark_proxy(
+                    raw, gts=gts, family=family, sequence=args.seq,
+                    frame=frame, start=trajectory_start,
+                    end=trajectory_end, severity=severity,
+                    seed=args.seed, dark_family=args.dark_family,
+                    temporal_profile=args.temporal_profile,
+                    background_library=background_library,
+                    sequence_state=sequence_states[name])
             row = analyze_variant(
                 model, image, dict(img_path=img_path), gts[0],
                 transform_compose, img_scale, flip, args, topks)
@@ -796,7 +828,6 @@ def main():
         args.role == 'source_val'
         and role_policy['protocol_source']
         and full_sequence
-        and target_reference is not None
         and len(passing_by_family) >= 2
         and all(passing_by_family[family] for family in args.families))
 
@@ -846,10 +877,15 @@ def main():
             None if target_reference_payload is None
             else target_reference_payload.get('manifest', {}).get('sha256')),
         protocol_ready_for_p1_a=protocol_ready,
+        gate_provenance='real_seq02_target_dev_diagnostic',
+        gate_mode='absolute_geometry_preserving_classification_collapse',
         config=args.config,
         checkpoint=args.checkpoint,
         args=vars(args),
         manifest=manifest,
+        background_library_manifest=(
+            None if background_library is None
+            else background_library.get('manifest')),
         passing_severities_by_family=passing_by_family,
         summaries=summaries,
         gate_summaries=gate_summaries,
