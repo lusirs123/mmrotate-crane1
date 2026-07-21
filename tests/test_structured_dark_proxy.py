@@ -92,14 +92,74 @@ class StructuredDarkProxyTest(unittest.TestCase):
         output, meta = apply_structured_dark_proxy(
             self.image, self.gts, family='industrial_edges',
             sequence='real_seq07', frame=10, start=0, end=30,
-            severity=0.60, seed=0, dark_family='photometric',
+            dark_severity=0.45, structure_severity=0.75,
+            seed=0, dark_family='photometric',
             temporal_profile='constant')
         self.assertEqual(output.shape, self.image.shape)
         self.assertEqual(output.dtype, np.uint8)
         self.assertLess(float(output.mean()), float(self.image.mean()))
         self.assertFalse(meta['target_geometry_modified'])
+        self.assertEqual(meta['dark_strength'], 0.45)
+        self.assertEqual(meta['structure_strength'], 0.75)
         self.assertIn('darkening', meta)
         self.assertIn('structure', meta)
+
+    def test_dark_and_structure_strengths_are_independent(self):
+        low_structure, low_meta = apply_structured_dark_proxy(
+            self.image, self.gts, family='industrial_edges',
+            sequence='real_seq07', frame=10, start=0, end=30,
+            dark_severity=0.45, structure_severity=0.35,
+            seed=0, temporal_profile='constant')
+        high_structure, high_meta = apply_structured_dark_proxy(
+            self.image, self.gts, family='industrial_edges',
+            sequence='real_seq07', frame=10, start=0, end=30,
+            dark_severity=0.45, structure_severity=1.0,
+            seed=0, temporal_profile='constant')
+
+        exclusion = target_exclusion_mask(self.image.shape, self.gts)
+        np.testing.assert_array_equal(
+            low_structure[exclusion > 0], high_structure[exclusion > 0])
+        self.assertFalse(np.array_equal(
+            low_structure[exclusion == 0], high_structure[exclusion == 0]))
+        self.assertEqual(low_meta['dark_strength'], high_meta['dark_strength'])
+        self.assertNotEqual(
+            low_meta['structure_strength'], high_meta['structure_strength'])
+        self.assertGreater(
+            high_meta['structure']['structure_pixels'],
+            low_meta['structure']['structure_pixels'])
+
+        _, darker_meta = apply_structured_dark_proxy(
+            self.image, self.gts, family='industrial_edges',
+            sequence='real_seq07', frame=10, start=0, end=30,
+            dark_severity=0.65, structure_severity=1.0,
+            seed=0, temporal_profile='constant')
+        self.assertNotEqual(
+            high_meta['dark_strength'], darker_meta['dark_strength'])
+        self.assertEqual(
+            high_meta['structure_strength'],
+            darker_meta['structure_strength'])
+        self.assertEqual(
+            high_meta['structure']['placements'],
+            darker_meta['structure']['placements'])
+
+    def test_ramp_changes_alpha_without_changing_layout_count(self):
+        _, edge = apply_structured_dark_proxy(
+            self.image, self.gts, family='industrial_edges',
+            sequence='real_seq07', frame=0, start=0, end=100,
+            dark_severity=0.45, structure_severity=1.0,
+            seed=0, temporal_profile='ramp-plateau')
+        _, plateau = apply_structured_dark_proxy(
+            self.image, self.gts, family='industrial_edges',
+            sequence='real_seq07', frame=50, start=0, end=100,
+            dark_severity=0.45, structure_severity=1.0,
+            seed=0, temporal_profile='ramp-plateau')
+        self.assertLess(
+            edge['structure_strength'], plateau['structure_strength'])
+        self.assertEqual(
+            len(edge['structure']['placements']),
+            len(plateau['structure']['placements']))
+        self.assertEqual(edge['structure']['layout_strength'], 1.0)
+        self.assertEqual(plateau['structure']['layout_strength'], 1.0)
 
     def test_background_library_uses_only_train_non_target_regions(self):
         with tempfile.TemporaryDirectory() as root:

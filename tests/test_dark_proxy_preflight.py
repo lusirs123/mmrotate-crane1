@@ -5,8 +5,13 @@ from types import SimpleNamespace
 import numpy as np
 
 from crane_project.tools.dark_proxy_preflight import (
+    _draw_proxy_preview,
     _longest_run,
+    _plateau_rows,
+    _variant_name,
+    decoded_box_to_original,
     evaluate_gate,
+    select_preview_frames,
     validate_data_role,
 )
 from crane_project.utils.dark_degradation import (
@@ -117,6 +122,40 @@ class ProxyIsolationTest(unittest.TestCase):
 
 class ProxyGateTest(unittest.TestCase):
 
+    def test_preview_frames_are_sampled_from_ramp_plateau(self):
+        selected = select_preview_frames(
+            list(range(101)), 3, 'ramp-plateau')
+        self.assertEqual(len(selected), 3)
+        self.assertEqual(selected[1], 50)
+        for frame in selected:
+            self.assertGreaterEqual(
+                temporal_strength(
+                    frame, 0, 100, 1.0, 'ramp-plateau'),
+                0.95)
+
+    def test_preview_box_mapping_and_overlay(self):
+        box = decoded_box_to_original(
+            [200.0, 100.0, 80.0, 40.0, 0.3],
+            dict(scale_factor=[2.0, 2.0, 2.0, 2.0], flip=False))
+        self.assertEqual(box, [100.0, 50.0, 40.0, 20.0, 0.3])
+        image = np.zeros((120, 160, 3), dtype=np.uint8)
+        row = dict(
+            variant='industrial_edges_d0p45_x1p00',
+            main_silent=False,
+            riou_thr=0.5,
+            top1_candidate=dict(
+                candidate_index=1, score=0.8, riou=0.0,
+                box_ori=[40.0, 40.0, 30.0, 12.0, 0.0]),
+            usable_candidate=dict(
+                candidate_index=2, score=0.2, riou=0.7, rank=500,
+                box_ori=[100.0, 70.0, 24.0, 10.0, 0.2]),
+        )
+        overlay = _draw_proxy_preview(
+            image, dict(cx=100.0, cy=70.0, w=24.0, h=10.0, angle=10.0),
+            row)
+        self.assertEqual(overlay.shape, image.shape)
+        self.assertGreater(int(overlay.sum()), 0)
+
     def test_longest_run_resets_on_frame_gap(self):
         rows = [
             dict(frame=1, silent=True),
@@ -125,6 +164,21 @@ class ProxyGateTest(unittest.TestCase):
             dict(frame=5, silent=False),
         ]
         self.assertEqual(_longest_run(rows, 'silent'), 2)
+
+    def test_plateau_and_variant_name_use_both_independent_axes(self):
+        rows = [
+            dict(frame=1, degradation=dict(
+                dark_severity=0.45, dark_strength=0.45,
+                structure_severity=1.0, structure_strength=0.90)),
+            dict(frame=2, degradation=dict(
+                dark_severity=0.45, dark_strength=0.45,
+                structure_severity=1.0, structure_strength=0.95)),
+        ]
+        self.assertEqual(
+            [row['frame'] for row in _plateau_rows(rows)], [2])
+        self.assertEqual(
+            _variant_name('industrial_edges', 0.45, 1.0),
+            'industrial_edges_d0p45_x1p00')
 
     def test_gate_requires_silence_geometry_and_rank(self):
         clean = dict(

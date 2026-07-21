@@ -5,7 +5,8 @@ The local dataset roles are explicit because the project uses video sequences
 and its local ``test`` split is in practice a target-domain development set.
 ``real_seq02`` may be used as labelled ``target_dev``; ``real_seq03`` and
 ``sim_seq09`` remain ``target_holdout`` and are never eligible for model
-selection.  The tool measures whether each structured proxy produces:
+selection. Darkening and structured interference have independent strengths;
+the tool measures whether each structured proxy produces:
 
 * at least 79% main-branch silence and a long top-1 error run;
 * top-1 recall below 20% and median usable rank in [500, 8000];
@@ -39,6 +40,7 @@ from crane_project.tools import ctx_entry_probe as entry_probe  # noqa: E402
 from crane_project.utils.dark_degradation import (  # noqa: E402
     SUPPORTED_DARK_FAMILIES,
     SUPPORTED_TEMPORAL_PROFILES,
+    temporal_strength,
 )
 from crane_project.utils.structured_dark_proxy import (  # noqa: E402
     SUPPORTED_STRUCTURED_PROXY_FAMILIES,
@@ -96,8 +98,14 @@ def parse_args():
                         choices=list(SUPPORTED_DARK_FAMILIES),
                         help='Shared moderate darkening underneath each '
                              'structured interference family.')
-    parser.add_argument('--severities', type=float, nargs='+',
-                        default=[0.45, 0.60, 0.75])
+    parser.add_argument('--dark-severity', type=float, default=0.45,
+                        help='Fixed moderate darkening shared by every '
+                             'structured variant.')
+    parser.add_argument('--structure-strengths', type=float, nargs='+',
+                        default=[0.75, 1.0],
+                        help='Independent structured-interference strengths. '
+                             'Keep this list small; this is a discriminator, '
+                             'not an open-ended sweep.')
     parser.add_argument('--temporal-profile', default='ramp-plateau',
                         choices=list(SUPPORTED_TEMPORAL_PROFILES))
     parser.add_argument('--candidate-source', default='main', choices=['main'])
@@ -122,7 +130,9 @@ def parse_args():
     parser.add_argument('--gpu', type=int, default=0)
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--preview-dir', default=None)
-    parser.add_argument('--preview-count', type=int, default=3)
+    parser.add_argument('--preview-count', type=int, default=3,
+                        help='Representative frames sampled uniformly from '
+                             'the temporal plateau when using ramp-plateau.')
     parser.add_argument('--out-json', required=True)
     return parser.parse_args()
 
@@ -224,9 +234,12 @@ def validate_args(args) -> Tuple[List[int], Dict]:
     if args.background_max_patches <= 0:
         raise ValueError('--background-max-patches must be positive')
     if not args.reference_only:
-        for severity in args.severities:
-            if not 0.0 < severity <= 1.0:
-                raise ValueError('--severities must be in (0, 1]')
+        if not 0.0 <= args.dark_severity <= 1.0:
+            raise ValueError('--dark-severity must be in [0, 1]')
+        for strength in args.structure_strengths:
+            if not 0.0 < strength <= 1.0:
+                raise ValueError(
+                    '--structure-strengths must be in (0, 1]')
         if set(args.families) != set(SUPPORTED_STRUCTURED_PROXY_FAMILIES):
             raise ValueError(
                 'Source proxy preflight requires both independent structured '
@@ -261,6 +274,29 @@ def discover_frame_ids(args) -> Tuple[List[int], bool]:
         raise RuntimeError(
             f'No proxy frames found for {args.split}/{args.seq}')
     return frame_ids, bool(frame_ids == all_frame_ids)
+
+
+def select_preview_frames(frame_ids: Sequence[int], count: int,
+                          temporal_profile: str) -> List[int]:
+    """Select deterministic representative frames, preferring the plateau."""
+    frames = [int(frame) for frame in frame_ids]
+    if not frames or count <= 0:
+        return []
+    eligible = frames
+    if temporal_profile == 'ramp-plateau' and len(frames) > 1:
+        start, end = frames[0], frames[-1]
+        plateau = [
+            frame for frame in frames
+            if temporal_strength(
+                frame, start, end, severity=1.0,
+                profile=temporal_profile) >= 0.95
+        ]
+        if plateau:
+            eligible = plateau
+    sample_count = min(int(count), len(eligible))
+    positions = np.linspace(
+        0, len(eligible) - 1, sample_count, dtype=np.int64)
+    return [eligible[int(position)] for position in positions]
 
 
 def build_manifest(data_root: str, split: str, seq: str,
@@ -337,6 +373,93 @@ def preprocess_bgr_array(image_bgr, filename, transform_compose,
     return image_tensor, meta
 
 
+def decoded_box_to_original(box_img: Sequence[float], meta: Dict) -> List[float]:
+    """Map a decoded OBB back to the unresized image for diagnostics."""
+    if bool(meta.get('flip', False)):
+        raise ValueError('Proxy preview overlays require flip=False')
+    scale = meta.get('scale_factor', 1.0)
+    if isinstance(scale, torch.Tensor):
+        scale = scale.detach().cpu().numpy()
+    flat = np.asarray(scale, dtype=np.float64).reshape(-1)
+    sx = float(flat[0]) if flat.size else 1.0
+    sy = float(flat[1]) if flat.size >= 2 else sx
+    if sx <= 0.0 or sy <= 0.0:
+        raise ValueError('scale_factor must be positive')
+    size_scale = float(np.sqrt(sx * sy))
+    values = [float(value) for value in box_img[:5]]
+    values[0] /= sx
+    values[1] /= sy
+    values[2] /= size_scale
+    values[3] /= size_scale
+    return values
+
+
+def _candidate_record(index: int, boxes, scores, ious,
+                      meta: Dict) -> Dict:
+    box_img = boxes[index].detach().cpu().float().tolist()
+    return dict(
+        candidate_index=int(index),
+        score=float(scores[index].item()),
+        riou=float(ious[index].item()),
+        box_img=[float(value) for value in box_img],
+        box_ori=decoded_box_to_original(box_img, meta),
+    )
+
+
+def _draw_proxy_preview(image_bgr: np.ndarray, gt_ori: Dict,
+                        row: Dict) -> np.ndarray:
+    """Overlay GT, top-1, and best usable candidate on a proxy frame."""
+    import cv2
+
+    canvas = image_bgr.copy()
+
+    def draw_degrees(box, color, label):
+        rect = (
+            (float(box[0]), float(box[1])),
+            (max(float(box[2]), 1.0), max(float(box[3]), 1.0)),
+            float(box[4]),
+        )
+        polygon = np.round(cv2.boxPoints(rect)).astype(np.int32)
+        cv2.polylines(canvas, [polygon], True, color, 2, cv2.LINE_AA)
+        anchor = tuple(polygon[0].tolist())
+        cv2.putText(canvas, label, anchor, cv2.FONT_HERSHEY_SIMPLEX,
+                    0.50, color, 2, cv2.LINE_AA)
+
+    gt_box = [
+        gt_ori['cx'], gt_ori['cy'], gt_ori['w'], gt_ori['h'],
+        gt_ori['angle'],
+    ]
+    draw_degrees(gt_box, (0, 220, 0), 'GT')
+
+    top1 = row['top1_candidate']
+    top1_box = list(top1['box_ori'])
+    top1_box[4] = float(np.degrees(top1_box[4]))
+    top1_color = (0, 180, 255) if top1['riou'] >= row['riou_thr'] \
+        else (0, 0, 255)
+    draw_degrees(
+        top1_box, top1_color,
+        'T1 i{:.2f} s{:.3f}'.format(top1['riou'], top1['score']))
+
+    usable = row.get('usable_candidate')
+    if usable is not None and usable['candidate_index'] \
+            != top1['candidate_index']:
+        usable_box = list(usable['box_ori'])
+        usable_box[4] = float(np.degrees(usable_box[4]))
+        draw_degrees(
+            usable_box, (255, 180, 0),
+            'U r{} s{:.3f}'.format(
+                usable['rank'], usable['score']))
+
+    header = '{}  silent={}  rank={}'.format(
+        row['variant'], int(row['main_silent']),
+        None if usable is None else usable['rank'])
+    cv2.rectangle(canvas, (0, 0), (min(canvas.shape[1], 680), 30),
+                  (0, 0, 0), -1)
+    cv2.putText(canvas, header, (8, 21), cv2.FONT_HERSHEY_SIMPLEX,
+                0.55, (255, 255, 255), 1, cv2.LINE_AA)
+    return canvas
+
+
 def _longest_run(rows: Sequence[Dict], key: str, expected: bool = True) -> int:
     longest = 0
     current = 0
@@ -383,16 +506,27 @@ def analyze_variant(model, image_bgr, meta_source: Dict, gt_ori: Dict,
         top_scores, top_indices = torch.topk(
             scores, k=max_k, largest=True, sorted=True)
         top_ious = ious[top_indices]
+        top1_index = int(top_indices[0].item())
+        top1_candidate = _candidate_record(
+            top1_index, boxes, scores, ious, meta)
         dense_best_riou = float(ious.max().item())
         usable = ious >= float(args.riou_thr)
         if bool(usable.any()):
-            usable_scores = scores[usable]
-            usable_best_score = float(usable_scores.max().item())
+            usable_indices = torch.nonzero(
+                usable, as_tuple=False).reshape(-1)
+            usable_scores = scores[usable_indices]
+            usable_position = int(torch.argmax(usable_scores).item())
+            usable_index = int(usable_indices[usable_position].item())
+            usable_candidate = _candidate_record(
+                usable_index, boxes, scores, ious, meta)
+            usable_best_score = float(usable_candidate['score'])
             usable_best_rank = int(
-                (scores > usable_scores.max()).sum().item()) + 1
+                (scores > scores[usable_index]).sum().item()) + 1
+            usable_candidate['rank'] = usable_best_rank
         else:
             usable_best_score = None
             usable_best_rank = None
+            usable_candidate = None
 
         per_k = {}
         for topk in topks:
@@ -413,10 +547,13 @@ def analyze_variant(model, image_bgr, meta_source: Dict, gt_ori: Dict,
         global_max=float(scores.max().item()),
         top1_score=float(top_scores[0].item()),
         top1_riou=float(top_ious[0].item()),
+        top1_candidate=top1_candidate,
         dense_best_riou=dense_best_riou,
         dense_oracle_hit=bool(dense_best_riou >= args.riou_thr),
         usable_best_score=usable_best_score,
         usable_best_rank=usable_best_rank,
+        usable_candidate=usable_candidate,
+        riou_thr=float(args.riou_thr),
         brightness=float(gray.mean()),
         contrast=float(gray.std()),
         per_k=per_k,
@@ -526,8 +663,8 @@ def _plateau_rows(rows: Sequence[Dict]) -> List[Dict]:
     selected = []
     for row in rows:
         degradation = row.get('degradation', {})
-        severity = float(degradation.get('severity', 0.0))
-        strength = float(degradation.get('strength', 0.0))
+        severity = float(degradation.get('structure_severity', 0.0))
+        strength = float(degradation.get('structure_strength', 0.0))
         if severity > 0.0 and strength >= 0.95 * severity:
             selected.append(row)
     return selected
@@ -618,10 +755,14 @@ def evaluate_gate(summary: Dict, clean: Dict, pool_size: int, args,
     )
 
 
-def _variant_name(family: str, severity: Optional[float] = None) -> str:
+def _variant_name(family: str,
+                  dark_severity: Optional[float] = None,
+                  structure_strength: Optional[float] = None) -> str:
     if family == 'clean':
         return 'clean'
-    return f'{family}_s{severity:.2f}'.replace('.', 'p')
+    return (
+        f'{family}_d{dark_severity:.2f}_x{structure_strength:.2f}'
+        .replace('.', 'p'))
 
 
 def print_variant(name: str, summary: Dict, gate: Optional[Dict],
@@ -680,6 +821,9 @@ def main():
         args.data_root, args.split, args.seq, frame_ids, args.role)
     trajectory_start = int(frame_ids[0])
     trajectory_end = int(frame_ids[-1])
+    preview_frames = select_preview_frames(
+        frame_ids, args.preview_count, args.temporal_profile)
+    preview_frame_set = set(preview_frames)
 
     background_library = None
     if (not args.reference_only
@@ -690,20 +834,20 @@ def main():
             seed=args.seed,
             sequence_prefix=args.background_sequence_prefix)
 
-    variants = [('clean', None)]
+    variants = [('clean', None, None)]
     if not args.reference_only:
         variants.extend([
-            (family, float(severity))
+            (family, float(args.dark_severity), float(structure_strength))
             for family in args.families
-            for severity in args.severities
+            for structure_strength in args.structure_strengths
         ])
     rows_by_variant = {
-        _variant_name(family, severity): []
-        for family, severity in variants
+        _variant_name(family, dark_severity, structure_strength): []
+        for family, dark_severity, structure_strength in variants
     }
     sequence_states = {
-        _variant_name(family, severity): {}
-        for family, severity in variants
+        _variant_name(family, dark_severity, structure_strength): {}
+        for family, dark_severity, structure_strength in variants
     }
 
     if args.preview_dir:
@@ -721,9 +865,12 @@ def main():
     print(f'reference:  {args.reference_json or "-"}')
     print(f'families:   {args.families if not args.reference_only else "-"}')
     print(f'dark base:  {args.dark_family if not args.reference_only else "-"}')
-    print(f'severities: {args.severities if not args.reference_only else "-"}')
+    print(f'dark sev:   {args.dark_severity if not args.reference_only else "-"}')
+    print('struct str: '
+          f'{args.structure_strengths if not args.reference_only else "-"}')
     print(f'profile:    {args.temporal_profile}')
     print(f'topks:      {topks}')
+    print(f'previews:   {preview_frames if args.preview_dir else "-"}')
 
     for index, frame in enumerate(frame_ids):
         img_path, ann_path = diag.find_files(
@@ -737,8 +884,9 @@ def main():
         if len(gts) > 1:
             print(f'[warn] {args.seq}_{frame:05d}: using first of {len(gts)} GTs')
 
-        for family, severity in variants:
-            name = _variant_name(family, severity)
+        for family, dark_severity, structure_strength in variants:
+            name = _variant_name(
+                family, dark_severity, structure_strength)
             if family == 'clean':
                 image = raw
                 degradation = dict(
@@ -748,7 +896,8 @@ def main():
                 image, degradation = apply_structured_dark_proxy(
                     raw, gts=gts, family=family, sequence=args.seq,
                     frame=frame, start=trajectory_start,
-                    end=trajectory_end, severity=severity,
+                    end=trajectory_end, dark_severity=dark_severity,
+                    structure_severity=structure_strength,
                     seed=args.seed, dark_family=args.dark_family,
                     temporal_profile=args.temporal_profile,
                     background_library=background_library,
@@ -766,11 +915,16 @@ def main():
             )
             rows_by_variant[name].append(row)
 
-            if args.preview_dir and index < args.preview_count:
+            if args.preview_dir and frame in preview_frame_set:
                 variant_dir = os.path.join(args.preview_dir, name)
+                overlay_dir = os.path.join(
+                    args.preview_dir, name + '_overlay')
                 os.makedirs(variant_dir, exist_ok=True)
-                cv2.imwrite(os.path.join(
-                    variant_dir, f'{args.seq}_{frame:05d}.jpg'), image)
+                os.makedirs(overlay_dir, exist_ok=True)
+                filename = f'{args.seq}_{frame:05d}.jpg'
+                cv2.imwrite(os.path.join(variant_dir, filename), image)
+                overlay = _draw_proxy_preview(image, gts[0], row)
+                cv2.imwrite(os.path.join(overlay_dir, filename), overlay)
 
         if index == 0 or (index + 1) % 20 == 0 or index + 1 == len(frame_ids):
             print(f'[progress] {index + 1}/{len(frame_ids)} frames')
@@ -799,8 +953,9 @@ def main():
         family: [] for family in args.families
     } if not args.reference_only else {}
     if not args.reference_only:
-        for family, severity in variants:
-            name = _variant_name(family, severity)
+        for family, dark_severity, structure_strength in variants:
+            name = _variant_name(
+                family, dark_severity, structure_strength)
             if family == 'clean':
                 continue
             variant_gate_rows = _plateau_rows(rows_by_variant[name])
@@ -812,7 +967,7 @@ def main():
             clean_gate_summary = summarize_variant(
                 clean_gate_rows, topks, args.riou_thr)
             gate_summaries[name] = dict(
-                scope='dark_plateau',
+                scope='joint_plateau',
                 frames=gate_frames,
                 variant=variant_gate_summary,
                 matched_clean=clean_gate_summary,
@@ -822,7 +977,8 @@ def main():
                 args.pool_size, args, target_reference=target_reference)
             gates[name] = gate
             if gate['passed']:
-                passing_by_family[family].append(float(severity))
+                passing_by_family[family].append(
+                    float(structure_strength))
 
     protocol_ready = bool(
         args.role == 'source_val'
@@ -834,8 +990,8 @@ def main():
     print('\n' + '-' * 100)
     print('VARIANT SUMMARY')
     print('-' * 100)
-    for family, severity in variants:
-        name = _variant_name(family, severity)
+    for family, dark_severity, structure_strength in variants:
+        name = _variant_name(family, dark_severity, structure_strength)
         print_variant(
             name, summaries[name], gates.get(name), gate_summaries.get(name))
     if reference_signature is not None:
@@ -849,13 +1005,15 @@ def main():
     elif args.role == 'target_holdout':
         print('TARGET_HOLDOUT: ineligible for model/checkpoint selection')
     else:
-        print(f'passing severities by family: {passing_by_family}')
+        print(f'passing structure strengths by family: {passing_by_family}')
         print(f'PROTOCOL_READY_FOR_P1_A={protocol_ready}')
 
     output_path = os.path.abspath(args.out_json)
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     payload = dict(
         probe='dark_proxy_preflight',
+        proxy_protocol_version=2,
+        strength_axes='decoupled_dark_and_structure',
         deployable=False,
         data_role=args.role,
         uses_test_data=args.split == 'test',
@@ -878,15 +1036,26 @@ def main():
             else target_reference_payload.get('manifest', {}).get('sha256')),
         protocol_ready_for_p1_a=protocol_ready,
         gate_provenance='real_seq02_target_dev_diagnostic',
-        gate_mode='absolute_geometry_preserving_classification_collapse',
+        gate_mode=(
+            'absolute_decoupled_dark_structure_geometry_preserving_'
+            'classification_collapse'),
         config=args.config,
         checkpoint=args.checkpoint,
         args=vars(args),
         manifest=manifest,
+        preview_frames=preview_frames,
+        preview_artifacts=(
+            None if args.preview_dir is None else dict(
+                directory=os.path.abspath(args.preview_dir),
+                raw_subdir='{variant}',
+                overlay_subdir='{variant}_overlay',
+                legend=dict(
+                    gt='green', top1_false='red', top1_hit='orange',
+                    usable='cyan'))),
         background_library_manifest=(
             None if background_library is None
             else background_library.get('manifest')),
-        passing_severities_by_family=passing_by_family,
+        passing_structure_strengths_by_family=passing_by_family,
         summaries=summaries,
         gate_summaries=gate_summaries,
         gates=gates,

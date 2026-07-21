@@ -26,7 +26,10 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import cv2
 import numpy as np
 
-from crane_project.utils.dark_degradation import apply_dark_degradation
+from crane_project.utils.dark_degradation import (
+    apply_dark_degradation,
+    temporal_strength,
+)
 
 
 SUPPORTED_STRUCTURED_PROXY_FAMILIES = (
@@ -272,9 +275,12 @@ def apply_industrial_edge_interference(
         start: int,
         end: int,
         strength: float,
-        seed: int = 0) -> Tuple[np.ndarray, Dict]:
+        seed: int = 0,
+        layout_strength: Optional[float] = None) -> Tuple[np.ndarray, Dict]:
     """Draw persistent industrial structures outside target regions."""
     strength = float(np.clip(strength, 0.0, 1.0))
+    layout_strength = float(np.clip(
+        strength if layout_strength is None else layout_strength, 0.0, 1.0))
     if strength <= 0.0:
         return image_bgr.copy(), dict(placements=[], structure_pixels=0)
     height, width = image_bgr.shape[:2]
@@ -285,7 +291,10 @@ def apply_industrial_edge_interference(
     rng = _layout_rng(seed, 'industrial_edges', sequence)
     placements = []
 
-    count = 3 + int(round(3.0 * strength))
+    # The first server audit showed that sparse structures were dominated by
+    # the shared darkening layer. Cover more background at high structure
+    # strength without touching the target exclusion mask.
+    count = 4 + int(round(8.0 * layout_strength))
     for index in range(count):
         x_norm, y_norm = _slow_position(rng, progress, index)
         cx, cy = int(x_norm * width), int(y_norm * height)
@@ -296,9 +305,9 @@ def apply_industrial_edge_interference(
         local = np.zeros((height, width), dtype=np.uint8)
         if kind == 0:
             angle = float(rng.uniform(-0.35, 0.35))
-            length = int(width * rng.uniform(0.20, 0.48))
+            length = int(width * rng.uniform(0.24, 0.58))
             spacing = max(4, int(height * rng.uniform(0.008, 0.025)))
-            thickness = max(1, int(round(1 + 2 * strength)))
+            thickness = max(1, int(round(1 + 3 * layout_strength)))
             dx, dy = int(math.cos(angle) * length / 2), int(
                 math.sin(angle) * length / 2)
             for offset in (-spacing, spacing):
@@ -308,8 +317,8 @@ def apply_industrial_edge_interference(
                 cv2.line(local, p1, p2, 255, thickness + 2, cv2.LINE_AA)
             kind_name = 'rail'
         elif kind == 1:
-            size = int(min(height, width) * rng.uniform(0.04, 0.10))
-            thickness = max(1, int(round(1 + strength)))
+            size = int(min(height, width) * rng.uniform(0.05, 0.13))
+            thickness = max(1, int(round(1 + 2 * layout_strength)))
             points = [
                 (cx - size, cy), (cx + size, cy),
                 (cx, cy - size), (cx, cy + size),
@@ -325,8 +334,8 @@ def apply_industrial_edge_interference(
             kind_name = 'text_stroke'
         elif kind == 2:
             axes = (
-                max(6, int(width * rng.uniform(0.018, 0.055))),
-                max(4, int(height * rng.uniform(0.010, 0.035))),
+                max(6, int(width * rng.uniform(0.025, 0.075))),
+                max(4, int(height * rng.uniform(0.015, 0.050))),
             )
             cv2.ellipse(overlay, (cx, cy), axes, float(rng.uniform(0, 180)),
                         0, 360, color, -1, cv2.LINE_AA)
@@ -334,11 +343,11 @@ def apply_industrial_edge_interference(
             local = cv2.GaussianBlur(local, (0, 0), sigmaX=max(2, axes[1]))
             kind_name = 'glare'
         else:
-            length = int(width * rng.uniform(0.12, 0.30))
+            length = int(width * rng.uniform(0.16, 0.40))
             angle = float(rng.uniform(-1.2, 1.2))
             dx, dy = int(math.cos(angle) * length / 2), int(
                 math.sin(angle) * length / 2)
-            thickness = max(1, int(round(1 + 2 * strength)))
+            thickness = max(1, int(round(1 + 3 * layout_strength)))
             p1, p2 = (cx - dx, cy - dy), (cx + dx, cy + dy)
             cv2.line(overlay, p1, p2, color, thickness, cv2.LINE_AA)
             cv2.line(local, p1, p2, 255, thickness + 3, cv2.LINE_AA)
@@ -347,12 +356,13 @@ def apply_industrial_edge_interference(
         placements.append(dict(
             kind=kind_name, center=[cx, cy], normalized=[x_norm, y_norm]))
 
-    alpha *= float(0.30 + 0.45 * strength)
+    alpha *= float(0.45 + 0.50 * strength)
     output = _blend_overlay(image_bgr, overlay, alpha, exclusion)
     return output, dict(
         placements=placements,
         structure_pixels=int(((alpha > 0.02) & (exclusion == 0)).sum()),
         target_exclusion_pixels=int((exclusion > 0).sum()),
+        layout_strength=layout_strength,
     )
 
 
@@ -389,7 +399,7 @@ def _adapt_patch(patch: np.ndarray, region: np.ndarray,
     scale = np.clip(target_std / np.maximum(source_std, 3.0), 0.45, 1.65)
     adapted = (source - source_mean) * scale + target_mean
     # Retain some donor contrast so the patch remains a genuine distractor.
-    adapted = target_mean + (adapted - target_mean) * (1.0 + 0.35 * strength)
+    adapted = target_mean + (adapted - target_mean) * (1.0 + 0.85 * strength)
     return np.clip(adapted, 0.0, 255.0).astype(np.uint8)
 
 
@@ -403,12 +413,15 @@ def apply_source_background_interference(
         end: int,
         strength: float,
         seed: int = 0,
-        sequence_state: Optional[Dict] = None) -> Tuple[np.ndarray, Dict]:
+        sequence_state: Optional[Dict] = None,
+        layout_strength: Optional[float] = None) -> Tuple[np.ndarray, Dict]:
     """Paste persistent, context-matched source-train background patches."""
     patches = list(library.get('patches', []))
     if not patches:
         raise ValueError('source_background requires a non-empty patch library')
     strength = float(np.clip(strength, 0.0, 1.0))
+    layout_strength = float(np.clip(
+        strength if layout_strength is None else layout_strength, 0.0, 1.0))
     if strength <= 0.0:
         return image_bgr.copy(), dict(placements=[], pasted_pixels=0)
     height, width = image_bgr.shape[:2]
@@ -418,7 +431,7 @@ def apply_source_background_interference(
     rng = _layout_rng(seed, 'source_background', sequence)
     placements = []
     pasted_pixels = 0
-    count = 1 + int(strength >= 0.55) + int(strength >= 0.75)
+    count = 2 + int(round(4.0 * layout_strength))
     if sequence_state is None:
         sequence_state = {}
     slots = sequence_state.setdefault('source_background_slots', {})
@@ -426,11 +439,11 @@ def apply_source_background_interference(
     for index in range(count):
         x_norm, y_norm = _slow_position(rng, progress, index)
         short_side = int(min(height, width) * (
-            0.07 + 0.08 * strength + 0.015 * index))
+            0.09 + 0.09 * layout_strength + 0.012 * index))
         base_index = int(_stable_seed(
             seed, sequence, 'source_patch', index) % len(patches))
         candidate_indices = [
-            (base_index + offset * 17) % len(patches) for offset in range(8)
+            (base_index + offset * 17) % len(patches) for offset in range(12)
         ]
         offsets = [
             (0.0, 0.0), (-0.06, 0.0), (0.06, 0.0),
@@ -507,7 +520,7 @@ def apply_source_background_interference(
         feather = cv2.GaussianBlur(
             feather, (0, 0),
             sigmaX=max(1.0, min(patch_h, patch_w) * 0.025))
-        alpha = feather[..., None] * float(0.42 + 0.38 * strength)
+        alpha = feather[..., None] * float(0.55 + 0.40 * strength)
         blended = (region.astype(np.float32) * (1.0 - alpha)
                    + adapted.astype(np.float32) * alpha)
         output[y:y + patch_h, x:x + patch_w] = np.clip(
@@ -528,6 +541,7 @@ def apply_source_background_interference(
         pasted_pixels=int(pasted_pixels),
         target_exclusion_pixels=int((exclusion > 0).sum()),
         library_sha256=library.get('manifest', {}).get('sha256'),
+        layout_strength=layout_strength,
     )
 
 
@@ -539,38 +553,47 @@ def apply_structured_dark_proxy(
         frame: int,
         start: int,
         end: int,
-        severity: float,
+        dark_severity: float,
+        structure_severity: float,
         seed: int = 0,
         dark_family: str = 'photometric',
         temporal_profile: str = 'ramp-plateau',
         background_library: Optional[Dict] = None,
         sequence_state: Optional[Dict] = None) -> Tuple[np.ndarray, Dict]:
-    """Apply moderate darkening followed by one structured interference."""
+    """Apply independently controlled darkening and structure interference."""
     if family not in SUPPORTED_STRUCTURED_PROXY_FAMILIES:
         raise ValueError(
             f'Unsupported structured family {family!r}; expected one of '
             f'{SUPPORTED_STRUCTURED_PROXY_FAMILIES}')
     darkened, dark_meta = apply_dark_degradation(
         image_bgr, family=dark_family, sequence=sequence, frame=frame,
-        start=start, end=end, severity=severity, seed=seed,
+        start=start, end=end, severity=dark_severity, seed=seed,
         profile=temporal_profile)
-    strength = float(dark_meta['strength'])
+    structure_strength = temporal_strength(
+        frame, start, end, severity=structure_severity,
+        profile=temporal_profile)
     if family == 'industrial_edges':
         output, structure_meta = apply_industrial_edge_interference(
-            darkened, gts, sequence, frame, start, end, strength, seed)
+            darkened, gts, sequence, frame, start, end,
+            structure_strength, seed,
+            layout_strength=structure_severity)
     else:
         if background_library is None:
             raise ValueError(
                 'source_background requires background_library')
         output, structure_meta = apply_source_background_interference(
             darkened, gts, background_library, sequence, frame,
-            start, end, strength, seed, sequence_state=sequence_state)
+            start, end, structure_strength, seed,
+            sequence_state=sequence_state,
+            layout_strength=structure_severity)
     metadata = dict(
         family=family,
         sequence=str(sequence),
         frame=int(frame),
-        severity=float(severity),
-        strength=strength,
+        dark_severity=float(dark_severity),
+        dark_strength=float(dark_meta['strength']),
+        structure_severity=float(structure_severity),
+        structure_strength=float(structure_strength),
         seed=int(seed),
         geometry_preserving=True,
         target_geometry_modified=False,
