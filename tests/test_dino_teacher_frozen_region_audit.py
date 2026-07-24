@@ -1,4 +1,5 @@
 import argparse
+import types
 
 import numpy as np
 import pytest
@@ -12,12 +13,14 @@ def _canonical_args(**overrides):
         config='/tmp/crane_symeood_k1_brightaug.py',
         detector_checkpoint='/tmp/epoch_20.pth',
         source_seq='real_seq07', dinov2_model='dinov2_vitl14',
-        dino_height=600, patch_size=14, pool_resolution=7,
+        dino_height=600, dino_max_long_side=1333,
+        patch_size=14, pool_resolution=7,
+        legacy_sdpa_query_chunk=512,
         source_folds=5, neighbors=5, positive_quantile=0.1,
         negative_quantile=0.9, min_fold_votes=4,
         max_source_samples=0, riou_thr=0.5, false_iou_thr=0.1,
         source_min_accuracy=0.8, target_min_wins=26,
-        target_start=137, target_end=169, seed=0,
+        target_start=137, target_end=169, seed=0, dino_gpus=None,
         allow_noncanonical=False)
     values.update(overrides)
     return argparse.Namespace(**values)
@@ -59,6 +62,32 @@ def test_unwrap_state_dict_strips_common_teacher_prefixes():
     assert torch.equal(state['weight'], tensor)
 
 
+def test_legacy_sdpa_matches_explicit_attention():
+    torch.manual_seed(0)
+    query = torch.randn(1, 2, 4, 3)
+    key = torch.randn(1, 2, 4, 3)
+    value = torch.randn(1, 2, 4, 5)
+    previous = audit._LEGACY_SDPA_QUERY_CHUNK
+    audit.configure_legacy_sdpa_query_chunk(2)
+    try:
+        actual = audit.legacy_scaled_dot_product_attention(query, key, value)
+    finally:
+        audit.configure_legacy_sdpa_query_chunk(previous)
+    weights = torch.softmax(
+        torch.matmul(query, key.transpose(-2, -1)) / (3.0 ** 0.5),
+        dim=-1)
+    expected = torch.matmul(weights, value)
+    assert torch.allclose(actual, expected, atol=1e-6)
+
+
+def test_install_sdpa_compatibility_only_when_missing():
+    functional = types.SimpleNamespace()
+    assert audit.install_torch_sdpa_compatibility(functional) is True
+    assert functional.scaled_dot_product_attention is (
+        audit.legacy_scaled_dot_product_attention)
+    assert audit.install_torch_sdpa_compatibility(functional) is False
+
+
 def test_resize_normalize_preserves_aspect_and_pads_to_patch_grid():
     image = np.zeros((20, 41, 3), dtype=np.uint8)
     tensor, meta = audit.resize_and_normalize_bgr(image, 28, 14)
@@ -78,6 +107,15 @@ def test_resize_normalize_uses_short_side_for_portrait_images():
     assert meta['scale'] == pytest.approx(1.4)
 
 
+def test_resize_normalize_caps_extreme_long_side():
+    image = np.zeros((100, 1000, 3), dtype=np.uint8)
+    tensor, meta = audit.resize_and_normalize_bgr(
+        image, target_height=600, patch_size=14, max_long_side=1333)
+    assert meta['resized_shape'] == [133, 1333]
+    assert meta['scale'] == pytest.approx(1.333)
+    assert tensor.shape[-2:] == (140, 1344)
+
+
 class _FakeDino:
     def get_intermediate_layers(self, tensor, n=1):
         batch = tensor.shape[0]
@@ -92,6 +130,15 @@ class _FakeHubDino(torch.nn.Module):
         super().__init__()
         self.weight = torch.nn.Parameter(torch.ones(2))
         self.patch_embed = argparse.Namespace(patch_size=torch.Size([14, 14]))
+
+
+class _FakeShardedDino(torch.nn.Module):
+    def __init__(self, blocks=6):
+        super().__init__()
+        self.patch_embed = torch.nn.Conv2d(3, 4, 1)
+        self.blocks = torch.nn.ModuleList(
+            [torch.nn.Linear(4, 4) for _ in range(blocks)])
+        self.norm = torch.nn.LayerNorm(4)
 
 
 def test_load_frozen_dinov2_strictly_loads_and_freezes(
@@ -125,6 +172,26 @@ def test_load_frozen_dinov2_rejects_weight_mismatch(
         audit.load_frozen_dinov2(
             str(repo), str(checkpoint), 'dinov2_vitl14',
             torch.device('cpu'))
+
+
+def test_shard_frozen_dinov2_records_contiguous_block_partition():
+    model = _FakeShardedDino(blocks=6)
+    metadata = audit.shard_frozen_dinov2(
+        model, [torch.device('cpu'), torch.device('cpu')])
+    assert metadata['block_count'] == 6
+    assert metadata['blocks_per_device'] == {'cpu': 6}
+    assert len(model._sym_dino_device_hooks) == 6
+
+
+def test_contiguous_device_indices_balance_vitl_blocks():
+    assert audit.contiguous_device_indices(24, 2) == [0] * 12 + [1] * 12
+    assert audit.contiguous_device_indices(24, 3) == (
+        [0] * 8 + [1] * 8 + [2] * 8)
+
+
+def test_validate_args_rejects_duplicate_dino_gpus():
+    with pytest.raises(ValueError, match='duplicates'):
+        audit.validate_args(_canonical_args(dino_gpus=[1, 1]))
 
 
 def test_extract_patch_grid_reconstructs_spatial_token_map():

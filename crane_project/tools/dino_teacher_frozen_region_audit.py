@@ -47,12 +47,15 @@ PAPER_CODE_URL = 'https://github.com/TRAILab/DINO_Teacher'
 CANONICAL_MODEL = 'dinov2_vitl14'
 CANONICAL_PATCH_SIZE = 14
 CANONICAL_DINO_HEIGHT = 600
+CANONICAL_DINO_MAX_LONG_SIDE = 1333
 CANONICAL_POOL_RESOLUTION = 7
 CANONICAL_SOURCE_FOLDS = 5
 CANONICAL_NEIGHBORS = 5
 CANONICAL_POSITIVE_QUANTILE = 0.1
 CANONICAL_NEGATIVE_QUANTILE = 0.9
 CANONICAL_MIN_FOLD_VOTES = 4
+CANONICAL_LEGACY_SDPA_QUERY_CHUNK = 512
+_LEGACY_SDPA_QUERY_CHUNK = CANONICAL_LEGACY_SDPA_QUERY_CHUNK
 
 
 def parse_args():
@@ -66,9 +69,20 @@ def parse_args():
     parser.add_argument('--dinov2-checkpoint', required=True,
                         help='Official dinov2_vitl14_pretrain.pth')
     parser.add_argument('--dinov2-model', default=CANONICAL_MODEL)
+    parser.add_argument(
+        '--dino-gpus', type=int, nargs='+', default=None,
+        help='GPU ids for contiguous DINO transformer block sharding; '
+             'defaults to --gpu')
+    parser.add_argument(
+        '--legacy-sdpa-query-chunk', type=int,
+        default=CANONICAL_LEGACY_SDPA_QUERY_CHUNK,
+        help='Query chunk size for the PyTorch<2.0 attention fallback')
     parser.add_argument('--dino-height', type=int,
                         default=CANONICAL_DINO_HEIGHT,
                         help='DINO input short side; canonical labeller value is 600')
+    parser.add_argument('--dino-max-long-side', type=int,
+                        default=CANONICAL_DINO_MAX_LONG_SIDE,
+                        help='Maximum DINO input long side')
     parser.add_argument('--patch-size', type=int,
                         default=CANONICAL_PATCH_SIZE)
     parser.add_argument('--pool-resolution', type=int,
@@ -102,8 +116,11 @@ def parse_args():
 def validate_args(args) -> bool:
     if args.seed != 0:
         raise ValueError('The unified protocol requires --seed 0')
-    if args.dino_height <= 0 or args.patch_size <= 0:
+    if (args.dino_height <= 0 or args.dino_max_long_side <= 0
+            or args.patch_size <= 0):
         raise ValueError('DINO dimensions must be positive')
+    if args.dino_max_long_side < args.dino_height:
+        raise ValueError('--dino-max-long-side must be >= --dino-height')
     if args.pool_resolution <= 0:
         raise ValueError('--pool-resolution must be positive')
     if args.source_folds < 2:
@@ -124,6 +141,13 @@ def validate_args(args) -> bool:
         raise ValueError('--source-min-accuracy must be in (0, 1]')
     if args.target_min_wins <= 0:
         raise ValueError('--target-min-wins must be positive')
+    if args.legacy_sdpa_query_chunk <= 0:
+        raise ValueError('--legacy-sdpa-query-chunk must be positive')
+    if args.dino_gpus is not None:
+        if not args.dino_gpus or any(value < 0 for value in args.dino_gpus):
+            raise ValueError('--dino-gpus must contain non-negative ids')
+        if len(set(args.dino_gpus)) != len(args.dino_gpus):
+            raise ValueError('--dino-gpus must not contain duplicates')
 
     checks = dict(
         config=(os.path.basename(args.config)
@@ -133,6 +157,8 @@ def validate_args(args) -> bool:
         source_seq=args.source_seq == neighborhood.SOURCE_SEQ,
         dino_model=args.dinov2_model == CANONICAL_MODEL,
         dino_height=int(args.dino_height) == CANONICAL_DINO_HEIGHT,
+        dino_max_long_side=(int(args.dino_max_long_side)
+                            == CANONICAL_DINO_MAX_LONG_SIDE),
         patch_size=int(args.patch_size) == CANONICAL_PATCH_SIZE,
         pool_resolution=(int(args.pool_resolution)
                          == CANONICAL_POOL_RESOLUTION),
@@ -180,6 +206,59 @@ def _torch_load(path: str):
         return torch.load(path, map_location='cpu')
 
 
+def legacy_scaled_dot_product_attention(
+        query: torch.Tensor, key: torch.Tensor, value: torch.Tensor,
+        attn_mask=None, dropout_p: float = 0.0,
+        is_causal: bool = False) -> torch.Tensor:
+    """PyTorch <2.0 fallback matching eval-time SDPA semantics."""
+    scale = float(query.shape[-1]) ** -0.5
+    query_length = int(query.shape[-2])
+    key_length = int(key.shape[-2])
+    key_transposed = key.transpose(-2, -1)
+    chunk_size = min(int(_LEGACY_SDPA_QUERY_CHUNK), query_length)
+    outputs = []
+    for start in range(0, query_length, chunk_size):
+        end = min(start + chunk_size, query_length)
+        scores = torch.matmul(
+            query[..., start:end, :], key_transposed) * scale
+        if is_causal:
+            query_positions = torch.arange(
+                start, end, device=query.device).view(-1, 1)
+            key_positions = torch.arange(
+                key_length, device=query.device).view(1, -1)
+            scores = scores.masked_fill(
+                key_positions > query_positions, float('-inf'))
+        if attn_mask is not None:
+            mask = attn_mask
+            if mask.ndim >= 2 and int(mask.shape[-2]) == query_length:
+                mask = mask[..., start:end, :]
+            if mask.dtype == torch.bool:
+                scores = scores.masked_fill(~mask, float('-inf'))
+            else:
+                scores = scores + mask
+        weights = torch.softmax(scores, dim=-1)
+        if float(dropout_p) > 0.0:
+            weights = F.dropout(
+                weights, p=float(dropout_p), training=True)
+        outputs.append(torch.matmul(weights, value))
+    return torch.cat(outputs, dim=-2)
+
+
+def configure_legacy_sdpa_query_chunk(chunk_size: int):
+    global _LEGACY_SDPA_QUERY_CHUNK
+    if int(chunk_size) <= 0:
+        raise ValueError('Legacy SDPA query chunk must be positive')
+    _LEGACY_SDPA_QUERY_CHUNK = int(chunk_size)
+
+
+def install_torch_sdpa_compatibility(functional_module=F) -> bool:
+    if hasattr(functional_module, 'scaled_dot_product_attention'):
+        return False
+    setattr(functional_module, 'scaled_dot_product_attention',
+            legacy_scaled_dot_product_attention)
+    return True
+
+
 def _unwrap_state_dict(checkpoint) -> Dict[str, torch.Tensor]:
     state = checkpoint
     while isinstance(state, dict):
@@ -224,16 +303,96 @@ def file_sha256(path: str) -> str:
     return digest.hexdigest()
 
 
+def _move_to_device(value, device: torch.device):
+    if isinstance(value, torch.Tensor):
+        return value.to(device=device, non_blocking=True)
+    if isinstance(value, tuple):
+        return tuple(_move_to_device(item, device) for item in value)
+    if isinstance(value, list):
+        return [_move_to_device(item, device) for item in value]
+    if isinstance(value, dict):
+        return {key: _move_to_device(item, device)
+                for key, item in value.items()}
+    return value
+
+
+def contiguous_device_indices(block_count: int,
+                              device_count: int) -> List[int]:
+    if block_count < 0 or device_count <= 0:
+        raise ValueError('Invalid block/device count')
+    if block_count and device_count > block_count:
+        raise ValueError('DINO device count exceeds transformer block count')
+    return [min((index * device_count) // max(block_count, 1),
+                device_count - 1)
+            for index in range(block_count)]
+
+
+def shard_frozen_dinov2(model, devices: Sequence[torch.device]) -> Dict:
+    devices = [torch.device(device) for device in devices]
+    if not devices:
+        raise ValueError('At least one DINO device is required')
+    model.to(devices[0])
+    blocks = getattr(model, 'blocks', None)
+    if len(devices) > 1 and (
+            blocks is None or not isinstance(blocks, torch.nn.ModuleList)
+            or len(blocks) < len(devices)):
+        raise RuntimeError(
+            'Multi-GPU DINO sharding requires a flat ModuleList of blocks')
+    block_devices = []
+    hooks = []
+    if blocks is not None:
+        block_count = len(blocks)
+        assignments = contiguous_device_indices(block_count, len(devices))
+        for block, device_index in zip(blocks, assignments):
+            target = devices[device_index]
+            block.to(target)
+            block_devices.append(str(target))
+
+            def move_inputs(_module, inputs, target_device=target):
+                return _move_to_device(inputs, target_device)
+
+            hooks.append(block.register_forward_pre_hook(move_inputs))
+    final_device = devices[-1] if block_devices else devices[0]
+    norm = getattr(model, 'norm', None)
+    if isinstance(norm, torch.nn.Module):
+        norm.to(final_device)
+    model._sym_dino_device_hooks = hooks
+    metadata = dict(
+        input_device=str(devices[0]), final_device=str(final_device),
+        requested_devices=[str(device) for device in devices],
+        block_count=len(block_devices), block_devices=block_devices,
+        blocks_per_device={
+            str(device): int(sum(item == str(device)
+                                 for item in block_devices))
+            for device in devices})
+    model._sym_dino_device_map = metadata
+    return metadata
+
+
 def load_frozen_dinov2(repo: str, checkpoint: str, model_name: str,
-                       device: torch.device):
+                       devices, legacy_sdpa_query_chunk: int =
+                       CANONICAL_LEGACY_SDPA_QUERY_CHUNK):
     hubconf = os.path.join(repo, 'hubconf.py')
     if not os.path.isfile(hubconf):
         raise RuntimeError(
             '--dinov2-repo must be a local DINOv2 clone with hubconf.py')
     if not os.path.isfile(checkpoint):
         raise RuntimeError('--dinov2-checkpoint does not exist')
-    model = torch.hub.load(
-        repo, model_name, source='local', pretrained=False)
+    configure_legacy_sdpa_query_chunk(legacy_sdpa_query_chunk)
+    sdpa_compatibility = install_torch_sdpa_compatibility()
+    print('[torch-compat] legacy_sdpa={} query_chunk={}'.format(
+        bool(sdpa_compatibility), int(legacy_sdpa_query_chunk)))
+    try:
+        model = torch.hub.load(
+            repo, model_name, source='local', pretrained=False)
+    except TypeError as error:
+        if sys.version_info < (3, 10) and 'unsupported operand type' in str(error):
+            raise RuntimeError(
+                'DINOv2 uses Python 3.10 union annotations. Run '
+                '`PYTHONPATH=. python3 crane_project/tools/'
+                'patch_dinov2_py38.py --repo {}` once, then retry.'.format(
+                    repo)) from error
+        raise
     state = _unwrap_state_dict(_torch_load(checkpoint))
     incompatible = model.load_state_dict(state, strict=False)
     missing = list(incompatible.missing_keys)
@@ -242,9 +401,16 @@ def load_frozen_dinov2(repo: str, checkpoint: str, model_name: str,
         raise RuntimeError(
             'DINO checkpoint/model mismatch: missing={} unexpected={}'.format(
                 missing, unexpected))
-    model.eval().to(device)
+    model.eval()
     for parameter in model.parameters():
         parameter.requires_grad_(False)
+    if isinstance(devices, (str, torch.device)):
+        devices = [torch.device(devices)]
+    device_map = shard_frozen_dinov2(model, devices)
+    print('[dino-shard] blocks_per_device={} input={} final={}'.format(
+        device_map['blocks_per_device'], device_map['input_device'],
+        device_map['final_device']))
+    model._sym_legacy_sdpa_installed = bool(sdpa_compatibility)
     patch_size = getattr(model, 'patch_size', None)
     if isinstance(patch_size, (tuple, list, torch.Size)):
         patch_size = patch_size[0]
@@ -257,16 +423,20 @@ def load_frozen_dinov2(repo: str, checkpoint: str, model_name: str,
     return model, int(patch_size)
 
 
-def resize_and_normalize_bgr(image_bgr: np.ndarray, target_height: int,
-                             patch_size: int) -> Tuple[torch.Tensor, Dict]:
+def resize_and_normalize_bgr(
+        image_bgr: np.ndarray, target_height: int, patch_size: int,
+        max_long_side: int = CANONICAL_DINO_MAX_LONG_SIDE
+        ) -> Tuple[torch.Tensor, Dict]:
     if image_bgr is None or image_bgr.ndim != 3 or image_bgr.shape[2] != 3:
         raise ValueError('Expected a BGR image [H,W,3]')
     ori_h, ori_w = [int(value) for value in image_bgr.shape[:2]]
     if ori_h <= 0 or ori_w <= 0:
         raise ValueError('DINO input image must be non-empty')
-    if target_height <= 0 or patch_size <= 0:
+    if target_height <= 0 or max_long_side <= 0 or patch_size <= 0:
         raise ValueError('DINO resize dimensions must be positive')
-    scale = float(target_height) / float(min(ori_h, ori_w))
+    scale = min(
+        float(target_height) / float(min(ori_h, ori_w)),
+        float(max_long_side) / float(max(ori_h, ori_w)))
     resized_h = max(1, int(round(float(ori_h) * scale)))
     resized_w = max(1, int(round(float(ori_w) * scale)))
     resized = cv2.resize(
@@ -287,7 +457,9 @@ def resize_and_normalize_bgr(image_bgr: np.ndarray, target_height: int,
         ori_shape=[ori_h, ori_w],
         resized_shape=[resized_h, resized_w],
         padded_shape=[pad_h, pad_w],
-        scale=_number(scale), patch_size=int(patch_size))
+        scale=_number(scale), patch_size=int(patch_size),
+        target_short_side=int(target_height),
+        max_long_side=int(max_long_side))
 
 
 def extract_patch_grid(model, tensor: torch.Tensor,
@@ -397,12 +569,13 @@ def _candidate_record(index: int, boxes: torch.Tensor,
 
 
 def _prepare_image_features(model, image_path: str, target_height: int,
-                            patch_size: int, device: torch.device):
+                            patch_size: int, max_long_side: int,
+                            device: torch.device):
     image = cv2.imread(image_path)
     if image is None:
         raise RuntimeError('Failed to read image {}'.format(image_path))
     tensor, meta = resize_and_normalize_bgr(
-        image, target_height, patch_size)
+        image, target_height, patch_size, max_long_side)
     tensor = tensor.to(device=device)
     feature = extract_patch_grid(model, tensor, patch_size)
     return feature, meta
@@ -443,7 +616,7 @@ def collect_source(detector, dino, records: Sequence[Dict], transforms,
         del img_tensor, features, boxes, scores, ious, gt_boxes
         dino_feature, dino_meta = _prepare_image_features(
             dino, record['image'], args.dino_height,
-            args.patch_size, device)
+            args.patch_size, args.dino_max_long_side, device)
         false_box = detector_box_to_dino(
             boxes_cpu[int(false_index), :5], detector_meta, dino_meta)
         negative_vector, negative_pool = oriented_roi_vector(
@@ -670,7 +843,8 @@ def collect_target(detector, dino, transforms, img_scale, flip, args,
             dense_best_riou = _number(ious_cpu.max().item())
         del img_tensor, features, boxes, scores, ious, gt_boxes
         dino_feature, dino_meta = _prepare_image_features(
-            dino, img_path, args.dino_height, args.patch_size, device)
+            dino, img_path, args.dino_height, args.patch_size,
+            args.dino_max_long_side, device)
         false_box = detector_box_to_dino(
             boxes_cpu[int(false_index), :5], detector_meta, dino_meta)
         false_vector, false_pool = oriented_roi_vector(
@@ -816,7 +990,18 @@ def main():
     args = parse_args()
     canonical = validate_args(args)
     set_seed(args.seed)
-    device = torch.device('cuda:{}'.format(args.gpu))
+    dino_gpu_ids = (list(args.dino_gpus) if args.dino_gpus is not None
+                    else [int(args.gpu)])
+    if torch.cuda.is_available():
+        invalid = [gpu for gpu in dino_gpu_ids
+                   if gpu >= torch.cuda.device_count()]
+        if invalid:
+            raise RuntimeError(
+                'DINO GPU ids {} exceed visible CUDA device count {}'.format(
+                    invalid, torch.cuda.device_count()))
+    dino_devices = [torch.device('cuda:{}'.format(gpu))
+                    for gpu in dino_gpu_ids]
+    device = dino_devices[0]
 
     detector, cfg = transfer.entry_probe.load_model(
         args.config, args.detector_checkpoint, args.gpu)
@@ -824,7 +1009,8 @@ def main():
     detector_versions = alignment.module_parameter_versions(detector)
     dino, loaded_patch_size = load_frozen_dinov2(
         args.dinov2_repo, args.dinov2_checkpoint,
-        args.dinov2_model, device)
+        args.dinov2_model, dino_devices,
+        args.legacy_sdpa_query_chunk)
     if loaded_patch_size != int(args.patch_size):
         raise RuntimeError(
             'Loaded DINO patch size {} != protocol {}'.format(
@@ -877,7 +1063,8 @@ def main():
             retained=[
                 'frozen DINOv2 ViT-L/14 source-labeller backbone',
                 'ImageNet RGB normalization',
-                '600-pixel short-side input padded to patch size 14',
+                '600-pixel short side with 1333-pixel long-side cap',
+                'input padded to patch size 14',
                 'final intermediate patch-token feature map',
                 'single-scale region representation',
                 'source controls and calibration frozen before target use'],
@@ -900,7 +1087,12 @@ def main():
             checkpoint_sha256=file_sha256(args.dinov2_checkpoint),
             model=args.dinov2_model, patch_size=int(args.patch_size),
             input_short_side=int(args.dino_height),
-            pool_resolution=int(args.pool_resolution)),
+            input_max_long_side=int(args.dino_max_long_side),
+            pool_resolution=int(args.pool_resolution),
+            legacy_sdpa_compatibility=bool(getattr(
+                dino, '_sym_legacy_sdpa_installed', False)),
+            legacy_sdpa_query_chunk=int(args.legacy_sdpa_query_chunk),
+            device_map=getattr(dino, '_sym_dino_device_map', None)),
         protocol=dict(
             source_seq=args.source_seq,
             source_folds=int(args.source_folds),
