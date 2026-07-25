@@ -63,9 +63,10 @@ def parse_args():
     parser.add_argument('--hidden-dim', type=int, default=1024)
     parser.add_argument('--epochs', type=int, default=12)
     parser.add_argument('--batch-size', type=int, default=16)
-    parser.add_argument('--lr', type=float, default=0.01)
+    parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--weight-decay', type=float, default=1e-4)
+    parser.add_argument('--max-grad-norm', type=float, default=5.0)
     parser.add_argument('--target-candidate-limit', type=int, default=10000)
     parser.add_argument('--target-min-wins', type=int, default=26)
     parser.add_argument('--target-start', type=int,
@@ -89,6 +90,8 @@ def validate_args(args):
         raise ValueError('--source-negatives-per-image must be positive')
     if args.hidden_dim < 1 or args.epochs < 1 or args.batch_size < 1:
         raise ValueError('Head dimensions and training settings must be positive')
+    if args.lr <= 0.0 or args.max_grad_norm <= 0.0:
+        raise ValueError('Learning rate and gradient norm must be positive')
     if args.target_candidate_limit < 1 or args.roi_chunk_size < 1:
         raise ValueError('Target candidate and ROI chunk limits must be positive')
     if not 0.0 < args.min_roi_in_bounds <= 1.0:
@@ -136,6 +139,51 @@ def sha256_file(path: str) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b''):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def json_safe(value):
+    """Replace non-finite numeric leaves and report how many were replaced."""
+    if isinstance(value, dict):
+        output = {}
+        replacements = 0
+        for key, item in value.items():
+            safe_item, item_replacements = json_safe(item)
+            output[key] = safe_item
+            replacements += item_replacements
+        return output, replacements
+    if isinstance(value, (list, tuple)):
+        output = []
+        replacements = 0
+        for item in value:
+            safe_item, item_replacements = json_safe(item)
+            output.append(safe_item)
+            replacements += item_replacements
+        return output, replacements
+    if isinstance(value, (float, np.floating)):
+        number = float(value)
+        if not math.isfinite(number):
+            return None, 1
+        return number, 0
+    if isinstance(value, np.integer):
+        return int(value), 0
+    return value, 0
+
+
+def write_json_atomic(path: str, payload: Dict) -> int:
+    safe_payload, replacements = json_safe(payload)
+    safe_payload['serialization'] = dict(
+        nonfinite_values_replaced=int(replacements),
+        replacement_value=None,
+        atomic_write=True)
+    output_path = os.path.abspath(path)
+    temporary_path = output_path + '.tmp'
+    with open(temporary_path, 'w') as handle:
+        json.dump(safe_payload, handle, indent=2, ensure_ascii=False,
+                  allow_nan=False)
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temporary_path, output_path)
+    return int(replacements)
 
 
 def candidate_order(scores: torch.Tensor, ious: torch.Tensor,
@@ -329,6 +377,7 @@ def evaluate_head(head, samples: Sequence[Dict], indices: Sequence[int],
     labels = []
     rows = []
     losses = []
+    finite = True
     with torch.no_grad():
         for batch_indices in _batches(indices, batch_size, 0, False):
             features = torch.stack([
@@ -338,10 +387,20 @@ def evaluate_head(head, samples: Sequence[Dict], indices: Sequence[int],
                 samples[index]['label'] for index in batch_indices],
                 dtype=torch.long, device=device)
             logits = head(features)
-            losses.append(float(F.cross_entropy(logits, target).item()))
+            loss = F.cross_entropy(logits, target)
+            if (not bool(torch.isfinite(logits).all().item())
+                    or not bool(torch.isfinite(loss).item())):
+                finite = False
+                break
+            losses.append(float(loss.item()))
             predictions.extend(logits.argmax(dim=1).cpu().tolist())
             labels.extend(target.cpu().tolist())
             rows.extend([samples[index]['row'] for index in batch_indices])
+    if not finite:
+        return dict(
+            count=len(indices), loss=None, finite=False,
+            positive_accuracy=0.0, negative_accuracy=0.0,
+            paired_accuracy=0.0, selection_score=0.0)
     positive_hits = [prediction == 1 for prediction, label in zip(
         predictions, labels) if label == 1]
     negative_hits = [prediction == 0 for prediction, label in zip(
@@ -352,12 +411,21 @@ def evaluate_head(head, samples: Sequence[Dict], indices: Sequence[int],
             features = torch.stack([
                 samples[index]['feature'] for index in batch_indices]).to(
                     device=device, dtype=torch.float32)
-            logits = head.objectness_logit(features).cpu().tolist()
+            batch_logits = head.objectness_logit(features)
+            if not bool(torch.isfinite(batch_logits).all().item()):
+                finite = False
+                break
+            logits = batch_logits.cpu().tolist()
             for index, logit in zip(batch_indices, logits):
                 row = samples[index]['row']
                 key = (str(row['seq']), int(row['frame']))
                 frame_scores.setdefault(key, {0: [], 1: []})[
                     int(samples[index]['label'])].append(float(logit))
+    if not finite:
+        return dict(
+            count=len(indices), loss=None, finite=False,
+            positive_accuracy=0.0, negative_accuracy=0.0,
+            paired_accuracy=0.0, selection_score=0.0)
     paired = [max(values[1]) > max(values[0])
               for values in frame_scores.values()
               if values[0] and values[1]]
@@ -366,6 +434,7 @@ def evaluate_head(head, samples: Sequence[Dict], indices: Sequence[int],
     paired_accuracy = float(np.mean(paired)) if paired else 0.0
     return dict(
         count=len(indices), loss=float(np.mean(losses)) if losses else None,
+        finite=True,
         positive_accuracy=positive_accuracy,
         negative_accuracy=negative_accuracy,
         paired_accuracy=paired_accuracy,
@@ -391,12 +460,15 @@ def train_one_head(samples: Sequence[Dict], train_indices: Sequence[int],
     best_metrics = None
     best_epoch = int(epochs)
     history = []
+    stopped_nonfinite = False
+    nonfinite_epoch = None
+    nonfinite_batch = None
     for epoch in range(1, int(epochs) + 1):
         head.train()
         losses = []
-        for batch_indices in _batches(
+        for batch_number, batch_indices in enumerate(_batches(
                 train_indices, args.batch_size,
-                seed + epoch * 1009, True):
+                seed + epoch * 1009, True), start=1):
             features = torch.stack([
                 samples[index]['feature'] for index in batch_indices]).to(
                     device=device, dtype=torch.float32)
@@ -405,20 +477,46 @@ def train_one_head(samples: Sequence[Dict], train_indices: Sequence[int],
                 dtype=torch.long, device=device)
             optimizer.zero_grad()
             loss = F.cross_entropy(head(features), labels)
+            if not bool(torch.isfinite(loss).item()):
+                stopped_nonfinite = True
+                nonfinite_epoch = int(epoch)
+                nonfinite_batch = int(batch_number)
+                break
             loss.backward()
+            grad_norm = torch.nn.utils.clip_grad_norm_(
+                head.parameters(), float(args.max_grad_norm))
+            if not bool(torch.isfinite(grad_norm).item()):
+                optimizer.zero_grad()
+                stopped_nonfinite = True
+                nonfinite_epoch = int(epoch)
+                nonfinite_batch = int(batch_number)
+                break
             optimizer.step()
             losses.append(float(loss.item()))
+        if stopped_nonfinite:
+            history.append(dict(
+                epoch=int(epoch),
+                train_loss=(None if not losses else float(np.mean(losses))),
+                finite=False, stopped_at_batch=int(nonfinite_batch)))
+            break
         scheduler.step()
-        record = dict(epoch=epoch, train_loss=float(np.mean(losses)))
+        record = dict(
+            epoch=epoch,
+            train_loss=(None if not losses else float(np.mean(losses))),
+            finite=True)
         if validation_indices is not None:
             metrics = evaluate_head(
                 head, samples, validation_indices,
                 args.batch_size, device)
             record['validation'] = metrics
-            key = (metrics['selection_score'], -metrics['loss'])
-            previous = None if best_metrics is None else (
-                best_metrics['selection_score'], -best_metrics['loss'])
-            if previous is None or key > previous:
+            if metrics['finite']:
+                key = (metrics['selection_score'], -metrics['loss'])
+                previous = None if best_metrics is None else (
+                    best_metrics['selection_score'], -best_metrics['loss'])
+            else:
+                key = None
+                previous = None
+            if key is not None and (previous is None or key > previous):
                 best_metrics = metrics
                 best_epoch = epoch
                 best_state = {
@@ -426,10 +524,15 @@ def train_one_head(samples: Sequence[Dict], train_indices: Sequence[int],
                     for name, value in head.state_dict().items()}
         history.append(record)
     if validation_indices is not None:
+        if best_state is None:
+            raise RuntimeError(
+                'No finite source-validation checkpoint was produced')
         head.load_state_dict(best_state)
     return head, dict(
         best_epoch=int(best_epoch), best_metrics=best_metrics,
-        history=history)
+        history=history, stopped_nonfinite=bool(stopped_nonfinite),
+        nonfinite_epoch=nonfinite_epoch,
+        nonfinite_batch=nonfinite_batch)
 
 
 def cross_validate(samples: Sequence[Dict], args, device: torch.device):
@@ -459,14 +562,19 @@ def cross_validate(samples: Sequence[Dict], args, device: torch.device):
     final_epochs = int(round(float(np.median(best_epochs))))
     summary = dict(
         fold_count=len(folds), final_epochs=final_epochs,
+        nonfinite_fold_count=int(sum(
+            item['stopped_nonfinite'] for item in folds)),
         minimum_positive_accuracy=float(min(
             item['best_metrics']['positive_accuracy'] for item in folds)),
         minimum_negative_accuracy=float(min(
             item['best_metrics']['negative_accuracy'] for item in folds)),
         minimum_paired_accuracy=float(min(
             item['best_metrics']['paired_accuracy'] for item in folds)))
+    summary['numerically_stable'] = bool(
+        summary['nonfinite_fold_count'] == 0)
     summary['valid'] = bool(
-        summary['minimum_positive_accuracy'] >= args.source_min_accuracy
+        summary['numerically_stable']
+        and summary['minimum_positive_accuracy'] >= args.source_min_accuracy
         and summary['minimum_negative_accuracy'] >= args.source_min_accuracy
         and summary['minimum_paired_accuracy'] >= args.source_min_accuracy)
     return folds, summary
@@ -736,10 +844,9 @@ def main():
         decision=decision)
     out_dir = os.path.dirname(os.path.abspath(args.out_json))
     os.makedirs(out_dir, exist_ok=True)
-    with open(args.out_json, 'w') as handle:
-        json.dump(payload, handle, indent=2, ensure_ascii=False,
-                  allow_nan=False)
+    replacements = write_json_atomic(args.out_json, payload)
     print('[roi-head] {}'.format(decision))
+    print('[json] nonfinite_replacements={}'.format(replacements))
     print('[out] {}'.format(args.out_json))
 
 

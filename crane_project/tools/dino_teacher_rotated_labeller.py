@@ -1,0 +1,769 @@
+#!/usr/bin/env python3
+"""Train a source-only rotated detector on a frozen DINOv2 feature map.
+
+This is the bounded SymEOOD adaptation of the CVPR 2025 DINO Teacher
+labeller.  A frozen single-scale DINOv2 feature map feeds an Oriented RPN and
+an oriented two-FC ROI box head.  Only the RPN and ROI head are optimized.
+Source validation selects the checkpoint; target-dev annotations are first
+read after the source-selected checkpoint has been fixed.
+"""
+
+import argparse
+import hashlib
+import json
+import math
+import os
+import random
+import sys
+from typing import Dict, List, Sequence, Tuple
+
+import cv2
+import numpy as np
+import torch
+import torch.nn as nn
+
+
+PROJ_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+if PROJ_ROOT not in sys.path:
+    sys.path.insert(0, PROJ_ROOT)
+
+from crane_project.tools import dino_teacher_frozen_region_audit as audit  # noqa: E402
+from crane_project.tools import dino_teacher_source_roi_head_probe as roi_probe  # noqa: E402
+from crane_project.tools import frozen_p3_feature_alignment_audit as alignment  # noqa: E402
+from crane_project.tools import frozen_p3_objectness_transfer_probe as transfer  # noqa: E402
+from crane_project.tools import p3_p4_neighborhood_rescue_audit as neighborhood  # noqa: E402
+
+
+LABELLER_NAME = 'Frozen DINOv2 Oriented RPN/ROI Source Labeller V1'
+PROTOCOL_VERSION = 1
+PAPER_URL = (
+    'https://openaccess.thecvf.com/content/CVPR2025/html/'
+    'Lavoie_Large_Self-Supervised_Models_Bridge_the_Gap_in_Domain_Adaptive_'
+    'Object_CVPR_2025_paper.html')
+PAPER_CODE_URL = 'https://github.com/TRAILab/DINO_Teacher'
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description=LABELLER_NAME)
+    parser.add_argument('--data-root', default='crane_project/data/crane_grab/')
+    parser.add_argument('--source-split', default=neighborhood.SOURCE_SPLIT)
+    parser.add_argument('--source-seq', default=neighborhood.SOURCE_SEQ)
+    parser.add_argument('--source-val-modulus', type=int, default=5)
+    parser.add_argument('--target-split', default=neighborhood.TARGET_SPLIT)
+    parser.add_argument('--target-seq', default=neighborhood.TARGET_SEQ)
+    parser.add_argument('--target-start', type=int,
+                        default=neighborhood.TARGET_START)
+    parser.add_argument('--target-end', type=int,
+                        default=neighborhood.TARGET_END)
+    parser.add_argument('--dinov2-repo', required=True)
+    parser.add_argument('--dinov2-checkpoint', required=True)
+    parser.add_argument('--dinov2-model', default=audit.CANONICAL_MODEL)
+    parser.add_argument('--dino-gpus', type=int, nargs='+', required=True)
+    parser.add_argument('--head-gpu', type=int, default=0)
+    parser.add_argument('--legacy-sdpa-query-chunk', type=int, default=512)
+    parser.add_argument('--dino-height', type=int,
+                        default=audit.CANONICAL_DINO_HEIGHT)
+    parser.add_argument('--dino-max-long-side', type=int,
+                        default=audit.CANONICAL_DINO_MAX_LONG_SIDE)
+    parser.add_argument('--patch-size', type=int, default=14)
+    parser.add_argument('--rpn-feat-channels', type=int, default=256)
+    parser.add_argument('--roi-fc-channels', type=int, default=1024)
+    parser.add_argument('--roi-samples', type=int, default=256)
+    parser.add_argument('--proposal-count', type=int, default=2000)
+    parser.add_argument('--max-detections', type=int, default=2000)
+    parser.add_argument('--epochs', type=int, default=12)
+    parser.add_argument('--lr', type=float, default=0.001)
+    parser.add_argument('--momentum', type=float, default=0.9)
+    parser.add_argument('--weight-decay', type=float, default=1e-4)
+    parser.add_argument('--max-grad-norm', type=float, default=10.0)
+    parser.add_argument('--riou-thr', type=float, default=0.5)
+    parser.add_argument('--target-min-wins', type=int, default=26)
+    parser.add_argument('--max-mcml', type=int, default=5)
+    parser.add_argument('--feature-cache-dir', required=True)
+    parser.add_argument('--work-dir', required=True)
+    parser.add_argument('--resume-checkpoint')
+    parser.add_argument('--eval-only-checkpoint')
+    parser.add_argument('--seed', type=int, default=0)
+    parser.add_argument('--out-json', required=True)
+    return parser.parse_args()
+
+
+def validate_args(args):
+    if args.seed != 0:
+        raise ValueError('The protocol requires --seed 0')
+    if args.source_val_modulus < 2:
+        raise ValueError('--source-val-modulus must be at least 2')
+    if not args.dino_gpus:
+        raise ValueError('At least one DINO GPU is required')
+    if args.head_gpu in args.dino_gpus:
+        raise ValueError(
+            'Head GPU must be separate from sharded DINO GPUs on 8GB cards')
+    positive = (
+        args.patch_size, args.rpn_feat_channels, args.roi_fc_channels,
+        args.roi_samples, args.proposal_count, args.max_detections,
+        args.epochs, args.lr, args.max_grad_norm)
+    if any(float(value) <= 0.0 for value in positive):
+        raise ValueError('Head, optimizer, and count settings must be positive')
+    if not 0.0 < args.riou_thr <= 1.0:
+        raise ValueError('--riou-thr must be in (0, 1]')
+    if args.resume_checkpoint and args.eval_only_checkpoint:
+        raise ValueError('Resume and eval-only checkpoints are mutually exclusive')
+
+
+def set_seed(seed: int):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+
+def file_identity(path: str) -> Dict:
+    stat = os.stat(path)
+    return dict(
+        path=os.path.abspath(path), size=int(stat.st_size),
+        mtime_ns=int(getattr(stat, 'st_mtime_ns', int(stat.st_mtime * 1e9))))
+
+
+def cache_signature(record: Dict, args) -> Dict:
+    return dict(
+        image=file_identity(record['image']),
+        dinov2_checkpoint=file_identity(args.dinov2_checkpoint),
+        dinov2_model=args.dinov2_model,
+        dino_height=int(args.dino_height),
+        dino_max_long_side=int(args.dino_max_long_side),
+        patch_size=int(args.patch_size))
+
+
+def cache_path(record: Dict, args) -> str:
+    signature = json.dumps(
+        cache_signature(record, args), sort_keys=True).encode('utf-8')
+    digest = hashlib.sha256(signature).hexdigest()[:16]
+    name = '{}_{:05d}_{}.pth'.format(
+        record['seq'], int(record['frame']), digest)
+    return os.path.join(args.feature_cache_dir, record['split'], name)
+
+
+def atomic_torch_save(payload: Dict, path: str):
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    temporary = path + '.tmp'
+    torch.save(payload, temporary)
+    os.replace(temporary, path)
+
+
+def feature_meta(image_path: str, dino_meta: Dict) -> Dict:
+    resized_h, resized_w = [int(value)
+                            for value in dino_meta['resized_shape']]
+    padded_h, padded_w = [int(value)
+                          for value in dino_meta['padded_shape']]
+    ori_h, ori_w = [int(value) for value in dino_meta['ori_shape']]
+    scale = float(dino_meta['scale'])
+    return dict(
+        filename=image_path,
+        ori_filename=os.path.basename(image_path),
+        ori_shape=(ori_h, ori_w, 3),
+        img_shape=(resized_h, resized_w, 3),
+        pad_shape=(padded_h, padded_w, 3),
+        scale_factor=np.asarray(
+            [scale, scale, scale, scale], dtype=np.float32),
+        flip=False, flip_direction=None,
+        img_norm_cfg=dict(
+            mean=np.asarray([123.675, 116.280, 103.530]),
+            std=np.asarray([58.395, 57.120, 57.375]),
+            to_rgb=True))
+
+
+def extract_or_load_feature(dino, record: Dict, args,
+                            dino_device: torch.device):
+    path = cache_path(record, args)
+    signature = cache_signature(record, args)
+    if os.path.isfile(path):
+        payload = torch.load(path, map_location='cpu')
+        if payload.get('signature') == signature:
+            feature = payload.get('feature')
+            if (isinstance(feature, torch.Tensor) and feature.ndim == 4
+                    and feature.shape[0] == 1
+                    and bool(torch.isfinite(feature.float()).all().item())):
+                return feature, payload['dino_meta'], True
+
+    image = cv2.imread(record['image'])
+    if image is None:
+        raise RuntimeError('Cannot read {}'.format(record['image']))
+    tensor, dino_meta = audit.resize_and_normalize_bgr(
+        image, args.dino_height, args.patch_size,
+        args.dino_max_long_side)
+    tensor = tensor.to(dino_device)
+    feature = audit.extract_patch_grid(dino, tensor, args.patch_size)
+    if not bool(torch.isfinite(feature).all().item()):
+        raise RuntimeError('Non-finite DINO feature')
+    feature_cpu = feature.detach().cpu().half()
+    atomic_torch_save(dict(
+        signature=signature, feature=feature_cpu,
+        dino_meta=dino_meta, frozen_dinov2=True), path)
+    del tensor, feature
+    return feature_cpu, dino_meta, False
+
+
+def parse_original_gt(annotation: str) -> np.ndarray:
+    diag = transfer.entry_probe.get_diag()
+    boxes = []
+    for gt in diag.parse_dota_ann(annotation):
+        if gt.get('cls') != 'grab':
+            continue
+        boxes.append([
+            float(gt['cx']), float(gt['cy']),
+            float(gt['w']), float(gt['h']),
+            math.radians(float(gt['angle']))])
+    if not boxes:
+        return np.zeros((0, 5), dtype=np.float32)
+    return np.asarray(boxes, dtype=np.float32)
+
+
+def scaled_gt_tensors(annotation: str, scale: float,
+                      device: torch.device):
+    original = parse_original_gt(annotation)
+    scaled = original.copy()
+    if scaled.size:
+        scaled[:, :4] *= float(scale)
+    boxes = torch.as_tensor(scaled, dtype=torch.float32, device=device)
+    labels = torch.zeros((boxes.shape[0],), dtype=torch.long, device=device)
+    return boxes, labels, original
+
+
+def split_source_records(records: Sequence[Dict], modulus: int):
+    ordered = sorted(records, key=lambda row: (row['seq'], int(row['frame'])))
+    train = [row for row in ordered if int(row['frame']) % modulus != 0]
+    val = [row for row in ordered if int(row['frame']) % modulus == 0]
+    if not train or not val:
+        raise RuntimeError('Source train/validation split is empty')
+    train_keys = {(row['seq'], int(row['frame'])) for row in train}
+    val_keys = {(row['seq'], int(row['frame'])) for row in val}
+    if train_keys & val_keys:
+        raise RuntimeError('Source train/validation overlap')
+    return train, val
+
+
+def target_records(args) -> List[Dict]:
+    diag = transfer.entry_probe.get_diag()
+    records = []
+    for frame in range(args.target_start, args.target_end + 1):
+        image, annotation = diag.find_files(
+            args.data_root, args.target_split, args.target_seq, frame)
+        if image is None or annotation is None:
+            raise RuntimeError('Missing target-dev frame {}'.format(frame))
+        records.append(dict(
+            split=args.target_split, seq=args.target_seq, frame=int(frame),
+            image=image, annotation=annotation))
+    return records
+
+
+def assert_training_target_isolation(source_records: Sequence[Dict],
+                                     targets: Sequence[Dict]):
+    source_paths = {os.path.realpath(row['image']) for row in source_records}
+    target_paths = {os.path.realpath(row['image']) for row in targets}
+    overlap = sorted(source_paths & target_paths)
+    if overlap:
+        raise RuntimeError(
+            'Target-dev image leaked into source training: {}'.format(
+                overlap[0]))
+
+
+def rpn_config(in_channels: int, args) -> Dict:
+    scales = [size / float(args.patch_size)
+              for size in (32, 64, 128, 256, 512)]
+    return dict(
+        type='OrientedRPNHead', in_channels=int(in_channels),
+        feat_channels=int(args.rpn_feat_channels), version='le90',
+        anchor_generator=dict(
+            type='AnchorGenerator', scales=scales,
+            ratios=[0.5, 1.0, 2.0], strides=[int(args.patch_size)]),
+        bbox_coder=dict(
+            type='MidpointOffsetCoder', angle_range='le90',
+            target_means=[0.0] * 6,
+            target_stds=[1.0, 1.0, 1.0, 1.0, 0.5, 0.5]),
+        loss_cls=dict(
+            type='CrossEntropyLoss', use_sigmoid=True, loss_weight=1.0),
+        loss_bbox=dict(
+            type='SmoothL1Loss', beta=1.0 / 9.0, loss_weight=1.0),
+        train_cfg=dict(
+            assigner=dict(
+                type='MaxIoUAssigner', pos_iou_thr=0.7,
+                neg_iou_thr=0.3, min_pos_iou=0.3,
+                match_low_quality=True, ignore_iof_thr=-1),
+            sampler=dict(
+                type='RandomSampler', num=256, pos_fraction=0.5,
+                neg_pos_ub=-1, add_gt_as_proposals=False),
+            allowed_border=0, pos_weight=-1, debug=False),
+        test_cfg=rpn_proposal_config(args))
+
+
+def rpn_proposal_config(args) -> Dict:
+    return dict(
+        nms_pre=4000, max_per_img=int(args.proposal_count),
+        nms=dict(type='nms', iou_threshold=0.8), min_bbox_size=0)
+
+
+def roi_config(in_channels: int, args) -> Dict:
+    return dict(
+        type='OrientedStandardRoIHead', version='le90',
+        bbox_roi_extractor=dict(
+            type='RotatedSingleRoIExtractor',
+            roi_layer=dict(
+                type='RoIAlignRotated', out_size=7,
+                sample_num=2, clockwise=True),
+            out_channels=int(in_channels),
+            featmap_strides=[int(args.patch_size)]),
+        bbox_head=dict(
+            type='RotatedShared2FCBBoxHead',
+            in_channels=int(in_channels),
+            fc_out_channels=int(args.roi_fc_channels),
+            roi_feat_size=7, num_classes=1,
+            bbox_coder=dict(
+                type='DeltaXYWHAOBBoxCoder', angle_range='le90',
+                norm_factor=None, edge_swap=True, proj_xy=True,
+                target_means=(0.0, 0.0, 0.0, 0.0, 0.0),
+                target_stds=(0.1, 0.1, 0.2, 0.2, 0.1)),
+            reg_class_agnostic=True,
+            loss_cls=dict(
+                type='CrossEntropyLoss', use_sigmoid=False,
+                loss_weight=1.0),
+            loss_bbox=dict(
+                type='SmoothL1Loss', beta=1.0, loss_weight=1.0)),
+        train_cfg=dict(
+            assigner=dict(
+                type='MaxIoUAssigner', pos_iou_thr=0.5,
+                neg_iou_thr=0.5, min_pos_iou=0.5,
+                match_low_quality=False,
+                iou_calculator=dict(type='RBboxOverlaps2D'),
+                ignore_iof_thr=-1),
+            sampler=dict(
+                type='RRandomSampler', num=int(args.roi_samples),
+                pos_fraction=0.25, neg_pos_ub=-1,
+                add_gt_as_proposals=True),
+            pos_weight=-1, debug=False),
+        test_cfg=dict(
+            nms_pre=int(args.proposal_count), min_bbox_size=0,
+            score_thr=0.0, nms=dict(iou_thr=0.1),
+            max_per_img=int(args.max_detections)))
+
+
+class FrozenDinoRotatedHeads(nn.Module):
+    def __init__(self, in_channels: int, args):
+        super().__init__()
+        from mmcv import ConfigDict
+        from mmrotate.models.builder import build_head
+
+        self.in_channels = int(in_channels)
+        self.rpn_head = build_head(ConfigDict(rpn_config(in_channels, args)))
+        self.roi_head = build_head(ConfigDict(roi_config(in_channels, args)))
+        self.rpn_head.init_weights()
+        self.roi_head.init_weights()
+        self.proposal_cfg = ConfigDict(rpn_proposal_config(args))
+
+    def forward_train(self, feature: torch.Tensor, img_meta: Dict,
+                      gt_boxes: torch.Tensor, gt_labels: torch.Tensor):
+        features = [feature]
+        img_metas = [img_meta]
+        gt_bboxes = [gt_boxes]
+        rpn_losses, proposals = self.rpn_head.forward_train(
+            features, img_metas, gt_bboxes, gt_labels=None,
+            gt_bboxes_ignore=None, proposal_cfg=self.proposal_cfg)
+        roi_losses = self.roi_head.forward_train(
+            features, img_metas, proposals, gt_bboxes, [gt_labels],
+            gt_bboxes_ignore=None, gt_masks=None)
+        losses = dict(rpn_losses)
+        losses.update(roi_losses)
+        return losses
+
+    def simple_test(self, feature: torch.Tensor, img_meta: Dict):
+        features = [feature]
+        proposals = self.rpn_head.simple_test_rpn(features, [img_meta])
+        results = self.roi_head.simple_test(
+            features, proposals, [img_meta], rescale=True)
+        if len(results) != 1 or len(results[0]) != 1:
+            raise RuntimeError('Unexpected one-image/one-class ROI result')
+        return np.asarray(results[0][0], dtype=np.float32)
+
+
+def loss_total(losses: Dict) -> torch.Tensor:
+    terms = []
+    for value in losses.values():
+        values = value if isinstance(value, (list, tuple)) else [value]
+        terms.extend(item.mean() for item in values
+                     if isinstance(item, torch.Tensor))
+    if not terms:
+        raise RuntimeError('Detector heads returned no tensor losses')
+    total = sum(terms)
+    if not bool(torch.isfinite(total).item()):
+        raise RuntimeError('Non-finite detector-head loss')
+    return total
+
+
+def prepare_record(dino, record: Dict, args, dino_device, head_device):
+    feature_cpu, dino_meta, cached = extract_or_load_feature(
+        dino, record, args, dino_device)
+    feature = feature_cpu.to(device=head_device, dtype=torch.float32)
+    img_meta = feature_meta(record['image'], dino_meta)
+    gt_boxes, gt_labels, original = scaled_gt_tensors(
+        record['annotation'], float(dino_meta['scale']), head_device)
+    return feature, img_meta, gt_boxes, gt_labels, original, cached
+
+
+def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
+                args, dino_device, head_device) -> Dict:
+    heads.train()
+    ordered = list(records)
+    random.Random(args.seed + epoch).shuffle(ordered)
+    losses = []
+    cache_hits = 0
+    for index, record in enumerate(ordered):
+        feature, img_meta, gt_boxes, gt_labels, _original, cached = (
+            prepare_record(
+                dino, record, args, dino_device, head_device))
+        cache_hits += int(cached)
+        optimizer.zero_grad()
+        output = heads.forward_train(feature, img_meta, gt_boxes, gt_labels)
+        total = loss_total(output)
+        total.backward()
+        grad_norm = torch.nn.utils.clip_grad_norm_(
+            heads.parameters(), args.max_grad_norm)
+        if not math.isfinite(float(grad_norm)):
+            raise RuntimeError('Non-finite detector-head gradient')
+        optimizer.step()
+        losses.append(float(total.item()))
+        if (index + 1) % 25 == 0 or index + 1 == len(ordered):
+            print('[source-train] epoch={} {}/{} loss={:.5f} cache={}/{}'.format(
+                epoch, index + 1, len(ordered),
+                float(np.mean(losses[-25:])), cache_hits, index + 1))
+        del feature, gt_boxes, gt_labels, total
+    return dict(
+        epoch=int(epoch), count=len(ordered),
+        mean_loss=float(np.mean(losses)), cache_hits=int(cache_hits))
+
+
+def ranked_detection_metrics(detections: np.ndarray, gt_original: np.ndarray,
+                             riou_thr: float) -> Dict:
+    from mmcv.ops import box_iou_rotated
+
+    if detections.ndim != 2 or detections.shape[1] != 6:
+        raise ValueError('Detections must have shape [N,6]')
+    if detections.shape[0] == 0 or gt_original.shape[0] == 0:
+        return dict(
+            detection_count=int(detections.shape[0]), top1_riou=0.0,
+            top1_hit=False, best_usable_rank=None, best_riou=0.0,
+            top1_score=None)
+    boxes = torch.from_numpy(detections[:, :5]).float()
+    gt = torch.from_numpy(gt_original).float()
+    ious = box_iou_rotated(boxes, gt).max(dim=1).values
+    best_rank = None
+    for rank, value in enumerate(ious.tolist(), start=1):
+        if float(value) >= float(riou_thr):
+            best_rank = int(rank)
+            break
+    return dict(
+        detection_count=int(detections.shape[0]),
+        top1_riou=float(ious[0].item()),
+        top1_hit=bool(float(ious[0].item()) >= float(riou_thr)),
+        best_usable_rank=best_rank,
+        best_riou=float(ious.max().item()),
+        top1_score=float(detections[0, 5]))
+
+
+def evaluate_records(dino, heads, records: Sequence[Dict], args,
+                     dino_device, head_device, role: str):
+    heads.eval()
+    rows = []
+    with torch.no_grad():
+        for index, record in enumerate(records):
+            feature, img_meta, _gt_boxes, _gt_labels, original, cached = (
+                prepare_record(
+                    dino, record, args, dino_device, head_device))
+            detections = heads.simple_test(feature, img_meta)
+            metrics = ranked_detection_metrics(
+                detections, original, args.riou_thr)
+            rows.append(dict(
+                role=role, split=record['split'], seq=record['seq'],
+                frame=int(record['frame']), feature_cache_hit=bool(cached),
+                metrics=metrics,
+                detections=[[float(value) for value in detection]
+                            for detection in detections.tolist()]))
+            if role == 'target_dev_diagnosis_only':
+                print('[target-labeller] frame={} top1={} rank={}'.format(
+                    record['frame'], metrics['top1_hit'],
+                    metrics['best_usable_rank']))
+            elif (index + 1) % 25 == 0 or index + 1 == len(records):
+                print('[source-val] {}/{} top1_hits={}'.format(
+                    index + 1, len(records),
+                    sum(row['metrics']['top1_hit'] for row in rows)))
+            del feature, _gt_boxes, _gt_labels
+    return rows
+
+
+def longest_miss(rows: Sequence[Dict], hit_key: str) -> int:
+    longest = 0
+    current = 0
+    previous_frame = None
+    for row in rows:
+        frame = int(row['frame'])
+        if previous_frame is None or frame != previous_frame + 1:
+            current = 0
+        if row[hit_key]:
+            current = 0
+        else:
+            current += 1
+            longest = max(longest, current)
+        previous_frame = frame
+    return int(longest)
+
+
+def summarize_rows(rows: Sequence[Dict]) -> Dict:
+    flat = []
+    for row in rows:
+        metrics = row['metrics']
+        flat.append(dict(
+            frame=int(row['frame']), top1=bool(metrics['top1_hit']),
+            r20=bool(metrics['best_usable_rank'] is not None
+                     and metrics['best_usable_rank'] <= 20),
+            r100=bool(metrics['best_usable_rank'] is not None
+                      and metrics['best_usable_rank'] <= 100),
+            geometry=bool(metrics['best_usable_rank'] is not None)))
+    top1_rious = [float(row['metrics']['top1_riou']) for row in rows]
+    return dict(
+        frame_count=len(rows),
+        top1_hits=int(sum(row['top1'] for row in flat)),
+        top1_mcml=longest_miss(flat, 'top1'),
+        recall_at_20=int(sum(row['r20'] for row in flat)),
+        recall_at_100=int(sum(row['r100'] for row in flat)),
+        geometry_eligible_count=int(sum(row['geometry'] for row in flat)),
+        mean_top1_riou=(float(np.mean(top1_rious))
+                        if top1_rious else 0.0))
+
+
+def source_selection_key(summary: Dict) -> Tuple:
+    return (
+        int(summary['top1_hits']), int(summary['recall_at_20']),
+        int(summary['recall_at_100']), float(summary['mean_top1_riou']))
+
+
+def make_target_decision(summary: Dict, args) -> str:
+    if summary['frame_count'] != args.target_end - args.target_start + 1:
+        return 'AUDIT_INVALID_TARGET_FRAME_COUNT'
+    if (summary['top1_hits'] >= args.target_min_wins
+            and summary['top1_mcml'] <= args.max_mcml):
+        return 'FROZEN_DINO_ROTATED_LABELLER_RESTORES_ORDERING'
+    if (summary['recall_at_100'] >= args.target_min_wins
+            and summary['top1_mcml'] > args.max_mcml):
+        return 'DINO_LABELLER_GEOMETRY_ONLY_RANKING_INSUFFICIENT'
+    return 'FROZEN_DINO_ROTATED_LABELLER_INSUFFICIENT'
+
+
+def checkpoint_payload(heads, optimizer, scheduler, epoch: int, best_epoch: int,
+                       best_summary: Dict, in_channels: int, args) -> Dict:
+    return dict(
+        labeller=LABELLER_NAME, protocol_version=PROTOCOL_VERSION,
+        source_only=True, frozen_dinov2=True,
+        epoch=int(epoch), best_epoch=int(best_epoch),
+        best_source_val_summary=best_summary,
+        in_channels=int(in_channels), patch_size=int(args.patch_size),
+        rpn_feat_channels=int(args.rpn_feat_channels),
+        roi_fc_channels=int(args.roi_fc_channels),
+        roi_samples=int(args.roi_samples),
+        proposal_count=int(args.proposal_count),
+        max_detections=int(args.max_detections),
+        heads_state_dict=heads.state_dict(),
+        optimizer_state_dict=(None if optimizer is None
+                              else optimizer.state_dict()),
+        scheduler_state_dict=(None if scheduler is None
+                              else scheduler.state_dict()))
+
+
+def validate_checkpoint(payload: Dict, in_channels: int, args):
+    required = (
+        'source_only', 'frozen_dinov2', 'in_channels', 'patch_size',
+        'rpn_feat_channels', 'roi_fc_channels', 'heads_state_dict')
+    missing = [key for key in required if key not in payload]
+    if missing:
+        raise RuntimeError('Labeller checkpoint lacks {}'.format(
+            ', '.join(missing)))
+    if payload['source_only'] is not True or payload['frozen_dinov2'] is not True:
+        raise RuntimeError('Checkpoint is not source-only/frozen-DINO')
+    expected = dict(
+        in_channels=int(in_channels), patch_size=int(args.patch_size),
+        rpn_feat_channels=int(args.rpn_feat_channels),
+        roi_fc_channels=int(args.roi_fc_channels))
+    mismatched = [key for key, value in expected.items()
+                  if int(payload[key]) != int(value)]
+    if mismatched:
+        raise RuntimeError('Labeller architecture mismatch: {}'.format(
+            ', '.join(mismatched)))
+
+
+def train_source_only(dino, heads, train_records, val_records, args,
+                      dino_device, head_device, in_channels: int):
+    optimizer = torch.optim.SGD(
+        heads.parameters(), lr=args.lr, momentum=args.momentum,
+        weight_decay=args.weight_decay)
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(
+        optimizer, milestones=[max(1, args.epochs * 2 // 3),
+                               max(1, args.epochs * 5 // 6)], gamma=0.1)
+    start_epoch = 1
+    best_epoch = 0
+    best_summary = None
+    best_key = None
+    history = []
+    if args.resume_checkpoint:
+        payload = torch.load(args.resume_checkpoint, map_location='cpu')
+        validate_checkpoint(payload, in_channels, args)
+        heads.load_state_dict(payload['heads_state_dict'], strict=True)
+        if payload.get('optimizer_state_dict') is not None:
+            optimizer.load_state_dict(payload['optimizer_state_dict'])
+        if payload.get('scheduler_state_dict') is not None:
+            scheduler.load_state_dict(payload['scheduler_state_dict'])
+        start_epoch = int(payload.get('epoch', 0)) + 1
+        best_epoch = int(payload.get('best_epoch', 0))
+        best_summary = payload.get('best_source_val_summary')
+        best_key = (None if best_summary is None
+                    else source_selection_key(best_summary))
+
+    best_path = os.path.join(args.work_dir, 'labeller_best_source_only.pth')
+    latest_path = os.path.join(args.work_dir, 'labeller_latest.pth')
+    for epoch in range(start_epoch, args.epochs + 1):
+        train_row = train_epoch(
+            dino, heads, optimizer, train_records, epoch, args,
+            dino_device, head_device)
+        val_rows = evaluate_records(
+            dino, heads, val_records, args, dino_device, head_device,
+            role='source_validation')
+        val_summary = summarize_rows(val_rows)
+        key = source_selection_key(val_summary)
+        improved = best_key is None or key > best_key
+        if improved:
+            best_key = key
+            best_epoch = int(epoch)
+            best_summary = val_summary
+            atomic_torch_save(checkpoint_payload(
+                heads, None, None, epoch, best_epoch, best_summary,
+                in_channels, args), best_path)
+        history.append(dict(
+            epoch=int(epoch), train=train_row,
+            source_val=val_summary, selected_as_best=bool(improved),
+            lr=float(optimizer.param_groups[0]['lr'])))
+        scheduler.step()
+        atomic_torch_save(checkpoint_payload(
+            heads, optimizer, scheduler, epoch, best_epoch, best_summary,
+            in_channels, args), latest_path)
+        print('[source-epoch] epoch={} top1={}/{} r100={} best_epoch={}'.format(
+            epoch, val_summary['top1_hits'], val_summary['frame_count'],
+            val_summary['recall_at_100'], best_epoch))
+    if best_epoch <= 0 or not os.path.isfile(best_path):
+        raise RuntimeError('No source-selected labeller checkpoint')
+    return best_path, best_epoch, best_summary, history
+
+
+def main():
+    args = parse_args()
+    validate_args(args)
+    set_seed(args.seed)
+    os.makedirs(args.work_dir, exist_ok=True)
+    os.makedirs(args.feature_cache_dir, exist_ok=True)
+    head_device = torch.device('cuda:{}'.format(args.head_gpu))
+    dino_devices = [torch.device('cuda:{}'.format(gpu))
+                    for gpu in args.dino_gpus]
+    dino_device = dino_devices[0]
+
+    source_records = [
+        row for row in transfer.discover_labeled_records(
+            args.data_root, args.source_split, 0)
+        if row['seq'] == args.source_seq]
+    source_train, source_val = split_source_records(
+        source_records, args.source_val_modulus)
+    targets = target_records(args)
+    assert_training_target_isolation(source_train, targets)
+
+    dino, loaded_patch_size = audit.load_frozen_dinov2(
+        args.dinov2_repo, args.dinov2_checkpoint,
+        args.dinov2_model, dino_devices,
+        args.legacy_sdpa_query_chunk)
+    if int(loaded_patch_size) != int(args.patch_size):
+        raise RuntimeError('Unexpected DINO patch size')
+    dino_versions = alignment.module_parameter_versions(dino)
+    in_channels = int(getattr(dino, 'embed_dim', 0))
+    if in_channels <= 0:
+        sample_feature, _meta, _cached = extract_or_load_feature(
+            dino, source_train[0], args, dino_device)
+        in_channels = int(sample_feature.shape[1])
+    heads = FrozenDinoRotatedHeads(in_channels, args).to(head_device)
+
+    if args.eval_only_checkpoint:
+        best_path = args.eval_only_checkpoint
+        payload = torch.load(best_path, map_location='cpu')
+        validate_checkpoint(payload, in_channels, args)
+        heads.load_state_dict(payload['heads_state_dict'], strict=True)
+        best_epoch = int(payload.get('best_epoch', payload.get('epoch', 0)))
+        best_source_summary = payload.get('best_source_val_summary')
+        history = []
+    else:
+        best_path, best_epoch, best_source_summary, history = train_source_only(
+            dino, heads, source_train, source_val, args,
+            dino_device, head_device, in_channels)
+        payload = torch.load(best_path, map_location='cpu')
+        validate_checkpoint(payload, in_channels, args)
+        heads.load_state_dict(payload['heads_state_dict'], strict=True)
+
+    # The checkpoint is fixed by source validation before target labels enter.
+    target_rows = evaluate_records(
+        dino, heads, targets, args, dino_device, head_device,
+        role='target_dev_diagnosis_only')
+    target_summary = summarize_rows(target_rows)
+    decision = make_target_decision(target_summary, args)
+
+    dino_unchanged = (
+        dino_versions == alignment.module_parameter_versions(dino))
+    if not dino_unchanged:
+        raise RuntimeError('Frozen DINO parameter invariant failed')
+    payload = dict(
+        labeller=LABELLER_NAME, protocol_version=PROTOCOL_VERSION,
+        paper=PAPER_URL, paper_code=PAPER_CODE_URL,
+        dinov2_checkpoint=os.path.abspath(args.dinov2_checkpoint),
+        source_selected_checkpoint=os.path.abspath(best_path),
+        protocol=dict(
+            architecture=(
+                'frozen_DINOv2_single_scale_to_OrientedRPN_'
+                'to_RotatedROIAlign7x7_to_Shared2FC_cls_and_OBB_reg'),
+            source_split=args.source_split, source_seq=args.source_seq,
+            source_val_rule='frame_id_mod_{}_equals_0'.format(
+                args.source_val_modulus),
+            checkpoint_selection='source_validation_only',
+            target_labels_first_used='after_source_checkpoint_fixed',
+            target_dev_role='diagnosis_only',
+            pseudo_label_student_training=False,
+            reason=(
+                'Only the paper labeller component is authorized; no separate '
+                'unlabelled target-train split was supplied.')),
+        isolation=dict(
+            dino_frozen=True, dino_parameters_unchanged=dino_unchanged,
+            trainable_modules=['OrientedRPNHead',
+                               'OrientedStandardRoIHead'],
+            target_used_for_training=False,
+            target_used_for_checkpoint_selection=False,
+            target_labels_used_for_evaluation_only=True),
+        architecture=dict(
+            in_channels=in_channels, patch_size=int(args.patch_size),
+            rpn=rpn_config(in_channels, args), roi=roi_config(in_channels, args)),
+        source=dict(
+            train_count=len(source_train), val_count=len(source_val),
+            best_epoch=int(best_epoch),
+            best_validation_summary=best_source_summary,
+            history=history),
+        target_dev=dict(summary=target_summary, rows=target_rows),
+        decision=decision)
+    replacements = roi_probe.write_json_atomic(args.out_json, payload)
+    print('[dino-labeller] {} top1={}/{} mcml={} r100={}'.format(
+        decision, target_summary['top1_hits'], target_summary['frame_count'],
+        target_summary['top1_mcml'], target_summary['recall_at_100']))
+    print('[json] nonfinite_replacements={}'.format(replacements))
+    print('[out] {}'.format(args.out_json))
+
+
+if __name__ == '__main__':
+    main()

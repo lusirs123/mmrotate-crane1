@@ -9,8 +9,8 @@ from crane_project.tools import dino_teacher_source_roi_head_probe as probe
 def _args(**overrides):
     values = dict(
         seed=0, source_folds=5, source_negatives_per_image=3,
-        hidden_dim=8, epochs=2, batch_size=4, lr=0.01,
-        momentum=0.9, weight_decay=1e-4,
+        hidden_dim=8, epochs=2, batch_size=4, lr=0.001,
+        momentum=0.9, weight_decay=1e-4, max_grad_norm=5.0,
         target_candidate_limit=10000, roi_chunk_size=4,
         min_roi_in_bounds=0.9, source_min_accuracy=0.8,
         pool_resolution=2, target_min_wins=26)
@@ -103,3 +103,14 @@ def test_target_decision_requires_global_top1_not_only_pairwise_signal():
 def test_validate_args_rejects_nonzero_seed():
     with pytest.raises(ValueError, match='seed 0'):
         probe.validate_args(_args(seed=1))
+
+
+def test_json_safe_replaces_nan_and_infinity_without_hiding_count(tmp_path):
+    output = tmp_path / 'result.json'
+    replacements = probe.write_json_atomic(str(output), dict(
+        finite=1.0, values=[float('nan'), float('inf')]))
+    assert replacements == 2
+    text = output.read_text()
+    assert 'NaN' not in text
+    assert 'Infinity' not in text
+    assert '"nonfinite_values_replaced": 2' in text
