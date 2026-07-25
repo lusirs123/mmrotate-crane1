@@ -35,7 +35,7 @@ from crane_project.tools import p3_p4_neighborhood_rescue_audit as neighborhood 
 
 
 LABELLER_NAME = 'Frozen DINOv2 Oriented RPN/ROI Source Labeller V1'
-PROTOCOL_VERSION = 1
+PROTOCOL_VERSION = 4
 PAPER_URL = (
     'https://openaccess.thecvf.com/content/CVPR2025/html/'
     'Lavoie_Large_Self-Supervised_Models_Bridge_the_Gap_in_Domain_Adaptive_'
@@ -71,6 +71,9 @@ def parse_args():
     parser.add_argument('--roi-samples', type=int, default=256)
     parser.add_argument('--proposal-count', type=int, default=2000)
     parser.add_argument('--max-detections', type=int, default=2000)
+    parser.add_argument('--valid-content-tolerance', type=float, default=1e-3)
+    parser.add_argument('--deployment-score-thr', type=float, default=0.05)
+    parser.add_argument('--border-margin-ratio', type=float, default=0.02)
     parser.add_argument('--epochs', type=int, default=12)
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--momentum', type=float, default=0.9)
@@ -79,6 +82,7 @@ def parse_args():
     parser.add_argument('--riou-thr', type=float, default=0.5)
     parser.add_argument('--target-min-wins', type=int, default=26)
     parser.add_argument('--max-mcml', type=int, default=5)
+    parser.add_argument('--source-min-top1-rate', type=float, default=0.8)
     parser.add_argument('--feature-cache-dir', required=True)
     parser.add_argument('--work-dir', required=True)
     parser.add_argument('--resume-checkpoint')
@@ -106,6 +110,14 @@ def validate_args(args):
         raise ValueError('Head, optimizer, and count settings must be positive')
     if not 0.0 < args.riou_thr <= 1.0:
         raise ValueError('--riou-thr must be in (0, 1]')
+    if args.valid_content_tolerance < 0.0:
+        raise ValueError('--valid-content-tolerance must be non-negative')
+    if args.deployment_score_thr < 0.0:
+        raise ValueError('--deployment-score-thr must be non-negative')
+    if not 0.0 <= args.border_margin_ratio <= 0.5:
+        raise ValueError('--border-margin-ratio must be in [0, 0.5]')
+    if not 0.0 <= args.source_min_top1_rate <= 1.0:
+        raise ValueError('--source-min-top1-rate must be in [0, 1]')
     if args.resume_checkpoint and args.eval_only_checkpoint:
         raise ValueError('Resume and eval-only checkpoints are mutually exclusive')
 
@@ -387,7 +399,10 @@ class FrozenDinoRotatedHeads(nn.Module):
 
 def loss_total(losses: Dict) -> torch.Tensor:
     terms = []
-    for value in losses.values():
+    for name, value in losses.items():
+        # MMRotate loss dictionaries also contain metrics such as ``acc``.
+        if 'loss' not in str(name).lower():
+            continue
         values = value if isinstance(value, (list, tuple)) else [value]
         terms.extend(item.mean() for item in values
                      if isinstance(item, torch.Tensor))
@@ -397,6 +412,22 @@ def loss_total(losses: Dict) -> torch.Tensor:
     if not bool(torch.isfinite(total).item()):
         raise RuntimeError('Non-finite detector-head loss')
     return total
+
+
+def loss_component_means(losses: Dict) -> Dict[str, float]:
+    """Return scalar means for loss entries, excluding metrics."""
+    components = {}
+    for name, value in losses.items():
+        if 'loss' not in str(name).lower():
+            continue
+        values = value if isinstance(value, (list, tuple)) else [value]
+        tensors = [item for item in values if isinstance(item, torch.Tensor)]
+        if tensors:
+            component = sum(item.mean() for item in tensors)
+            if not bool(torch.isfinite(component).item()):
+                raise RuntimeError('Non-finite detector-head loss component')
+            components[str(name)] = float(component.detach().item())
+    return components
 
 
 def prepare_record(dino, record: Dict, args, dino_device, head_device):
@@ -415,6 +446,7 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
     ordered = list(records)
     random.Random(args.seed + epoch).shuffle(ordered)
     losses = []
+    component_sums = {}
     cache_hits = 0
     for index, record in enumerate(ordered):
         feature, img_meta, gt_boxes, gt_labels, _original, cached = (
@@ -423,6 +455,8 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
         cache_hits += int(cached)
         optimizer.zero_grad()
         output = heads.forward_train(feature, img_meta, gt_boxes, gt_labels)
+        for name, value in loss_component_means(output).items():
+            component_sums[name] = component_sums.get(name, 0.0) + value
         total = loss_total(output)
         total.backward()
         grad_norm = torch.nn.utils.clip_grad_norm_(
@@ -438,20 +472,122 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
         del feature, gt_boxes, gt_labels, total
     return dict(
         epoch=int(epoch), count=len(ordered),
-        mean_loss=float(np.mean(losses)), cache_hits=int(cache_hits))
+        mean_loss=float(np.mean(losses)),
+        mean_loss_components={
+            name: float(value / max(1, len(ordered)))
+            for name, value in sorted(component_sums.items())},
+        cache_hits=int(cache_hits))
+
+
+def rotated_box_corners(detections: np.ndarray) -> np.ndarray:
+    """Convert [cx, cy, w, h, angle] OBBs to four xy corners."""
+    boxes = np.asarray(detections, dtype=np.float32)
+    if boxes.ndim != 2 or boxes.shape[1] < 5:
+        raise ValueError('Boxes must have shape [N,>=5]')
+    if boxes.shape[0] == 0:
+        return np.zeros((0, 4, 2), dtype=np.float32)
+    cx, cy = boxes[:, 0], boxes[:, 1]
+    half_w, half_h = boxes[:, 2] * 0.5, boxes[:, 3] * 0.5
+    angle = boxes[:, 4]
+    local = np.stack([
+        np.stack([-half_w, -half_h], axis=1),
+        np.stack([half_w, -half_h], axis=1),
+        np.stack([half_w, half_h], axis=1),
+        np.stack([-half_w, half_h], axis=1),
+    ], axis=1)
+    cos_angle = np.cos(angle)[:, None]
+    sin_angle = np.sin(angle)[:, None]
+    rotated_x = local[:, :, 0] * cos_angle - local[:, :, 1] * sin_angle
+    rotated_y = local[:, :, 0] * sin_angle + local[:, :, 1] * cos_angle
+    return np.stack([
+        rotated_x + cx[:, None], rotated_y + cy[:, None]], axis=2
+    ).astype(np.float32, copy=False)
+
+
+def filter_valid_rotated_detections(detections: np.ndarray,
+                                    img_meta: Dict,
+                                    tolerance: float = 1e-3):
+    """Filter OBBs with corners outside the original image.
+
+    The rule is label-free and is applied identically to source validation and
+    target diagnosis.  Remaining detections keep their original score order.
+    """
+    array = np.asarray(detections, dtype=np.float32)
+    if array.ndim != 2 or array.shape[1] != 6:
+        raise ValueError('Detections must have shape [N,6]')
+    shape = img_meta.get('ori_shape')
+    if shape is None or len(shape) < 2:
+        raise ValueError('img_meta must contain ori_shape')
+    height, width = int(shape[0]), int(shape[1])
+    corners = rotated_box_corners(array[:, :5])
+    if corners.shape[0] == 0:
+        keep = np.zeros((0,), dtype=bool)
+    else:
+        x = corners[:, :, 0]
+        y = corners[:, :, 1]
+        keep = ((x >= -float(tolerance)).all(axis=1)
+                & (x <= float(width) + float(tolerance)).all(axis=1)
+                & (y >= -float(tolerance)).all(axis=1)
+                & (y <= float(height) + float(tolerance)).all(axis=1))
+    filtered = array[keep]
+    stats = dict(
+        raw_detection_count=int(array.shape[0]),
+        invalid_border_filtered_count=int((~keep).sum()),
+        valid_detection_count=int(filtered.shape[0]))
+    return filtered, stats
+
+
+def gt_border_metrics(gt_original: np.ndarray, img_meta: Dict,
+                      margin_ratio: float = 0.02,
+                      tolerance: float = 1e-3) -> Dict:
+    """Describe GT proximity to image borders without changing detections."""
+    shape = img_meta.get('ori_shape')
+    if shape is None or len(shape) < 2:
+        raise ValueError('img_meta must contain ori_shape')
+    height, width = int(shape[0]), int(shape[1])
+    margin = float(min(height, width)) * float(margin_ratio)
+    if gt_original.shape[0] == 0:
+        return dict(
+            gt_count=0, gt_all_corners_inside=None,
+            gt_min_border_distance_px=None, gt_near_border=None,
+            gt_border_margin_px=margin)
+    corners = rotated_box_corners(gt_original)
+    x, y = corners[:, :, 0], corners[:, :, 1]
+    distances = np.stack([x, float(width) - x,
+                          y, float(height) - y], axis=2)
+    minimum = float(distances.min())
+    return dict(
+        gt_count=int(gt_original.shape[0]),
+        gt_all_corners_inside=bool(minimum >= -float(tolerance)),
+        gt_min_border_distance_px=minimum,
+        gt_near_border=bool(minimum <= margin),
+        gt_border_margin_px=margin)
 
 
 def ranked_detection_metrics(detections: np.ndarray, gt_original: np.ndarray,
-                             riou_thr: float) -> Dict:
+                             riou_thr: float,
+                             deployment_score_thr: float = 0.05) -> Dict:
     from mmcv.ops import box_iou_rotated
 
     if detections.ndim != 2 or detections.shape[1] != 6:
         raise ValueError('Detections must have shape [N,6]')
-    if detections.shape[0] == 0 or gt_original.shape[0] == 0:
+    if detections.shape[0] == 0:
+        return dict(
+            detection_count=0, top1_riou=0.0,
+            top1_hit=False, best_usable_rank=None, best_riou=0.0,
+            top1_score=None, deployment_score_thr=float(
+                deployment_score_thr), deployment_top1_hit=False,
+            deployment_silence=True)
+    if gt_original.shape[0] == 0:
+        top1_score = float(detections[0, 5])
         return dict(
             detection_count=int(detections.shape[0]), top1_riou=0.0,
             top1_hit=False, best_usable_rank=None, best_riou=0.0,
-            top1_score=None)
+            top1_score=top1_score,
+            deployment_score_thr=float(deployment_score_thr),
+            deployment_top1_hit=False,
+            deployment_silence=bool(
+                top1_score < float(deployment_score_thr)))
     boxes = torch.from_numpy(detections[:, :5]).float()
     gt = torch.from_numpy(gt_original).float()
     ious = box_iou_rotated(boxes, gt).max(dim=1).values
@@ -460,13 +596,20 @@ def ranked_detection_metrics(detections: np.ndarray, gt_original: np.ndarray,
         if float(value) >= float(riou_thr):
             best_rank = int(rank)
             break
+    top1_score = float(detections[0, 5])
+    top1_hit = bool(float(ious[0].item()) >= float(riou_thr))
     return dict(
         detection_count=int(detections.shape[0]),
         top1_riou=float(ious[0].item()),
-        top1_hit=bool(float(ious[0].item()) >= float(riou_thr)),
+        top1_hit=top1_hit,
         best_usable_rank=best_rank,
         best_riou=float(ious.max().item()),
-        top1_score=float(detections[0, 5]))
+        top1_score=top1_score,
+        deployment_score_thr=float(deployment_score_thr),
+        deployment_top1_hit=bool(
+            top1_hit and top1_score >= float(deployment_score_thr)),
+        deployment_silence=bool(
+            top1_score < float(deployment_score_thr)))
 
 
 def evaluate_records(dino, heads, records: Sequence[Dict], args,
@@ -478,9 +621,30 @@ def evaluate_records(dino, heads, records: Sequence[Dict], args,
             feature, img_meta, _gt_boxes, _gt_labels, original, cached = (
                 prepare_record(
                     dino, record, args, dino_device, head_device))
-            detections = heads.simple_test(feature, img_meta)
+            raw_detections = heads.simple_test(feature, img_meta)
+            raw_metrics = ranked_detection_metrics(
+                raw_detections, original, args.riou_thr,
+                args.deployment_score_thr)
+            detections, filter_stats = filter_valid_rotated_detections(
+                raw_detections, img_meta, args.valid_content_tolerance)
             metrics = ranked_detection_metrics(
-                detections, original, args.riou_thr)
+                detections, original, args.riou_thr,
+                args.deployment_score_thr)
+            metrics.update(filter_stats)
+            metrics['raw_unfiltered'] = raw_metrics
+            metrics['filter_effect'] = dict(
+                removed_usable_geometry=bool(
+                    raw_metrics['best_usable_rank'] is not None
+                    and metrics['best_usable_rank'] is None),
+                promoted_to_top1=bool(
+                    not raw_metrics['top1_hit'] and metrics['top1_hit']),
+                demoted_from_top1=bool(
+                    raw_metrics['top1_hit'] and not metrics['top1_hit']),
+                raw_best_usable_rank=raw_metrics['best_usable_rank'],
+                filtered_best_usable_rank=metrics['best_usable_rank'])
+            metrics.update(gt_border_metrics(
+                original, img_meta, args.border_margin_ratio,
+                args.valid_content_tolerance))
             rows.append(dict(
                 role=role, split=record['split'], seq=record['seq'],
                 frame=int(record['frame']), feature_cache_hit=bool(cached),
@@ -488,12 +652,22 @@ def evaluate_records(dino, heads, records: Sequence[Dict], args,
                 detections=[[float(value) for value in detection]
                             for detection in detections.tolist()]))
             if role == 'target_dev_diagnosis_only':
-                print('[target-labeller] frame={} top1={} rank={}'.format(
-                    record['frame'], metrics['top1_hit'],
-                    metrics['best_usable_rank']))
-            elif (index + 1) % 25 == 0 or index + 1 == len(records):
+                print('[target-labeller] frame={} top1={} rank={} raw_rank={}'
+                      .format(
+                          record['frame'], metrics['top1_hit'],
+                          metrics['best_usable_rank'],
+                          raw_metrics['best_usable_rank']))
+            elif (role == 'source_validation'
+                  and ((index + 1) % 25 == 0
+                       or index + 1 == len(records))):
                 print('[source-val] {}/{} top1_hits={}'.format(
                     index + 1, len(records),
+                    sum(row['metrics']['top1_hit'] for row in rows)))
+            elif (role == 'target_holdout_readonly'
+                  and ((index + 1) % 25 == 0
+                       or index + 1 == len(records))):
+                print('[target-holdout] seq={} {}/{} top1_hits={}'.format(
+                    record['seq'], index + 1, len(records),
                     sum(row['metrics']['top1_hit'] for row in rows)))
             del feature, _gt_boxes, _gt_labels
     return rows
@@ -503,9 +677,12 @@ def longest_miss(rows: Sequence[Dict], hit_key: str) -> int:
     longest = 0
     current = 0
     previous_frame = None
+    previous_seq = None
     for row in rows:
         frame = int(row['frame'])
-        if previous_frame is None or frame != previous_frame + 1:
+        seq = row.get('seq')
+        if (previous_frame is None or frame != previous_frame + 1
+                or seq != previous_seq):
             current = 0
         if row[hit_key]:
             current = 0
@@ -513,6 +690,7 @@ def longest_miss(rows: Sequence[Dict], hit_key: str) -> int:
             current += 1
             longest = max(longest, current)
         previous_frame = frame
+        previous_seq = seq
     return int(longest)
 
 
@@ -520,21 +698,85 @@ def summarize_rows(rows: Sequence[Dict]) -> Dict:
     flat = []
     for row in rows:
         metrics = row['metrics']
+        raw_metrics = metrics.get('raw_unfiltered', metrics)
         flat.append(dict(
-            frame=int(row['frame']), top1=bool(metrics['top1_hit']),
+            seq=row.get('seq'), frame=int(row['frame']),
+            top1=bool(metrics['top1_hit']),
+            deployment_top1=bool(metrics.get('deployment_top1_hit', False)),
             r20=bool(metrics['best_usable_rank'] is not None
                      and metrics['best_usable_rank'] <= 20),
             r100=bool(metrics['best_usable_rank'] is not None
                       and metrics['best_usable_rank'] <= 100),
-            geometry=bool(metrics['best_usable_rank'] is not None)))
+            geometry=bool(metrics['best_usable_rank'] is not None),
+            raw_top1=bool(raw_metrics['top1_hit']),
+            raw_r20=bool(raw_metrics['best_usable_rank'] is not None
+                         and raw_metrics['best_usable_rank'] <= 20),
+            raw_r100=bool(raw_metrics['best_usable_rank'] is not None
+                          and raw_metrics['best_usable_rank'] <= 100),
+            raw_geometry=bool(raw_metrics['best_usable_rank'] is not None),
+            removed_geometry=bool(metrics.get(
+                'filter_effect', {}).get('removed_usable_geometry', False)),
+            promoted_top1=bool(metrics.get(
+                'filter_effect', {}).get('promoted_to_top1', False)),
+            demoted_top1=bool(metrics.get(
+                'filter_effect', {}).get('demoted_from_top1', False)),
+            near_border=metrics.get('gt_near_border')))
     top1_rious = [float(row['metrics']['top1_riou']) for row in rows]
+    top1_scores = [float(row['metrics']['top1_score']) for row in rows
+                   if row['metrics']['top1_score'] is not None]
+    raw_top1_rious = [float(row['metrics'].get(
+        'raw_unfiltered', row['metrics'])['top1_riou']) for row in rows]
+    raw_top1_scores = [
+        float(row['metrics'].get('raw_unfiltered', row['metrics'])[
+            'top1_score']) for row in rows
+        if row['metrics'].get('raw_unfiltered', row['metrics'])[
+            'top1_score'] is not None]
+    raw_count = sum(int(row['metrics'].get('raw_detection_count', 0))
+                    for row in rows)
+    border_filtered = sum(int(row['metrics'].get(
+        'invalid_border_filtered_count', 0)) for row in rows)
+    valid_count = sum(int(row['metrics'].get('valid_detection_count', 0))
+                      for row in rows)
+    near_border = [row for row in flat if row['near_border'] is True]
     return dict(
         frame_count=len(rows),
         top1_hits=int(sum(row['top1'] for row in flat)),
         top1_mcml=longest_miss(flat, 'top1'),
+        deployment_top1_hits=int(sum(
+            row['deployment_top1'] for row in flat)),
+        deployment_top1_mcml=longest_miss(flat, 'deployment_top1'),
+        deployment_silence_count=int(sum(
+            row['metrics'].get('deployment_silence', False)
+            for row in rows)),
         recall_at_20=int(sum(row['r20'] for row in flat)),
         recall_at_100=int(sum(row['r100'] for row in flat)),
         geometry_eligible_count=int(sum(row['geometry'] for row in flat)),
+        raw_unfiltered_top1_hits=int(sum(row['raw_top1'] for row in flat)),
+        raw_unfiltered_top1_mcml=longest_miss(flat, 'raw_top1'),
+        raw_unfiltered_recall_at_20=int(sum(row['raw_r20'] for row in flat)),
+        raw_unfiltered_recall_at_100=int(sum(
+            row['raw_r100'] for row in flat)),
+        raw_unfiltered_geometry_eligible_count=int(sum(
+            row['raw_geometry'] for row in flat)),
+        filter_removed_usable_geometry_count=int(sum(
+            row['removed_geometry'] for row in flat)),
+        filter_promoted_to_top1_count=int(sum(
+            row['promoted_top1'] for row in flat)),
+        filter_demoted_from_top1_count=int(sum(
+            row['demoted_top1'] for row in flat)),
+        raw_detection_count=int(raw_count),
+        invalid_border_filtered_count=int(border_filtered),
+        valid_detection_count=int(valid_count),
+        invalid_border_filtered_fraction=(
+            float(border_filtered / raw_count) if raw_count else 0.0),
+        near_border_frame_count=len(near_border),
+        near_border_top1_hits=int(sum(row['top1'] for row in near_border)),
+        median_top1_score=(float(np.median(top1_scores))
+                           if top1_scores else None),
+        raw_unfiltered_median_top1_score=(
+            float(np.median(raw_top1_scores)) if raw_top1_scores else None),
+        raw_unfiltered_mean_top1_riou=(
+            float(np.mean(raw_top1_rious)) if raw_top1_rious else 0.0),
         mean_top1_riou=(float(np.mean(top1_rious))
                         if top1_rious else 0.0))
 
@@ -545,9 +787,17 @@ def source_selection_key(summary: Dict) -> Tuple:
         int(summary['recall_at_100']), float(summary['mean_top1_riou']))
 
 
-def make_target_decision(summary: Dict, args) -> str:
+def make_target_decision(summary: Dict, args,
+                         source_summary: Dict = None) -> str:
     if summary['frame_count'] != args.target_end - args.target_start + 1:
         return 'AUDIT_INVALID_TARGET_FRAME_COUNT'
+    if source_summary is not None:
+        source_count = int(source_summary.get('frame_count', 0))
+        source_hits = int(source_summary.get('top1_hits', 0))
+        source_rate = (float(source_hits) / source_count
+                       if source_count > 0 else 0.0)
+        if source_rate < float(args.source_min_top1_rate):
+            return 'AUDIT_INVALID_SOURCE_CONTROL'
     if (summary['top1_hits'] >= args.target_min_wins
             and summary['top1_mcml'] <= args.max_mcml):
         return 'FROZEN_DINO_ROTATED_LABELLER_RESTORES_ORDERING'
@@ -702,6 +952,12 @@ def main():
         best_epoch = int(payload.get('best_epoch', payload.get('epoch', 0)))
         best_source_summary = payload.get('best_source_val_summary')
         history = []
+        # Recompute source validation with the current inference rule.  The
+        # checkpoint's stored summary may predate the valid-content filter.
+        source_val_rows = evaluate_records(
+            dino, heads, source_val, args, dino_device, head_device,
+            role='source_validation')
+        current_source_summary = summarize_rows(source_val_rows)
     else:
         best_path, best_epoch, best_source_summary, history = train_source_only(
             dino, heads, source_train, source_val, args,
@@ -709,13 +965,15 @@ def main():
         payload = torch.load(best_path, map_location='cpu')
         validate_checkpoint(payload, in_channels, args)
         heads.load_state_dict(payload['heads_state_dict'], strict=True)
+        current_source_summary = best_source_summary
 
     # The checkpoint is fixed by source validation before target labels enter.
     target_rows = evaluate_records(
         dino, heads, targets, args, dino_device, head_device,
         role='target_dev_diagnosis_only')
     target_summary = summarize_rows(target_rows)
-    decision = make_target_decision(target_summary, args)
+    decision = make_target_decision(
+        target_summary, args, source_summary=current_source_summary)
 
     dino_unchanged = (
         dino_versions == alignment.module_parameter_versions(dino))
@@ -734,6 +992,19 @@ def main():
             source_val_rule='frame_id_mod_{}_equals_0'.format(
                 args.source_val_modulus),
             checkpoint_selection='source_validation_only',
+            source_min_top1_rate=float(args.source_min_top1_rate),
+            deployment_score_thr=float(args.deployment_score_thr),
+            border_margin_ratio=float(args.border_margin_ratio),
+            valid_content_filter=dict(
+                rule='all_four_obb_corners_inside_original_image',
+                tolerance=float(args.valid_content_tolerance),
+                applied_to=['source_validation',
+                            'target_dev_diagnosis_only'],
+                uses_annotations=False),
+            raw_filter_comparison=dict(
+                reporting_only=True, changes_returned_detections=False,
+                changes_checkpoint_selection=False,
+                raw_candidate_stage='roi_output_before_valid_content_filter'),
             target_labels_first_used='after_source_checkpoint_fixed',
             target_dev_role='diagnosis_only',
             pseudo_label_student_training=False,
@@ -754,6 +1025,8 @@ def main():
             train_count=len(source_train), val_count=len(source_val),
             best_epoch=int(best_epoch),
             best_validation_summary=best_source_summary,
+            current_inference_validation_summary=current_source_summary,
+            current_inference_rule='valid_rotated_obb_corners',
             history=history),
         target_dev=dict(summary=target_summary, rows=target_rows),
         decision=decision)

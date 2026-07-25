@@ -15,9 +15,12 @@ def _args(tmp_path, **overrides):
         seed=0, source_val_modulus=5, dino_gpus=[1, 2], head_gpu=0,
         patch_size=14, rpn_feat_channels=256, roi_fc_channels=1024,
         roi_samples=256, proposal_count=2000, max_detections=2000,
+        valid_content_tolerance=1e-3,
+        deployment_score_thr=0.05, border_margin_ratio=0.02,
         epochs=12, lr=0.001, momentum=0.9, weight_decay=1e-4,
         max_grad_norm=10.0, riou_thr=0.5, target_min_wins=26,
-        max_mcml=5, resume_checkpoint=None, eval_only_checkpoint=None,
+        max_mcml=5, source_min_top1_rate=0.8,
+        resume_checkpoint=None, eval_only_checkpoint=None,
         dinov2_checkpoint=str(checkpoint), dinov2_model='dinov2_vitl14',
         dino_height=600, dino_max_long_side=1333,
         feature_cache_dir=str(tmp_path / 'cache'),
@@ -89,12 +92,105 @@ def test_scaled_gt_preserves_angle_and_scales_first_four_values(monkeypatch):
 
 
 def test_loss_total_reduces_rpn_lists_and_roi_tensors():
-    total = labeller.loss_total(dict(
+    losses = dict(
         loss_rpn_cls=[torch.tensor([1.0, 3.0])],
         loss_rpn_bbox=[torch.tensor(2.0)],
         loss_cls=torch.tensor(4.0),
-        loss_bbox=torch.tensor(5.0)))
+        loss_bbox=torch.tensor(5.0),
+        acc=torch.tensor(99.0))
+    total = labeller.loss_total(losses)
     assert float(total.item()) == pytest.approx(13.0)
+    assert labeller.loss_component_means(losses) == pytest.approx(dict(
+        loss_rpn_cls=2.0, loss_rpn_bbox=2.0,
+        loss_cls=4.0, loss_bbox=5.0))
+
+
+def test_rotated_box_corners_and_valid_content_filter_preserve_order():
+    detections = np.asarray([
+        [50.0, 50.0, 20.0, 10.0, 0.0, 0.9],
+        [0.0, 0.0, 100.0, 100.0, 0.0, 0.8],
+        [100.0, 100.0, 20.0, 10.0, np.pi / 4.0, 0.7],
+    ], dtype=np.float32)
+    corners = labeller.rotated_box_corners(detections[:, :5])
+    assert corners.shape == (3, 4, 2)
+    filtered, stats = labeller.filter_valid_rotated_detections(
+        detections, {'ori_shape': (200, 200, 3)})
+    assert filtered[:, 5].tolist() == pytest.approx([0.9, 0.7])
+    assert stats == dict(raw_detection_count=3,
+                         invalid_border_filtered_count=1,
+                         valid_detection_count=2)
+
+
+def test_valid_content_filter_rejects_rotated_corner_outside_image():
+    detections = np.asarray([
+        [5.0, 5.0, 20.0, 10.0, np.pi / 4.0, 0.9],
+    ], dtype=np.float32)
+    filtered, stats = labeller.filter_valid_rotated_detections(
+        detections, {'ori_shape': (100, 100, 3)})
+    assert filtered.shape == (0, 6)
+    assert stats['invalid_border_filtered_count'] == 1
+
+
+def test_gt_border_metrics_distinguish_interior_and_near_border():
+    image_meta = {'ori_shape': (100, 100, 3)}
+    interior = np.asarray([[50, 50, 10, 10, 0]], dtype=np.float32)
+    border = np.asarray([[5, 5, 10, 10, 0]], dtype=np.float32)
+    interior_metrics = labeller.gt_border_metrics(
+        interior, image_meta, margin_ratio=0.02)
+    border_metrics = labeller.gt_border_metrics(
+        border, image_meta, margin_ratio=0.02)
+    assert interior_metrics['gt_near_border'] is False
+    assert interior_metrics['gt_min_border_distance_px'] == pytest.approx(45)
+    assert border_metrics['gt_near_border'] is True
+    assert border_metrics['gt_all_corners_inside'] is True
+
+
+def test_summary_reports_deployment_threshold_and_filter_statistics():
+    rows = []
+    values = [(True, True, False), (True, False, True),
+              (False, False, False)]
+    for frame, (top1, deployed, near_border) in enumerate(values, start=1):
+        raw_rank = 2 if frame == 1 else (5 if frame == 2 else 4)
+        rows.append(dict(
+            seq='seq', frame=frame,
+            metrics=dict(
+                top1_hit=top1, deployment_top1_hit=deployed,
+                deployment_silence=not deployed,
+                best_usable_rank=(1 if top1 else None),
+                top1_riou=(0.6 if top1 else 0.1), top1_score=0.1,
+                raw_detection_count=10,
+                invalid_border_filtered_count=6,
+                valid_detection_count=4,
+                raw_unfiltered=dict(
+                    top1_hit=False, best_usable_rank=raw_rank,
+                    top1_riou=0.0, top1_score=0.2),
+                filter_effect=dict(
+                    removed_usable_geometry=(frame == 3),
+                    promoted_to_top1=(frame <= 2),
+                    demoted_from_top1=False),
+                gt_near_border=near_border)))
+    summary = labeller.summarize_rows(rows)
+    assert summary['top1_hits'] == 2
+    assert summary['top1_mcml'] == 1
+    assert summary['deployment_top1_hits'] == 1
+    assert summary['deployment_top1_mcml'] == 2
+    assert summary['invalid_border_filtered_fraction'] == pytest.approx(0.6)
+    assert summary['near_border_frame_count'] == 1
+    assert summary['near_border_top1_hits'] == 1
+    assert summary['raw_unfiltered_top1_hits'] == 0
+    assert summary['raw_unfiltered_geometry_eligible_count'] == 3
+    assert summary['filter_removed_usable_geometry_count'] == 1
+    assert summary['filter_promoted_to_top1_count'] == 2
+    assert summary['filter_demoted_from_top1_count'] == 0
+
+
+def test_longest_miss_resets_at_sequence_boundary():
+    rows = [
+        dict(seq='a', frame=1, hit=False),
+        dict(seq='a', frame=2, hit=False),
+        dict(seq='b', frame=3, hit=False),
+    ]
+    assert labeller.longest_miss(rows, 'hit') == 2
 
 
 def test_source_selection_prioritizes_top1_before_oracle_recall():
@@ -115,6 +211,15 @@ def test_target_decision_requires_top1_and_mcml(tmp_path):
     summary['top1_mcml'] = 16
     assert labeller.make_target_decision(summary, args) == (
         'DINO_LABELLER_GEOMETRY_ONLY_RANKING_INSUFFICIENT')
+
+
+def test_target_decision_rejects_broken_source_control(tmp_path):
+    args = _args(tmp_path)
+    target = dict(frame_count=33, top1_hits=32, top1_mcml=1,
+                  recall_at_100=32)
+    source = dict(frame_count=45, top1_hits=35)
+    assert labeller.make_target_decision(target, args, source) == (
+        'AUDIT_INVALID_SOURCE_CONTROL')
 
 
 def test_checkpoint_rejects_non_source_payload(tmp_path):
