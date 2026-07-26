@@ -108,6 +108,8 @@ def transition_metrics(previous: np.ndarray, current: np.ndarray,
     previous_area = max(float(previous[2] * previous[3]), 1e-12)
     current_area = max(float(current[2] * current[3]), 1e-12)
     gap = max(int(frame_gap), 1)
+    total_angle_change = float(angle_delta_deg(current, previous))
+    angle_change = float(total_angle_change / gap)
     return dict(
         dfr=float(abs(current_diag - previous_diag) /
                   max(previous_diag * gap, 1e-12)),
@@ -115,7 +117,11 @@ def transition_metrics(previous: np.ndarray, current: np.ndarray,
         diagonal_current=current_diag,
         log_area_change=float(abs(math.log(current_area / previous_area)) /
                               gap),
-        angle_change_deg=float(angle_delta_deg(current, previous) / gap),
+        angle_change_deg=angle_change,
+        # Match CraneOfflineEvaluator: ACI uses the total angle difference
+        # between valid outputs, whereas DFR is normalized by frame gap.
+        aci=float(np.clip(
+            1.0 - total_angle_change / 35.0, 0.0, 1.0)),
         center_step_px=float(np.linalg.norm(
             current[:2] - previous[:2]) / gap))
 
@@ -142,6 +148,7 @@ def summarize_transitions(rows: Sequence[Dict]) -> Dict:
             [row['log_area_change'] for row in rows]),
         angle_change_deg=numeric_summary(
             [row['angle_change_deg'] for row in rows]),
+        aci=numeric_summary([row['aci'] for row in rows]),
         center_step_px=numeric_summary(
             [row['center_step_px'] for row in rows]))
 

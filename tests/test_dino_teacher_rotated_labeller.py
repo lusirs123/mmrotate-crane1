@@ -26,6 +26,7 @@ def _args(tmp_path, **overrides):
         selection_epochs=[1, 2, 3, 4, 5, 6, 7, 8],
         max_mcml=5, source_min_top1_rate=0.8,
         resume_checkpoint=None, eval_only_checkpoint=None,
+        source_val_results_out=None,
         dinov2_checkpoint=str(checkpoint), dinov2_model='dinov2_vitl14',
         dino_height=600, dino_max_long_side=1333,
         feature_cache_dir=str(tmp_path / 'cache'),
@@ -89,6 +90,18 @@ def test_target_image_cannot_enter_source_training(tmp_path):
     target = [dict(source[0], split='test', seq='real_seq02', frame=137)]
     with pytest.raises(RuntimeError, match='leaked'):
         labeller.assert_training_target_isolation(source, target)
+
+
+def test_source_val_result_export_preserves_one_class_structure(tmp_path):
+    rows = [dict(detections=[[1, 2, 3, 4, 0, 0.9]]),
+            dict(detections=[])]
+    path = tmp_path / 'source_val.pkl'
+    labeller.write_detection_rows_pickle(rows, str(path))
+    import pickle
+    with path.open('rb') as handle:
+        payload = pickle.load(handle)
+    assert payload[0][0].shape == (1, 6)
+    assert payload[1][0].shape == (0, 6)
 
 
 def test_rpn_config_uses_single_dino_stride_and_canonical_sizes(tmp_path):

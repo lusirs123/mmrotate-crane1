@@ -14,6 +14,7 @@ import hashlib
 import json
 import math
 import os
+import pickle
 import random
 import re
 import sys
@@ -102,6 +103,9 @@ def parse_args():
     parser.add_argument('--resume-checkpoint')
     parser.add_argument('--eval-only-checkpoint')
     parser.add_argument(
+        '--source-val-results-out',
+        help='Optional one-class result pickle for read-only source probes.')
+    parser.add_argument(
         '--skip-target-eval', action='store_true',
         help='Train/select on source only; run target evaluation separately.')
     parser.add_argument('--seed', type=int, default=0)
@@ -165,6 +169,10 @@ def validate_args(args):
         raise ValueError('--source-min-top1-rate must be in [0, 1]')
     if args.resume_checkpoint and args.eval_only_checkpoint:
         raise ValueError('Resume and eval-only checkpoints are mutually exclusive')
+    if (args.source_val_results_out and
+            os.path.exists(args.source_val_results_out)):
+        raise ValueError('Refusing to overwrite source-val results: {}'.format(
+            args.source_val_results_out))
 
 
 def set_seed(seed: int):
@@ -205,6 +213,20 @@ def atomic_torch_save(payload: Dict, path: str):
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     temporary = path + '.tmp'
     torch.save(payload, temporary)
+    os.replace(temporary, path)
+
+
+def write_detection_rows_pickle(rows: Sequence[Dict], path: str):
+    payload = []
+    for row in rows:
+        detections = np.asarray(row['detections'], dtype=np.float32)
+        if detections.size == 0:
+            detections = np.zeros((0, 6), dtype=np.float32)
+        payload.append([detections.reshape((-1, 6))])
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    temporary = path + '.tmp'
+    with open(temporary, 'wb') as handle:
+        pickle.dump(payload, handle, protocol=pickle.HIGHEST_PROTOCOL)
     os.replace(temporary, path)
 
 
@@ -1136,6 +1158,7 @@ def main():
             dino, source_train[0], args, dino_device)
         in_channels = int(sample_feature.shape[1])
     heads = FrozenDinoRotatedHeads(in_channels, args).to(head_device)
+    source_val_rows = None
 
     if args.eval_only_checkpoint:
         best_path = args.eval_only_checkpoint
@@ -1159,6 +1182,17 @@ def main():
         validate_checkpoint(payload, in_channels, args)
         heads.load_state_dict(payload['heads_state_dict'], strict=True)
         current_source_summary = best_source_summary
+
+    source_val_results_path = None
+    if args.source_val_results_out:
+        if source_val_rows is None:
+            source_val_rows = evaluate_records(
+                dino, heads, source_val, args, dino_device, head_device,
+                role='source_validation')
+        write_detection_rows_pickle(
+            source_val_rows, args.source_val_results_out)
+        source_val_results_path = os.path.abspath(
+            args.source_val_results_out)
 
     # The paper training stage does not read target data.  Legacy diagnostic
     # runs may still evaluate target only after the source checkpoint is fixed.
@@ -1242,7 +1276,8 @@ def main():
             best_validation_summary=best_source_summary,
             current_inference_validation_summary=current_source_summary,
             current_inference_rule='valid_rotated_obb_corners',
-            history=history),
+            history=history,
+            source_val_results_pickle=source_val_results_path),
         target_dev=(None if target_summary is None else dict(
             summary=target_summary, rows=target_rows)),
         decision=decision)
@@ -1254,6 +1289,8 @@ def main():
             decision, target_summary['top1_hits'],
             target_summary['frame_count'], target_summary['top1_mcml'],
             target_summary['recall_at_100']))
+    if source_val_results_path:
+        print('[source-val-results] {}'.format(source_val_results_path))
     print('[json] nonfinite_replacements={}'.format(replacements))
     print('[out] {}'.format(args.out_json))
 

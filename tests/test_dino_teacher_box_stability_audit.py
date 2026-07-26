@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from crane_project.tools import dino_teacher_box_stability_audit as audit
 
@@ -14,7 +15,7 @@ def _records():
     return [dict(
         split='test', seq='real_seq02', frame=frame,
         image='image', annotation='annotation', domain='real')
-            for frame in (1, 2, 3, 4)]
+        for frame in (1, 2, 3, 4)]
 
 
 def _scope():
@@ -30,6 +31,15 @@ def test_transition_metrics_match_dfr_definition():
     assert metrics['dfr'] == 1.0
     assert metrics['diagonal_previous'] == 5.0
     assert metrics['diagonal_current'] == 10.0
+
+
+def test_aci_matches_official_total_angle_change_definition():
+    previous = np.asarray([0, 0, 3, 4, 0], dtype=np.float32)
+    current = np.asarray(
+        [0, 0, 3, 4, np.deg2rad(17.5)], dtype=np.float32)
+    metrics = audit.transition_metrics(previous, current, frame_gap=5)
+    assert metrics['angle_change_deg'] == pytest.approx(3.5)
+    assert metrics['aci'] == pytest.approx(0.5)
 
 
 def test_report_separates_new_transitions_from_common_output():
