@@ -24,7 +24,8 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description='Scope-Gated Frozen DINO Semantic Rescue runner')
     parser.add_argument('--config', required=True)
-    parser.add_argument('--stage', required=True, choices=('train', 'test'))
+    parser.add_argument(
+        '--stage', required=True, choices=('train', 'test', 'full-test'))
     parser.add_argument('--dry-run', action='store_true')
     return parser.parse_args()
 
@@ -42,7 +43,8 @@ def load_method_config(path: str) -> Dict:
 
 
 def require_sections(method: Dict):
-    required = ('baseline', 'data', 'dinov2', 'head', 'train', 'test')
+    required = (
+        'baseline', 'data', 'dinov2', 'head', 'train', 'test', 'full_test')
     missing = [name for name in required if name not in method]
     if missing:
         raise ValueError('Missing dino_rescue sections: {}'.format(missing))
@@ -81,6 +83,8 @@ def require_sections(method: Dict):
             'BrightAug sweep must inspect epochs 16 18 20 22 24')
     if method['test'].get('scope_manifest') is None:
         raise ValueError('Paper test requires an explicit scope_manifest')
+    if method['full_test'].get('scope_manifest') is None:
+        raise ValueError('Complete test requires an explicit scope_manifest')
 
 
 def add_arg(argv: List[str], name: str, value):
@@ -187,6 +191,43 @@ def build_stage_command(method: Dict, stage: str) -> Tuple[str, List[str]]:
         script = (
             'crane_project/tools/'
             'dino_teacher_baseline_first_rescue_audit.py')
+    elif stage == 'full-test':
+        baseline, data, dino, head, full_test, train = (
+            method['baseline'], method['data'], method['dinov2'],
+            method['head'], method['full_test'], method['train'])
+        argv = []
+        add_arg(argv, '--baseline-config', baseline['config'])
+        add_arg(argv, '--baseline-checkpoint', baseline['checkpoint'])
+        add_arg(argv, '--baseline-gpu', baseline['gpu'])
+        add_arg(argv, '--data-root', data['root'])
+        add_arg(argv, '--test-split', data['target_dev_split'])
+        add_arg(argv, '--labeller-checkpoint',
+                full_test['labeller_checkpoint'])
+        add_arg(argv, '--dinov2-repo', dino['repo'])
+        add_arg(argv, '--dinov2-checkpoint', dino['checkpoint'])
+        add_arg(argv, '--dinov2-model', dino['model'])
+        argv.append('--dino-gpus')
+        argv.extend(str(value) for value in dino['gpus'])
+        add_arg(argv, '--head-gpu', head['gpu'])
+        add_arg(argv, '--legacy-sdpa-query-chunk',
+                dino['legacy_sdpa_query_chunk'])
+        add_arg(argv, '--dino-height', dino['height'])
+        add_arg(argv, '--dino-max-long-side', dino['max_long_side'])
+        add_arg(argv, '--patch-size', dino['patch_size'])
+        add_arg(argv, '--rpn-feat-channels', head['rpn_feat_channels'])
+        add_arg(argv, '--roi-fc-channels', head['roi_fc_channels'])
+        add_arg(argv, '--roi-samples', head['roi_samples'])
+        add_arg(argv, '--proposal-count', head['proposal_count'])
+        add_arg(argv, '--max-detections', head['max_detections'])
+        add_arg(argv, '--feature-cache-dir',
+                full_test['feature_cache_dir'])
+        add_arg(argv, '--scope-manifest', full_test['scope_manifest'])
+        if bool(full_test.get('confirm_diagnosis_scope', False)):
+            argv.append('--confirm-diagnosis-scope')
+        add_arg(argv, '--seed', train['seed'])
+        add_arg(argv, '--out-dir', full_test['out_dir'])
+        add_arg(argv, '--out-json', full_test['out_json'])
+        script = 'crane_project/tools/dino_teacher_scoped_full_test.py'
     else:
         raise ValueError('Unsupported stage: {}'.format(stage))
     return script, argv
@@ -196,7 +237,7 @@ def main():
     args = parse_args()
     method = load_method_config(args.config)
     script, stage_argv = build_stage_command(method, args.stage)
-    if args.stage == 'test' and not args.dry_run:
+    if args.stage in ('test', 'full-test') and not args.dry_run:
         selected = resolve_selected_baseline_checkpoint(method)
         checkpoint_index = stage_argv.index('--baseline-checkpoint') + 1
         stage_argv[checkpoint_index] = selected

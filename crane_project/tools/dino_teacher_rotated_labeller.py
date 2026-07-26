@@ -801,6 +801,11 @@ def evaluate_records(dino, heads, records: Sequence[Dict], args,
                 print('[target-holdout] seq={} {}/{} top1_hits={}'.format(
                     record['seq'], index + 1, len(records),
                     sum(row['metrics']['top1_hit'] for row in rows)))
+            elif (role == 'target_full_test_readonly'
+                  and ((index + 1) % 25 == 0
+                       or index + 1 == len(records))):
+                print('[full-test-dino] {}/{} seq={} frame={}'.format(
+                    index + 1, len(records), record['seq'], record['frame']))
             del feature, _gt_boxes, _gt_labels
     return rows
 

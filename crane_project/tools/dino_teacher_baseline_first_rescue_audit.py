@@ -591,6 +591,11 @@ def summarize_combination(rows: Sequence[Dict]) -> Dict:
             == 'dino_primary'
             and row['policies']['scoped_dino_primary']['metrics']['top1_hit']
             for row in rows)),
+        scoped_primary_disabled_scope_changed_count=int(sum(
+            not row['policies']['scoped_dino_primary']['scope_enabled']
+            and row['policies']['scoped_dino_primary']['detections']
+            != row['policies']['baseline']['detections']
+            for row in rows)),
         dino_primary_baseline_correct_to_incorrect_count=int(sum(
             row['policies']['baseline']['metrics']['top1_hit']
             and not row['dino_top1_metrics']['top1_hit']
@@ -619,12 +624,18 @@ def confident_override_non_regression_holds(summary: Dict) -> bool:
 
 def scoped_primary_non_regression_holds(summary: Dict) -> bool:
     baseline = summary['baseline']
-    primary = summary['dino_top1']
+    # Evaluate the actual scoped routing output.  The previous implementation
+    # used the unscoped DINO top-1 summary, which made disabled-scope frames
+    # fail the gate even though they were returned byte-for-byte from the
+    # BrightAug baseline.
+    primary = summary['scoped_dino_primary']
     return (primary['top1_hits'] >= baseline['top1_hits']
             and primary['top1_mcml'] <= baseline['top1_mcml']
             and primary['mean_top1_riou'] >= baseline['mean_top1_riou']
             and summary['routing_diagnostics'][
-                'dino_primary_baseline_correct_to_incorrect_count'] == 0)
+                'scoped_primary_baseline_correct_to_incorrect_count'] == 0
+            and summary['routing_diagnostics'][
+                'scoped_primary_disabled_scope_changed_count'] == 0)
 
 
 def make_scoped_primary_decision(source_summary: Dict,

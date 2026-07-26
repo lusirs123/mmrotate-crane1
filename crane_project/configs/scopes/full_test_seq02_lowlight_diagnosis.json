@@ -1,0 +1,49 @@
+{
+  "scope_source": "target_dev_protocol",
+  "target_label_derived": true,
+  "eligible_for_final_test": false,
+  "entries": [
+    {
+      "split": "test",
+      "seq": "real_seq02",
+      "start": 2,
+      "end": 136,
+      "dino_enabled": false
+    },
+    {
+      "split": "test",
+      "seq": "real_seq02",
+      "start": 137,
+      "end": 169,
+      "dino_enabled": true
+    },
+    {
+      "split": "test",
+      "seq": "real_seq02",
+      "start": 170,
+      "end": 180,
+      "dino_enabled": false
+    },
+    {
+      "split": "test",
+      "seq": "real_seq02",
+      "start": 960,
+      "end": 1000,
+      "dino_enabled": false
+    },
+    {
+      "split": "test",
+      "seq": "real_seq03",
+      "start": 1,
+      "end": 200,
+      "dino_enabled": false
+    },
+    {
+      "split": "test",
+      "seq": "sim_seq09",
+      "start": 0,
+      "end": 571,
+      "dino_enabled": false
+    }
+  ]
+}

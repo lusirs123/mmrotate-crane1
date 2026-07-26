@@ -323,10 +323,12 @@ def test_scoped_primary_decision_requires_external_scope_signal():
     summary = {
         'baseline': dict(top1_hits=44, top1_mcml=1,
                          mean_top1_riou=0.75),
-        'dino_top1': dict(
-            top1_hits=45, top1_mcml=0, mean_top1_riou=0.8),
+        'scoped_dino_primary': dict(
+            top1_hits=45, top1_mcml=0, mean_top1_riou=0.8,
+            baseline_preservation_failures=0),
         'routing_diagnostics': dict(
-            dino_primary_baseline_correct_to_incorrect_count=0)}
+            scoped_primary_baseline_correct_to_incorrect_count=0,
+            scoped_primary_disabled_scope_changed_count=0)}
     target = {
         'scoped_dino_primary': dict(top1_hits=32, top1_mcml=1)}
     assert audit.make_scoped_primary_decision(
@@ -343,15 +345,44 @@ def test_scoped_primary_source_gate_rejects_harmful_replacement():
     source = {
         'baseline': dict(top1_hits=44, top1_mcml=1,
                          mean_top1_riou=0.75),
-        'dino_top1': dict(
-            top1_hits=45, top1_mcml=0, mean_top1_riou=0.8),
+        'scoped_dino_primary': dict(
+            top1_hits=45, top1_mcml=0, mean_top1_riou=0.8,
+            baseline_preservation_failures=1),
         'routing_diagnostics': dict(
-            dino_primary_baseline_correct_to_incorrect_count=1)}
+            scoped_primary_baseline_correct_to_incorrect_count=1,
+            scoped_primary_disabled_scope_changed_count=0)}
     target = {
         'scoped_dino_primary': dict(top1_hits=32, top1_mcml=1)}
     assert audit.make_scoped_primary_decision(
         source, target, True) == (
             'INVALID_SOURCE_SCOPED_DINO_PRIMARY_REGRESSION')
+
+
+def test_scoped_primary_source_gate_honors_disabled_scope_fallback():
+    source = {
+        'baseline': dict(top1_hits=44, top1_mcml=1,
+                         mean_top1_riou=0.75),
+        'dino_top1': dict(
+            top1_hits=0, top1_mcml=45, mean_top1_riou=0.0),
+        'scoped_dino_primary': dict(
+            top1_hits=44, top1_mcml=1, mean_top1_riou=0.75,
+            baseline_preservation_failures=0),
+        'routing_diagnostics': dict(
+            scoped_primary_baseline_correct_to_incorrect_count=0,
+            scoped_primary_disabled_scope_changed_count=0)}
+    assert audit.scoped_primary_non_regression_holds(source)
+
+
+def test_scoped_primary_source_gate_rejects_changed_disabled_scope():
+    source = {
+        'baseline': dict(top1_hits=44, top1_mcml=1,
+                         mean_top1_riou=0.75),
+        'scoped_dino_primary': dict(
+            top1_hits=44, top1_mcml=1, mean_top1_riou=0.75),
+        'routing_diagnostics': dict(
+            scoped_primary_baseline_correct_to_incorrect_count=0,
+            scoped_primary_disabled_scope_changed_count=1)}
+    assert not audit.scoped_primary_non_regression_holds(source)
 
 
 def test_validate_fixed_protocol_and_sequential_gpu_sharing(tmp_path):

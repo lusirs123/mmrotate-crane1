@@ -67,4 +67,21 @@ dino_rescue = dict(
             'feature_cache'),
         out_json=(
             'work_dirs/dino_teacher_scoped_lowlight_v1_formal8/'
-            'target_dev_test_result.json')))
+            'target_dev_test_result.json')),
+    full_test=dict(
+        labeller_checkpoint=(
+            'work_dirs/dino_teacher_scoped_lowlight_v1_formal8/'
+            'labeller_best_source_only.pth'),
+        scope_manifest=(
+            'crane_project/configs/scopes/'
+            'full_test_seq02_lowlight_diagnosis.json'),
+        confirm_diagnosis_scope=True,
+        feature_cache_dir=(
+            'work_dirs/dino_teacher_scoped_lowlight_v1_formal8/'
+            'feature_cache'),
+        out_dir=(
+            'work_dirs/dino_teacher_scoped_lowlight_v1_formal8/'
+            'full_test_diagnosis'),
+        out_json=(
+            'work_dirs/dino_teacher_scoped_lowlight_v1_formal8/'
+            'full_test_diagnosis/result.json')))

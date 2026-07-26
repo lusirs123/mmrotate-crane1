@@ -31,7 +31,11 @@ def _method():
                    out_json='train.json'),
         test=dict(labeller_checkpoint='head.pth',
                   feature_cache_dir='cache', scope_manifest='scope.json',
-                  out_json='test.json'))
+                  out_json='test.json'),
+        full_test=dict(
+            labeller_checkpoint='head.pth', feature_cache_dir='cache',
+            scope_manifest='full_scope.json', confirm_diagnosis_scope=True,
+            out_dir='full-test', out_json='full-test/result.json'))
 
 
 def test_train_command_uses_source_only_labeller_entrypoint():
@@ -53,6 +57,17 @@ def test_test_command_uses_scoped_rescue_and_fixed_checkpoints():
     assert '--baseline-checkpoint' in argv
     assert '--labeller-checkpoint' in argv
     assert '--scope-manifest' in argv
+
+
+def test_full_test_command_exports_complete_scoped_predictions():
+    script, argv = runner.build_stage_command(_method(), 'full-test')
+    assert script.endswith('dino_teacher_scoped_full_test.py')
+    assert '--baseline-checkpoint' in argv
+    assert '--labeller-checkpoint' in argv
+    assert '--scope-manifest' in argv
+    assert '--confirm-diagnosis-scope' in argv
+    assert '--out-dir' in argv
+    assert '--target-start' not in argv
 
 
 def test_method_requires_seed_zero_and_scope_manifest():
