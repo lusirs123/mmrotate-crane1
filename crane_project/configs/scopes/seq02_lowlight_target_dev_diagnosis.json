@@ -1,0 +1,21 @@
+{
+  "scope_source": "target_dev_protocol",
+  "target_label_derived": true,
+  "eligible_for_final_test": false,
+  "entries": [
+    {
+      "split": "val",
+      "seq": "real_seq07",
+      "start": 1,
+      "end": 226,
+      "dino_enabled": true
+    },
+    {
+      "split": "test",
+      "seq": "real_seq02",
+      "start": 137,
+      "end": 169,
+      "dino_enabled": true
+    }
+  ]
+}

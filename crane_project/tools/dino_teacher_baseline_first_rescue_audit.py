@@ -147,10 +147,13 @@ def load_scope_manifest(path: str, records: Sequence[Dict]):
     with open(path, 'r', encoding='utf-8') as handle:
         payload = json.load(handle)
     source = str(payload.get('scope_source', '')).strip().lower()
+    target_label_derived = bool(payload.get('target_label_derived', False))
+    eligible_for_final_test = bool(payload.get(
+        'eligible_for_final_test', not target_label_derived))
     if source in ('target_labels', 'target_dev_labels',
-                  'manual_target_tuning'):
+                  'manual_target_tuning') and not target_label_derived:
         raise ValueError(
-            'Scope manifest cannot be derived from target labels or tuning')
+            'Target-derived scope must declare target_label_derived=true')
     if not source:
         raise ValueError('Scope manifest requires a non-empty scope_source')
     entries = payload.get('entries')
@@ -180,6 +183,8 @@ def load_scope_manifest(path: str, records: Sequence[Dict]):
             .format(missing[:1]))
     evaluated_scope = {key: bool(scope[key]) for key in expected}
     return dict(source=source, values=evaluated_scope,
+                target_label_derived=target_label_derived,
+                eligible_for_final_test=eligible_for_final_test,
                 path=os.path.abspath(path))
 
 
@@ -325,6 +330,25 @@ def choose_scoped_confident_override(
         baseline, dino, dino_score_thr=dino_score_thr)
 
 
+def choose_scoped_dino_primary(
+        baseline: np.ndarray, dino: np.ndarray, dino_enabled: bool):
+    """Use DINO as the low-light expert and BrightAug as exact fallback.
+
+    This policy deliberately avoids cross-model score comparison and absolute
+    DINO thresholding.  It is valid only when an external, target-independent
+    operating-mode signal enables the low-light expert.
+    """
+    if not bool(dino_enabled):
+        if baseline.shape[0] > 0:
+            return baseline.copy(), 'baseline_scope_disabled'
+        return np.zeros((0, 6), dtype=np.float32), 'silence_scope_disabled'
+    if dino.shape[0] > 0:
+        return dino[:1].copy(), 'dino_primary'
+    if baseline.shape[0] > 0:
+        return baseline.copy(), 'baseline_fallback'
+    return np.zeros((0, 6), dtype=np.float32), 'silence'
+
+
 def combine_rows(baseline_rows: Sequence[Dict], dino_rows: Sequence[Dict],
                  records: Sequence[Dict], scope_by_key=None):
     if not (len(baseline_rows) == len(dino_rows) == len(records)):
@@ -350,6 +374,8 @@ def combine_rows(baseline_rows: Sequence[Dict], dino_rows: Sequence[Dict],
         scoped_enabled = (True if scope_by_key is None else
                            bool(scope_by_key.get(scope_key, False)))
         scoped_override, scoped_source = choose_scoped_confident_override(
+            baseline, dino, scoped_enabled)
+        scoped_primary, scoped_primary_source = choose_scoped_dino_primary(
             baseline, dino, scoped_enabled)
         dino_top1 = dino[:1].copy()
         baseline_active = baseline.shape[0] > 0
@@ -401,7 +427,16 @@ def combine_rows(baseline_rows: Sequence[Dict], dino_rows: Sequence[Dict],
                     metrics=labeller.ranked_detection_metrics(
                         scoped_override, gt, RIOU_THR,
                         DINO_DEPLOYMENT_SCORE_THR),
-                    detections=scoped_override.tolist()))))
+                    detections=scoped_override.tolist()),
+                scoped_dino_primary=dict(
+                    source=scoped_primary_source,
+                    scope_enabled=bool(scoped_enabled),
+                    preserved=(not baseline_active
+                               or np.array_equal(scoped_primary, baseline)),
+                    metrics=labeller.ranked_detection_metrics(
+                        scoped_primary, gt, RIOU_THR,
+                        DINO_DEPLOYMENT_SCORE_THR),
+                    detections=scoped_primary.tolist()))))
     return combined
 
 
@@ -473,7 +508,17 @@ def summarize_combination(rows: Sequence[Dict]) -> Dict:
     summary = {
         name: summarize_policy(rows, name)
         for name in ('baseline', 'strict', 'ranked', 'confident_override',
-                     'scoped_override')}
+                     'scoped_override', 'scoped_dino_primary')}
+    dino_flat = [dict(
+        seq=row['seq'], frame=int(row['frame']),
+        hit=bool(row['dino_top1_metrics']['top1_hit'])) for row in rows]
+    summary['dino_top1'] = dict(
+        frame_count=len(rows),
+        top1_hits=int(sum(item['hit'] for item in dino_flat)),
+        top1_mcml=labeller.longest_miss(dino_flat, 'hit'),
+        mean_top1_riou=(float(np.mean([
+            row['dino_top1_metrics']['top1_riou'] for row in rows]))
+                        if rows else 0.0))
     summary['routing_diagnostics'] = dict(
         baseline_active_count=int(sum(row['baseline_active'] for row in rows)),
         baseline_silent_count=int(sum(
@@ -525,6 +570,30 @@ def summarize_combination(rows: Sequence[Dict]) -> Dict:
             and not row['policies']['baseline']['metrics']['top1_hit']
             and row['policies']['scoped_override']['source'] == 'dino_override'
             and row['policies']['scoped_override']['metrics']['top1_hit']
+            for row in rows)),
+        scoped_primary_dino_selected_count=int(sum(
+            row['policies']['scoped_dino_primary']['source'] == 'dino_primary'
+            for row in rows)),
+        scoped_primary_baseline_fallback_count=int(sum(
+            row['policies']['scoped_dino_primary']['source']
+            == 'baseline_fallback' for row in rows)),
+        scoped_primary_baseline_correct_to_incorrect_count=int(sum(
+            row['policies']['baseline']['metrics']['top1_hit']
+            and row['policies']['scoped_dino_primary']['source']
+            == 'dino_primary'
+            and not row['policies']['scoped_dino_primary']['metrics'][
+                'top1_hit']
+            for row in rows)),
+        scoped_primary_baseline_incorrect_to_correct_count=int(sum(
+            row['baseline_active']
+            and not row['policies']['baseline']['metrics']['top1_hit']
+            and row['policies']['scoped_dino_primary']['source']
+            == 'dino_primary'
+            and row['policies']['scoped_dino_primary']['metrics']['top1_hit']
+            for row in rows)),
+        dino_primary_baseline_correct_to_incorrect_count=int(sum(
+            row['policies']['baseline']['metrics']['top1_hit']
+            and not row['dino_top1_metrics']['top1_hit']
             for row in rows)))
     return summary
 
@@ -546,6 +615,34 @@ def confident_override_non_regression_holds(summary: Dict) -> bool:
             and override['mean_top1_riou'] >= baseline['mean_top1_riou']
             and summary['routing_diagnostics'][
                 'baseline_correct_overridden_to_incorrect_count'] == 0)
+
+
+def scoped_primary_non_regression_holds(summary: Dict) -> bool:
+    baseline = summary['baseline']
+    primary = summary['dino_top1']
+    return (primary['top1_hits'] >= baseline['top1_hits']
+            and primary['top1_mcml'] <= baseline['top1_mcml']
+            and primary['mean_top1_riou'] >= baseline['mean_top1_riou']
+            and summary['routing_diagnostics'][
+                'dino_primary_baseline_correct_to_incorrect_count'] == 0)
+
+
+def make_scoped_primary_decision(source_summary: Dict,
+                                 target_summary: Dict,
+                                 scope_manifest_applied: bool,
+                                 scope_eligible_for_final_test: bool = True
+                                 ) -> str:
+    if not scope_manifest_applied:
+        return 'SCOPE_SIGNAL_NOT_SUPPLIED'
+    if not scoped_primary_non_regression_holds(source_summary):
+        return 'INVALID_SOURCE_SCOPED_DINO_PRIMARY_REGRESSION'
+    primary = target_summary['scoped_dino_primary']
+    if (primary['top1_hits'] >= TARGET_MIN_HITS
+            and primary['top1_mcml'] <= TARGET_MAX_MCML):
+        if not scope_eligible_for_final_test:
+            return 'TARGET_AWARE_SCOPE_DIAGNOSIS_ONLY'
+        return 'SCOPED_DINO_PRIMARY_LOW_LIGHT_EXPERT_PASSES'
+    return 'SCOPED_DINO_PRIMARY_LOW_LIGHT_EXPERT_INSUFFICIENT'
 
 
 def make_decision(source_summary: Dict, target_summary: Dict) -> str:
@@ -651,6 +748,11 @@ def main():
     source_summary = summarize_combination(source_rows)
     target_summary = summarize_combination(target_rows)
     decision = make_decision(source_summary, target_summary)
+    scoped_primary_decision = make_scoped_primary_decision(
+        source_summary, target_summary, scope_manifest is not None,
+        scope_eligible_for_final_test=(
+            False if scope_manifest is None else
+            scope_manifest['eligible_for_final_test']))
 
     payload = dict(
         audit=AUDIT_NAME, protocol_version=PROTOCOL_VERSION,
@@ -662,7 +764,7 @@ def main():
         dinov2_checkpoint=os.path.abspath(args.dinov2_checkpoint),
         dinov2_checkpoint_sha256=file_sha256(args.dinov2_checkpoint),
         protocol=dict(
-            routing='four_fixed_policies_reported_side_by_side',
+            routing='fixed_policies_plus_external_scope_policies',
             baseline_inference_config_unchanged=True,
             baseline_policy=baseline_policy,
             strict_dino_score_thr=DINO_DEPLOYMENT_SCORE_THR,
@@ -676,6 +778,10 @@ def main():
                 cross_model_score_comparison=False,
                 threshold_source='predeclared_labeller_deployment_threshold',
                 requires_source_non_regression=True),
+            scoped_dino_primary_policy=(
+                'external_scope_enabled_dino_top1_else_baseline_fallback'),
+            scoped_override_policy=(
+                'external_scope_enabled_confident_override'),
             score_fusion=False, brightness_gate=False,
             target_dev_role='diagnosis_only',
             target_dev_informed_method_development=True,
@@ -690,7 +796,11 @@ def main():
             manifest=(None if scope_manifest is None else dict(
                 path=scope_manifest['path'],
                 sha256=file_sha256(args.scope_manifest))),
-            target_label_derived=False)),
+            target_label_derived=(False if scope_manifest is None else
+                                  scope_manifest['target_label_derived']),
+            eligible_for_final_test=(False if scope_manifest is None else
+                                     scope_manifest[
+                                         'eligible_for_final_test']))),
         isolation=dict(
             optimizer_steps=0, checkpoint_writes=0,
             baseline_frozen=True,
@@ -703,10 +813,12 @@ def main():
             summary=source_summary, rows=source_rows),
         target_dev=dict(
             summary=target_summary, rows=target_rows),
-        decision=decision)
+        decision=decision,
+        scoped_primary_decision=scoped_primary_decision)
     replacements = roi_probe.write_json_atomic(args.out_json, payload)
     print('[rescue] {} baseline={}/{} strict={}/{} ranked={}/{} '
-          'override={}/{} strict_mcml={} ranked_mcml={} override_mcml={}'
+          'override={}/{} scoped_primary={}/{} strict_mcml={} '
+          'ranked_mcml={} override_mcml={} scoped_primary_mcml={}'
           .format(
               decision,
               target_summary['baseline']['top1_hits'], len(target_rows),
@@ -714,10 +826,14 @@ def main():
               target_summary['ranked']['top1_hits'], len(target_rows),
               target_summary['confident_override']['top1_hits'],
               len(target_rows),
+              target_summary['scoped_dino_primary']['top1_hits'],
+              len(target_rows),
               target_summary['strict']['top1_mcml'],
               target_summary['ranked']['top1_mcml'],
-              target_summary['confident_override']['top1_mcml']))
+              target_summary['confident_override']['top1_mcml'],
+              target_summary['scoped_dino_primary']['top1_mcml']))
     print('[json] nonfinite_replacements={}'.format(replacements))
+    print('[scope] {}'.format(scoped_primary_decision))
     print('[out] {}'.format(args.out_json))
 
 

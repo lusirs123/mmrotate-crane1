@@ -13,12 +13,17 @@ def _args(tmp_path, **overrides):
     checkpoint.write_bytes(b'dino')
     values = dict(
         seed=0, source_val_modulus=5, dino_gpus=[1, 2], head_gpu=0,
+        source_train_datasets=None, source_val_datasets=None,
         patch_size=14, rpn_feat_channels=256, roi_fc_channels=1024,
         roi_samples=256, proposal_count=2000, max_detections=2000,
         valid_content_tolerance=1e-3,
         deployment_score_thr=0.05, border_margin_ratio=0.02,
-        epochs=12, lr=0.001, momentum=0.9, weight_decay=1e-4,
+        epochs=24, lr=0.0025, momentum=0.9, weight_decay=1e-4,
         max_grad_norm=10.0, riou_thr=0.5, target_min_wins=26,
+        warmup_iters=1000, warmup_ratio=0.001,
+        lr_steps=[16, 22], lr_gamma=0.1,
+        checkpoint_interval=2,
+        selection_epochs=[16, 18, 20, 22, 24],
         max_mcml=5, source_min_top1_rate=0.8,
         resume_checkpoint=None, eval_only_checkpoint=None,
         dinov2_checkpoint=str(checkpoint), dinov2_model='dinov2_vitl14',
@@ -42,12 +47,41 @@ def test_validate_requires_disjoint_head_and_dino_gpus(tmp_path):
         labeller.validate_args(_args(tmp_path, head_gpu=1))
 
 
+def test_validate_rejects_selection_outside_checkpoint_epochs(tmp_path):
+    with pytest.raises(ValueError, match='validation checkpoints'):
+        labeller.validate_args(_args(
+            tmp_path, selection_epochs=[15, 18, 20, 22, 24]))
+
+
 def test_source_split_is_deterministic_and_disjoint(tmp_path):
     records = [_record(tmp_path, frame) for frame in range(1, 11)]
     train, val = labeller.split_source_records(records, modulus=5)
     assert [row['frame'] for row in val] == [5, 10]
     assert set(row['frame'] for row in train).isdisjoint(
         row['frame'] for row in val)
+
+
+def test_formal_source_records_support_train_sim_image_mapping(tmp_path):
+    root = tmp_path / 'data'
+    for split in ('train', 'train_sim', 'val'):
+        (root / split / 'annfiles').mkdir(parents=True)
+    (root / 'train' / 'images').mkdir(parents=True)
+    (root / 'val' / 'images').mkdir(parents=True)
+    fixtures = (
+        ('train', 'train', 'real_seq01_00001'),
+        ('train_sim', 'train', 'sim_seq08_00001'),
+        ('val', 'val', 'real_seq07_00001'))
+    for annotation_split, image_split, name in fixtures:
+        (root / annotation_split / 'annfiles' / (name + '.txt')).write_text(
+            '', encoding='ascii')
+        (root / image_split / 'images' / (name + '.jpg')).write_bytes(b'image')
+    args = _args(
+        tmp_path, data_root=str(root),
+        source_train_datasets=['train:train', 'train_sim:train'],
+        source_val_datasets=['val:val'])
+    train, val = labeller.formal_source_records(args)
+    assert [row['seq'] for row in train] == ['real_seq01', 'sim_seq08']
+    assert [row['seq'] for row in val] == ['real_seq07']
 
 
 def test_target_image_cannot_enter_source_training(tmp_path):
@@ -199,6 +233,18 @@ def test_source_selection_prioritizes_top1_before_oracle_recall():
     b = dict(top1_hits=4, recall_at_20=20,
              recall_at_100=20, mean_top1_riou=0.9)
     assert labeller.source_selection_key(a) > labeller.source_selection_key(b)
+
+
+def test_lr_schedule_matches_brightaug_warmup_and_steps(tmp_path):
+    args = _args(tmp_path)
+    assert labeller.scheduled_lr(args, epoch=1, global_step=0) == pytest.approx(
+        0.0025 * 0.001)
+    assert labeller.scheduled_lr(
+        args, epoch=1, global_step=1000) == pytest.approx(0.0025)
+    assert labeller.scheduled_lr(
+        args, epoch=17, global_step=1000) == pytest.approx(0.00025)
+    assert labeller.scheduled_lr(
+        args, epoch=23, global_step=1000) == pytest.approx(0.000025)
 
 
 def test_target_decision_requires_top1_and_mcml(tmp_path):

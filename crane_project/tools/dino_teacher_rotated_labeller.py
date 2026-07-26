@@ -9,11 +9,13 @@ read after the source-selected checkpoint has been fixed.
 """
 
 import argparse
+import glob
 import hashlib
 import json
 import math
 import os
 import random
+import re
 import sys
 from typing import Dict, List, Sequence, Tuple
 
@@ -35,7 +37,7 @@ from crane_project.tools import p3_p4_neighborhood_rescue_audit as neighborhood 
 
 
 LABELLER_NAME = 'Frozen DINOv2 Oriented RPN/ROI Source Labeller V1'
-PROTOCOL_VERSION = 4
+PROTOCOL_VERSION = 5
 PAPER_URL = (
     'https://openaccess.thecvf.com/content/CVPR2025/html/'
     'Lavoie_Large_Self-Supervised_Models_Bridge_the_Gap_in_Domain_Adaptive_'
@@ -49,6 +51,12 @@ def parse_args():
     parser.add_argument('--source-split', default=neighborhood.SOURCE_SPLIT)
     parser.add_argument('--source-seq', default=neighborhood.SOURCE_SEQ)
     parser.add_argument('--source-val-modulus', type=int, default=5)
+    parser.add_argument(
+        '--source-train-datasets', nargs='+',
+        help='Formal source train specs: annotation_split:image_split')
+    parser.add_argument(
+        '--source-val-datasets', nargs='+',
+        help='Formal source validation specs: annotation_split:image_split')
     parser.add_argument('--target-split', default=neighborhood.TARGET_SPLIT)
     parser.add_argument('--target-seq', default=neighborhood.TARGET_SEQ)
     parser.add_argument('--target-start', type=int,
@@ -74,11 +82,17 @@ def parse_args():
     parser.add_argument('--valid-content-tolerance', type=float, default=1e-3)
     parser.add_argument('--deployment-score-thr', type=float, default=0.05)
     parser.add_argument('--border-margin-ratio', type=float, default=0.02)
-    parser.add_argument('--epochs', type=int, default=12)
-    parser.add_argument('--lr', type=float, default=0.001)
+    parser.add_argument('--epochs', type=int, default=24)
+    parser.add_argument('--lr', type=float, default=0.0025)
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--weight-decay', type=float, default=1e-4)
     parser.add_argument('--max-grad-norm', type=float, default=10.0)
+    parser.add_argument('--warmup-iters', type=int, default=1000)
+    parser.add_argument('--warmup-ratio', type=float, default=0.001)
+    parser.add_argument('--lr-steps', type=int, nargs='+', default=[16, 22])
+    parser.add_argument('--lr-gamma', type=float, default=0.1)
+    parser.add_argument('--checkpoint-interval', type=int, default=2)
+    parser.add_argument('--selection-epochs', type=int, nargs='+')
     parser.add_argument('--riou-thr', type=float, default=0.5)
     parser.add_argument('--target-min-wins', type=int, default=26)
     parser.add_argument('--max-mcml', type=int, default=5)
@@ -87,6 +101,9 @@ def parse_args():
     parser.add_argument('--work-dir', required=True)
     parser.add_argument('--resume-checkpoint')
     parser.add_argument('--eval-only-checkpoint')
+    parser.add_argument(
+        '--skip-target-eval', action='store_true',
+        help='Train/select on source only; run target evaluation separately.')
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--out-json', required=True)
     return parser.parse_args()
@@ -97,6 +114,12 @@ def validate_args(args):
         raise ValueError('The protocol requires --seed 0')
     if args.source_val_modulus < 2:
         raise ValueError('--source-val-modulus must be at least 2')
+    if bool(args.source_train_datasets) != bool(args.source_val_datasets):
+        raise ValueError(
+            'Formal source train and validation specs must be supplied together')
+    if args.source_train_datasets:
+        parse_dataset_specs(args.source_train_datasets)
+        parse_dataset_specs(args.source_val_datasets)
     if not args.dino_gpus:
         raise ValueError('At least one DINO GPU is required')
     if args.head_gpu in args.dino_gpus:
@@ -105,9 +128,31 @@ def validate_args(args):
     positive = (
         args.patch_size, args.rpn_feat_channels, args.roi_fc_channels,
         args.roi_samples, args.proposal_count, args.max_detections,
-        args.epochs, args.lr, args.max_grad_norm)
+        args.epochs, args.lr, args.max_grad_norm, args.lr_gamma,
+        args.checkpoint_interval)
     if any(float(value) <= 0.0 for value in positive):
         raise ValueError('Head, optimizer, and count settings must be positive')
+    if args.warmup_iters < 0:
+        raise ValueError('--warmup-iters must be non-negative')
+    if not 0.0 < args.warmup_ratio <= 1.0:
+        raise ValueError('--warmup-ratio must be in (0, 1]')
+    lr_steps = sorted(set(int(value) for value in args.lr_steps))
+    if any(value <= 0 or value >= args.epochs for value in lr_steps):
+        raise ValueError('--lr-steps must be within the training schedule')
+    args.lr_steps = lr_steps
+    selection = (list(range(1, args.epochs + 1))
+                 if args.selection_epochs is None
+                 else sorted(set(int(value)
+                                 for value in args.selection_epochs)))
+    if not selection or any(
+            value <= 0 or value > args.epochs for value in selection):
+        raise ValueError(
+            '--selection-epochs must be non-empty and within training')
+    if any(value % args.checkpoint_interval != 0
+           and value != args.epochs for value in selection):
+        raise ValueError(
+            '--selection-epochs must coincide with validation checkpoints')
+    args.selection_epochs = selection
     if not 0.0 < args.riou_thr <= 1.0:
         raise ValueError('--riou-thr must be in (0, 1]')
     if args.valid_content_tolerance < 0.0:
@@ -252,6 +297,76 @@ def split_source_records(records: Sequence[Dict], modulus: int):
     val_keys = {(row['seq'], int(row['frame'])) for row in val}
     if train_keys & val_keys:
         raise RuntimeError('Source train/validation overlap')
+    return train, val
+
+
+def parse_dataset_specs(values: Sequence[str]) -> List[Tuple[str, str]]:
+    """Parse ``annotation_split:image_split`` source dataset specs."""
+    specs = []
+    for value in values:
+        parts = str(value).split(':')
+        if len(parts) != 2 or not all(parts):
+            raise ValueError(
+                'Dataset specs must use annotation_split:image_split: {}'
+                .format(value))
+        specs.append((parts[0], parts[1]))
+    if not specs:
+        raise ValueError('At least one source dataset spec is required')
+    return specs
+
+
+def discover_labeled_records_with_image_split(
+        data_root: str, annotation_split: str, image_split: str) -> List[Dict]:
+    """Read labels from one split and images from its configured image split."""
+    ann_dir = os.path.join(data_root, annotation_split, 'annfiles')
+    img_dir = os.path.join(data_root, image_split, 'images')
+    records = []
+    for annotation in sorted(glob.glob(os.path.join(ann_dir, '*.txt'))):
+        base = os.path.splitext(os.path.basename(annotation))[0]
+        match = re.match(r'(.+_seq\d+)_(\d{5})$', base)
+        if match is None:
+            continue
+        image = None
+        for extension in ('.jpg', '.png', '.bmp', '.tif'):
+            candidate = os.path.join(img_dir, base + extension)
+            if os.path.isfile(candidate):
+                image = candidate
+                break
+        if image is None:
+            continue
+        records.append(dict(
+            split=annotation_split, image_split=image_split,
+            seq=match.group(1), frame=int(match.group(2)),
+            image=image, annotation=annotation,
+            domain=base.split('_', 1)[0]))
+    if not records:
+        raise RuntimeError(
+            'No labeled records found for {}:{}'
+            .format(annotation_split, image_split))
+    return records
+
+
+def formal_source_records(args):
+    if not args.source_train_datasets or not args.source_val_datasets:
+        return None
+    train = []
+    for annotation_split, image_split in parse_dataset_specs(
+            args.source_train_datasets):
+        train.extend(discover_labeled_records_with_image_split(
+            args.data_root, annotation_split, image_split))
+    val = []
+    for annotation_split, image_split in parse_dataset_specs(
+            args.source_val_datasets):
+        val.extend(discover_labeled_records_with_image_split(
+            args.data_root, annotation_split, image_split))
+    train_keys = {os.path.realpath(row['image']) for row in train}
+    val_keys = {os.path.realpath(row['image']) for row in val}
+    if train_keys & val_keys:
+        raise RuntimeError('Formal source train/validation overlap')
+    train = sorted(
+        train, key=lambda row: (row['split'], row['seq'], row['frame']))
+    val = sorted(
+        val, key=lambda row: (row['split'], row['seq'], row['frame']))
     return train, val
 
 
@@ -440,8 +555,19 @@ def prepare_record(dino, record: Dict, args, dino_device, head_device):
     return feature, img_meta, gt_boxes, gt_labels, original, cached
 
 
+def scheduled_lr(args, epoch: int, global_step: int) -> float:
+    decay_count = sum(int(epoch) > int(step) for step in args.lr_steps)
+    regular_lr = float(args.lr) * (float(args.lr_gamma) ** decay_count)
+    if args.warmup_iters <= 0 or global_step >= args.warmup_iters:
+        return regular_lr
+    progress = float(global_step) / float(args.warmup_iters)
+    warmup_factor = (float(args.warmup_ratio)
+                     + (1.0 - float(args.warmup_ratio)) * progress)
+    return regular_lr * warmup_factor
+
+
 def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
-                args, dino_device, head_device) -> Dict:
+                global_step: int, args, dino_device, head_device) -> Dict:
     heads.train()
     ordered = list(records)
     random.Random(args.seed + epoch).shuffle(ordered)
@@ -449,6 +575,9 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
     component_sums = {}
     cache_hits = 0
     for index, record in enumerate(ordered):
+        current_lr = scheduled_lr(args, epoch, global_step)
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = current_lr
         feature, img_meta, gt_boxes, gt_labels, _original, cached = (
             prepare_record(
                 dino, record, args, dino_device, head_device))
@@ -464,6 +593,7 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
         if not math.isfinite(float(grad_norm)):
             raise RuntimeError('Non-finite detector-head gradient')
         optimizer.step()
+        global_step += 1
         losses.append(float(total.item()))
         if (index + 1) % 25 == 0 or index + 1 == len(ordered):
             print('[source-train] epoch={} {}/{} loss={:.5f} cache={}/{}'.format(
@@ -472,6 +602,8 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
         del feature, gt_boxes, gt_labels, total
     return dict(
         epoch=int(epoch), count=len(ordered),
+        global_step_end=int(global_step),
+        lr_end=float(optimizer.param_groups[0]['lr']),
         mean_loss=float(np.mean(losses)),
         mean_loss_components={
             name: float(value / max(1, len(ordered)))
@@ -808,12 +940,26 @@ def make_target_decision(summary: Dict, args,
 
 
 def checkpoint_payload(heads, optimizer, scheduler, epoch: int, best_epoch: int,
-                       best_summary: Dict, in_channels: int, args) -> Dict:
+                       best_summary: Dict, in_channels: int, args,
+                       global_step: int = 0) -> Dict:
     return dict(
         labeller=LABELLER_NAME, protocol_version=PROTOCOL_VERSION,
         source_only=True, frozen_dinov2=True,
         epoch=int(epoch), best_epoch=int(best_epoch),
+        global_step=int(global_step),
         best_source_val_summary=best_summary,
+        training_protocol=dict(
+            epochs=int(args.epochs), lr=float(args.lr),
+            momentum=float(args.momentum),
+            weight_decay=float(args.weight_decay),
+            max_grad_norm=float(args.max_grad_norm),
+            warmup_iters=int(args.warmup_iters),
+            warmup_ratio=float(args.warmup_ratio),
+            lr_steps=[int(value) for value in args.lr_steps],
+            lr_gamma=float(args.lr_gamma),
+            checkpoint_interval=int(args.checkpoint_interval),
+            selection_epochs=[int(value)
+                              for value in args.selection_epochs]),
         in_channels=int(in_channels), patch_size=int(args.patch_size),
         rpn_feat_channels=int(args.rpn_feat_channels),
         roi_fc_channels=int(args.roi_fc_channels),
@@ -853,10 +999,9 @@ def train_source_only(dino, heads, train_records, val_records, args,
     optimizer = torch.optim.SGD(
         heads.parameters(), lr=args.lr, momentum=args.momentum,
         weight_decay=args.weight_decay)
-    scheduler = torch.optim.lr_scheduler.MultiStepLR(
-        optimizer, milestones=[max(1, args.epochs * 2 // 3),
-                               max(1, args.epochs * 5 // 6)], gamma=0.1)
+    scheduler = None
     start_epoch = 1
+    global_step = 0
     best_epoch = 0
     best_summary = None
     best_key = None
@@ -867,9 +1012,9 @@ def train_source_only(dino, heads, train_records, val_records, args,
         heads.load_state_dict(payload['heads_state_dict'], strict=True)
         if payload.get('optimizer_state_dict') is not None:
             optimizer.load_state_dict(payload['optimizer_state_dict'])
-        if payload.get('scheduler_state_dict') is not None:
-            scheduler.load_state_dict(payload['scheduler_state_dict'])
         start_epoch = int(payload.get('epoch', 0)) + 1
+        global_step = int(payload.get(
+            'global_step', (start_epoch - 1) * len(train_records)))
         best_epoch = int(payload.get('best_epoch', 0))
         best_summary = payload.get('best_source_val_summary')
         best_key = (None if best_summary is None
@@ -877,34 +1022,63 @@ def train_source_only(dino, heads, train_records, val_records, args,
 
     best_path = os.path.join(args.work_dir, 'labeller_best_source_only.pth')
     latest_path = os.path.join(args.work_dir, 'labeller_latest.pth')
+    selection_epochs = set(int(value) for value in args.selection_epochs)
     for epoch in range(start_epoch, args.epochs + 1):
         train_row = train_epoch(
-            dino, heads, optimizer, train_records, epoch, args,
+            dino, heads, optimizer, train_records, epoch, global_step, args,
             dino_device, head_device)
-        val_rows = evaluate_records(
-            dino, heads, val_records, args, dino_device, head_device,
-            role='source_validation')
-        val_summary = summarize_rows(val_rows)
-        key = source_selection_key(val_summary)
-        improved = best_key is None or key > best_key
+        global_step = int(train_row['global_step_end'])
+        evaluate_epoch = (
+            epoch % int(args.checkpoint_interval) == 0
+            or epoch == int(args.epochs))
+        val_summary = None
+        if evaluate_epoch:
+            val_rows = evaluate_records(
+                dino, heads, val_records, args, dino_device, head_device,
+                role='source_validation')
+            val_summary = summarize_rows(val_rows)
+        selection_eligible = epoch in selection_epochs
+        if selection_eligible and val_summary is None:
+            raise RuntimeError(
+                'A selection epoch must also be a validation epoch')
+        key = (None if val_summary is None
+               else source_selection_key(val_summary))
+        improved = bool(
+            selection_eligible
+            and (best_key is None or key > best_key))
         if improved:
             best_key = key
             best_epoch = int(epoch)
             best_summary = val_summary
             atomic_torch_save(checkpoint_payload(
                 heads, None, None, epoch, best_epoch, best_summary,
-                in_channels, args), best_path)
+                in_channels, args, global_step), best_path)
+        if evaluate_epoch:
+            epoch_path = os.path.join(
+                args.work_dir,
+                'labeller_epoch_{:02d}_source_only.pth'.format(epoch))
+            atomic_torch_save(checkpoint_payload(
+                heads, optimizer, scheduler, epoch, best_epoch,
+                best_summary, in_channels, args, global_step), epoch_path)
         history.append(dict(
             epoch=int(epoch), train=train_row,
             source_val=val_summary, selected_as_best=bool(improved),
+            selection_eligible=bool(selection_eligible),
+            checkpoint_saved=bool(evaluate_epoch),
             lr=float(optimizer.param_groups[0]['lr'])))
-        scheduler.step()
         atomic_torch_save(checkpoint_payload(
             heads, optimizer, scheduler, epoch, best_epoch, best_summary,
-            in_channels, args), latest_path)
-        print('[source-epoch] epoch={} top1={}/{} r100={} best_epoch={}'.format(
-            epoch, val_summary['top1_hits'], val_summary['frame_count'],
-            val_summary['recall_at_100'], best_epoch))
+            in_channels, args, global_step), latest_path)
+        if val_summary is None:
+            print('[source-epoch] epoch={} validation=skipped best_epoch={}'
+                  .format(epoch, best_epoch))
+        else:
+            print('[source-epoch] epoch={} top1={}/{} r100={} '
+                  'selection_eligible={} best_epoch={}'.format(
+                      epoch, val_summary['top1_hits'],
+                      val_summary['frame_count'],
+                      val_summary['recall_at_100'], selection_eligible,
+                      best_epoch))
     if best_epoch <= 0 or not os.path.isfile(best_path):
         raise RuntimeError('No source-selected labeller checkpoint')
     return best_path, best_epoch, best_summary, history
@@ -921,14 +1095,28 @@ def main():
                     for gpu in args.dino_gpus]
     dino_device = dino_devices[0]
 
-    source_records = [
-        row for row in transfer.discover_labeled_records(
-            args.data_root, args.source_split, 0)
-        if row['seq'] == args.source_seq]
-    source_train, source_val = split_source_records(
-        source_records, args.source_val_modulus)
-    targets = target_records(args)
-    assert_training_target_isolation(source_train, targets)
+    formal_records = formal_source_records(args)
+    if formal_records is None:
+        source_records = [
+            row for row in transfer.discover_labeled_records(
+                args.data_root, args.source_split, 0)
+            if row['seq'] == args.source_seq]
+        source_train, source_val = split_source_records(
+            source_records, args.source_val_modulus)
+        source_protocol = dict(
+            mode='legacy_single_sequence_modulus_split',
+            source_split=args.source_split, source_seq=args.source_seq,
+            source_val_modulus=int(args.source_val_modulus))
+    else:
+        source_train, source_val = formal_records
+        source_protocol = dict(
+            mode='official_source_train_and_val_splits',
+            train_datasets=list(args.source_train_datasets),
+            val_datasets=list(args.source_val_datasets))
+    targets = [] if args.skip_target_eval else target_records(args)
+    if targets:
+        assert_training_target_isolation(
+            list(source_train) + list(source_val), targets)
 
     dino, loaded_patch_size = audit.load_frozen_dinov2(
         args.dinov2_repo, args.dinov2_checkpoint,
@@ -967,13 +1155,19 @@ def main():
         heads.load_state_dict(payload['heads_state_dict'], strict=True)
         current_source_summary = best_source_summary
 
-    # The checkpoint is fixed by source validation before target labels enter.
-    target_rows = evaluate_records(
-        dino, heads, targets, args, dino_device, head_device,
-        role='target_dev_diagnosis_only')
-    target_summary = summarize_rows(target_rows)
-    decision = make_target_decision(
-        target_summary, args, source_summary=current_source_summary)
+    # The paper training stage does not read target data.  Legacy diagnostic
+    # runs may still evaluate target only after the source checkpoint is fixed.
+    if args.skip_target_eval:
+        target_rows = None
+        target_summary = None
+        decision = 'SOURCE_ONLY_TRAINING_COMPLETE_TARGET_NOT_READ'
+    else:
+        target_rows = evaluate_records(
+            dino, heads, targets, args, dino_device, head_device,
+            role='target_dev_diagnosis_only')
+        target_summary = summarize_rows(target_rows)
+        decision = make_target_decision(
+            target_summary, args, source_summary=current_source_summary)
 
     dino_unchanged = (
         dino_versions == alignment.module_parameter_versions(dino))
@@ -988,10 +1182,22 @@ def main():
             architecture=(
                 'frozen_DINOv2_single_scale_to_OrientedRPN_'
                 'to_RotatedROIAlign7x7_to_Shared2FC_cls_and_OBB_reg'),
-            source_split=args.source_split, source_seq=args.source_seq,
-            source_val_rule='frame_id_mod_{}_equals_0'.format(
-                args.source_val_modulus),
-            checkpoint_selection='source_validation_only',
+            source_data=source_protocol,
+            checkpoint_selection=(
+                'source_validation_only_over_fixed_candidate_epochs'),
+            selection_epochs=[int(value)
+                              for value in args.selection_epochs],
+            training_schedule=dict(
+                epochs=int(args.epochs), optimizer='SGD',
+                lr=float(args.lr), momentum=float(args.momentum),
+                weight_decay=float(args.weight_decay),
+                max_grad_norm=float(args.max_grad_norm),
+                warmup='linear', warmup_iters=int(args.warmup_iters),
+                warmup_ratio=float(args.warmup_ratio),
+                lr_policy='step',
+                lr_steps=[int(value) for value in args.lr_steps],
+                lr_gamma=float(args.lr_gamma),
+                checkpoint_interval=int(args.checkpoint_interval)),
             source_min_top1_rate=float(args.source_min_top1_rate),
             deployment_score_thr=float(args.deployment_score_thr),
             border_margin_ratio=float(args.border_margin_ratio),
@@ -1005,8 +1211,11 @@ def main():
                 reporting_only=True, changes_returned_detections=False,
                 changes_checkpoint_selection=False,
                 raw_candidate_stage='roi_output_before_valid_content_filter'),
-            target_labels_first_used='after_source_checkpoint_fixed',
-            target_dev_role='diagnosis_only',
+            target_labels_first_used=(
+                'not_read' if args.skip_target_eval
+                else 'after_source_checkpoint_fixed'),
+            target_dev_role=('not_read_during_source_only_training'
+                             if args.skip_target_eval else 'diagnosis_only'),
             pseudo_label_student_training=False,
             reason=(
                 'Only the paper labeller component is authorized; no separate '
@@ -1017,7 +1226,8 @@ def main():
                                'OrientedStandardRoIHead'],
             target_used_for_training=False,
             target_used_for_checkpoint_selection=False,
-            target_labels_used_for_evaluation_only=True),
+            target_labels_used_for_evaluation_only=bool(
+                not args.skip_target_eval)),
         architecture=dict(
             in_channels=in_channels, patch_size=int(args.patch_size),
             rpn=rpn_config(in_channels, args), roi=roi_config(in_channels, args)),
@@ -1028,12 +1238,17 @@ def main():
             current_inference_validation_summary=current_source_summary,
             current_inference_rule='valid_rotated_obb_corners',
             history=history),
-        target_dev=dict(summary=target_summary, rows=target_rows),
+        target_dev=(None if target_summary is None else dict(
+            summary=target_summary, rows=target_rows)),
         decision=decision)
     replacements = roi_probe.write_json_atomic(args.out_json, payload)
-    print('[dino-labeller] {} top1={}/{} mcml={} r100={}'.format(
-        decision, target_summary['top1_hits'], target_summary['frame_count'],
-        target_summary['top1_mcml'], target_summary['recall_at_100']))
+    if target_summary is None:
+        print('[dino-labeller] {}'.format(decision))
+    else:
+        print('[dino-labeller] {} top1={}/{} mcml={} r100={}'.format(
+            decision, target_summary['top1_hits'],
+            target_summary['frame_count'], target_summary['top1_mcml'],
+            target_summary['recall_at_100']))
     print('[json] nonfinite_replacements={}'.format(replacements))
     print('[out] {}'.format(args.out_json))
 

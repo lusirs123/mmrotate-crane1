@@ -33,6 +33,10 @@ def _combined_row(frame, baseline, strict, ranked, override=None):
             scoped_override=dict(
                 source=('dino_rescue' if override['detection_count']
                         else 'silence'), scope_enabled=True,
+                preserved=True, metrics=override),
+            scoped_dino_primary=dict(
+                source=('dino_primary' if override['detection_count']
+                        else 'silence'), scope_enabled=True,
                 preserved=True, metrics=override)))
 
 
@@ -100,6 +104,33 @@ def test_scoped_override_uses_dino_only_when_enabled():
     assert np.array_equal(selected, dino)
 
 
+def test_scoped_dino_primary_ignores_uncalibrated_score_inside_scope():
+    baseline = np.asarray([[1, 2, 3, 4, 0.1, 0.99]], dtype=np.float32)
+    dino = np.asarray([[9, 8, 7, 6, 0.2, 0.001]], dtype=np.float32)
+    selected, source = audit.choose_scoped_dino_primary(
+        baseline, dino, dino_enabled=True)
+    assert source == 'dino_primary'
+    assert np.array_equal(selected, dino)
+
+
+def test_scoped_dino_primary_is_exact_baseline_outside_scope():
+    baseline = np.asarray([[1, 2, 3, 4, 0.1, 0.99]], dtype=np.float32)
+    dino = np.asarray([[9, 8, 7, 6, 0.2, 0.9]], dtype=np.float32)
+    selected, source = audit.choose_scoped_dino_primary(
+        baseline, dino, dino_enabled=False)
+    assert source == 'baseline_scope_disabled'
+    assert np.array_equal(selected, baseline)
+
+
+def test_scoped_dino_primary_falls_back_when_dino_is_silent():
+    baseline = np.asarray([[1, 2, 3, 4, 0.1, 0.99]], dtype=np.float32)
+    dino = np.zeros((0, 6), dtype=np.float32)
+    selected, source = audit.choose_scoped_dino_primary(
+        baseline, dino, dino_enabled=True)
+    assert source == 'baseline_fallback'
+    assert np.array_equal(selected, baseline)
+
+
 def test_scope_manifest_covers_records_and_rejects_target_derived_source(
         tmp_path):
     path = tmp_path / 'scope.json'
@@ -116,7 +147,7 @@ def test_scope_manifest_covers_records_and_rejects_target_derived_source(
     path.write_text(
         '{"scope_source":"target_labels","entries":[]}',
         encoding='utf-8')
-    with pytest.raises(ValueError, match='target labels'):
+    with pytest.raises(ValueError, match='target_label_derived'):
         audit.load_scope_manifest(str(path), records)
 
 
@@ -163,6 +194,8 @@ def test_combine_rows_preserves_active_baseline_and_rescues_only_silence(
         'dino_rescue')
     assert rows[0]['policies']['scoped_override']['source'] == (
         'dino_override')
+    assert rows[0]['policies']['scoped_dino_primary']['source'] == (
+        'dino_primary')
 
 
 def test_normalize_baseline_result_requires_one_image_and_one_class():
@@ -284,6 +317,41 @@ def test_source_gate_rejects_hidden_correct_baseline_regression():
         'routing_diagnostics': dict(
             baseline_correct_overridden_to_incorrect_count=1)}
     assert not audit.confident_override_non_regression_holds(summary)
+
+
+def test_scoped_primary_decision_requires_external_scope_signal():
+    summary = {
+        'baseline': dict(top1_hits=44, top1_mcml=1,
+                         mean_top1_riou=0.75),
+        'dino_top1': dict(
+            top1_hits=45, top1_mcml=0, mean_top1_riou=0.8),
+        'routing_diagnostics': dict(
+            dino_primary_baseline_correct_to_incorrect_count=0)}
+    target = {
+        'scoped_dino_primary': dict(top1_hits=32, top1_mcml=1)}
+    assert audit.make_scoped_primary_decision(
+        summary, target, False) == 'SCOPE_SIGNAL_NOT_SUPPLIED'
+    assert audit.make_scoped_primary_decision(
+        summary, target, True) == (
+            'SCOPED_DINO_PRIMARY_LOW_LIGHT_EXPERT_PASSES')
+    assert audit.make_scoped_primary_decision(
+        summary, target, True, False) == (
+            'TARGET_AWARE_SCOPE_DIAGNOSIS_ONLY')
+
+
+def test_scoped_primary_source_gate_rejects_harmful_replacement():
+    source = {
+        'baseline': dict(top1_hits=44, top1_mcml=1,
+                         mean_top1_riou=0.75),
+        'dino_top1': dict(
+            top1_hits=45, top1_mcml=0, mean_top1_riou=0.8),
+        'routing_diagnostics': dict(
+            dino_primary_baseline_correct_to_incorrect_count=1)}
+    target = {
+        'scoped_dino_primary': dict(top1_hits=32, top1_mcml=1)}
+    assert audit.make_scoped_primary_decision(
+        source, target, True) == (
+            'INVALID_SOURCE_SCOPED_DINO_PRIMARY_REGRESSION')
 
 
 def test_validate_fixed_protocol_and_sequential_gpu_sharing(tmp_path):
