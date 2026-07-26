@@ -81,7 +81,7 @@ dino_rescue = dict(
             'feature_cache'),
         out_dir=(
             'work_dirs/dino_teacher_scoped_lowlight_v1_formal8/'
-            'full_test_diagnosis'),
+            'full_test_diagnosis_v2'),
         out_json=(
             'work_dirs/dino_teacher_scoped_lowlight_v1_formal8/'
-            'full_test_diagnosis/result.json')))
+            'full_test_diagnosis_v2/result.json')))

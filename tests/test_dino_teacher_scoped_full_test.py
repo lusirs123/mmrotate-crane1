@@ -2,6 +2,8 @@ import argparse
 import json
 import os
 
+import numpy as np
+
 from crane_project.tools import dino_teacher_scoped_full_test as full_test
 
 
@@ -78,3 +80,69 @@ def test_dota_export_and_pickle_keep_one_class_structure(tmp_path):
     assert len(payload) == 1
     assert len(payload[0]) == 1
     assert payload[0][0].shape == (1, 6)
+
+
+def test_miss_run_summary_breaks_on_frame_gaps():
+    summary = full_test.miss_run_summary(
+        [1, 2, 3, 5, 6], [False, True, False, False, False])
+    assert summary['mcml'] == 2
+    assert summary['longest_intervals'] == [
+        {'start': 5, 'end': 6, 'length': 2}]
+
+
+def test_sequence_failure_analysis_reports_three_metrics(
+        monkeypatch, tmp_path):
+    records = []
+    rows = []
+    for frame in (1, 2, 3, 4, 6, 7):
+        record = _record(tmp_path, frame=frame)
+        record['domain'] = 'real'
+        records.append(record)
+        output = [] if frame in (1, 6, 7) else [[0, 0, 10, 10, 0, 0.9]]
+        rows.append(dict(
+            seq='real_seq02', frame=frame,
+            policies=dict(baseline=dict(
+                detections=output,
+                metrics=dict(
+                    top1_hit=frame == 2,
+                    top1_riou=0.8 if frame == 2 else 0.2)))))
+
+    monkeypatch.setattr(
+        full_test.labeller, 'parse_original_gt',
+        lambda _path: np.asarray([[0, 0, 10, 10, 0]], dtype=np.float32))
+    report = full_test.sequence_failure_analysis(
+        rows, records, 'baseline')['real_seq02']
+    assert report['silence_mcml']['mcml'] == 2
+    assert report['silence_mcml']['longest_intervals'] == [
+        {'start': 6, 'end': 7, 'length': 2}]
+    assert report['center_mcml']['mcml'] == 2
+    assert report['rotated_iou_mcml']['mcml'] == 2
+
+
+def test_compact_sequence_mcml_keeps_paper_fields_only():
+    metric = dict(
+        mcml=3,
+        longest_intervals=[{'start': 10, 'end': 12, 'length': 3}])
+    compact = full_test.compact_sequence_mcml(dict(
+        baseline=dict(real_seq02=dict(
+            silence_mcml=metric,
+            center_mcml=metric,
+            rotated_iou_mcml=metric))))
+    assert compact == dict(baseline=dict(real_seq02=dict(
+        silence_mcml=3,
+        silence_longest='10..12',
+        center_mcml=3,
+        center_longest='10..12',
+        rotated_iou_mcml=3,
+        rotated_iou_longest='10..12')))
+
+
+def test_explicit_center_metrics_separates_denominators_and_thresholds():
+    metrics = full_test.explicit_center_metrics(
+        {'real/R_center(%)': 98.91, 'sim/R_center(%)': 100.0},
+        {'real_R_center': 0.6476, 'sim_R_center': 1.0})
+    assert metrics == dict(
+        real_R_center_det_at_15px_percent=98.91,
+        sim_R_center_det_at_15px_percent=100.0,
+        real_R_center_all_at_25px_percent=64.76,
+        sim_R_center_all_at_10px_percent=100.0)

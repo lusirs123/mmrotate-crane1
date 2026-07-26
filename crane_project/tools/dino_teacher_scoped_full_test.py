@@ -18,7 +18,7 @@ import hashlib
 import os
 import pickle
 from collections import Counter, defaultdict
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import cv2
 import numpy as np
@@ -43,6 +43,7 @@ EXPECTED_SEQUENCE_COUNTS = {
     'real_seq03': 200,
     'sim_seq09': 572,
 }
+CENTER_THRESHOLDS_PX = {'real': 25.0, 'sim': 10.0}
 
 
 def parse_args():
@@ -254,6 +255,123 @@ def group_summary(rows: Sequence[Dict], policy: str) -> Dict[str, Dict]:
             for seq, items in sorted(grouped.items())}
 
 
+def miss_run_summary(frames: Sequence[int], hit_flags: Sequence[bool]) -> Dict:
+    """Summarize consecutive misses without crossing frame-id gaps."""
+    if len(frames) != len(hit_flags):
+        raise ValueError('Frame/hit lengths differ')
+    intervals = []
+    start = None
+    previous = None
+    for frame_value, hit_value in zip(frames, hit_flags):
+        frame = int(frame_value)
+        hit = bool(hit_value)
+        if previous is not None and frame != previous + 1:
+            if start is not None:
+                intervals.append(dict(
+                    start=int(start), end=int(previous),
+                    length=int(previous - start + 1)))
+                start = None
+        if hit:
+            if start is not None:
+                intervals.append(dict(
+                    start=int(start), end=int(previous),
+                    length=int(previous - start + 1)))
+                start = None
+        elif start is None:
+            start = frame
+        previous = frame
+    if start is not None and previous is not None:
+        intervals.append(dict(
+            start=int(start), end=int(previous),
+            length=int(previous - start + 1)))
+    mcml = max((item['length'] for item in intervals), default=0)
+    longest = [item for item in intervals if item['length'] == mcml]
+    return dict(
+        hit_count=int(sum(bool(value) for value in hit_flags)),
+        miss_count=int(sum(not bool(value) for value in hit_flags)),
+        miss_interval_count=len(intervals), mcml=int(mcml),
+        longest_intervals=longest)
+
+
+def center_hit(detections: Sequence[Sequence[float]],
+               gt_original: np.ndarray,
+               threshold_px: float) -> Tuple[bool, Optional[float]]:
+    if not detections or gt_original.shape[0] == 0:
+        return False, None
+    prediction = np.asarray(detections[0], dtype=np.float32)
+    distance = float(np.linalg.norm(
+        prediction[:2] - gt_original[0, :2]))
+    return bool(distance < float(threshold_px)), distance
+
+
+def sequence_failure_analysis(rows: Sequence[Dict], records: Sequence[Dict],
+                              policy: str) -> Dict[str, Dict]:
+    if len(rows) != len(records):
+        raise ValueError('Row/record lengths differ')
+    grouped = defaultdict(list)
+    for row, record in zip(rows, records):
+        if (row['seq'], int(row['frame'])) != (
+                record['seq'], int(record['frame'])):
+            raise RuntimeError('Failure-analysis frame alignment mismatch')
+        domain = str(record.get('domain', '')).lower()
+        if domain not in CENTER_THRESHOLDS_PX:
+            raise RuntimeError('Unsupported domain: {}'.format(domain))
+        gt = labeller.parse_original_gt(record['annotation'])
+        if gt.shape[0] != 1:
+            raise RuntimeError(
+                'One-target test requires exactly one GT: {}'.format(
+                    record['annotation']))
+        item = row['policies'][policy]
+        detections = item['detections']
+        has_output = bool(detections)
+        center_ok, center_distance = center_hit(
+            detections, gt, CENTER_THRESHOLDS_PX[domain])
+        grouped[record['seq']].append(dict(
+            frame=int(record['frame']), domain=domain,
+            has_output=has_output, center_hit=center_ok,
+            center_distance_px=center_distance,
+            rotated_iou_hit=bool(item['metrics']['top1_hit']),
+            rotated_iou=float(item['metrics']['top1_riou'])))
+
+    report = {}
+    for seq, items in sorted(grouped.items()):
+        items.sort(key=lambda item: int(item['frame']))
+        frames = [int(item['frame']) for item in items]
+        domain = items[0]['domain']
+        report[seq] = dict(
+            domain=domain, frame_count=len(items),
+            center_threshold_px=CENTER_THRESHOLDS_PX[domain],
+            rotated_iou_threshold=float(rescue.RIOU_THR),
+            silence_mcml=miss_run_summary(
+                frames, [item['has_output'] for item in items]),
+            center_mcml=miss_run_summary(
+                frames, [item['center_hit'] for item in items]),
+            rotated_iou_mcml=miss_run_summary(
+                frames, [item['rotated_iou_hit'] for item in items]))
+    return report
+
+
+def compact_sequence_mcml(failure_analysis: Dict) -> Dict:
+    """Keep only the values and longest intervals needed by the paper."""
+    compact = {}
+    for method, reports in failure_analysis.items():
+        compact[method] = {}
+        for seq, report in sorted(reports.items()):
+            row = {}
+            for output_name, metric_name in (
+                    ('silence', 'silence_mcml'),
+                    ('center', 'center_mcml'),
+                    ('rotated_iou', 'rotated_iou_mcml')):
+                metric = report[metric_name]
+                intervals = metric['longest_intervals']
+                row[output_name + '_mcml'] = int(metric['mcml'])
+                row[output_name + '_longest'] = ','.join(
+                    '{}..{}'.format(item['start'], item['end'])
+                    for item in intervals) if intervals else 'none'
+            compact[method][seq] = row
+    return compact
+
+
 def metric_delta(baseline: Dict, combined: Dict) -> Dict:
     delta = {}
     numeric = (int, float, np.integer, np.floating)
@@ -264,9 +382,25 @@ def metric_delta(baseline: Dict, combined: Dict) -> Dict:
     return delta
 
 
+def explicit_center_metrics(offline_metrics: Dict,
+                            standard_metrics: Dict) -> Dict:
+    """Expose conditional and all-frame center metrics without ambiguity."""
+    return dict(
+        real_R_center_det_at_15px_percent=float(
+            offline_metrics['real/R_center(%)']),
+        sim_R_center_det_at_15px_percent=float(
+            offline_metrics['sim/R_center(%)']),
+        real_R_center_all_at_25px_percent=round(
+            float(standard_metrics['real_R_center']) * 100.0, 4),
+        sim_R_center_all_at_10px_percent=round(
+            float(standard_metrics['sim_R_center']) * 100.0, 4))
+
+
 def paper_log_lines(baseline_metrics: Dict, combined_metrics: Dict,
                     baseline_standard: Dict, combined_standard: Dict,
+                    center_metrics: Dict,
                     overall: Dict, sequence_summaries: Dict,
+                    sequence_mcml: Dict,
                     scope: Dict, records: Sequence[Dict]) -> List[str]:
     enabled = sum(bool(scope['values'].get(
         (row['split'], row['seq'], int(row['frame'])), False))
@@ -286,6 +420,14 @@ def paper_log_lines(baseline_metrics: Dict, combined_metrics: Dict,
         lines.append('[paper-standard] method={} {}'.format(
             method, ' '.join('{}={}'.format(key, metrics[key])
                              for key in sorted(metrics))))
+    for method, metrics in (('BrightAug', center_metrics['baseline']),
+                            ('ScopedDINO', center_metrics['scoped_dino'])):
+        lines.append(
+            '[paper-center] method={} R_center^det@15px={} '
+            'R_center^all@25px={}'.format(
+                method,
+                metrics['real_R_center_det_at_15px_percent'],
+                metrics['real_R_center_all_at_25px_percent']))
     primary = overall['scoped_dino_primary']
     routing = overall['routing_diagnostics']
     lines.append(
@@ -304,6 +446,17 @@ def paper_log_lines(baseline_metrics: Dict, combined_metrics: Dict,
                 seq, summary['top1_hits'], summary['frame_count'],
                 summary['top1_mcml'], summary['deployment_top1_hits'],
                 summary['frame_count']))
+    for method, reports in (('BrightAug', sequence_mcml['baseline']),
+                            ('ScopedDINO', sequence_mcml['scoped_dino'])):
+        for seq, report in sorted(reports.items()):
+            lines.append(
+                '[paper-mcml] method={} seq={} silence={}[{}] '
+                'center={}[{}] riou={}[{}]'.format(
+                    method, seq,
+                    report['silence_mcml'], report['silence_longest'],
+                    report['center_mcml'], report['center_longest'],
+                    report['rotated_iou_mcml'],
+                    report['rotated_iou_longest']))
     lines.append(
         '[paper-scope] source={} target_label_derived={} '
         'eligible_for_final_test={}'.format(
@@ -394,12 +547,24 @@ def main():
     combined_standard = evaluate_standard_metrics(
         args.baseline_config, records,
         policy_results(combined_rows, 'scoped_dino_primary'))
+    center_metrics = dict(
+        baseline=explicit_center_metrics(
+            baseline_metrics, baseline_standard),
+        scoped_dino=explicit_center_metrics(
+            combined_metrics, combined_standard))
 
     sequence_summaries = group_summary(
         combined_rows, 'scoped_dino_primary')
+    failure_analysis = dict(
+        baseline=sequence_failure_analysis(
+            combined_rows, records, 'baseline'),
+        scoped_dino=sequence_failure_analysis(
+            combined_rows, records, 'scoped_dino_primary'))
+    sequence_mcml = compact_sequence_mcml(failure_analysis)
     summary_lines = paper_log_lines(
         baseline_metrics, combined_metrics, baseline_standard,
-        combined_standard, overall, sequence_summaries, scope, records)
+        combined_standard, center_metrics, overall, sequence_summaries,
+        sequence_mcml, scope, records)
     paper_summary_path = os.path.join(args.out_dir, 'paper_summary.txt')
     with open(paper_summary_path, 'w', encoding='utf-8') as handle:
         handle.write('\n'.join(summary_lines) + '\n')
@@ -421,7 +586,22 @@ def main():
             target_labels_used_for_metrics_only=(
                 not scope['target_label_derived']),
             diagnosis_only=scope['diagnosis_only'],
-            scope_eligible_for_final_test=scope['eligible_for_final_test']),
+            scope_eligible_for_final_test=scope['eligible_for_final_test'],
+            failure_metrics=dict(
+                silence_mcml='maximum_consecutive_frames_without_output',
+                center_mcml=dict(
+                    real_threshold_px=CENTER_THRESHOLDS_PX['real'],
+                    sim_threshold_px=CENTER_THRESHOLDS_PX['sim']),
+                rotated_iou_mcml=dict(
+                    exact_rotated_iou=True,
+                    threshold=float(rescue.RIOU_THR)),
+                frame_id_gaps_break_intervals=True),
+            center_metric_names=dict(
+                R_center_det_at_15px=(
+                    'conditional center accuracy over output frames only'),
+                R_center_all_at_25px=(
+                    'real all-frame center recall; silence is a miss')),
+            legacy_offline_metrics_use_axis_aligned_iou_approximation=True),
         dataset=dict(
             frame_count=len(records),
             sequence_counts=dict(Counter(row['seq'] for row in records)),
@@ -447,6 +627,8 @@ def main():
         routing=dict(
             overall=overall,
             by_sequence=sequence_summaries),
+        sequence_mcml=sequence_mcml,
+        center_metrics=center_metrics,
         offline_metrics=dict(
             baseline=baseline_metrics,
             scoped_dino=combined_metrics,
