@@ -39,30 +39,32 @@ dino_rescue = dict(
     head=dict(
         gpu=0, rpn_feat_channels=256, roi_fc_channels=1024,
         roi_samples=256, proposal_count=2000, max_detections=2000),
+    # DINO head has an independent schedule.  Its epoch numbers are unrelated
+    # to the frozen BrightAug detector checkpoint selected above.
     train=dict(
-        epochs=24, lr=0.0025, momentum=0.9, weight_decay=0.0001,
+        epochs=8, lr=0.001, momentum=0.9, weight_decay=0.0001,
         max_grad_norm=10.0,
         warmup_iters=1000, warmup_ratio=0.001,
-        lr_steps=[16, 22], lr_gamma=0.1,
-        checkpoint_interval=2,
-        selection_epochs=[16, 18, 20, 22, 24],
+        lr_steps=[5, 7], lr_gamma=0.1,
+        checkpoint_interval=1,
+        selection_epochs=[1, 2, 3, 4, 5, 6, 7, 8],
         seed=0,
-        work_dir='work_dirs/dino_teacher_scoped_lowlight_v1_formal24',
+        work_dir='work_dirs/dino_teacher_scoped_lowlight_v1_formal8',
         feature_cache_dir=(
-            'work_dirs/dino_teacher_scoped_lowlight_v1_formal24/feature_cache'),
+            'work_dirs/dino_teacher_scoped_lowlight_v1_formal8/feature_cache'),
         out_json=(
-            'work_dirs/dino_teacher_scoped_lowlight_v1_formal24/'
+            'work_dirs/dino_teacher_scoped_lowlight_v1_formal8/'
             'train_result.json')),
     test=dict(
         labeller_checkpoint=(
-            'work_dirs/dino_teacher_scoped_lowlight_v1_formal24/'
+            'work_dirs/dino_teacher_scoped_lowlight_v1_formal8/'
             'labeller_best_source_only.pth'),
         scope_manifest=(
             'crane_project/configs/scopes/'
             'seq02_lowlight_target_dev_diagnosis.json'),
         feature_cache_dir=(
-            'work_dirs/dino_teacher_scoped_lowlight_v1_formal24/'
+            'work_dirs/dino_teacher_scoped_lowlight_v1_formal8/'
             'feature_cache'),
         out_json=(
-            'work_dirs/dino_teacher_scoped_lowlight_v1_formal24/'
+            'work_dirs/dino_teacher_scoped_lowlight_v1_formal8/'
             'target_dev_test_result.json')))

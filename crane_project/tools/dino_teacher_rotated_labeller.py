@@ -37,7 +37,7 @@ from crane_project.tools import p3_p4_neighborhood_rescue_audit as neighborhood 
 
 
 LABELLER_NAME = 'Frozen DINOv2 Oriented RPN/ROI Source Labeller V1'
-PROTOCOL_VERSION = 5
+PROTOCOL_VERSION = 6
 PAPER_URL = (
     'https://openaccess.thecvf.com/content/CVPR2025/html/'
     'Lavoie_Large_Self-Supervised_Models_Bridge_the_Gap_in_Domain_Adaptive_'
@@ -82,16 +82,16 @@ def parse_args():
     parser.add_argument('--valid-content-tolerance', type=float, default=1e-3)
     parser.add_argument('--deployment-score-thr', type=float, default=0.05)
     parser.add_argument('--border-margin-ratio', type=float, default=0.02)
-    parser.add_argument('--epochs', type=int, default=24)
-    parser.add_argument('--lr', type=float, default=0.0025)
+    parser.add_argument('--epochs', type=int, default=8)
+    parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--weight-decay', type=float, default=1e-4)
     parser.add_argument('--max-grad-norm', type=float, default=10.0)
     parser.add_argument('--warmup-iters', type=int, default=1000)
     parser.add_argument('--warmup-ratio', type=float, default=0.001)
-    parser.add_argument('--lr-steps', type=int, nargs='+', default=[16, 22])
+    parser.add_argument('--lr-steps', type=int, nargs='+', default=[5, 7])
     parser.add_argument('--lr-gamma', type=float, default=0.1)
-    parser.add_argument('--checkpoint-interval', type=int, default=2)
+    parser.add_argument('--checkpoint-interval', type=int, default=1)
     parser.add_argument('--selection-epochs', type=int, nargs='+')
     parser.add_argument('--riou-thr', type=float, default=0.5)
     parser.add_argument('--target-min-wins', type=int, default=26)

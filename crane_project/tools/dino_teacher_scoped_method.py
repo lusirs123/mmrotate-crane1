@@ -10,9 +10,12 @@ from typing import Dict, List, Tuple
 
 
 PROJ_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-PAPER_EPOCHS = 24
-PAPER_SELECTION_EPOCHS = (16, 18, 20, 22, 24)
-PAPER_LR_STEPS = (16, 22)
+DINO_HEAD_EPOCHS = 8
+DINO_HEAD_SELECTION_EPOCHS = tuple(range(1, DINO_HEAD_EPOCHS + 1))
+DINO_HEAD_LR_STEPS = (5, 7)
+DINO_HEAD_LR = 0.001
+DINO_HEAD_CHECKPOINT_INTERVAL = 1
+BRIGHTAUG_SELECTION_EPOCHS = (16, 18, 20, 22, 24)
 PAPER_SOURCE_TRAIN_DATASETS = ('train:train', 'train_sim:train')
 PAPER_SOURCE_VAL_DATASETS = ('val:val',)
 
@@ -46,13 +49,19 @@ def require_sections(method: Dict):
     if int(method['train'].get('seed', -1)) != 0:
         raise ValueError('Paper protocol requires train.seed=0')
     train = method['train']
-    if int(train.get('epochs', -1)) != PAPER_EPOCHS:
-        raise ValueError('Paper protocol requires train.epochs=24')
-    if tuple(train.get('selection_epochs', ())) != PAPER_SELECTION_EPOCHS:
+    if int(train.get('epochs', -1)) != DINO_HEAD_EPOCHS:
+        raise ValueError('DINO head protocol requires train.epochs=8')
+    if tuple(train.get('selection_epochs', ())) != (
+            DINO_HEAD_SELECTION_EPOCHS):
         raise ValueError(
-            'Paper protocol requires selection epochs 16 18 20 22 24')
-    if tuple(train.get('lr_steps', ())) != PAPER_LR_STEPS:
-        raise ValueError('Paper protocol requires LR steps 16 and 22')
+            'DINO head protocol requires selection epochs 1 through 8')
+    if tuple(train.get('lr_steps', ())) != DINO_HEAD_LR_STEPS:
+        raise ValueError('DINO head protocol requires LR steps 5 and 7')
+    if float(train.get('lr', -1.0)) != DINO_HEAD_LR:
+        raise ValueError('DINO head protocol requires train.lr=0.001')
+    if int(train.get('checkpoint_interval', -1)) != (
+            DINO_HEAD_CHECKPOINT_INTERVAL):
+        raise ValueError('DINO head protocol validates every epoch')
     data = method['data']
     if tuple(data.get('source_train_datasets', ())) != (
             PAPER_SOURCE_TRAIN_DATASETS):
@@ -66,7 +75,8 @@ def require_sections(method: Dict):
         raise ValueError('BrightAug checkpoint must come from ckpt_sweep.py')
     if baseline.get('selection_split') != 'val':
         raise ValueError('BrightAug checkpoint selection must use val only')
-    if tuple(baseline.get('selection_epochs', ())) != PAPER_SELECTION_EPOCHS:
+    if tuple(baseline.get('selection_epochs', ())) != (
+            BRIGHTAUG_SELECTION_EPOCHS):
         raise ValueError(
             'BrightAug sweep must inspect epochs 16 18 20 22 24')
     if method['test'].get('scope_manifest') is None:

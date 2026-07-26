@@ -18,12 +18,12 @@ def _args(tmp_path, **overrides):
         roi_samples=256, proposal_count=2000, max_detections=2000,
         valid_content_tolerance=1e-3,
         deployment_score_thr=0.05, border_margin_ratio=0.02,
-        epochs=24, lr=0.0025, momentum=0.9, weight_decay=1e-4,
+        epochs=8, lr=0.001, momentum=0.9, weight_decay=1e-4,
         max_grad_norm=10.0, riou_thr=0.5, target_min_wins=26,
         warmup_iters=1000, warmup_ratio=0.001,
-        lr_steps=[16, 22], lr_gamma=0.1,
-        checkpoint_interval=2,
-        selection_epochs=[16, 18, 20, 22, 24],
+        lr_steps=[5, 7], lr_gamma=0.1,
+        checkpoint_interval=1,
+        selection_epochs=[1, 2, 3, 4, 5, 6, 7, 8],
         max_mcml=5, source_min_top1_rate=0.8,
         resume_checkpoint=None, eval_only_checkpoint=None,
         dinov2_checkpoint=str(checkpoint), dinov2_model='dinov2_vitl14',
@@ -50,7 +50,7 @@ def test_validate_requires_disjoint_head_and_dino_gpus(tmp_path):
 def test_validate_rejects_selection_outside_checkpoint_epochs(tmp_path):
     with pytest.raises(ValueError, match='validation checkpoints'):
         labeller.validate_args(_args(
-            tmp_path, selection_epochs=[15, 18, 20, 22, 24]))
+            tmp_path, checkpoint_interval=2, selection_epochs=[1, 2, 4, 6, 8]))
 
 
 def test_source_split_is_deterministic_and_disjoint(tmp_path):
@@ -235,16 +235,16 @@ def test_source_selection_prioritizes_top1_before_oracle_recall():
     assert labeller.source_selection_key(a) > labeller.source_selection_key(b)
 
 
-def test_lr_schedule_matches_brightaug_warmup_and_steps(tmp_path):
+def test_lr_schedule_uses_independent_dino_head_warmup_and_steps(tmp_path):
     args = _args(tmp_path)
     assert labeller.scheduled_lr(args, epoch=1, global_step=0) == pytest.approx(
-        0.0025 * 0.001)
+        0.001 * 0.001)
     assert labeller.scheduled_lr(
-        args, epoch=1, global_step=1000) == pytest.approx(0.0025)
+        args, epoch=1, global_step=1000) == pytest.approx(0.001)
     assert labeller.scheduled_lr(
-        args, epoch=17, global_step=1000) == pytest.approx(0.00025)
+        args, epoch=6, global_step=1000) == pytest.approx(0.0001)
     assert labeller.scheduled_lr(
-        args, epoch=23, global_step=1000) == pytest.approx(0.000025)
+        args, epoch=8, global_step=1000) == pytest.approx(0.00001)
 
 
 def test_target_decision_requires_top1_and_mcml(tmp_path):

@@ -21,12 +21,12 @@ def _method():
         head=dict(gpu=0, rpn_feat_channels=256, roi_fc_channels=1024,
                   roi_samples=256, proposal_count=2000,
                   max_detections=2000),
-        train=dict(epochs=24, lr=0.0025, momentum=0.9,
+        train=dict(epochs=8, lr=0.001, momentum=0.9,
                    weight_decay=0.0001, max_grad_norm=10.0,
                    warmup_iters=1000, warmup_ratio=0.001,
-                   lr_steps=[16, 22], lr_gamma=0.1,
-                   checkpoint_interval=2,
-                   selection_epochs=[16, 18, 20, 22, 24],
+                   lr_steps=[5, 7], lr_gamma=0.1,
+                   checkpoint_interval=1,
+                   selection_epochs=[1, 2, 3, 4, 5, 6, 7, 8],
                    feature_cache_dir='cache', work_dir='work', seed=0,
                    out_json='train.json'),
         test=dict(labeller_checkpoint='head.pth',
@@ -38,7 +38,7 @@ def test_train_command_uses_source_only_labeller_entrypoint():
     script, argv = runner.build_stage_command(_method(), 'train')
     assert script.endswith('dino_teacher_rotated_labeller.py')
     assert '--epochs' in argv
-    assert argv[argv.index('--epochs') + 1] == '24'
+    assert argv[argv.index('--epochs') + 1] == '8'
     assert '--selection-epochs' in argv
     assert '--warmup-iters' in argv
     assert '--source-train-datasets' in argv
@@ -74,15 +74,26 @@ def test_method_requires_seed_zero_and_scope_manifest():
         raise AssertionError('Expected scope validation failure')
 
 
-def test_method_rejects_short_probe_schedule():
+def test_method_rejects_brightaug_schedule_for_dino_head():
     method = _method()
-    method['train']['epochs'] = 12
+    method['train']['epochs'] = 24
     try:
         runner.require_sections(method)
     except ValueError as error:
-        assert 'epochs=24' in str(error)
+        assert 'epochs=8' in str(error)
     else:
-        raise AssertionError('Expected 24-epoch protocol validation failure')
+        raise AssertionError('Expected independent DINO schedule validation')
+
+
+def test_method_rejects_sparse_dino_checkpoint_selection():
+    method = _method()
+    method['train']['checkpoint_interval'] = 2
+    try:
+        runner.require_sections(method)
+    except ValueError as error:
+        assert 'every epoch' in str(error)
+    else:
+        raise AssertionError('Expected per-epoch DINO validation')
 
 
 def test_resolve_selected_baseline_checkpoint_uses_sweep_file(tmp_path):
