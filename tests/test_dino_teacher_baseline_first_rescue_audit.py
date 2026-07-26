@@ -6,13 +6,14 @@ import pytest
 from crane_project.tools import dino_teacher_baseline_first_rescue_audit as audit
 
 
-def _metrics(hit=False, deployed=False, count=0, score=None):
+def _metrics(hit=False, deployed=False, count=0, score=None, riou=0.0):
     return dict(
         detection_count=count, top1_hit=hit,
-        deployment_top1_hit=deployed, top1_score=score)
+        deployment_top1_hit=deployed, top1_score=score, top1_riou=riou)
 
 
-def _combined_row(frame, baseline, strict, ranked):
+def _combined_row(frame, baseline, strict, ranked, override=None):
+    override = ranked if override is None else override
     return dict(
         seq='seq', frame=frame, baseline_active=False,
         dino_top1_metrics=ranked,
@@ -24,7 +25,15 @@ def _combined_row(frame, baseline, strict, ranked):
                         metrics=strict),
             ranked=dict(source=('dino_rescue' if ranked['detection_count']
                                 else 'silence'), preserved=True,
-                        metrics=ranked)))
+                        metrics=ranked),
+            confident_override=dict(
+                source=('dino_rescue' if override['detection_count']
+                        else 'silence'), preserved=True,
+                metrics=override),
+            scoped_override=dict(
+                source=('dino_rescue' if override['detection_count']
+                        else 'silence'), scope_enabled=True,
+                preserved=True, metrics=override)))
 
 
 def test_baseline_first_never_overwrites_existing_detection():
@@ -48,6 +57,69 @@ def test_strict_rescue_rejects_low_score_but_ranked_reports_upper_bound():
     assert np.array_equal(ranked, dino)
 
 
+def test_confident_override_uses_dino_only_above_fixed_threshold():
+    baseline = np.asarray([[1, 2, 3, 4, 0.1, 0.8]], dtype=np.float32)
+    confident_dino = np.asarray(
+        [[9, 8, 7, 6, 0.2, 0.06]], dtype=np.float32)
+    low_dino = confident_dino.copy()
+    low_dino[0, 5] = 0.02
+    selected, source = audit.choose_ranked_confident_override(
+        baseline, confident_dino)
+    assert source == 'dino_override'
+    assert np.array_equal(selected, confident_dino)
+    selected, source = audit.choose_ranked_confident_override(
+        baseline, low_dino)
+    assert source == 'baseline'
+    assert np.array_equal(selected, baseline)
+
+
+def test_confident_override_keeps_low_score_ranked_rescue_on_silence():
+    baseline = np.zeros((0, 6), dtype=np.float32)
+    low_dino = np.asarray([[1, 2, 3, 4, 0.1, 0.02]], dtype=np.float32)
+    selected, source = audit.choose_ranked_confident_override(
+        baseline, low_dino)
+    assert source == 'dino_rescue'
+    assert np.array_equal(selected, low_dino)
+
+
+def test_scoped_override_is_exact_baseline_fallback_when_disabled():
+    baseline = np.asarray([[1, 2, 3, 4, 0.1, 0.8]], dtype=np.float32)
+    dino = np.asarray([[9, 8, 7, 6, 0.2, 0.99]], dtype=np.float32)
+    selected, source = audit.choose_scoped_confident_override(
+        baseline, dino, dino_enabled=False)
+    assert source == 'baseline_scope_disabled'
+    assert np.array_equal(selected, baseline)
+
+
+def test_scoped_override_uses_dino_only_when_enabled():
+    baseline = np.asarray([[1, 2, 3, 4, 0.1, 0.8]], dtype=np.float32)
+    dino = np.asarray([[9, 8, 7, 6, 0.2, 0.06]], dtype=np.float32)
+    selected, source = audit.choose_scoped_confident_override(
+        baseline, dino, dino_enabled=True)
+    assert source == 'dino_override'
+    assert np.array_equal(selected, dino)
+
+
+def test_scope_manifest_covers_records_and_rejects_target_derived_source(
+        tmp_path):
+    path = tmp_path / 'scope.json'
+    path.write_text(
+        '{"scope_source":"camera_mode","entries":['
+        '{"split":"test","seq":"seq","start":1,"end":2,'
+        '"dino_enabled":true}]}', encoding='utf-8')
+    records = [
+        dict(split='test', seq='seq', frame=1),
+        dict(split='test', seq='seq', frame=2)]
+    manifest = audit.load_scope_manifest(str(path), records)
+    assert manifest['source'] == 'camera_mode'
+    assert manifest['values'][('test', 'seq', 1)] is True
+    path.write_text(
+        '{"scope_source":"target_labels","entries":[]}',
+        encoding='utf-8')
+    with pytest.raises(ValueError, match='target labels'):
+        audit.load_scope_manifest(str(path), records)
+
+
 def test_combine_rows_preserves_active_baseline_and_rescues_only_silence(
         monkeypatch):
     monkeypatch.setattr(
@@ -61,7 +133,7 @@ def test_combine_rows_preserves_active_baseline_and_rescues_only_silence(
             detection_count=count, top1_hit=False,
             deployment_top1_hit=bool(
                 count and score >= deployment_score_thr),
-            top1_score=score)
+            top1_score=score, top1_riou=0.0)
 
     monkeypatch.setattr(audit.labeller, 'ranked_detection_metrics', fake_metrics)
     records = [
@@ -85,6 +157,12 @@ def test_combine_rows_preserves_active_baseline_and_rescues_only_silence(
         np.asarray([baseline_detection], dtype=np.float32))
     assert rows[1]['policies']['strict']['source'] == 'silence'
     assert rows[1]['policies']['ranked']['source'] == 'dino_rescue'
+    assert rows[0]['policies']['confident_override']['source'] == (
+        'dino_override')
+    assert rows[1]['policies']['confident_override']['source'] == (
+        'dino_rescue')
+    assert rows[0]['policies']['scoped_override']['source'] == (
+        'dino_override')
 
 
 def test_normalize_baseline_result_requires_one_image_and_one_class():
@@ -117,15 +195,23 @@ def test_summary_and_decision_keep_ranked_result_diagnostic_only():
 
     source = {
         name: dict(top1_hits=2, top1_mcml=0,
-                   baseline_preservation_failures=0)
-        for name in ('baseline', 'strict', 'ranked')}
+                   baseline_preservation_failures=0, mean_top1_riou=0.8)
+        for name in ('baseline', 'strict', 'ranked', 'confident_override')}
+    source['routing_diagnostics'] = dict(
+        baseline_correct_overridden_to_incorrect_count=0)
     target = {
         'baseline': dict(top1_hits=0, top1_mcml=33,
-                         baseline_preservation_failures=0),
+                         baseline_preservation_failures=0,
+                         mean_top1_riou=0.0),
         'strict': dict(top1_hits=15, top1_mcml=10,
-                       baseline_preservation_failures=0),
+                       baseline_preservation_failures=0,
+                       mean_top1_riou=0.3),
         'ranked': dict(top1_hits=32, top1_mcml=1,
-                       baseline_preservation_failures=0)}
+                       baseline_preservation_failures=0,
+                       mean_top1_riou=0.6),
+        'confident_override': dict(
+            top1_hits=15, top1_mcml=10,
+            baseline_preservation_failures=1, mean_top1_riou=0.3)}
     assert audit.make_decision(source, target) == (
         'RANKED_RESCUE_UPPER_BOUND_ONLY')
 
@@ -133,17 +219,71 @@ def test_summary_and_decision_keep_ranked_result_diagnostic_only():
 def test_decision_authorizes_only_strict_policy():
     source = {
         name: dict(top1_hits=10, top1_mcml=0,
-                   baseline_preservation_failures=0)
-        for name in ('baseline', 'strict', 'ranked')}
+                   baseline_preservation_failures=0, mean_top1_riou=0.8)
+        for name in ('baseline', 'strict', 'ranked', 'confident_override')}
+    source['routing_diagnostics'] = dict(
+        baseline_correct_overridden_to_incorrect_count=0)
     target = {
         'baseline': dict(top1_hits=0, top1_mcml=33,
-                         baseline_preservation_failures=0),
+                         baseline_preservation_failures=0,
+                         mean_top1_riou=0.0),
         'strict': dict(top1_hits=26, top1_mcml=5,
-                       baseline_preservation_failures=0),
+                       baseline_preservation_failures=0,
+                       mean_top1_riou=0.5),
         'ranked': dict(top1_hits=32, top1_mcml=1,
-                       baseline_preservation_failures=0)}
+                       baseline_preservation_failures=0,
+                       mean_top1_riou=0.6),
+        'confident_override': dict(
+            top1_hits=25, top1_mcml=6,
+            baseline_preservation_failures=1, mean_top1_riou=0.5)}
     assert audit.make_decision(source, target) == (
         'STRICT_BASELINE_FIRST_DINO_RESCUE_PASSES')
+
+
+def test_decision_accepts_confident_override_only_after_source_non_regression():
+    source = {
+        'baseline': dict(top1_hits=44, top1_mcml=1,
+                         baseline_preservation_failures=0,
+                         mean_top1_riou=0.75),
+        'strict': dict(top1_hits=45, top1_mcml=0,
+                       baseline_preservation_failures=0,
+                       mean_top1_riou=0.76),
+        'ranked': dict(top1_hits=45, top1_mcml=0,
+                       baseline_preservation_failures=0,
+                       mean_top1_riou=0.76),
+        'confident_override': dict(
+            top1_hits=45, top1_mcml=0,
+            baseline_preservation_failures=12, mean_top1_riou=0.76),
+        'routing_diagnostics': dict(
+            baseline_correct_overridden_to_incorrect_count=0)}
+    target = {
+        'baseline': dict(top1_hits=0, top1_mcml=33,
+                         baseline_preservation_failures=0,
+                         mean_top1_riou=0.0),
+        'strict': dict(top1_hits=14, top1_mcml=12,
+                       baseline_preservation_failures=0,
+                       mean_top1_riou=0.3),
+        'ranked': dict(top1_hits=30, top1_mcml=2,
+                       baseline_preservation_failures=0,
+                       mean_top1_riou=0.6),
+        'confident_override': dict(
+            top1_hits=31, top1_mcml=1,
+            baseline_preservation_failures=1, mean_top1_riou=0.62)}
+    assert audit.make_decision(source, target) == (
+        'CONFIDENT_DINO_OVERRIDE_CANDIDATE_PASSES')
+    source['confident_override']['top1_hits'] = 43
+    assert audit.make_decision(source, target) == (
+        'INVALID_SOURCE_CONFIDENT_OVERRIDE_REGRESSION')
+
+
+def test_source_gate_rejects_hidden_correct_baseline_regression():
+    summary = {
+        'baseline': dict(top1_hits=44, top1_mcml=1, mean_top1_riou=0.75),
+        'confident_override': dict(
+            top1_hits=44, top1_mcml=1, mean_top1_riou=0.75),
+        'routing_diagnostics': dict(
+            baseline_correct_overridden_to_incorrect_count=1)}
+    assert not audit.confident_override_non_regression_holds(summary)
 
 
 def test_validate_fixed_protocol_and_sequential_gpu_sharing(tmp_path):
@@ -161,6 +301,7 @@ def test_validate_fixed_protocol_and_sequential_gpu_sharing(tmp_path):
         max_detections=2000, dino_height=600, dino_max_long_side=1333,
         baseline_config=files[0], baseline_checkpoint=files[1],
         labeller_checkpoint=files[2], dinov2_checkpoint=files[3])
+    args.scope_manifest = None
     audit.validate_args(args)
     args.target_start = 136
     with pytest.raises(ValueError, match='137..169'):

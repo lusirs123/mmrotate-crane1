@@ -3,10 +3,12 @@
 
 The BrightAug detector keeps ownership of every frame for which its unchanged
 test configuration returns a detection.  The frozen DINO labeller is consulted
-only when BrightAug is silent.  Two fixed policies are reported:
+only when BrightAug is silent.  Three fixed rescue policies are reported:
 
 * strict: accept DINO top-1 only when its score is at least 0.05;
-* ranked: accept DINO top-1 regardless of score (diagnostic upper bound).
+* ranked: accept DINO top-1 regardless of score (diagnostic upper bound);
+* confident override: use ranked rescue for baseline silence, and allow DINO
+  to replace an active baseline only when DINO score is at least 0.05.
 
 This script does not train, write checkpoints, fuse scores, or modify either
 model's normal inference path.
@@ -14,6 +16,7 @@ model's normal inference path.
 
 import argparse
 import hashlib
+import json
 import os
 import sys
 from typing import Dict, Sequence, Tuple
@@ -33,8 +36,8 @@ from crane_project.tools import frozen_p3_feature_alignment_audit as alignment  
 from crane_project.tools import frozen_p3_objectness_transfer_probe as transfer  # noqa: E402
 
 
-AUDIT_NAME = 'Frozen DINO Baseline-First Silence Rescue Audit V1'
-PROTOCOL_VERSION = 1
+AUDIT_NAME = 'Frozen DINO Baseline-First Confident Override Audit V2'
+PROTOCOL_VERSION = 2
 DINO_DEPLOYMENT_SCORE_THR = 0.05
 VALID_CONTENT_TOLERANCE = 1e-3
 RIOU_THR = 0.5
@@ -73,6 +76,10 @@ def parse_args():
     parser.add_argument('--proposal-count', type=int, default=2000)
     parser.add_argument('--max-detections', type=int, default=2000)
     parser.add_argument('--feature-cache-dir', required=True)
+    parser.add_argument(
+        '--scope-manifest',
+        help=('Optional external low-light mode manifest. Without it, the '
+              'legacy all-enabled diagnostic policy is used.'))
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--out-json', required=True)
     return parser.parse_args()
@@ -105,6 +112,9 @@ def validate_args(args):
     for path in required:
         if not os.path.isfile(path):
             raise ValueError('Required file does not exist: {}'.format(path))
+    if args.scope_manifest and not os.path.isfile(args.scope_manifest):
+        raise ValueError('Scope manifest does not exist: {}'.format(
+            args.scope_manifest))
 
 
 def protocol_args(args):
@@ -128,6 +138,49 @@ def file_sha256(path: str) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b''):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def load_scope_manifest(path: str, records: Sequence[Dict]):
+    """Load an external mode manifest and cover every evaluated record once."""
+    if path is None:
+        return None
+    with open(path, 'r', encoding='utf-8') as handle:
+        payload = json.load(handle)
+    source = str(payload.get('scope_source', '')).strip().lower()
+    if source in ('target_labels', 'target_dev_labels',
+                  'manual_target_tuning'):
+        raise ValueError(
+            'Scope manifest cannot be derived from target labels or tuning')
+    if not source:
+        raise ValueError('Scope manifest requires a non-empty scope_source')
+    entries = payload.get('entries')
+    if not isinstance(entries, list) or not entries:
+        raise ValueError('Scope manifest requires a non-empty entries list')
+    scope = {}
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise ValueError('Scope manifest entries must be objects')
+        required = ('split', 'seq', 'start', 'end', 'dino_enabled')
+        if any(key not in entry for key in required):
+            raise ValueError('Scope manifest entry is missing a required field')
+        start, end = int(entry['start']), int(entry['end'])
+        if end < start:
+            raise ValueError('Scope manifest entry has end before start')
+        for frame in range(start, end + 1):
+            key = (str(entry['split']), str(entry['seq']), int(frame))
+            if key in scope:
+                raise ValueError('Scope manifest has overlapping entries')
+            scope[key] = bool(entry['dino_enabled'])
+    expected = {(row['split'], row['seq'], int(row['frame']))
+                for row in records}
+    missing = sorted(expected - set(scope))
+    if missing:
+        raise ValueError(
+            'Scope manifest must cover every evaluated record; missing={}'
+            .format(missing[:1]))
+    evaluated_scope = {key: bool(scope[key]) for key in expected}
+    return dict(source=source, values=evaluated_scope,
+                path=os.path.abspath(path))
 
 
 def source_and_target_records(args) -> Tuple[Sequence[Dict], Sequence[Dict]]:
@@ -233,8 +286,47 @@ def choose_baseline_first(baseline: np.ndarray, dino: np.ndarray,
     return dino[:1].copy(), 'dino_rescue'
 
 
+def choose_ranked_confident_override(
+        baseline: np.ndarray, dino: np.ndarray,
+        dino_score_thr: float = DINO_DEPLOYMENT_SCORE_THR):
+    """Ranked rescue on silence plus fixed-threshold DINO override.
+
+    Scores from the two detectors are never compared.  An active baseline is
+    replaced only when DINO independently clears its pre-declared threshold.
+    When baseline is silent, the one-target protocol keeps the ranked DINO
+    top-1 even if its absolute score is poorly calibrated.
+    """
+    if dino.shape[0] > 0 and float(dino[0, 5]) >= float(dino_score_thr):
+        source = 'dino_override' if baseline.shape[0] > 0 else 'dino_rescue'
+        return dino[:1].copy(), source
+    if baseline.shape[0] > 0:
+        return baseline.copy(), 'baseline'
+    if dino.shape[0] > 0:
+        return dino[:1].copy(), 'dino_rescue'
+    return np.zeros((0, 6), dtype=np.float32), 'silence'
+
+
+def choose_scoped_confident_override(
+        baseline: np.ndarray, dino: np.ndarray,
+        dino_enabled: bool,
+        dino_score_thr: float = DINO_DEPLOYMENT_SCORE_THR):
+    """Apply DINO only when an external low-light scope enables it.
+
+    The scope signal must come from deployment metadata or a separately
+    validated mode controller.  It must not be inferred from target labels or
+    from a target-derived sequence allowlist.  Disabled scope is an exact
+    BrightAug-preserving fallback.
+    """
+    if not bool(dino_enabled):
+        if baseline.shape[0] > 0:
+            return baseline.copy(), 'baseline_scope_disabled'
+        return np.zeros((0, 6), dtype=np.float32), 'silence_scope_disabled'
+    return choose_ranked_confident_override(
+        baseline, dino, dino_score_thr=dino_score_thr)
+
+
 def combine_rows(baseline_rows: Sequence[Dict], dino_rows: Sequence[Dict],
-                 records: Sequence[Dict]):
+                 records: Sequence[Dict], scope_by_key=None):
     if not (len(baseline_rows) == len(dino_rows) == len(records)):
         raise RuntimeError('Baseline/DINO/record count mismatch')
     combined = []
@@ -252,12 +344,22 @@ def combine_rows(baseline_rows: Sequence[Dict], dino_rows: Sequence[Dict],
         strict, strict_source = choose_baseline_first(
             baseline, dino, DINO_DEPLOYMENT_SCORE_THR)
         ranked, ranked_source = choose_baseline_first(baseline, dino, None)
+        confident_override, override_source = (
+            choose_ranked_confident_override(baseline, dino))
+        scope_key = (record['split'], record['seq'], int(record['frame']))
+        scoped_enabled = (True if scope_by_key is None else
+                           bool(scope_by_key.get(scope_key, False)))
+        scoped_override, scoped_source = choose_scoped_confident_override(
+            baseline, dino, scoped_enabled)
         dino_top1 = dino[:1].copy()
         baseline_active = baseline.shape[0] > 0
         strict_preserved = (
             not baseline_active or np.array_equal(strict, baseline))
         ranked_preserved = (
             not baseline_active or np.array_equal(ranked, baseline))
+        override_preserved = (
+            not baseline_active
+            or np.array_equal(confident_override, baseline))
         if not strict_preserved or not ranked_preserved:
             raise RuntimeError('Baseline preservation invariant failed')
         gt = labeller.parse_original_gt(record['annotation'])
@@ -284,13 +386,29 @@ def combine_rows(baseline_rows: Sequence[Dict], dino_rows: Sequence[Dict],
                     source=ranked_source, preserved=ranked_preserved,
                     metrics=labeller.ranked_detection_metrics(
                         ranked, gt, RIOU_THR, DINO_DEPLOYMENT_SCORE_THR),
-                    detections=ranked.tolist()))))
+                    detections=ranked.tolist()),
+                confident_override=dict(
+                    source=override_source, preserved=override_preserved,
+                    metrics=labeller.ranked_detection_metrics(
+                        confident_override, gt, RIOU_THR,
+                        DINO_DEPLOYMENT_SCORE_THR),
+                    detections=confident_override.tolist()),
+                scoped_override=dict(
+                    source=scoped_source,
+                    scope_enabled=bool(scoped_enabled),
+                    preserved=(not baseline_active
+                               or np.array_equal(scoped_override, baseline)),
+                    metrics=labeller.ranked_detection_metrics(
+                        scoped_override, gt, RIOU_THR,
+                        DINO_DEPLOYMENT_SCORE_THR),
+                    detections=scoped_override.tolist()))))
     return combined
 
 
 def summarize_policy(rows: Sequence[Dict], policy: str) -> Dict:
     flat = []
     scores = []
+    top1_rious = []
     for row in rows:
         item = row['policies'][policy]
         metrics = item['metrics']
@@ -300,6 +418,7 @@ def summarize_policy(rows: Sequence[Dict], policy: str) -> Dict:
             deployment_hit=bool(metrics['deployment_top1_hit'])))
         if metrics['top1_score'] is not None:
             scores.append(float(metrics['top1_score']))
+        top1_rious.append(float(metrics['top1_riou']))
     return dict(
         frame_count=len(rows),
         output_frame_count=int(sum(
@@ -313,27 +432,48 @@ def summarize_policy(rows: Sequence[Dict], policy: str) -> Dict:
         deployment_top1_hits=int(sum(item['deployment_hit'] for item in flat)),
         deployment_top1_mcml=labeller.longest_miss(flat, 'deployment_hit'),
         baseline_selected_count=int(sum(
-            row['policies'][policy]['source'] == 'baseline' for row in rows)),
+            row['policies'][policy]['source']
+            in ('baseline', 'baseline_scope_disabled') for row in rows)),
+        dino_selected_count=int(sum(
+            row['policies'][policy]['source']
+            in ('dino_rescue', 'dino_override') for row in rows)),
         dino_rescue_selected_count=int(sum(
             row['policies'][policy]['source'] == 'dino_rescue'
             for row in rows)),
-        dino_rescue_correct_count=int(sum(
-            row['policies'][policy]['source'] == 'dino_rescue'
+        dino_override_selected_count=int(sum(
+            row['policies'][policy]['source'] == 'dino_override'
+            for row in rows)),
+        dino_selected_correct_count=int(sum(
+            row['policies'][policy]['source']
+            in ('dino_rescue', 'dino_override')
             and row['policies'][policy]['metrics']['top1_hit']
             for row in rows)),
-        dino_rescue_incorrect_count=int(sum(
-            row['policies'][policy]['source'] == 'dino_rescue'
+        dino_selected_incorrect_count=int(sum(
+            row['policies'][policy]['source']
+            in ('dino_rescue', 'dino_override')
             and not row['policies'][policy]['metrics']['top1_hit']
             for row in rows)),
         baseline_preservation_failures=int(sum(
             not row['policies'][policy]['preserved'] for row in rows)),
-        median_output_score=(float(np.median(scores)) if scores else None))
+        baseline_overridden_count=int(sum(
+            row['policies'][policy]['source'] == 'dino_override'
+            for row in rows)),
+        scope_enabled_count=int(sum(
+            row['policies'][policy].get('scope_enabled') is True
+            for row in rows)),
+        scope_disabled_count=int(sum(
+            row['policies'][policy].get('scope_enabled') is False
+            for row in rows)),
+        median_output_score=(float(np.median(scores)) if scores else None),
+        mean_top1_riou=(float(np.mean(top1_rious))
+                        if top1_rious else 0.0))
 
 
 def summarize_combination(rows: Sequence[Dict]) -> Dict:
     summary = {
         name: summarize_policy(rows, name)
-        for name in ('baseline', 'strict', 'ranked')}
+        for name in ('baseline', 'strict', 'ranked', 'confident_override',
+                     'scoped_override')}
     summary['routing_diagnostics'] = dict(
         baseline_active_count=int(sum(row['baseline_active'] for row in rows)),
         baseline_silent_count=int(sum(
@@ -352,11 +492,44 @@ def summarize_combination(rows: Sequence[Dict]) -> Dict:
             row['baseline_active']
             and not row['policies']['baseline']['metrics']['top1_hit']
             and row['dino_top1_metrics']['top1_hit']
+            for row in rows)),
+        confident_dino_override_count=int(sum(
+            row['policies']['confident_override']['source'] == 'dino_override'
+            for row in rows)),
+        baseline_correct_overridden_to_incorrect_count=int(sum(
+            row['policies']['baseline']['metrics']['top1_hit']
+            and row['policies']['confident_override']['source']
+            == 'dino_override'
+            and not row['policies']['confident_override']['metrics']['top1_hit']
+            for row in rows)),
+        baseline_incorrect_overridden_to_correct_count=int(sum(
+            row['baseline_active']
+            and not row['policies']['baseline']['metrics']['top1_hit']
+            and row['policies']['confident_override']['source']
+            == 'dino_override'
+            and row['policies']['confident_override']['metrics']['top1_hit']
+            for row in rows)),
+        scoped_enabled_count=int(sum(
+            row['policies']['scoped_override']['scope_enabled']
+            for row in rows)),
+        scoped_dino_override_count=int(sum(
+            row['policies']['scoped_override']['source'] == 'dino_override'
+            for row in rows)),
+        scoped_baseline_correct_overridden_to_incorrect_count=int(sum(
+            row['policies']['baseline']['metrics']['top1_hit']
+            and row['policies']['scoped_override']['source'] == 'dino_override'
+            and not row['policies']['scoped_override']['metrics']['top1_hit']
+            for row in rows)),
+        scoped_baseline_incorrect_overridden_to_correct_count=int(sum(
+            row['baseline_active']
+            and not row['policies']['baseline']['metrics']['top1_hit']
+            and row['policies']['scoped_override']['source'] == 'dino_override'
+            and row['policies']['scoped_override']['metrics']['top1_hit']
             for row in rows)))
     return summary
 
 
-def non_regression_holds(summary: Dict) -> bool:
+def baseline_preserving_non_regression_holds(summary: Dict) -> bool:
     baseline = summary['baseline']
     return all(
         item['baseline_preservation_failures'] == 0
@@ -365,16 +538,32 @@ def non_regression_holds(summary: Dict) -> bool:
         for item in (summary['strict'], summary['ranked']))
 
 
+def confident_override_non_regression_holds(summary: Dict) -> bool:
+    baseline = summary['baseline']
+    override = summary['confident_override']
+    return (override['top1_hits'] >= baseline['top1_hits']
+            and override['top1_mcml'] <= baseline['top1_mcml']
+            and override['mean_top1_riou'] >= baseline['mean_top1_riou']
+            and summary['routing_diagnostics'][
+                'baseline_correct_overridden_to_incorrect_count'] == 0)
+
+
 def make_decision(source_summary: Dict, target_summary: Dict) -> str:
-    if not non_regression_holds(source_summary):
+    if not baseline_preserving_non_regression_holds(source_summary):
         return 'INVALID_SOURCE_NON_REGRESSION'
-    if not non_regression_holds(target_summary):
+    if not baseline_preserving_non_regression_holds(target_summary):
         return 'INVALID_TARGET_BASELINE_PRESERVATION'
+    if not confident_override_non_regression_holds(source_summary):
+        return 'INVALID_SOURCE_CONFIDENT_OVERRIDE_REGRESSION'
     strict = target_summary['strict']
     ranked = target_summary['ranked']
+    override = target_summary['confident_override']
     if (strict['top1_hits'] >= TARGET_MIN_HITS
             and strict['top1_mcml'] <= TARGET_MAX_MCML):
         return 'STRICT_BASELINE_FIRST_DINO_RESCUE_PASSES'
+    if (override['top1_hits'] >= TARGET_MIN_HITS
+            and override['top1_mcml'] <= TARGET_MAX_MCML):
+        return 'CONFIDENT_DINO_OVERRIDE_CANDIDATE_PASSES'
     if (ranked['top1_hits'] >= TARGET_MIN_HITS
             and ranked['top1_mcml'] <= TARGET_MAX_MCML):
         return 'RANKED_RESCUE_UPPER_BOUND_ONLY'
@@ -411,6 +600,10 @@ def main():
     os.makedirs(args.feature_cache_dir, exist_ok=True)
     os.makedirs(os.path.dirname(os.path.abspath(args.out_json)), exist_ok=True)
     source_records, target_records = source_and_target_records(args)
+    scope_manifest = load_scope_manifest(
+        args.scope_manifest, list(source_records) + list(target_records))
+    scope_by_key = (None if scope_manifest is None
+                    else scope_manifest['values'])
 
     # The two detectors share the 8GB head card sequentially.  Releasing the
     # baseline before loading DINO heads avoids changing either computation.
@@ -452,9 +645,9 @@ def main():
         raise RuntimeError('Frozen DINO/labeller parameter invariant failed')
 
     source_rows = combine_rows(
-        source_baseline, source_dino, source_records)
+        source_baseline, source_dino, source_records, scope_by_key)
     target_rows = combine_rows(
-        target_baseline, target_dino, target_records)
+        target_baseline, target_dino, target_records, scope_by_key)
     source_summary = summarize_combination(source_rows)
     target_summary = summarize_combination(target_rows)
     decision = make_decision(source_summary, target_summary)
@@ -469,18 +662,35 @@ def main():
         dinov2_checkpoint=os.path.abspath(args.dinov2_checkpoint),
         dinov2_checkpoint_sha256=file_sha256(args.dinov2_checkpoint),
         protocol=dict(
-            routing='baseline_output_if_nonempty_else_dino_top1',
+            routing='four_fixed_policies_reported_side_by_side',
             baseline_inference_config_unchanged=True,
             baseline_policy=baseline_policy,
             strict_dino_score_thr=DINO_DEPLOYMENT_SCORE_THR,
             ranked_policy=(
                 'threshold_free_top1_upper_bound_for_always_present_single_'
                 'target_protocol_only'),
+            confident_override_policy=dict(
+                baseline_silent='ranked_dino_top1',
+                baseline_active=(
+                    'dino_top1_only_if_dino_score_at_least_0.05_else_baseline'),
+                cross_model_score_comparison=False,
+                threshold_source='predeclared_labeller_deployment_threshold',
+                requires_source_non_regression=True),
             score_fusion=False, brightness_gate=False,
             target_dev_role='diagnosis_only',
+            target_dev_informed_method_development=True,
+            target_dev_eligible_for_unbiased_final_test=False,
             target_eligible_for_threshold_tuning=False,
             target_used_for_training=False,
             checkpoint_selection=False),
+        scope_gate=(dict(
+            enabled=True,
+            source=(scope_manifest['source'] if scope_manifest else
+                    'legacy_all_records_enabled'),
+            manifest=(None if scope_manifest is None else dict(
+                path=scope_manifest['path'],
+                sha256=file_sha256(args.scope_manifest))),
+            target_label_derived=False)),
         isolation=dict(
             optimizer_steps=0, checkpoint_writes=0,
             baseline_frozen=True,
@@ -496,13 +706,17 @@ def main():
         decision=decision)
     replacements = roi_probe.write_json_atomic(args.out_json, payload)
     print('[rescue] {} baseline={}/{} strict={}/{} ranked={}/{} '
-          'strict_mcml={} ranked_mcml={}'.format(
+          'override={}/{} strict_mcml={} ranked_mcml={} override_mcml={}'
+          .format(
               decision,
               target_summary['baseline']['top1_hits'], len(target_rows),
               target_summary['strict']['top1_hits'], len(target_rows),
               target_summary['ranked']['top1_hits'], len(target_rows),
+              target_summary['confident_override']['top1_hits'],
+              len(target_rows),
               target_summary['strict']['top1_mcml'],
-              target_summary['ranked']['top1_mcml']))
+              target_summary['ranked']['top1_mcml'],
+              target_summary['confident_override']['top1_mcml']))
     print('[json] nonfinite_replacements={}'.format(replacements))
     print('[out] {}'.format(args.out_json))
 
