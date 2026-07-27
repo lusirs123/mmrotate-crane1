@@ -316,3 +316,9 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
                     else baseline)
         selected = self._stabilize(selected, seq, frame)
         return [[selected]]
+
+    def aug_test(self, imgs, img_metas, rescale=False):
+        del imgs, img_metas, rescale
+        raise RuntimeError(
+            'Scoped DINO sequential inference does not support test-time '
+            'augmentation; use the configured single-view test pipeline')

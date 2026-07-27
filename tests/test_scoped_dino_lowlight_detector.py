@@ -1,6 +1,8 @@
 """CPU-only tests for the integrated scoped-DINO detector policy."""
 
+import abc
 import importlib.util
+import inspect
 import pathlib
 import runpy
 import sys
@@ -22,6 +24,10 @@ class _RotatedBaseDetector(nn.Module):
     def __init__(self, init_cfg=None):
         del init_cfg
         super().__init__()
+
+    @abc.abstractmethod
+    def aug_test(self, imgs, img_metas, rescale=False):
+        raise NotImplementedError
 
 
 def _load_module():
@@ -57,6 +63,16 @@ def _load_module():
 
 MODULE = _load_module()
 Detector = MODULE.ScopedDinoLowlightDetector
+
+
+def test_integrated_detector_satisfies_base_abstract_interface():
+    assert not inspect.isabstract(Detector)
+
+
+def test_aug_test_is_explicitly_rejected_to_preserve_sequence_state():
+    detector = _detector()
+    with pytest.raises(RuntimeError, match='does not support'):
+        detector.aug_test([], [], rescale=False)
 
 
 def _detector(alpha=0.25):
