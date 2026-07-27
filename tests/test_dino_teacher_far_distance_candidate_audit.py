@@ -1,6 +1,7 @@
 import argparse
 
 import pytest
+import torch
 
 from crane_project.tools import dino_teacher_far_distance_candidate_audit as audit
 
@@ -69,3 +70,45 @@ def test_decision_rejects_classifier_training_without_candidates():
                   raw_unfiltered_geometry_eligible_count=12)
     assert audit.make_decision(source, target) == (
         'DINO_FAR_DISTANCE_CANDIDATE_GENERATION_INSUFFICIENT')
+
+
+def test_load_frozen_labeller_preserves_checkpoint_and_freeze_contract(
+        tmp_path, monkeypatch):
+    args = _args(
+        tmp_path, dinov2_repo=str(tmp_path / 'dinov2'),
+        dinov2_model='dinov2_vitl14', legacy_sdpa_query_chunk=512)
+
+    class FakeDino(torch.nn.Module):
+        embed_dim = 4
+
+        def __init__(self):
+            super().__init__()
+            self.weight = torch.nn.Parameter(torch.ones(1))
+
+    class FakeHeads(torch.nn.Module):
+        def __init__(self, _channels, _args):
+            super().__init__()
+            self.weight = torch.nn.Parameter(torch.zeros(1))
+
+    dino = FakeDino()
+    monkeypatch.setattr(
+        audit.common, 'load_frozen_dinov2',
+        lambda *_args, **_kwargs: (dino, 14))
+    monkeypatch.setattr(audit.labeller, 'FrozenDinoRotatedHeads', FakeHeads)
+    monkeypatch.setattr(
+        audit.labeller, 'validate_checkpoint',
+        lambda payload, channels, call_args: None)
+    monkeypatch.setattr(
+        torch, 'load',
+        lambda *_args, **_kwargs: {
+            'heads_state_dict': {'weight': torch.tensor([3.0])}})
+
+    loaded_dino, heads = audit.load_frozen_labeller(
+        args, [torch.device('cpu')], torch.device('cpu'))
+    assert loaded_dino is dino
+    assert heads.weight.detach().tolist() == [3.0]
+    assert loaded_dino.training is False
+    assert heads.training is False
+    assert all(not parameter.requires_grad
+               for parameter in loaded_dino.parameters())
+    assert all(not parameter.requires_grad for parameter in heads.parameters())

@@ -84,11 +84,18 @@ class CraneDataset(DOTADataset):
         thresh_real = kwargs.pop('thresh_real', 25.0)
         weight_sim  = kwargs.pop('weight_sim',  0.6)
         weight_real = kwargs.pop('weight_real', 0.4)
+        paper_temporal = bool(kwargs.pop('paper_temporal', False))
+        temporal_center_thresh_px = float(kwargs.pop(
+            'temporal_center_thresh_px', 15.0))
+        temporal_ekf_window = int(kwargs.pop('temporal_ekf_window', 10))
+        temporal_mcml_limit = int(kwargs.pop('temporal_mcml_limit', 5))
+        temporal_iou_thresh = float(kwargs.pop('temporal_iou_thresh', 0.5))
 
         eval_results = {}
 
         # 1. 保留标准 mAP 评估（兼容 COCO 静态基线对照）
-        if metric == 'mAP':
+        metric_names = [metric] if isinstance(metric, str) else list(metric)
+        if 'mAP' in metric_names:
             try:
                 eval_results.update(super().evaluate(results, metric, logger, **kwargs))
             except Exception as e:
@@ -158,6 +165,46 @@ class CraneDataset(DOTADataset):
         eval_results['sim_R_center']      = round(r_center_sim,  4)
         eval_results['real_R_center']     = round(r_center_real, 4)
         eval_results['Weighted_R_center'] = round(weighted_score, 4)
+
+        # 5b. Optional paper protocol: evaluate the ordered prediction stream
+        # directly, using the same formulas and display format as the legacy
+        # CraneOfflineEvaluator.  This makes the complete DINO method runnable
+        # through config + tools/test.py without a separate pickle composer.
+        if paper_temporal:
+            from crane_project.tools.eval_crane_offline import (
+                CraneOfflineEvaluator, parse_seq_frame)
+            temporal_records = []
+            for index, result in enumerate(results):
+                info = self.data_infos[index]
+                domain, seq_id, frame_id = parse_seq_frame(
+                    info.get('img_id', info['filename']))
+                predictions = np.asarray(result[0], dtype=np.float32)
+                annotation = self.get_ann_info(index)
+                gt_boxes = np.asarray(annotation['bboxes'], dtype=np.float32)
+                pred_box = (None if predictions.shape[0] == 0
+                            else predictions[0, :5])
+                gt_box = None if gt_boxes.shape[0] == 0 else gt_boxes[0, :5]
+                temporal_records.append(dict(
+                    domain=domain, seq_id=seq_id, frame_id=frame_id,
+                    pred_box=pred_box, gt_box=gt_box,
+                    score=(0.0 if predictions.shape[0] == 0
+                           else float(predictions[0, 5])),
+                    plc_rope=None))
+            temporal = CraneOfflineEvaluator(
+                mode='test',
+                center_thresh_px=temporal_center_thresh_px,
+                ekf_window=temporal_ekf_window,
+                mcml_limit=temporal_mcml_limit,
+                iou_thresh=temporal_iou_thresh)
+            eval_results.update(temporal.evaluate_records(temporal_records))
+            eval_results['real/R_center_det@15px(%)'] = eval_results.get(
+                'real/R_center(%)', 0.0)
+            eval_results['sim/R_center_det@15px(%)'] = eval_results.get(
+                'sim/R_center(%)', 0.0)
+            eval_results['real/R_center_all@25px(%)'] = round(
+                r_center_real * 100.0, 2)
+            eval_results['sim/R_center_all@10px(%)'] = round(
+                r_center_sim * 100.0, 2)
 
         # 6. 终端日志规整化输出
         sep = '=' * 60

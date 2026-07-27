@@ -125,6 +125,31 @@ class CraneOfflineEvaluator:
         logging.basicConfig(level=logging.INFO, format='%(message)s')
         self.logger = logging.getLogger(__name__)
 
+    def evaluate_records(self, records: List[dict]) -> Dict[str, float]:
+        """Evaluate already decoded per-frame OBB records.
+
+        This is the in-model/config counterpart of ``extract_from_dirs``.  It
+        avoids a temporary DOTA export when MMRotate already owns the ordered
+        prediction stream.
+        """
+        required = ('domain', 'seq_id', 'frame_id', 'pred_box', 'gt_box')
+        normalized = []
+        for record in records:
+            if any(key not in record for key in required):
+                raise ValueError('Temporal evaluation record is incomplete')
+            normalized.append(dict(
+                domain=str(record['domain']),
+                seq_id=str(record['seq_id']),
+                frame_id=int(record['frame_id']),
+                pred_box=(None if record['pred_box'] is None else
+                          np.asarray(record['pred_box'], dtype=np.float64)),
+                gt_box=(None if record['gt_box'] is None else
+                        np.asarray(record['gt_box'], dtype=np.float64)),
+                score=float(record.get('score', 0.0)),
+                plc_rope=record.get('plc_rope')))
+        self.results = normalized
+        return self.compute_metrics()
+
     def extract_from_dirs(self, gt_dir: str, pred_dir: str) -> None:
         """从物理目录加载真值与预测流形，重构原版 process() 数据结构"""
         txt_files = glob.glob(os.path.join(gt_dir, '*.txt'))

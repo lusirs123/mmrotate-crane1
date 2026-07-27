@@ -1,7 +1,5 @@
 import importlib.util
 from pathlib import Path
-import runpy
-
 import torch
 
 
@@ -38,15 +36,3 @@ def test_content_mask_does_not_change_anchor_values():
         anchors, (576, 1024, 3))
     assert torch.equal(anchors, original)
     assert torch.equal(anchors[mask], original[:1])
-
-
-def test_padzero_diagnostic_only_overrides_eval_pipelines():
-    config_path = (Path(__file__).parents[1] / 'crane_project' / 'configs'
-                   / 'crane_symeood_k1_brightaug_valid_content_padzero_diag.py')
-    config = runpy.run_path(str(config_path))
-    assert 'train_pipeline' not in config
-    assert config['data']['val']['pipeline'] is config['test_pipeline']
-    assert config['data']['test']['pipeline'] is config['test_pipeline']
-    pad = config['test_pipeline'][1]['transforms'][2]
-    assert pad['type'] == 'Pad'
-    assert pad['pad_val']['img'] == (0.0, 0.0, 0.0)

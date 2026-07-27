@@ -30,11 +30,7 @@ PROJ_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 if PROJ_ROOT not in sys.path:
     sys.path.insert(0, PROJ_ROOT)
 
-from crane_project.tools import dino_teacher_frozen_region_audit as audit  # noqa: E402
-from crane_project.tools import dino_teacher_source_roi_head_probe as roi_probe  # noqa: E402
-from crane_project.tools import frozen_p3_feature_alignment_audit as alignment  # noqa: E402
-from crane_project.tools import frozen_p3_objectness_transfer_probe as transfer  # noqa: E402
-from crane_project.tools import p3_p4_neighborhood_rescue_audit as neighborhood  # noqa: E402
+from crane_project.tools import dino_teacher_common as common  # noqa: E402
 
 
 LABELLER_NAME = 'Frozen DINOv2 Oriented RPN/ROI Source Labeller V1'
@@ -49,8 +45,8 @@ PAPER_CODE_URL = 'https://github.com/TRAILab/DINO_Teacher'
 def parse_args():
     parser = argparse.ArgumentParser(description=LABELLER_NAME)
     parser.add_argument('--data-root', default='crane_project/data/crane_grab/')
-    parser.add_argument('--source-split', default=neighborhood.SOURCE_SPLIT)
-    parser.add_argument('--source-seq', default=neighborhood.SOURCE_SEQ)
+    parser.add_argument('--source-split', default=common.SOURCE_SPLIT)
+    parser.add_argument('--source-seq', default=common.SOURCE_SEQ)
     parser.add_argument('--source-val-modulus', type=int, default=5)
     parser.add_argument(
         '--source-train-datasets', nargs='+',
@@ -58,22 +54,22 @@ def parse_args():
     parser.add_argument(
         '--source-val-datasets', nargs='+',
         help='Formal source validation specs: annotation_split:image_split')
-    parser.add_argument('--target-split', default=neighborhood.TARGET_SPLIT)
-    parser.add_argument('--target-seq', default=neighborhood.TARGET_SEQ)
+    parser.add_argument('--target-split', default=common.TARGET_SPLIT)
+    parser.add_argument('--target-seq', default=common.TARGET_SEQ)
     parser.add_argument('--target-start', type=int,
-                        default=neighborhood.TARGET_START)
+                        default=common.TARGET_START)
     parser.add_argument('--target-end', type=int,
-                        default=neighborhood.TARGET_END)
+                        default=common.TARGET_END)
     parser.add_argument('--dinov2-repo', required=True)
     parser.add_argument('--dinov2-checkpoint', required=True)
-    parser.add_argument('--dinov2-model', default=audit.CANONICAL_MODEL)
+    parser.add_argument('--dinov2-model', default=common.CANONICAL_MODEL)
     parser.add_argument('--dino-gpus', type=int, nargs='+', required=True)
     parser.add_argument('--head-gpu', type=int, default=0)
     parser.add_argument('--legacy-sdpa-query-chunk', type=int, default=512)
     parser.add_argument('--dino-height', type=int,
-                        default=audit.CANONICAL_DINO_HEIGHT)
+                        default=common.CANONICAL_DINO_HEIGHT)
     parser.add_argument('--dino-max-long-side', type=int,
-                        default=audit.CANONICAL_DINO_MAX_LONG_SIDE)
+                        default=common.CANONICAL_DINO_MAX_LONG_SIDE)
     parser.add_argument('--patch-size', type=int, default=14)
     parser.add_argument('--rpn-feat-channels', type=int, default=256)
     parser.add_argument('--roi-fc-channels', type=int, default=1024)
@@ -268,11 +264,11 @@ def extract_or_load_feature(dino, record: Dict, args,
     image = cv2.imread(record['image'])
     if image is None:
         raise RuntimeError('Cannot read {}'.format(record['image']))
-    tensor, dino_meta = audit.resize_and_normalize_bgr(
+    tensor, dino_meta = common.resize_and_normalize_bgr(
         image, args.dino_height, args.patch_size,
         args.dino_max_long_side)
     tensor = tensor.to(dino_device)
-    feature = audit.extract_patch_grid(dino, tensor, args.patch_size)
+    feature = common.extract_patch_grid(dino, tensor, args.patch_size)
     if not bool(torch.isfinite(feature).all().item()):
         raise RuntimeError('Non-finite DINO feature')
     feature_cpu = feature.detach().cpu().half()
@@ -284,7 +280,7 @@ def extract_or_load_feature(dino, record: Dict, args,
 
 
 def parse_original_gt(annotation: str) -> np.ndarray:
-    diag = transfer.entry_probe.get_diag()
+    diag = common.entry_probe.get_diag()
     boxes = []
     for gt in diag.parse_dota_ann(annotation):
         if gt.get('cls') != 'grab':
@@ -393,7 +389,7 @@ def formal_source_records(args):
 
 
 def target_records(args) -> List[Dict]:
-    diag = transfer.entry_probe.get_diag()
+    diag = common.entry_probe.get_diag()
     records = []
     for frame in range(args.target_start, args.target_end + 1):
         image, annotation = diag.find_files(
@@ -1125,7 +1121,7 @@ def main():
     formal_records = formal_source_records(args)
     if formal_records is None:
         source_records = [
-            row for row in transfer.discover_labeled_records(
+            row for row in common.discover_labeled_records(
                 args.data_root, args.source_split, 0)
             if row['seq'] == args.source_seq]
         source_train, source_val = split_source_records(
@@ -1145,13 +1141,13 @@ def main():
         assert_training_target_isolation(
             list(source_train) + list(source_val), targets)
 
-    dino, loaded_patch_size = audit.load_frozen_dinov2(
+    dino, loaded_patch_size = common.load_frozen_dinov2(
         args.dinov2_repo, args.dinov2_checkpoint,
         args.dinov2_model, dino_devices,
         args.legacy_sdpa_query_chunk)
     if int(loaded_patch_size) != int(args.patch_size):
         raise RuntimeError('Unexpected DINO patch size')
-    dino_versions = alignment.module_parameter_versions(dino)
+    dino_versions = common.module_parameter_versions(dino)
     in_channels = int(getattr(dino, 'embed_dim', 0))
     if in_channels <= 0:
         sample_feature, _meta, _cached = extract_or_load_feature(
@@ -1209,7 +1205,7 @@ def main():
             target_summary, args, source_summary=current_source_summary)
 
     dino_unchanged = (
-        dino_versions == alignment.module_parameter_versions(dino))
+        dino_versions == common.module_parameter_versions(dino))
     if not dino_unchanged:
         raise RuntimeError('Frozen DINO parameter invariant failed')
     payload = dict(
@@ -1281,7 +1277,7 @@ def main():
         target_dev=(None if target_summary is None else dict(
             summary=target_summary, rows=target_rows)),
         decision=decision)
-    replacements = roi_probe.write_json_atomic(args.out_json, payload)
+    replacements = common.write_json_atomic(args.out_json, payload)
     if target_summary is None:
         print('[dino-labeller] {}'.format(decision))
     else:

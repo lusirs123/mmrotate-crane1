@@ -8,6 +8,21 @@ final paper test.
 
 _base_ = ['./crane_symeood_k1_brightaug.py']
 
+# The normal MMRotate test entry builds the complete method below.  The
+# dino_rescue dictionary remains the single source of training/provenance
+# parameters used by the source-only head trainer.
+custom_imports = dict(
+    imports=[
+        'mmrotate.datasets.crane_custom_dota',
+        'mmrotate.models.detectors.sym_eood_detector',
+        'mmrotate.models.detectors.scoped_dino_lowlight_detector',
+        'mmrotate.models.dense_heads.sym_eood_head',
+        'mmrotate.models.losses.sym_nfl_loss',
+        'mmrotate.models.losses.sym_kld_loss',
+        'mmrotate.core.bbox.assigners.sym_pola',
+    ],
+    allow_failed_imports=False)
+
 dino_rescue = dict(
     protocol_name='Scope-Gated Frozen DINO Semantic Rescue V1',
     baseline=dict(
@@ -85,3 +100,42 @@ dino_rescue = dict(
         out_json=(
             'work_dirs/dino_teacher_scoped_lowlight_v1_formal8/'
             'full_test_diagnosis_v2/result.json')))
+
+# Deployable inference composition.  The positional checkpoint passed to
+# tools/test.py is the unchanged BrightAug checkpoint; the detector loads the
+# source-selected frozen-DINO head separately and keeps it out of the module
+# tree so its GPU-1/GPU-2 sharding survives MMDataParallel.
+model = dict(
+    _delete_=True,
+    type='ScopedDinoLowlightDetector',
+    baseline_config='crane_project/configs/crane_symeood_k1_brightaug.py',
+    dino_rescue=dino_rescue,
+    dino_head_checkpoint=(
+        'work_dirs/dino_teacher_scoped_lowlight_v1_formal8/'
+        'labeller_best_source_only.pth'),
+    scope_manifest=(
+        'crane_project/configs/scopes/full_test_seq02_lowlight_diagnosis.json'),
+    scope_split='test',
+    stabilizer=dict(
+        enabled=True,
+        alpha=0.25,
+        selection_split='val',
+        candidates=[0.25, 0.5, 0.75, 1.0],
+        max_source_riou_drop=0.005,
+        target_used_for_selection=False),
+    test_cfg=dict(score_thr=0.05, max_per_img=1),
+)
+
+evaluation = dict(
+    interval=1,
+    metric='mAP',
+    thresh_sim=10.0,
+    thresh_real=25.0,
+    weight_sim=0.7,
+    weight_real=0.3,
+    paper_temporal=True,
+    temporal_center_thresh_px=15.0,
+    temporal_ekf_window=10,
+    temporal_mcml_limit=5,
+    temporal_iou_thresh=0.5,
+)

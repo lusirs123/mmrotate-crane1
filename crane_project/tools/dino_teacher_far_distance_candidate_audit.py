@@ -13,11 +13,8 @@ from typing import Dict, Sequence, Tuple
 
 import torch
 
-from crane_project.tools import dino_teacher_baseline_first_rescue_audit as rescue
+from crane_project.tools import dino_teacher_common as common
 from crane_project.tools import dino_teacher_rotated_labeller as labeller
-from crane_project.tools import dino_teacher_source_roi_head_probe as roi_probe
-from crane_project.tools import frozen_p3_feature_alignment_audit as alignment
-from crane_project.tools import frozen_p3_objectness_transfer_probe as transfer
 
 
 AUDIT_NAME = 'Frozen DINO Far-Distance Candidate Coverage Audit V1'
@@ -93,7 +90,16 @@ def validate_args(args):
 
 
 def protocol_args(args):
-    args = rescue.protocol_args(args)
+    args.valid_content_tolerance = 1e-3
+    args.deployment_score_thr = 0.05
+    args.border_margin_ratio = 0.02
+    args.riou_thr = 0.5
+    args.source_min_top1_rate = SOURCE_MIN_TOP1_RATE
+    args.epochs = 1
+    args.lr = 1.0
+    args.max_grad_norm = 1.0
+    args.resume_checkpoint = None
+    args.eval_only_checkpoint = args.labeller_checkpoint
     args.target_min_wins = MIN_GEOMETRY_COUNT
     args.max_mcml = TARGET_COUNT
     return args
@@ -101,7 +107,7 @@ def protocol_args(args):
 
 def source_and_target_records(args) -> Tuple[Sequence[Dict], Sequence[Dict]]:
     source = [
-        row for row in transfer.discover_labeled_records(
+        row for row in common.discover_labeled_records(
             args.data_root, args.source_split, 0)
         if row['seq'] == args.source_seq]
     _source_train, source_val = labeller.split_source_records(
@@ -111,6 +117,29 @@ def source_and_target_records(args) -> Tuple[Sequence[Dict], Sequence[Dict]]:
     if len(targets) != TARGET_COUNT:
         raise RuntimeError('Incomplete far-distance target slice')
     return source_val, targets
+
+
+def load_frozen_labeller(args, dino_devices, head_device):
+    dino, loaded_patch_size = common.load_frozen_dinov2(
+        args.dinov2_repo, args.dinov2_checkpoint,
+        args.dinov2_model, dino_devices,
+        args.legacy_sdpa_query_chunk)
+    if int(loaded_patch_size) != int(args.patch_size):
+        raise RuntimeError('Unexpected DINO patch size')
+    dino.eval()
+    for parameter in dino.parameters():
+        parameter.requires_grad_(False)
+    in_channels = int(getattr(dino, 'embed_dim', 0))
+    if in_channels <= 0:
+        raise RuntimeError('DINO model does not expose embed_dim')
+    heads = labeller.FrozenDinoRotatedHeads(in_channels, args).to(head_device)
+    checkpoint = torch.load(args.labeller_checkpoint, map_location='cpu')
+    labeller.validate_checkpoint(checkpoint, in_channels, args)
+    heads.load_state_dict(checkpoint['heads_state_dict'], strict=True)
+    heads.eval()
+    for parameter in heads.parameters():
+        parameter.requires_grad_(False)
+    return dino, heads
 
 
 def make_decision(source_summary: Dict, target_summary: Dict) -> str:
@@ -143,10 +172,10 @@ def main():
                     for gpu in args.dino_gpus]
     dino_device = dino_devices[0]
     head_device = torch.device('cuda:{}'.format(args.head_gpu))
-    dino, heads = rescue.load_frozen_labeller(
+    dino, heads = load_frozen_labeller(
         args, dino_devices, head_device)
-    dino_versions = alignment.module_parameter_versions(dino)
-    head_versions = alignment.module_parameter_versions(heads)
+    dino_versions = common.module_parameter_versions(dino)
+    head_versions = common.module_parameter_versions(heads)
 
     source_rows = labeller.evaluate_records(
         dino, heads, source_records, args, dino_device, head_device,
@@ -158,9 +187,9 @@ def main():
     target_summary = labeller.summarize_rows(target_rows)
 
     dino_unchanged = (
-        dino_versions == alignment.module_parameter_versions(dino))
+        dino_versions == common.module_parameter_versions(dino))
     heads_unchanged = (
-        head_versions == alignment.module_parameter_versions(heads))
+        head_versions == common.module_parameter_versions(heads))
     if not dino_unchanged or not heads_unchanged:
         raise RuntimeError('Frozen DINO/labeller parameter invariant failed')
     decision = make_decision(source_summary, target_summary)
@@ -168,10 +197,10 @@ def main():
     payload = dict(
         audit=AUDIT_NAME, protocol_version=PROTOCOL_VERSION,
         labeller_checkpoint=os.path.abspath(args.labeller_checkpoint),
-        labeller_checkpoint_sha256=rescue.file_sha256(
+        labeller_checkpoint_sha256=common.file_sha256(
             args.labeller_checkpoint),
         dinov2_checkpoint=os.path.abspath(args.dinov2_checkpoint),
-        dinov2_checkpoint_sha256=rescue.file_sha256(
+        dinov2_checkpoint_sha256=common.file_sha256(
             args.dinov2_checkpoint),
         protocol=dict(
             target_slice='test/real_seq02[2..41]',
@@ -198,7 +227,7 @@ def main():
         source_control=dict(summary=source_summary, rows=source_rows),
         target_far_distance=dict(summary=target_summary, rows=target_rows),
         decision=decision)
-    replacements = roi_probe.write_json_atomic(args.out_json, payload)
+    replacements = common.write_json_atomic(args.out_json, payload)
     print('[far-distance] {} geometry={}/{} r20={} r100={} top1={}'
           .format(
               decision, target_summary['geometry_eligible_count'],
