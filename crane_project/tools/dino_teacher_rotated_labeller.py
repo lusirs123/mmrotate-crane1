@@ -26,7 +26,8 @@ import torch
 import torch.nn as nn
 
 
-PROJ_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+PROJ_ROOT = os.path.abspath(os.path.join(
+    os.path.dirname(__file__), '..', '..'))
 if PROJ_ROOT not in sys.path:
     sys.path.insert(0, PROJ_ROOT)
 
@@ -34,7 +35,7 @@ from crane_project.tools import dino_teacher_common as common  # noqa: E402
 
 
 LABELLER_NAME = 'Frozen DINOv2 Oriented RPN/ROI Source Labeller V1'
-PROTOCOL_VERSION = 6
+PROTOCOL_VERSION = 7
 PAPER_URL = (
     'https://openaccess.thecvf.com/content/CVPR2025/html/'
     'Lavoie_Large_Self-Supervised_Models_Bridge_the_Gap_in_Domain_Adaptive_'
@@ -44,7 +45,8 @@ PAPER_CODE_URL = 'https://github.com/TRAILab/DINO_Teacher'
 
 def parse_args():
     parser = argparse.ArgumentParser(description=LABELLER_NAME)
-    parser.add_argument('--data-root', default='crane_project/data/crane_grab/')
+    parser.add_argument(
+        '--data-root', default='crane_project/data/crane_grab/')
     parser.add_argument('--source-split', default=common.SOURCE_SPLIT)
     parser.add_argument('--source-seq', default=common.SOURCE_SEQ)
     parser.add_argument('--source-val-modulus', type=int, default=5)
@@ -94,8 +96,22 @@ def parse_args():
     parser.add_argument('--target-min-wins', type=int, default=26)
     parser.add_argument('--max-mcml', type=int, default=5)
     parser.add_argument('--source-min-top1-rate', type=float, default=0.8)
+    parser.add_argument(
+        '--train-components', choices=['all', 'roi_cls'], default='all',
+        help=('Train all RPN/ROI heads, or only the final ROI classifier '
+              'fc_cls while keeping RPN, shared ROI FCs, and bbox regression '
+              'fixed.'))
+    parser.add_argument(
+        '--source-small-repeat', type=int, default=1,
+        help='Repeat source-train frames in the lower short-token tertile.')
+    parser.add_argument(
+        '--source-retain-max-top1-drop', type=int, default=0,
+        help='Maximum source-val top1 drop allowed for ROI-cls selection.')
     parser.add_argument('--feature-cache-dir', required=True)
     parser.add_argument('--work-dir', required=True)
+    parser.add_argument(
+        '--init-checkpoint',
+        help='Initialize head weights without resuming epoch or optimizer.')
     parser.add_argument('--resume-checkpoint')
     parser.add_argument('--eval-only-checkpoint')
     parser.add_argument(
@@ -116,7 +132,8 @@ def validate_args(args):
         raise ValueError('--source-val-modulus must be at least 2')
     if bool(args.source_train_datasets) != bool(args.source_val_datasets):
         raise ValueError(
-            'Formal source train and validation specs must be supplied together')
+            'Formal source train and validation specs must be supplied '
+            'together')
     if args.source_train_datasets:
         parse_dataset_specs(args.source_train_datasets)
         parse_dataset_specs(args.source_val_datasets)
@@ -131,9 +148,14 @@ def validate_args(args):
         args.epochs, args.lr, args.max_grad_norm, args.lr_gamma,
         args.checkpoint_interval)
     if any(float(value) <= 0.0 for value in positive):
-        raise ValueError('Head, optimizer, and count settings must be positive')
+        raise ValueError(
+            'Head, optimizer, and count settings must be positive')
     if args.warmup_iters < 0:
         raise ValueError('--warmup-iters must be non-negative')
+    if args.source_small_repeat < 1:
+        raise ValueError('--source-small-repeat must be at least 1')
+    if args.source_retain_max_top1_drop < 0:
+        raise ValueError('--source-retain-max-top1-drop must be non-negative')
     if not 0.0 < args.warmup_ratio <= 1.0:
         raise ValueError('--warmup-ratio must be in (0, 1]')
     lr_steps = sorted(set(int(value) for value in args.lr_steps))
@@ -164,7 +186,21 @@ def validate_args(args):
     if not 0.0 <= args.source_min_top1_rate <= 1.0:
         raise ValueError('--source-min-top1-rate must be in [0, 1]')
     if args.resume_checkpoint and args.eval_only_checkpoint:
-        raise ValueError('Resume and eval-only checkpoints are mutually exclusive')
+        raise ValueError(
+            'Resume and eval-only checkpoints are mutually exclusive')
+    if args.init_checkpoint and (
+            args.resume_checkpoint or args.eval_only_checkpoint):
+        raise ValueError(
+            '--init-checkpoint cannot be combined with resume/eval-only')
+    if args.init_checkpoint and not os.path.isfile(args.init_checkpoint):
+        raise ValueError('Init checkpoint does not exist: {}'.format(
+            args.init_checkpoint))
+    if (args.train_components == 'roi_cls'
+            and not (args.init_checkpoint or args.resume_checkpoint
+                     or args.eval_only_checkpoint)):
+        raise ValueError(
+            '--train-components roi_cls requires an init/resume/eval-only '
+            'checkpoint so the validated RPN and OBB regressor are retained')
     if (args.source_val_results_out and
             os.path.exists(args.source_val_results_out)):
         raise ValueError('Refusing to overwrite source-val results: {}'.format(
@@ -177,6 +213,38 @@ def set_seed(seed: int):
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
+
+
+def configure_trainable_components(heads, train_components: str) -> List[str]:
+    """Set the exact head parameters authorized for optimization."""
+    for parameter in heads.parameters():
+        parameter.requires_grad_(False)
+    if train_components == 'all':
+        for parameter in heads.parameters():
+            parameter.requires_grad_(True)
+    elif train_components == 'roi_cls':
+        bbox_head = heads.roi_head.bbox_head
+        if not hasattr(bbox_head, 'fc_cls'):
+            raise RuntimeError('ROI bbox head has no fc_cls classifier')
+        for parameter in bbox_head.fc_cls.parameters():
+            parameter.requires_grad_(True)
+    else:
+        raise ValueError('Unsupported train-components: {}'.format(
+            train_components))
+    return [
+        name for name, parameter in heads.named_parameters()
+        if parameter.requires_grad]
+
+
+def optimization_loss_total(losses: Dict, train_components: str):
+    if train_components == 'all':
+        return loss_total(losses)
+    if train_components == 'roi_cls':
+        if 'loss_cls' not in losses:
+            raise RuntimeError('ROI classification loss is missing')
+        return loss_total({'loss_cls': losses['loss_cls']})
+    raise ValueError('Unsupported train-components: {}'.format(
+        train_components))
 
 
 def file_identity(path: str) -> Dict:
@@ -305,6 +373,50 @@ def scaled_gt_tensors(annotation: str, scale: float,
     return boxes, labels, original
 
 
+def record_short_token(record: Dict, args) -> float:
+    image = cv2.imread(record['image'], cv2.IMREAD_COLOR)
+    if image is None:
+        raise RuntimeError('Cannot read {}'.format(record['image']))
+    height, width = image.shape[:2]
+    scale = min(
+        float(args.dino_height) / float(min(height, width)),
+        float(args.dino_max_long_side) / float(max(height, width)))
+    boxes = parse_original_gt(record['annotation'])
+    if boxes.shape[0] == 0:
+        return float('inf')
+    short_pixels = np.minimum(np.abs(boxes[:, 2]), np.abs(boxes[:, 3]))
+    return float(np.min(short_pixels) * scale / float(args.patch_size))
+
+
+def source_small_balanced_records(records: Sequence[Dict], args):
+    """Repeat source-small frames using a source-train-only threshold."""
+    values = [record_short_token(record, args) for record in records]
+    finite = [value for value in values if math.isfinite(value)]
+    if not finite:
+        raise RuntimeError('Source train has no labeled object scale')
+    threshold = float(np.percentile(
+        np.asarray(finite, dtype=np.float64), 100.0 / 3.0))
+    repeat = int(args.source_small_repeat)
+    balanced = []
+    small_count = 0
+    for record, value in zip(records, values):
+        is_small = bool(math.isfinite(value) and value <= threshold)
+        small_count += int(is_small)
+        balanced.extend([record] * (repeat if is_small else 1))
+    return balanced, dict(
+        definition='source_train_short_token_lower_tertile',
+        short_token_threshold=threshold,
+        original_count=int(len(records)), small_frame_count=small_count,
+        repeat=int(repeat), balanced_count=int(len(balanced)))
+
+
+def source_small_records(records: Sequence[Dict], args,
+                         threshold: float) -> List[Dict]:
+    return [
+        record for record in records
+        if record_short_token(record, args) <= float(threshold)]
+
+
 def split_source_records(records: Sequence[Dict], modulus: int):
     ordered = sorted(records, key=lambda row: (row['seq'], int(row['frame'])))
     train = [row for row in ordered if int(row['frame']) % modulus != 0]
@@ -335,7 +447,7 @@ def parse_dataset_specs(values: Sequence[str]) -> List[Tuple[str, str]]:
 
 def discover_labeled_records_with_image_split(
         data_root: str, annotation_split: str, image_split: str) -> List[Dict]:
-    """Read labels from one split and images from its configured image split."""
+    """Read labels and images from independently configured splits."""
     ann_dir = os.path.join(data_root, annotation_split, 'annfiles')
     img_dir = os.path.join(data_root, image_split, 'images')
     records = []
@@ -520,6 +632,75 @@ class FrozenDinoRotatedHeads(nn.Module):
         losses.update(roi_losses)
         return losses
 
+    def forward_roi_cls_hard_train(
+            self, feature: torch.Tensor, img_meta: Dict,
+            gt_boxes: torch.Tensor, max_samples: int,
+            positive_fraction: float = 0.25,
+            riou_thr: float = 0.5) -> Dict:
+        """Mine decoded-ROI positives and hard negatives for ``fc_cls``."""
+        import torch.nn.functional as functional
+        from mmcv.ops import box_iou_rotated
+        from mmrotate.core import rbbox2roi
+
+        with torch.no_grad():
+            proposals = self.rpn_head.simple_test_rpn(
+                [feature], [img_meta])[0][:, :5]
+            if gt_boxes.shape[0]:
+                proposals = torch.cat([proposals, gt_boxes], dim=0)
+        rois = rbbox2roi([proposals])
+        bbox_results = self.roi_head._bbox_forward([feature], rois)
+        cls_score = bbox_results['cls_score']
+        with torch.no_grad():
+            decoded, _scores = self.roi_head.bbox_head.get_bboxes(
+                rois, cls_score.detach(), bbox_results['bbox_pred'],
+                img_meta['img_shape'], img_meta['scale_factor'],
+                rescale=False, cfg=None)
+            if decoded.shape[1] != 5:
+                raise RuntimeError(
+                    'ROI-cls hard mining requires class-agnostic regression')
+            if gt_boxes.shape[0]:
+                overlap = box_iou_rotated(
+                    decoded.float(), gt_boxes.float()).max(dim=1).values
+            else:
+                overlap = decoded.new_zeros((decoded.shape[0],))
+            positive = overlap >= float(riou_thr)
+            foreground_score = torch.softmax(
+                cls_score.detach(), dim=1)[:, 0]
+            positive_indices = torch.nonzero(
+                positive, as_tuple=False).reshape(-1)
+            negative_indices = torch.nonzero(
+                ~positive, as_tuple=False).reshape(-1)
+            max_positive = max(1, int(max_samples * positive_fraction))
+            if positive_indices.numel() > max_positive:
+                hard_positive_order = torch.argsort(
+                    foreground_score[positive_indices])
+                positive_indices = positive_indices[
+                    hard_positive_order[:max_positive]]
+            max_negative = max(0, int(max_samples) - positive_indices.numel())
+            if negative_indices.numel() > max_negative:
+                hard_negative_order = torch.argsort(
+                    foreground_score[negative_indices], descending=True)
+                negative_indices = negative_indices[
+                    hard_negative_order[:max_negative]]
+            selected = torch.cat(
+                [positive_indices, negative_indices], dim=0)
+            labels = torch.cat([
+                torch.zeros(
+                    positive_indices.numel(), dtype=torch.long,
+                    device=cls_score.device),
+                torch.ones(
+                    negative_indices.numel(), dtype=torch.long,
+                    device=cls_score.device)], dim=0)
+        if selected.numel() == 0:
+            raise RuntimeError('ROI-cls hard mining selected no samples')
+        loss = functional.cross_entropy(cls_score[selected], labels)
+        accuracy = (cls_score[selected].argmax(dim=1) == labels).float().mean()
+        return dict(
+            loss_cls=loss, roi_cls_accuracy=accuracy,
+            roi_cls_positive_count=int(positive_indices.numel()),
+            roi_cls_hard_negative_count=int(negative_indices.numel()),
+            roi_cls_candidate_count=int(proposals.shape[0]))
+
     def simple_test(self, feature: torch.Tensor, img_meta: Dict):
         features = [feature]
         proposals = self.rpn_head.simple_test_rpn(features, [img_meta])
@@ -601,10 +782,16 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                 dino, record, args, dino_device, head_device))
         cache_hits += int(cached)
         optimizer.zero_grad()
-        output = heads.forward_train(feature, img_meta, gt_boxes, gt_labels)
+        if args.train_components == 'roi_cls':
+            output = heads.forward_roi_cls_hard_train(
+                feature, img_meta, gt_boxes, args.roi_samples,
+                riou_thr=args.riou_thr)
+        else:
+            output = heads.forward_train(
+                feature, img_meta, gt_boxes, gt_labels)
         for name, value in loss_component_means(output).items():
             component_sums[name] = component_sums.get(name, 0.0) + value
-        total = loss_total(output)
+        total = optimization_loss_total(output, args.train_components)
         total.backward()
         grad_norm = torch.nn.utils.clip_grad_norm_(
             heads.parameters(), args.max_grad_norm)
@@ -614,15 +801,20 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
         global_step += 1
         losses.append(float(total.item()))
         if (index + 1) % 25 == 0 or index + 1 == len(ordered):
-            print('[source-train] epoch={} {}/{} loss={:.5f} cache={}/{}'.format(
-                epoch, index + 1, len(ordered),
-                float(np.mean(losses[-25:])), cache_hits, index + 1))
+            print(
+                '[source-train] epoch={} {}/{} loss={:.5f} cache={}/{}'
+                .format(
+                    epoch, index + 1, len(ordered),
+                    float(np.mean(losses[-25:])), cache_hits, index + 1))
         del feature, gt_boxes, gt_labels, total
     return dict(
         epoch=int(epoch), count=len(ordered),
         global_step_end=int(global_step),
         lr_end=float(optimizer.param_groups[0]['lr']),
         mean_loss=float(np.mean(losses)),
+        optimized_components=(
+            ['loss_rpn_cls', 'loss_rpn_bbox', 'loss_cls', 'loss_bbox']
+            if args.train_components == 'all' else ['loss_cls']),
         mean_loss_components={
             name: float(value / max(1, len(ordered)))
             for name, value in sorted(component_sums.items())},
@@ -942,6 +1134,11 @@ def source_selection_key(summary: Dict) -> Tuple:
         int(summary['recall_at_100']), float(summary['mean_top1_riou']))
 
 
+def roi_cls_selection_key(full_summary: Dict, small_summary: Dict) -> Tuple:
+    return source_selection_key(small_summary) + source_selection_key(
+        full_summary)
+
+
 def make_target_decision(summary: Dict, args,
                          source_summary: Dict = None) -> str:
     if summary['frame_count'] != args.target_end - args.target_start + 1:
@@ -962,16 +1159,32 @@ def make_target_decision(summary: Dict, args,
     return 'FROZEN_DINO_ROTATED_LABELLER_INSUFFICIENT'
 
 
-def checkpoint_payload(heads, optimizer, scheduler, epoch: int, best_epoch: int,
-                       best_summary: Dict, in_channels: int, args,
-                       global_step: int = 0) -> Dict:
+def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
+                       best_epoch: int, best_summary: Dict,
+                       in_channels: int, args,
+                       global_step: int = 0,
+                       best_small_summary: Dict = None,
+                       source_sampling: Dict = None,
+                       source_baseline_summary: Dict = None,
+                       source_baseline_small_summary: Dict = None) -> Dict:
     return dict(
         labeller=LABELLER_NAME, protocol_version=PROTOCOL_VERSION,
         source_only=True, frozen_dinov2=True,
         epoch=int(epoch), best_epoch=int(best_epoch),
         global_step=int(global_step),
         best_source_val_summary=best_summary,
+        best_source_small_val_summary=best_small_summary,
+        source_baseline_val_summary=source_baseline_summary,
+        source_baseline_small_val_summary=source_baseline_small_summary,
+        source_sampling=source_sampling,
         training_protocol=dict(
+            train_components=str(args.train_components),
+            optimization_loss_components=(
+                ['loss_rpn_cls', 'loss_rpn_bbox', 'loss_cls', 'loss_bbox']
+                if args.train_components == 'all' else ['loss_cls']),
+            trainable_parameter_names=[
+                name for name, parameter in heads.named_parameters()
+                if parameter.requires_grad],
             epochs=int(args.epochs), lr=float(args.lr),
             momentum=float(args.momentum),
             weight_decay=float(args.weight_decay),
@@ -996,7 +1209,8 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int, best_epoch: int,
                               else scheduler.state_dict()))
 
 
-def validate_checkpoint(payload: Dict, in_channels: int, args):
+def validate_checkpoint(payload: Dict, in_channels: int, args,
+                        allow_training_mode_mismatch: bool = False):
     required = (
         'source_only', 'frozen_dinov2', 'in_channels', 'patch_size',
         'rpn_feat_channels', 'roi_fc_channels', 'heads_state_dict')
@@ -1004,8 +1218,17 @@ def validate_checkpoint(payload: Dict, in_channels: int, args):
     if missing:
         raise RuntimeError('Labeller checkpoint lacks {}'.format(
             ', '.join(missing)))
-    if payload['source_only'] is not True or payload['frozen_dinov2'] is not True:
+    if (payload['source_only'] is not True
+            or payload['frozen_dinov2'] is not True):
         raise RuntimeError('Checkpoint is not source-only/frozen-DINO')
+    stored_mode = payload.get('training_protocol', {}).get(
+        'train_components', 'all')
+    requested_mode = getattr(args, 'train_components', stored_mode)
+    if (not allow_training_mode_mismatch
+            and stored_mode != requested_mode):
+        raise RuntimeError(
+            'Checkpoint training mode mismatch: stored={} requested={}'.format(
+                stored_mode, requested_mode))
     expected = dict(
         in_channels=int(in_channels), patch_size=int(args.patch_size),
         rpn_feat_channels=int(args.rpn_feat_channels),
@@ -1019,16 +1242,35 @@ def validate_checkpoint(payload: Dict, in_channels: int, args):
 
 def train_source_only(dino, heads, train_records, val_records, args,
                       dino_device, head_device, in_channels: int):
+    trainable_names = configure_trainable_components(
+        heads, args.train_components)
+    trainable_parameters = [
+        parameter for parameter in heads.parameters()
+        if parameter.requires_grad]
+    if not trainable_parameters:
+        raise RuntimeError('No trainable head parameters')
+    print('[trainable] mode={} tensors={} parameters={}'.format(
+        args.train_components, len(trainable_names),
+        sum(int(parameter.numel()) for parameter in trainable_parameters)))
     optimizer = torch.optim.SGD(
-        heads.parameters(), lr=args.lr, momentum=args.momentum,
+        trainable_parameters, lr=args.lr, momentum=args.momentum,
         weight_decay=args.weight_decay)
     scheduler = None
     start_epoch = 1
     global_step = 0
     best_epoch = 0
     best_summary = None
+    best_small_summary = None
     best_key = None
+    source_baseline_summary = None
+    source_baseline_small_summary = None
     history = []
+    if args.init_checkpoint:
+        payload = torch.load(args.init_checkpoint, map_location='cpu')
+        validate_checkpoint(
+            payload, in_channels, args,
+            allow_training_mode_mismatch=True)
+        heads.load_state_dict(payload['heads_state_dict'], strict=True)
     if args.resume_checkpoint:
         payload = torch.load(args.resume_checkpoint, map_location='cpu')
         validate_checkpoint(payload, in_channels, args)
@@ -1040,71 +1282,178 @@ def train_source_only(dino, heads, train_records, val_records, args,
             'global_step', (start_epoch - 1) * len(train_records)))
         best_epoch = int(payload.get('best_epoch', 0))
         best_summary = payload.get('best_source_val_summary')
-        best_key = (None if best_summary is None
-                    else source_selection_key(best_summary))
+        best_small_summary = payload.get('best_source_small_val_summary')
+        source_baseline_summary = payload.get(
+            'source_baseline_val_summary')
+        source_baseline_small_summary = payload.get(
+            'source_baseline_small_val_summary')
+
+    frozen_parameter_versions = {
+        name: int(parameter._version)
+        for name, parameter in heads.named_parameters()
+        if not parameter.requires_grad}
 
     best_path = os.path.join(args.work_dir, 'labeller_best_source_only.pth')
     latest_path = os.path.join(args.work_dir, 'labeller_latest.pth')
+    epoch_train_records = list(train_records)
+    source_sampling = None
+    small_val_records = []
+    if args.train_components == 'roi_cls':
+        epoch_train_records, source_sampling = source_small_balanced_records(
+            train_records, args)
+        small_val_records = source_small_records(
+            val_records, args, source_sampling['short_token_threshold'])
+        if not small_val_records:
+            raise RuntimeError(
+                'Source validation has no objects within the source-train '
+                'small-token threshold')
+        print('[source-small] threshold={:.6f} train={}/{} balanced={} '
+              'val={}/{}'.format(
+                  source_sampling['short_token_threshold'],
+                  source_sampling['small_frame_count'], len(train_records),
+                  len(epoch_train_records), len(small_val_records),
+                  len(val_records)))
+        if args.resume_checkpoint:
+            if (source_baseline_summary is None
+                    or source_baseline_small_summary is None
+                    or best_summary is None or best_small_summary is None):
+                raise RuntimeError(
+                    'ROI-cls resume checkpoint lacks source baseline/small '
+                    'validation summaries')
+            best_key = roi_cls_selection_key(
+                best_summary, best_small_summary)
+        else:
+            baseline_rows = evaluate_records(
+                dino, heads, val_records, args, dino_device, head_device,
+                role='source_validation_baseline')
+            source_baseline_summary = summarize_rows(baseline_rows)
+            baseline_small_rows = evaluate_records(
+                dino, heads, small_val_records, args,
+                dino_device, head_device,
+                role='source_small_validation_baseline')
+            source_baseline_small_summary = summarize_rows(
+                baseline_small_rows)
+            best_summary = source_baseline_summary
+            best_small_summary = source_baseline_small_summary
+            best_key = roi_cls_selection_key(
+                best_summary, best_small_summary)
+            atomic_torch_save(checkpoint_payload(
+                heads, None, None, 0, 0, best_summary, in_channels, args,
+                global_step, best_small_summary, source_sampling,
+                source_baseline_summary,
+                source_baseline_small_summary), best_path)
+            print('[source-baseline] full_top1={}/{} small_top1={}/{} '
+                  'fallback_epoch=0'.format(
+                      best_summary['top1_hits'],
+                      best_summary['frame_count'],
+                      best_small_summary['top1_hits'],
+                      best_small_summary['frame_count']))
+    elif best_summary is not None:
+        best_key = source_selection_key(best_summary)
+
     selection_epochs = set(int(value) for value in args.selection_epochs)
     for epoch in range(start_epoch, args.epochs + 1):
         train_row = train_epoch(
-            dino, heads, optimizer, train_records, epoch, global_step, args,
-            dino_device, head_device)
+            dino, heads, optimizer, epoch_train_records, epoch, global_step,
+            args, dino_device, head_device)
         global_step = int(train_row['global_step_end'])
         evaluate_epoch = (
             epoch % int(args.checkpoint_interval) == 0
             or epoch == int(args.epochs))
         val_summary = None
+        small_val_summary = None
         if evaluate_epoch:
             val_rows = evaluate_records(
                 dino, heads, val_records, args, dino_device, head_device,
                 role='source_validation')
             val_summary = summarize_rows(val_rows)
+            if args.train_components == 'roi_cls':
+                small_val_rows = evaluate_records(
+                    dino, heads, small_val_records, args,
+                    dino_device, head_device,
+                    role='source_small_validation')
+                small_val_summary = summarize_rows(small_val_rows)
         selection_eligible = epoch in selection_epochs
         if selection_eligible and val_summary is None:
             raise RuntimeError(
                 'A selection epoch must also be a validation epoch')
-        key = (None if val_summary is None
-               else source_selection_key(val_summary))
+        if val_summary is None:
+            key = None
+        elif args.train_components == 'roi_cls':
+            key = roi_cls_selection_key(val_summary, small_val_summary)
+        else:
+            key = source_selection_key(val_summary)
+        retention_passed = True
+        if val_summary is not None and args.train_components == 'roi_cls':
+            retention_floor = (
+                int(source_baseline_summary['top1_hits'])
+                - int(args.source_retain_max_top1_drop))
+            retention_passed = bool(
+                int(val_summary['top1_hits']) >= retention_floor)
         improved = bool(
-            selection_eligible
+            selection_eligible and retention_passed
             and (best_key is None or key > best_key))
         if improved:
             best_key = key
             best_epoch = int(epoch)
             best_summary = val_summary
+            best_small_summary = small_val_summary
             atomic_torch_save(checkpoint_payload(
                 heads, None, None, epoch, best_epoch, best_summary,
-                in_channels, args, global_step), best_path)
+                in_channels, args, global_step, best_small_summary,
+                source_sampling, source_baseline_summary,
+                source_baseline_small_summary), best_path)
         if evaluate_epoch:
             epoch_path = os.path.join(
                 args.work_dir,
                 'labeller_epoch_{:02d}_source_only.pth'.format(epoch))
             atomic_torch_save(checkpoint_payload(
                 heads, optimizer, scheduler, epoch, best_epoch,
-                best_summary, in_channels, args, global_step), epoch_path)
+                best_summary, in_channels, args, global_step,
+                best_small_summary, source_sampling,
+                source_baseline_summary,
+                source_baseline_small_summary), epoch_path)
         history.append(dict(
             epoch=int(epoch), train=train_row,
-            source_val=val_summary, selected_as_best=bool(improved),
+            source_val=val_summary,
+            source_small_val=small_val_summary,
+            source_retention_passed=bool(retention_passed),
+            selected_as_best=bool(improved),
             selection_eligible=bool(selection_eligible),
             checkpoint_saved=bool(evaluate_epoch),
             lr=float(optimizer.param_groups[0]['lr'])))
         atomic_torch_save(checkpoint_payload(
             heads, optimizer, scheduler, epoch, best_epoch, best_summary,
-            in_channels, args, global_step), latest_path)
+            in_channels, args, global_step, best_small_summary,
+            source_sampling, source_baseline_summary,
+            source_baseline_small_summary), latest_path)
         if val_summary is None:
             print('[source-epoch] epoch={} validation=skipped best_epoch={}'
                   .format(epoch, best_epoch))
         else:
-            print('[source-epoch] epoch={} top1={}/{} r100={} '
-                  'selection_eligible={} best_epoch={}'.format(
+            small_text = (' n/a' if small_val_summary is None else
+                          ' {}/{}'.format(
+                              small_val_summary['top1_hits'],
+                              small_val_summary['frame_count']))
+            print('[source-epoch] epoch={} top1={}/{} small_top1={} r100={} '
+                  'retention={} selection_eligible={} best_epoch={}'.format(
                       epoch, val_summary['top1_hits'],
-                      val_summary['frame_count'],
-                      val_summary['recall_at_100'], selection_eligible,
-                      best_epoch))
-    if best_epoch <= 0 or not os.path.isfile(best_path):
+                      val_summary['frame_count'], small_text,
+                      val_summary['recall_at_100'], retention_passed,
+                      selection_eligible, best_epoch))
+    if not os.path.isfile(best_path):
         raise RuntimeError('No source-selected labeller checkpoint')
-    return best_path, best_epoch, best_summary, history
+    frozen_parameters_unchanged = bool(
+        frozen_parameter_versions == {
+            name: int(parameter._version)
+            for name, parameter in heads.named_parameters()
+            if not parameter.requires_grad})
+    if not frozen_parameters_unchanged:
+        raise RuntimeError('A frozen detector-head parameter changed')
+    return (best_path, best_epoch, best_summary, best_small_summary,
+            source_sampling, source_baseline_summary,
+            source_baseline_small_summary, frozen_parameters_unchanged,
+            history)
 
 
 def main():
@@ -1154,6 +1503,8 @@ def main():
             dino, source_train[0], args, dino_device)
         in_channels = int(sample_feature.shape[1])
     heads = FrozenDinoRotatedHeads(in_channels, args).to(head_device)
+    trainable_names = configure_trainable_components(
+        heads, args.train_components)
     source_val_rows = None
 
     if args.eval_only_checkpoint:
@@ -1163,6 +1514,14 @@ def main():
         heads.load_state_dict(payload['heads_state_dict'], strict=True)
         best_epoch = int(payload.get('best_epoch', payload.get('epoch', 0)))
         best_source_summary = payload.get('best_source_val_summary')
+        best_source_small_summary = payload.get(
+            'best_source_small_val_summary')
+        source_sampling = payload.get('source_sampling')
+        source_baseline_summary = payload.get(
+            'source_baseline_val_summary')
+        source_baseline_small_summary = payload.get(
+            'source_baseline_small_val_summary')
+        frozen_head_parameters_unchanged = True
         history = []
         # Recompute source validation with the current inference rule.  The
         # checkpoint's stored summary may predate the valid-content filter.
@@ -1171,9 +1530,13 @@ def main():
             role='source_validation')
         current_source_summary = summarize_rows(source_val_rows)
     else:
-        best_path, best_epoch, best_source_summary, history = train_source_only(
-            dino, heads, source_train, source_val, args,
-            dino_device, head_device, in_channels)
+        (best_path, best_epoch,
+         best_source_summary, best_source_small_summary,
+         source_sampling, source_baseline_summary,
+         source_baseline_small_summary,
+         frozen_head_parameters_unchanged, history) = train_source_only(
+             dino, heads, source_train, source_val, args,
+             dino_device, head_device, in_channels)
         payload = torch.load(best_path, map_location='cpu')
         validate_checkpoint(payload, in_channels, args)
         heads.load_state_dict(payload['heads_state_dict'], strict=True)
@@ -1219,10 +1582,16 @@ def main():
                 'to_RotatedROIAlign7x7_to_Shared2FC_cls_and_OBB_reg'),
             source_data=source_protocol,
             checkpoint_selection=(
-                'source_validation_only_over_fixed_candidate_epochs'),
+                ('source_validation_only_with_roi_cls_small_control'
+                 if args.train_components == 'roi_cls' else
+                 'source_validation_only_over_fixed_candidate_epochs')),
             selection_epochs=[int(value)
                               for value in args.selection_epochs],
             training_schedule=dict(
+                train_components=str(args.train_components),
+                optimization_loss_components=(
+                    ['loss_rpn_cls', 'loss_rpn_bbox', 'loss_cls', 'loss_bbox']
+                    if args.train_components == 'all' else ['loss_cls']),
                 epochs=int(args.epochs), optimizer='SGD',
                 lr=float(args.lr), momentum=float(args.momentum),
                 weight_decay=float(args.weight_decay),
@@ -1257,19 +1626,32 @@ def main():
                 'unlabelled target-train split was supplied.')),
         isolation=dict(
             dino_frozen=True, dino_parameters_unchanged=dino_unchanged,
-            trainable_modules=['OrientedRPNHead',
-                               'OrientedStandardRoIHead'],
+            initialization_checkpoint=(
+                None if not args.init_checkpoint
+                else os.path.abspath(args.init_checkpoint)),
+            train_components=str(args.train_components),
+            trainable_parameter_names=trainable_names,
+            trainable_parameter_count=int(sum(
+                parameter.numel() for parameter in heads.parameters()
+                if parameter.requires_grad)),
+            frozen_head_parameters_unchanged=bool(
+                frozen_head_parameters_unchanged),
             target_used_for_training=False,
             target_used_for_checkpoint_selection=False,
             target_labels_used_for_evaluation_only=bool(
                 not args.skip_target_eval)),
         architecture=dict(
             in_channels=in_channels, patch_size=int(args.patch_size),
-            rpn=rpn_config(in_channels, args), roi=roi_config(in_channels, args)),
+            rpn=rpn_config(in_channels, args),
+            roi=roi_config(in_channels, args)),
         source=dict(
             train_count=len(source_train), val_count=len(source_val),
             best_epoch=int(best_epoch),
             best_validation_summary=best_source_summary,
+            best_small_validation_summary=best_source_small_summary,
+            baseline_validation_summary=source_baseline_summary,
+            baseline_small_validation_summary=source_baseline_small_summary,
+            small_sampling=source_sampling,
             current_inference_validation_summary=current_source_summary,
             current_inference_rule='valid_rotated_obb_corners',
             history=history,

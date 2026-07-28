@@ -25,6 +25,8 @@ def _args(tmp_path, **overrides):
         checkpoint_interval=1,
         selection_epochs=[1, 2, 3, 4, 5, 6, 7, 8],
         max_mcml=5, source_min_top1_rate=0.8,
+        train_components='all', init_checkpoint=None,
+        source_small_repeat=1, source_retain_max_top1_drop=0,
         resume_checkpoint=None, eval_only_checkpoint=None,
         source_val_results_out=None,
         dinov2_checkpoint=str(checkpoint), dinov2_model='dinov2_vitl14',
@@ -52,6 +54,20 @@ def test_validate_rejects_selection_outside_checkpoint_epochs(tmp_path):
     with pytest.raises(ValueError, match='validation checkpoints'):
         labeller.validate_args(_args(
             tmp_path, checkpoint_interval=2, selection_epochs=[1, 2, 4, 6, 8]))
+
+
+def test_validate_rejects_init_and_resume_together(tmp_path):
+    init_path = tmp_path / 'init.pth'
+    init_path.write_bytes(b'checkpoint')
+    with pytest.raises(ValueError, match='cannot be combined'):
+        labeller.validate_args(_args(
+            tmp_path, init_checkpoint=str(init_path),
+            resume_checkpoint='resume.pth'))
+
+
+def test_validate_requires_checkpoint_for_roi_classifier_mode(tmp_path):
+    with pytest.raises(ValueError, match='requires an init/resume/eval-only'):
+        labeller.validate_args(_args(tmp_path, train_components='roi_cls'))
 
 
 def test_source_split_is_deterministic_and_disjoint(tmp_path):
@@ -152,6 +168,43 @@ def test_loss_total_reduces_rpn_lists_and_roi_tensors():
         loss_cls=4.0, loss_bbox=5.0))
 
 
+def test_roi_cls_mode_trains_only_final_classifier():
+    class TinyBBoxHead(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.shared_fcs = torch.nn.ModuleList([
+                torch.nn.Linear(3, 3)])
+            self.fc_cls = torch.nn.Linear(3, 2)
+            self.fc_reg = torch.nn.Linear(3, 5)
+
+    class TinyHeads(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.rpn_head = torch.nn.Linear(3, 3)
+            self.roi_head = torch.nn.Module()
+            self.roi_head.bbox_head = TinyBBoxHead()
+
+    heads = TinyHeads()
+    names = labeller.configure_trainable_components(heads, 'roi_cls')
+    assert names == [
+        'roi_head.bbox_head.fc_cls.weight',
+        'roi_head.bbox_head.fc_cls.bias']
+    assert all(
+        parameter.requires_grad == name.startswith(
+            'roi_head.bbox_head.fc_cls.')
+        for name, parameter in heads.named_parameters())
+
+
+def test_roi_cls_mode_optimizes_only_roi_classification_loss():
+    losses = dict(
+        loss_rpn_cls=torch.tensor(10.0),
+        loss_rpn_bbox=torch.tensor(20.0),
+        loss_cls=torch.tensor(3.0, requires_grad=True),
+        loss_bbox=torch.tensor(30.0))
+    total = labeller.optimization_loss_total(losses, 'roi_cls')
+    assert float(total.item()) == pytest.approx(3.0)
+
+
 def test_rotated_box_corners_and_valid_content_filter_preserve_order():
     detections = np.asarray([
         [50.0, 50.0, 20.0, 10.0, 0.0, 0.9],
@@ -248,10 +301,42 @@ def test_source_selection_prioritizes_top1_before_oracle_recall():
     assert labeller.source_selection_key(a) > labeller.source_selection_key(b)
 
 
+def test_roi_cls_selection_prioritizes_source_small_validation():
+    full_a = dict(top1_hits=10, recall_at_20=10,
+                  recall_at_100=10, mean_top1_riou=0.6)
+    small_a = dict(top1_hits=2, recall_at_20=2,
+                   recall_at_100=2, mean_top1_riou=0.6)
+    full_b = dict(top1_hits=9, recall_at_20=9,
+                  recall_at_100=9, mean_top1_riou=0.6)
+    small_b = dict(top1_hits=3, recall_at_20=3,
+                   recall_at_100=3, mean_top1_riou=0.6)
+    assert labeller.roi_cls_selection_key(full_b, small_b) > (
+        labeller.roi_cls_selection_key(full_a, small_a))
+
+
+def test_source_small_sampling_uses_source_train_threshold_only(
+        monkeypatch, tmp_path):
+    args = _args(tmp_path, source_small_repeat=2)
+    train = [dict(name='small'), dict(name='medium'), dict(name='large')]
+    val = [dict(name='val_small'), dict(name='val_large')]
+    scale = dict(small=1.0, medium=2.0, large=3.0,
+                 val_small=1.5, val_large=2.5)
+    monkeypatch.setattr(
+        labeller, 'record_short_token',
+        lambda record, _args: scale[record['name']])
+    balanced, sampling = labeller.source_small_balanced_records(train, args)
+    selected_val = labeller.source_small_records(
+        val, args, sampling['short_token_threshold'])
+    assert sampling['short_token_threshold'] == pytest.approx(5.0 / 3.0)
+    assert [row['name'] for row in balanced] == [
+        'small', 'small', 'medium', 'large']
+    assert [row['name'] for row in selected_val] == ['val_small']
+
+
 def test_lr_schedule_uses_independent_dino_head_warmup_and_steps(tmp_path):
     args = _args(tmp_path)
-    assert labeller.scheduled_lr(args, epoch=1, global_step=0) == pytest.approx(
-        0.001 * 0.001)
+    assert labeller.scheduled_lr(
+        args, epoch=1, global_step=0) == pytest.approx(0.001 * 0.001)
     assert labeller.scheduled_lr(
         args, epoch=1, global_step=1000) == pytest.approx(0.001)
     assert labeller.scheduled_lr(
