@@ -79,6 +79,10 @@ def parse_args():
     parser.add_argument('--proposal-count', type=int, default=2000)
     parser.add_argument('--max-detections', type=int, default=2000)
     parser.add_argument(
+        '--feature-strides', type=int, nargs='+', default=None,
+        help=('Optional DINO feature pyramid strides. Default is the original '
+              'single stride equal to --patch-size.'))
+    parser.add_argument(
         '--roi-nms-iou-thr', type=float, default=0.1,
         help='Frozen DINO ROI rotated-NMS IoU threshold.')
     parser.add_argument('--valid-content-tolerance', type=float, default=1e-3)
@@ -206,6 +210,15 @@ def validate_args(args):
     roi_nms_iou_thr = float(getattr(args, 'roi_nms_iou_thr', 0.1))
     if not 0.0 < roi_nms_iou_thr <= 1.0:
         raise ValueError('--roi-nms-iou-thr must be in (0, 1]')
+    strides = getattr(args, 'feature_strides', None)
+    if strides is not None:
+        strides = [int(value) for value in strides]
+        if (not strides or any(value <= 0 for value in strides)
+                or len(set(strides)) != len(strides)):
+            raise ValueError('--feature-strides must be positive and unique')
+        if args.patch_size not in strides:
+            raise ValueError('--feature-strides must include --patch-size')
+        args.feature_strides = sorted(strides)
     if args.valid_content_tolerance < 0.0:
         raise ValueError('--valid-content-tolerance must be non-negative')
     if args.deployment_score_thr < 0.0:
@@ -651,7 +664,18 @@ def assert_training_target_isolation(source_records: Sequence[Dict],
                 overlap[0]))
 
 
+def feature_strides(args) -> List[int]:
+    values = getattr(args, 'feature_strides', None)
+    if values is None:
+        return [int(args.patch_size)]
+    values = sorted(set(int(value) for value in values))
+    if not values or int(args.patch_size) not in values:
+        raise ValueError('Feature strides must include the patch size')
+    return values
+
+
 def rpn_config(in_channels: int, args) -> Dict:
+    strides = feature_strides(args)
     scales = [size / float(args.patch_size)
               for size in (32, 64, 128, 256, 512)]
     return dict(
@@ -659,7 +683,7 @@ def rpn_config(in_channels: int, args) -> Dict:
         feat_channels=int(args.rpn_feat_channels), version='le90',
         anchor_generator=dict(
             type='AnchorGenerator', scales=scales,
-            ratios=[0.5, 1.0, 2.0], strides=[int(args.patch_size)]),
+            ratios=[0.5, 1.0, 2.0], strides=strides),
         bbox_coder=dict(
             type='MidpointOffsetCoder', angle_range='le90',
             target_means=[0.0] * 6,
@@ -687,6 +711,7 @@ def rpn_proposal_config(args) -> Dict:
 
 
 def roi_config(in_channels: int, args) -> Dict:
+    strides = feature_strides(args)
     return dict(
         type='OrientedStandardRoIHead', version='le90',
         bbox_roi_extractor=dict(
@@ -695,7 +720,7 @@ def roi_config(in_channels: int, args) -> Dict:
                 type='RoIAlignRotated', out_size=7,
                 sample_num=2, clockwise=True),
             out_channels=int(in_channels),
-            featmap_strides=[int(args.patch_size)]),
+            featmap_strides=strides),
         bbox_head=dict(
             type='RotatedShared2FCBBoxHead',
             in_channels=int(in_channels),
@@ -738,6 +763,7 @@ class FrozenDinoRotatedHeads(nn.Module):
         from mmrotate.models.builder import build_head
 
         self.in_channels = int(in_channels)
+        self._args = args
         self.rpn_head = build_head(ConfigDict(rpn_config(in_channels, args)))
         self.roi_head = build_head(ConfigDict(roi_config(in_channels, args)))
         self.rpn_head.init_weights()
@@ -745,6 +771,32 @@ class FrozenDinoRotatedHeads(nn.Module):
         self.proposal_cfg = ConfigDict(rpn_proposal_config(args))
         self._roi_cls_teacher_weight = None
         self._roi_cls_teacher_bias = None
+
+    def feature_levels(self, feature: torch.Tensor):
+        """Build optional spatial levels from the frozen patch grid.
+
+        The default path returns the original tensor unchanged.  Non-default
+        levels are interpolation-only and add no trainable parameters; their
+        RPN/ROI weights are still trained source-only when this option is
+        enabled.
+        """
+        strides = feature_strides(self._args)
+        if strides == [int(self._args.patch_size)]:
+            return [feature]
+        import torch.nn.functional as functional
+        base_stride = float(self._args.patch_size)
+        levels = []
+        for stride in strides:
+            scale = base_stride / float(stride)
+            height = max(1, int(round(feature.shape[-2] * scale)))
+            width = max(1, int(round(feature.shape[-1] * scale)))
+            if height == feature.shape[-2] and width == feature.shape[-1]:
+                levels.append(feature)
+            else:
+                levels.append(functional.interpolate(
+                    feature, size=(height, width), mode='bilinear',
+                    align_corners=False))
+        return levels
 
     def capture_roi_cls_teacher(self):
         """Freeze the initialized source classifier as a retention teacher."""
@@ -793,7 +845,8 @@ class FrozenDinoRotatedHeads(nn.Module):
                 or bbox_head.num_reg_fcs != 0):
             raise RuntimeError(
                 'Pairwise mode requires the configured Shared2FC ROI head')
-        x = self.roi_head.bbox_roi_extractor([feature], rois)
+        x = self.roi_head.bbox_roi_extractor(
+            self.feature_levels(feature), rois)
         if self.roi_head.with_shared_head:
             x = self.roi_head.shared_head(x)
         if bbox_head.with_avg_pool:
@@ -807,7 +860,7 @@ class FrozenDinoRotatedHeads(nn.Module):
 
     def forward_train(self, feature: torch.Tensor, img_meta: Dict,
                       gt_boxes: torch.Tensor, gt_labels: torch.Tensor):
-        features = [feature]
+        features = self.feature_levels(feature)
         img_metas = [img_meta]
         gt_bboxes = [gt_boxes]
         rpn_losses, proposals = self.rpn_head.forward_train(
@@ -830,13 +883,14 @@ class FrozenDinoRotatedHeads(nn.Module):
         from mmcv.ops import box_iou_rotated
         from mmrotate.core import rbbox2roi
 
+        features = self.feature_levels(feature)
         with torch.no_grad():
             proposals = self.rpn_head.simple_test_rpn(
-                [feature], [img_meta])[0][:, :5]
+                features, [img_meta])[0][:, :5]
             if gt_boxes.shape[0]:
                 proposals = torch.cat([proposals, gt_boxes], dim=0)
         rois = rbbox2roi([proposals])
-        bbox_results = self.roi_head._bbox_forward([feature], rois)
+        bbox_results = self.roi_head._bbox_forward(features, rois)
         cls_score = bbox_results['cls_score']
         with torch.no_grad():
             decoded, _scores = self.roi_head.bbox_head.get_bboxes(
@@ -905,9 +959,10 @@ class FrozenDinoRotatedHeads(nn.Module):
 
         if self._roi_cls_teacher_weight is None:
             raise RuntimeError('ROI retention teacher was not initialized')
+        features = self.feature_levels(feature)
         with torch.no_grad():
             proposals = self.rpn_head.simple_test_rpn(
-                [feature], [img_meta])[0][:, :5]
+                features, [img_meta])[0][:, :5]
             if gt_boxes.shape[0]:
                 proposals = torch.cat([proposals, gt_boxes], dim=0)
         rois = rbbox2roi([proposals])
@@ -991,7 +1046,7 @@ class FrozenDinoRotatedHeads(nn.Module):
             roi_cls_candidate_count=int(proposals.shape[0]))
 
     def simple_test(self, feature: torch.Tensor, img_meta: Dict):
-        features = [feature]
+        features = self.feature_levels(feature)
         proposals = self.rpn_head.simple_test_rpn(features, [img_meta])
         results = self.roi_head.simple_test(
             features, proposals, [img_meta], rescale=True)

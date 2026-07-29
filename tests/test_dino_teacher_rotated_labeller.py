@@ -164,6 +164,24 @@ def test_roi_config_propagates_explicit_nms_policy(tmp_path):
     assert config['test_cfg']['nms']['iou_thr'] == pytest.approx(0.5)
 
 
+def test_interpolated_feature_levels_preserve_default_and_add_scales(tmp_path):
+    args = _args(tmp_path, feature_strides=[7, 14, 28])
+    heads = object.__new__(labeller.FrozenDinoRotatedHeads)
+    heads._args = args
+    feature = torch.zeros((1, 4, 6, 8))
+    levels = heads.feature_levels(feature)
+    assert [tuple(level.shape[-2:]) for level in levels] == [
+        (12, 16), (6, 8), (3, 4)]
+
+
+def test_multiscale_rpn_and_roi_share_feature_stride_contract(tmp_path):
+    args = _args(tmp_path, feature_strides=[7, 14, 28])
+    rpn = labeller.rpn_config(1024, args)
+    roi = labeller.roi_config(1024, args)
+    assert rpn['anchor_generator']['strides'] == [7, 14, 28]
+    assert roi['bbox_roi_extractor']['featmap_strides'] == [7, 14, 28]
+
+
 def test_scaled_gt_preserves_angle_and_scales_first_four_values(monkeypatch):
     monkeypatch.setattr(
         labeller, 'parse_original_gt',

@@ -73,6 +73,7 @@ def parse_args():
     parser.add_argument('--roi-samples', type=int, default=256)
     parser.add_argument('--proposal-count', type=int, default=2000)
     parser.add_argument('--max-detections', type=int, default=2000)
+    parser.add_argument('--feature-strides', type=int, nargs='+', default=None)
     parser.add_argument('--recall-ks', type=int, nargs='+',
                         default=list(DEFAULT_RECALL_KS))
     parser.add_argument('--anchor-iou-thresholds', type=float, nargs='+',
@@ -140,6 +141,15 @@ def validate_args(args):
             '--anchor-iou-thresholds must include 0.5 for diagnosis')
     if not 0.0 < float(args.riou_thr) <= 1.0:
         raise ValueError('--riou-thr must be in (0, 1]')
+    feature_strides = getattr(args, 'feature_strides', None)
+    if feature_strides is not None:
+        args.feature_strides = sorted(set(int(value)
+                                         for value in feature_strides))
+        if (not args.feature_strides
+                or any(value <= 0 for value in args.feature_strides)
+                or args.patch_size not in args.feature_strides):
+            raise ValueError(
+                '--feature-strides must be positive and include patch size')
     for path in (args.labeller_checkpoint, args.dinov2_checkpoint):
         if not os.path.isfile(path):
             raise ValueError('Required checkpoint does not exist: {}'.format(
@@ -318,22 +328,25 @@ def score_rank(scores: torch.Tensor, index: int) -> int:
     return int((scores > value).sum().item()) + 1
 
 
-def anchor_metrics(rpn_head, feature: torch.Tensor, img_meta: Dict,
+def anchor_metrics(rpn_head, features: Sequence[torch.Tensor], img_meta: Dict,
                    gt_boxes: torch.Tensor, cls_score: torch.Tensor,
                    thresholds: Sequence[float]) -> List[Dict]:
     from mmdet.core import anchor_inside_flags
     from mmrotate.core import obb2xyxy
 
-    featmap_sizes = [tuple(int(value) for value in feature.shape[-2:])]
+    featmap_sizes = [tuple(int(value) for value in feature.shape[-2:])
+                     for feature in features]
     anchor_list, flag_list = rpn_head.get_anchors(
         featmap_sizes, [img_meta], device=feature.device)
-    anchors = anchor_list[0][0]
-    valid_flags = flag_list[0][0]
+    anchors = torch.cat(anchor_list[0])
+    valid_flags = torch.cat(flag_list[0])
     inside = anchor_inside_flags(
         anchors, valid_flags, img_meta['img_shape'][:2],
         rpn_head.train_cfg.allowed_border)
     anchors = anchors[inside]
-    flat_scores = cls_score[0].permute(1, 2, 0).reshape(-1).sigmoid()
+    flat_scores = torch.cat([
+        score[0].permute(1, 2, 0).reshape(-1).sigmoid()
+        for score in cls_score])
     if flat_scores.numel() != inside.numel():
         raise RuntimeError('RPN score/anchor ordering mismatch')
     flat_scores = flat_scores[inside]
@@ -412,10 +425,11 @@ def evaluate_rpn_records(dino, heads, records: Sequence[Dict], args,
                 labeller.prepare_record(
                     dino, record, args, dino_device, head_device))
             cache_hits += int(cached)
-            rpn_outputs = heads.rpn_head([feature])
+            features = heads.feature_levels(feature)
+            rpn_outputs = heads.rpn_head(features)
             cls_scores, bbox_preds = rpn_outputs
             anchor_rows = anchor_metrics(
-                heads.rpn_head, feature, img_meta, gt_boxes,
+                heads.rpn_head, features, img_meta, gt_boxes,
                 cls_scores[0], args.anchor_iou_thresholds)
             proposals = heads.rpn_head.get_bboxes(
                 cls_scores, bbox_preds, img_metas=[img_meta],
@@ -613,6 +627,8 @@ def main():
             target_used_for_checkpoint_selection=False,
             source_defined_token_bins=boundaries,
             token_definition='resized_obb_side_pixels_divided_by_patch_size',
+            feature_strides=(None if args.feature_strides is None else
+                             list(args.feature_strides)),
             theoretical_anchor_definition=(
                 'exact_inside_RPN_anchors_vs_scaled_GTs_horizontal_envelope'),
             trained_rpn_definition=(

@@ -163,6 +163,15 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
         roi_nms_iou_thr = float(head_cfg.get('roi_nms_iou_thr', 0.1))
         if not 0.0 < roi_nms_iou_thr <= 1.0:
             raise ValueError('DINO ROI NMS IoU threshold must be in (0, 1]')
+        feature_strides = head_cfg.get('feature_strides')
+        if feature_strides is None:
+            feature_strides = [int(dinov2.get('patch_size', 14))]
+        feature_strides = sorted(set(int(value) for value in feature_strides))
+        if (not feature_strides
+                or int(dinov2.get('patch_size', 14)) not in feature_strides
+                or any(value <= 0 for value in feature_strides)):
+            raise ValueError(
+                'DINO feature_strides must be positive and include patch size')
         args = SimpleNamespace(
             patch_size=int(dinov2.get('patch_size', 14)),
             rpn_feat_channels=int(head_cfg.get('rpn_feat_channels', 256)),
@@ -170,7 +179,8 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
             roi_samples=int(head_cfg.get('roi_samples', 256)),
             proposal_count=int(head_cfg.get('proposal_count', 2000)),
             max_detections=int(head_cfg.get('max_detections', 2000)),
-            roi_nms_iou_thr=roi_nms_iou_thr)
+            roi_nms_iou_thr=roi_nms_iou_thr,
+            feature_strides=feature_strides)
         dino, loaded_patch_size = common.load_frozen_dinov2(
             dinov2['repo'], dinov2['checkpoint'],
             dinov2.get('model', common.CANONICAL_MODEL), dino_devices,

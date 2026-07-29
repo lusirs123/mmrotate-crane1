@@ -53,6 +53,7 @@ def parse_args():
     parser.add_argument('--roi-samples', type=int, default=256)
     parser.add_argument('--proposal-count', type=int, default=2000)
     parser.add_argument('--max-detections', type=int, default=2000)
+    parser.add_argument('--feature-strides', type=int, nargs='+', default=None)
     parser.add_argument('--feature-cache-dir', required=True)
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--out-json', required=True)
@@ -81,6 +82,15 @@ def validate_args(args):
         args.dino_height, args.dino_max_long_side)
     if any(int(value) <= 0 for value in positive):
         raise ValueError('Architecture and image sizes must be positive')
+    feature_strides = getattr(args, 'feature_strides', None)
+    if feature_strides is not None:
+        args.feature_strides = sorted(set(int(value)
+                                         for value in feature_strides))
+        if (not args.feature_strides
+                or any(value <= 0 for value in args.feature_strides)
+                or args.patch_size not in args.feature_strides):
+            raise ValueError(
+                '--feature-strides must be positive and include patch size')
     for path in (args.labeller_checkpoint, args.dinov2_checkpoint):
         if not os.path.isfile(path):
             raise ValueError('Required checkpoint does not exist: {}'.format(
