@@ -27,6 +27,9 @@ def _args(tmp_path, **overrides):
         max_mcml=5, source_min_top1_rate=0.8,
         train_components='all', init_checkpoint=None,
         source_small_repeat=1, source_retain_max_top1_drop=0,
+        pairwise_margin=0.5, pairwise_loss_weight=1.0,
+        retention_loss_weight=1.0, retention_temperature=1.0,
+        pairwise_negative_riou_thr=0.1, pairwise_nms_iou_thr=0.1,
         resume_checkpoint=None, eval_only_checkpoint=None,
         source_val_results_out=None,
         dinov2_checkpoint=str(checkpoint), dinov2_model='dinov2_vitl14',
@@ -68,6 +71,19 @@ def test_validate_rejects_init_and_resume_together(tmp_path):
 def test_validate_requires_checkpoint_for_roi_classifier_mode(tmp_path):
     with pytest.raises(ValueError, match='requires an init/resume/eval-only'):
         labeller.validate_args(_args(tmp_path, train_components='roi_cls'))
+
+
+def test_validate_requires_checkpoint_for_pairwise_roi_mode(tmp_path):
+    with pytest.raises(ValueError, match='requires an init/resume/eval-only'):
+        labeller.validate_args(_args(
+            tmp_path, train_components='roi_cls_pairwise'))
+
+
+def test_validate_rejects_pairwise_negative_overlap_with_positive_band(
+        tmp_path):
+    with pytest.raises(ValueError, match='negative-riou-thr'):
+        labeller.validate_args(_args(
+            tmp_path, pairwise_negative_riou_thr=0.5))
 
 
 def test_source_split_is_deterministic_and_disjoint(tmp_path):
@@ -193,6 +209,9 @@ def test_roi_cls_mode_trains_only_final_classifier():
         parameter.requires_grad == name.startswith(
             'roi_head.bbox_head.fc_cls.')
         for name, parameter in heads.named_parameters())
+    pairwise_names = labeller.configure_trainable_components(
+        heads, 'roi_cls_pairwise')
+    assert pairwise_names == names
 
 
 def test_roi_cls_mode_optimizes_only_roi_classification_loss():
@@ -203,6 +222,44 @@ def test_roi_cls_mode_optimizes_only_roi_classification_loss():
         loss_bbox=torch.tensor(30.0))
     total = labeller.optimization_loss_total(losses, 'roi_cls')
     assert float(total.item()) == pytest.approx(3.0)
+
+
+def test_pairwise_roi_mode_optimizes_all_three_authorized_losses():
+    losses = dict(
+        loss_cls=torch.tensor(3.0, requires_grad=True),
+        loss_roi_pairwise=torch.tensor(2.0, requires_grad=True),
+        loss_roi_retention=torch.tensor(0.5, requires_grad=True),
+        loss_bbox=torch.tensor(30.0))
+    total = labeller.optimization_loss_total(losses, 'roi_cls_pairwise')
+    assert float(total.item()) == pytest.approx(5.5)
+
+
+def test_pairwise_margin_loss_rewards_correct_relative_order():
+    good = labeller.roi_pairwise_margin_loss(
+        torch.tensor([2.0]), torch.tensor([0.0]), margin=0.5)
+    bad = labeller.roi_pairwise_margin_loss(
+        torch.tensor([0.0]), torch.tensor([1.0]), margin=0.5)
+    assert float(good.item()) == pytest.approx(0.0)
+    assert float(bad.item()) == pytest.approx(1.5)
+
+
+def test_classifier_retention_loss_is_zero_for_identical_logits():
+    logits = torch.tensor([[2.0, -1.0], [0.5, 0.2]])
+    loss = labeller.roi_classifier_retention_loss(
+        logits, logits.clone(), temperature=1.0)
+    assert float(loss.item()) == pytest.approx(0.0, abs=1e-7)
+
+
+def test_pairwise_mining_prioritizes_nms_competitor_before_global_false():
+    overlap = torch.tensor([0.8, 0.0, 0.0, 0.3])
+    scores = torch.tensor([0.2, 0.7, 0.99, 0.8])
+    competitor_iou = torch.tensor([1.0, 0.2, 0.0, 0.15])
+    positive, negative = labeller.select_hard_pairwise_indices(
+        overlap, scores, competitor_iou, max_samples=3,
+        positive_fraction=0.5, positive_riou_thr=0.5,
+        negative_riou_thr=0.1, nms_iou_thr=0.1)
+    assert positive.tolist() == [0]
+    assert negative.tolist() == [3, 1]
 
 
 def test_rotated_box_corners_and_valid_content_filter_preserve_order():
@@ -312,6 +369,23 @@ def test_roi_cls_selection_prioritizes_source_small_validation():
                    recall_at_100=3, mean_top1_riou=0.6)
     assert labeller.roi_cls_selection_key(full_b, small_b) > (
         labeller.roi_cls_selection_key(full_a, small_a))
+
+
+def test_exact_source_retention_detects_swapped_correct_frames():
+    baseline = ['val|seq|1', 'val|seq|2']
+    candidate = [
+        dict(split='val', seq='seq', frame=1,
+             metrics=dict(top1_hit=True)),
+        dict(split='val', seq='seq', frame=2,
+             metrics=dict(top1_hit=False)),
+        dict(split='val', seq='seq', frame=3,
+             metrics=dict(top1_hit=True)),
+    ]
+    summary = labeller.source_top1_retention_summary(baseline, candidate)
+    assert summary['candidate_correct_count'] == 2
+    assert summary['retained_correct_count'] == 1
+    assert summary['lost_frame_keys'] == ['val|seq|2']
+    assert summary['gained_frame_keys'] == ['val|seq|3']
 
 
 def test_source_small_sampling_uses_source_train_threshold_only(

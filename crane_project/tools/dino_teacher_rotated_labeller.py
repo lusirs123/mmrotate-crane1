@@ -35,7 +35,7 @@ from crane_project.tools import dino_teacher_common as common  # noqa: E402
 
 
 LABELLER_NAME = 'Frozen DINOv2 Oriented RPN/ROI Source Labeller V1'
-PROTOCOL_VERSION = 7
+PROTOCOL_VERSION = 8
 PAPER_URL = (
     'https://openaccess.thecvf.com/content/CVPR2025/html/'
     'Lavoie_Large_Self-Supervised_Models_Bridge_the_Gap_in_Domain_Adaptive_'
@@ -97,16 +97,29 @@ def parse_args():
     parser.add_argument('--max-mcml', type=int, default=5)
     parser.add_argument('--source-min-top1-rate', type=float, default=0.8)
     parser.add_argument(
-        '--train-components', choices=['all', 'roi_cls'], default='all',
+        '--train-components',
+        choices=['all', 'roi_cls', 'roi_cls_pairwise'], default='all',
         help=('Train all RPN/ROI heads, or only the final ROI classifier '
               'fc_cls while keeping RPN, shared ROI FCs, and bbox regression '
-              'fixed.'))
+              'fixed. roi_cls_pairwise additionally uses source-only '
+              'NMS-aware pairwise ranking and the initialized classifier as '
+              'a frozen retention teacher.'))
     parser.add_argument(
         '--source-small-repeat', type=int, default=1,
         help='Repeat source-train frames in the lower short-token tertile.')
     parser.add_argument(
         '--source-retain-max-top1-drop', type=int, default=0,
         help='Maximum source-val top1 drop allowed for ROI-cls selection.')
+    parser.add_argument('--pairwise-margin', type=float, default=0.5)
+    parser.add_argument('--pairwise-loss-weight', type=float, default=1.0)
+    parser.add_argument('--retention-loss-weight', type=float, default=1.0)
+    parser.add_argument('--retention-temperature', type=float, default=1.0)
+    parser.add_argument(
+        '--pairwise-negative-riou-thr', type=float, default=0.1,
+        help='Maximum GT RIoU for a decoded ROI to be a pairwise negative.')
+    parser.add_argument(
+        '--pairwise-nms-iou-thr', type=float, default=0.1,
+        help='Prioritize false ROIs that can suppress a positive at NMS.')
     parser.add_argument('--feature-cache-dir', required=True)
     parser.add_argument('--work-dir', required=True)
     parser.add_argument(
@@ -156,6 +169,16 @@ def validate_args(args):
         raise ValueError('--source-small-repeat must be at least 1')
     if args.source_retain_max_top1_drop < 0:
         raise ValueError('--source-retain-max-top1-drop must be non-negative')
+    pairwise_positive = (
+        args.pairwise_margin, args.pairwise_loss_weight,
+        args.retention_loss_weight, args.retention_temperature)
+    if any(float(value) <= 0.0 for value in pairwise_positive):
+        raise ValueError('Pairwise and retention settings must be positive')
+    if not 0.0 <= args.pairwise_negative_riou_thr < args.riou_thr:
+        raise ValueError(
+            '--pairwise-negative-riou-thr must be in [0, --riou-thr)')
+    if not 0.0 <= args.pairwise_nms_iou_thr <= 1.0:
+        raise ValueError('--pairwise-nms-iou-thr must be in [0, 1]')
     if not 0.0 < args.warmup_ratio <= 1.0:
         raise ValueError('--warmup-ratio must be in (0, 1]')
     lr_steps = sorted(set(int(value) for value in args.lr_steps))
@@ -195,12 +218,13 @@ def validate_args(args):
     if args.init_checkpoint and not os.path.isfile(args.init_checkpoint):
         raise ValueError('Init checkpoint does not exist: {}'.format(
             args.init_checkpoint))
-    if (args.train_components == 'roi_cls'
+    if (args.train_components in ('roi_cls', 'roi_cls_pairwise')
             and not (args.init_checkpoint or args.resume_checkpoint
                      or args.eval_only_checkpoint)):
         raise ValueError(
-            '--train-components roi_cls requires an init/resume/eval-only '
-            'checkpoint so the validated RPN and OBB regressor are retained')
+            '--train-components {} requires an init/resume/eval-only '
+            'checkpoint so the validated RPN and OBB regressor are retained'
+            .format(args.train_components))
     if (args.source_val_results_out and
             os.path.exists(args.source_val_results_out)):
         raise ValueError('Refusing to overwrite source-val results: {}'.format(
@@ -222,7 +246,7 @@ def configure_trainable_components(heads, train_components: str) -> List[str]:
     if train_components == 'all':
         for parameter in heads.parameters():
             parameter.requires_grad_(True)
-    elif train_components == 'roi_cls':
+    elif train_components in ('roi_cls', 'roi_cls_pairwise'):
         bbox_head = heads.roi_head.bbox_head
         if not hasattr(bbox_head, 'fc_cls'):
             raise RuntimeError('ROI bbox head has no fc_cls classifier')
@@ -243,8 +267,104 @@ def optimization_loss_total(losses: Dict, train_components: str):
         if 'loss_cls' not in losses:
             raise RuntimeError('ROI classification loss is missing')
         return loss_total({'loss_cls': losses['loss_cls']})
+    if train_components == 'roi_cls_pairwise':
+        required = ('loss_cls', 'loss_roi_pairwise', 'loss_roi_retention')
+        missing = [name for name in required if name not in losses]
+        if missing:
+            raise RuntimeError('Pairwise ROI losses missing: {}'.format(
+                ', '.join(missing)))
+        return loss_total({name: losses[name] for name in required})
     raise ValueError('Unsupported train-components: {}'.format(
         train_components))
+
+
+def roi_foreground_log_odds(cls_score: torch.Tensor) -> torch.Tensor:
+    """Return the foreground-vs-background logit used for ROI ordering."""
+    if cls_score.ndim != 2 or cls_score.shape[1] != 2:
+        raise ValueError('One-class ROI logits must have shape [N, 2]')
+    return cls_score[:, 0] - cls_score[:, 1]
+
+
+def roi_pairwise_margin_loss(positive_log_odds: torch.Tensor,
+                             negative_log_odds: torch.Tensor,
+                             margin: float) -> torch.Tensor:
+    """Require every selected positive to outrank selected false ROIs."""
+    import torch.nn.functional as functional
+
+    if positive_log_odds.numel() == 0 or negative_log_odds.numel() == 0:
+        return (positive_log_odds.sum() + negative_log_odds.sum()) * 0.0
+    violations = (float(margin) - positive_log_odds[:, None]
+                  + negative_log_odds[None, :])
+    return functional.relu(violations).mean()
+
+
+def roi_classifier_retention_loss(student_logits: torch.Tensor,
+                                  teacher_logits: torch.Tensor,
+                                  temperature: float) -> torch.Tensor:
+    """Keep the updated classifier close to the fixed source classifier."""
+    import torch.nn.functional as functional
+
+    if student_logits.shape != teacher_logits.shape:
+        raise ValueError('Student and teacher ROI logits must have one shape')
+    temperature = float(temperature)
+    if temperature <= 0.0:
+        raise ValueError('Retention temperature must be positive')
+    return functional.kl_div(
+        functional.log_softmax(student_logits / temperature, dim=1),
+        functional.softmax(teacher_logits / temperature, dim=1),
+        reduction='batchmean') * (temperature ** 2)
+
+
+def select_hard_pairwise_indices(
+        gt_overlap: torch.Tensor, foreground_score: torch.Tensor,
+        positive_competitor_iou: torch.Tensor, max_samples: int,
+        positive_fraction: float, positive_riou_thr: float,
+        negative_riou_thr: float, nms_iou_thr: float):
+    """Select low-score positives and NMS-capable, high-score negatives."""
+    if not (gt_overlap.ndim == foreground_score.ndim
+            == positive_competitor_iou.ndim == 1):
+        raise ValueError('Pairwise mining inputs must be one-dimensional')
+    if not (gt_overlap.shape == foreground_score.shape
+            == positive_competitor_iou.shape):
+        raise ValueError('Pairwise mining inputs must have one shape')
+    positive_indices = torch.nonzero(
+        gt_overlap >= float(positive_riou_thr),
+        as_tuple=False).reshape(-1)
+    negative_eligible = (
+        (gt_overlap < float(positive_riou_thr))
+        & ((gt_overlap <= float(negative_riou_thr))
+           | (positive_competitor_iou >= float(nms_iou_thr))))
+    negative_indices = torch.nonzero(
+        negative_eligible, as_tuple=False).reshape(-1)
+    max_positive = max(1, int(max_samples * positive_fraction))
+    if positive_indices.numel() > max_positive:
+        order = torch.argsort(foreground_score[positive_indices])
+        positive_indices = positive_indices[order[:max_positive]]
+    max_negative = max(0, int(max_samples) - positive_indices.numel())
+    if negative_indices.numel() > max_negative:
+        suppressor_mask = (
+            positive_competitor_iou[negative_indices]
+            >= float(nms_iou_thr))
+        suppressors = negative_indices[suppressor_mask]
+        other_negatives = negative_indices[~suppressor_mask]
+        suppressors = suppressors[torch.argsort(
+            foreground_score[suppressors], descending=True)]
+        other_negatives = other_negatives[torch.argsort(
+            foreground_score[other_negatives], descending=True)]
+        negative_indices = torch.cat(
+            [suppressors, other_negatives], dim=0)[:max_negative]
+    elif negative_indices.numel():
+        suppressor_mask = (
+            positive_competitor_iou[negative_indices]
+            >= float(nms_iou_thr))
+        suppressors = negative_indices[suppressor_mask]
+        other_negatives = negative_indices[~suppressor_mask]
+        suppressors = suppressors[torch.argsort(
+            foreground_score[suppressors], descending=True)]
+        other_negatives = other_negatives[torch.argsort(
+            foreground_score[other_negatives], descending=True)]
+        negative_indices = torch.cat([suppressors, other_negatives], dim=0)
+    return positive_indices, negative_indices
 
 
 def file_identity(path: str) -> Dict:
@@ -616,6 +736,67 @@ class FrozenDinoRotatedHeads(nn.Module):
         self.rpn_head.init_weights()
         self.roi_head.init_weights()
         self.proposal_cfg = ConfigDict(rpn_proposal_config(args))
+        self._roi_cls_teacher_weight = None
+        self._roi_cls_teacher_bias = None
+
+    def capture_roi_cls_teacher(self):
+        """Freeze the initialized source classifier as a retention teacher."""
+        classifier = self.roi_head.bbox_head.fc_cls
+        self._roi_cls_teacher_weight = classifier.weight.detach().clone()
+        self._roi_cls_teacher_bias = (
+            None if classifier.bias is None
+            else classifier.bias.detach().clone())
+
+    def roi_cls_teacher_state(self):
+        if self._roi_cls_teacher_weight is None:
+            return None
+        return dict(
+            weight=self._roi_cls_teacher_weight.detach().cpu(),
+            bias=(None if self._roi_cls_teacher_bias is None else
+                  self._roi_cls_teacher_bias.detach().cpu()))
+
+    def load_roi_cls_teacher_state(self, state: Dict):
+        if not state or 'weight' not in state:
+            raise RuntimeError('Pairwise checkpoint lacks ROI teacher state')
+        classifier = self.roi_head.bbox_head.fc_cls
+        weight = state['weight'].to(
+            device=classifier.weight.device, dtype=classifier.weight.dtype)
+        bias = state.get('bias')
+        if weight.shape != classifier.weight.shape:
+            raise RuntimeError('ROI teacher weight shape mismatch')
+        if bias is not None:
+            bias = bias.to(
+                device=classifier.weight.device,
+                dtype=classifier.weight.dtype)
+            if classifier.bias is None or bias.shape != classifier.bias.shape:
+                raise RuntimeError('ROI teacher bias shape mismatch')
+        self._roi_cls_teacher_weight = weight.detach().clone()
+        self._roi_cls_teacher_bias = (
+            None if bias is None else bias.detach().clone())
+
+    def _forward_pairwise_roi(self, feature: torch.Tensor,
+                              rois: torch.Tensor):
+        """Expose the exact Shared2FC representation entering ``fc_cls``."""
+        bbox_head = self.roi_head.bbox_head
+        if (bbox_head.num_shared_convs != 0
+                or bbox_head.num_shared_fcs != 2
+                or bbox_head.num_cls_convs != 0
+                or bbox_head.num_cls_fcs != 0
+                or bbox_head.num_reg_convs != 0
+                or bbox_head.num_reg_fcs != 0):
+            raise RuntimeError(
+                'Pairwise mode requires the configured Shared2FC ROI head')
+        x = self.roi_head.bbox_roi_extractor([feature], rois)
+        if self.roi_head.with_shared_head:
+            x = self.roi_head.shared_head(x)
+        if bbox_head.with_avg_pool:
+            x = bbox_head.avg_pool(x)
+        x = x.flatten(1)
+        for layer in bbox_head.shared_fcs:
+            x = bbox_head.relu(layer(x))
+        cls_score = bbox_head.fc_cls(x)
+        bbox_pred = bbox_head.fc_reg(x)
+        return cls_score, bbox_pred, x
 
     def forward_train(self, feature: torch.Tensor, img_meta: Dict,
                       gt_boxes: torch.Tensor, gt_labels: torch.Tensor):
@@ -701,6 +882,107 @@ class FrozenDinoRotatedHeads(nn.Module):
             roi_cls_hard_negative_count=int(negative_indices.numel()),
             roi_cls_candidate_count=int(proposals.shape[0]))
 
+    def forward_roi_cls_pairwise_train(
+            self, feature: torch.Tensor, img_meta: Dict,
+            gt_boxes: torch.Tensor, max_samples: int,
+            positive_fraction: float = 0.25, riou_thr: float = 0.5,
+            negative_riou_thr: float = 0.1, nms_iou_thr: float = 0.1,
+            pairwise_margin: float = 0.5,
+            pairwise_loss_weight: float = 1.0,
+            retention_loss_weight: float = 1.0,
+            retention_temperature: float = 1.0) -> Dict:
+        """Train ``fc_cls`` with source-only NMS-aware pair ranking."""
+        import torch.nn.functional as functional
+        from mmcv.ops import box_iou_rotated
+        from mmrotate.core import rbbox2roi
+
+        if self._roi_cls_teacher_weight is None:
+            raise RuntimeError('ROI retention teacher was not initialized')
+        with torch.no_grad():
+            proposals = self.rpn_head.simple_test_rpn(
+                [feature], [img_meta])[0][:, :5]
+            if gt_boxes.shape[0]:
+                proposals = torch.cat([proposals, gt_boxes], dim=0)
+        rois = rbbox2roi([proposals])
+        cls_score, bbox_pred, cls_features = self._forward_pairwise_roi(
+            feature, rois)
+        with torch.no_grad():
+            teacher_logits = functional.linear(
+                cls_features.detach(), self._roi_cls_teacher_weight,
+                self._roi_cls_teacher_bias)
+            decoded, _scores = self.roi_head.bbox_head.get_bboxes(
+                rois, cls_score.detach(), bbox_pred.detach(),
+                img_meta['img_shape'], img_meta['scale_factor'],
+                rescale=False, cfg=None)
+            if decoded.shape[1] != 5:
+                raise RuntimeError(
+                    'Pairwise ROI training requires class-agnostic regression')
+            if gt_boxes.shape[0]:
+                overlap = box_iou_rotated(
+                    decoded.float(), gt_boxes.float()).max(dim=1).values
+            else:
+                overlap = decoded.new_zeros((decoded.shape[0],))
+            foreground_score = torch.softmax(
+                cls_score.detach(), dim=1)[:, 0]
+            all_positive = torch.nonzero(
+                overlap >= float(riou_thr),
+                as_tuple=False).reshape(-1)
+            competitor_iou = decoded.new_zeros((decoded.shape[0],))
+            if all_positive.numel():
+                competitor_iou = box_iou_rotated(
+                    decoded.float(), decoded[all_positive].float()).max(
+                        dim=1).values
+            positive_indices, negative_indices = (
+                select_hard_pairwise_indices(
+                    overlap, foreground_score, competitor_iou,
+                    max_samples=max_samples,
+                    positive_fraction=positive_fraction,
+                    positive_riou_thr=riou_thr,
+                    negative_riou_thr=negative_riou_thr,
+                    nms_iou_thr=nms_iou_thr))
+            selected = torch.cat(
+                [positive_indices, negative_indices], dim=0)
+            labels = torch.cat([
+                torch.zeros(
+                    positive_indices.numel(), dtype=torch.long,
+                    device=cls_score.device),
+                torch.ones(
+                    negative_indices.numel(), dtype=torch.long,
+                    device=cls_score.device)], dim=0)
+        if selected.numel() == 0:
+            raise RuntimeError('Pairwise ROI mining selected no samples')
+        loss_cls = functional.cross_entropy(cls_score[selected], labels)
+        log_odds = roi_foreground_log_odds(cls_score)
+        raw_pairwise = roi_pairwise_margin_loss(
+            log_odds[positive_indices], log_odds[negative_indices],
+            pairwise_margin)
+        raw_retention = roi_classifier_retention_loss(
+            cls_score, teacher_logits, retention_temperature)
+        pairwise_accuracy = cls_score.new_tensor(0.0)
+        pair_count = int(
+            positive_indices.numel() * negative_indices.numel())
+        if pair_count:
+            pairwise_accuracy = (
+                log_odds[positive_indices, None]
+                > log_odds[None, negative_indices]).float().mean()
+        selected_accuracy = (
+            cls_score[selected].argmax(dim=1) == labels).float().mean()
+        suppressor_count = int((
+            competitor_iou[negative_indices] >= float(nms_iou_thr)
+        ).sum().item())
+        return dict(
+            loss_cls=loss_cls,
+            loss_roi_pairwise=(raw_pairwise * float(pairwise_loss_weight)),
+            loss_roi_retention=(raw_retention
+                                * float(retention_loss_weight)),
+            roi_cls_accuracy=selected_accuracy,
+            roi_pairwise_accuracy=pairwise_accuracy,
+            roi_cls_positive_count=int(positive_indices.numel()),
+            roi_cls_hard_negative_count=int(negative_indices.numel()),
+            roi_cls_nms_competitor_count=suppressor_count,
+            roi_pair_count=pair_count,
+            roi_cls_candidate_count=int(proposals.shape[0]))
+
     def simple_test(self, feature: torch.Tensor, img_meta: Dict):
         features = [feature]
         proposals = self.rpn_head.simple_test_rpn(features, [img_meta])
@@ -772,6 +1054,7 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
     random.Random(args.seed + epoch).shuffle(ordered)
     losses = []
     component_sums = {}
+    metric_sums = {}
     cache_hits = 0
     for index, record in enumerate(ordered):
         current_lr = scheduled_lr(args, epoch, global_step)
@@ -786,11 +1069,28 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
             output = heads.forward_roi_cls_hard_train(
                 feature, img_meta, gt_boxes, args.roi_samples,
                 riou_thr=args.riou_thr)
+        elif args.train_components == 'roi_cls_pairwise':
+            output = heads.forward_roi_cls_pairwise_train(
+                feature, img_meta, gt_boxes, args.roi_samples,
+                riou_thr=args.riou_thr,
+                negative_riou_thr=args.pairwise_negative_riou_thr,
+                nms_iou_thr=args.pairwise_nms_iou_thr,
+                pairwise_margin=args.pairwise_margin,
+                pairwise_loss_weight=args.pairwise_loss_weight,
+                retention_loss_weight=args.retention_loss_weight,
+                retention_temperature=args.retention_temperature)
         else:
             output = heads.forward_train(
                 feature, img_meta, gt_boxes, gt_labels)
         for name, value in loss_component_means(output).items():
             component_sums[name] = component_sums.get(name, 0.0) + value
+        for name, value in output.items():
+            if name in component_sums or 'loss' in str(name).lower():
+                continue
+            if isinstance(value, torch.Tensor) and value.numel() == 1:
+                value = float(value.detach().item())
+            if isinstance(value, (int, float)) and math.isfinite(float(value)):
+                metric_sums[name] = metric_sums.get(name, 0.0) + float(value)
         total = optimization_loss_total(output, args.train_components)
         total.backward()
         grad_norm = torch.nn.utils.clip_grad_norm_(
@@ -814,10 +1114,16 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
         mean_loss=float(np.mean(losses)),
         optimized_components=(
             ['loss_rpn_cls', 'loss_rpn_bbox', 'loss_cls', 'loss_bbox']
-            if args.train_components == 'all' else ['loss_cls']),
+            if args.train_components == 'all' else (
+                ['loss_cls', 'loss_roi_pairwise', 'loss_roi_retention']
+                if args.train_components == 'roi_cls_pairwise'
+                else ['loss_cls'])),
         mean_loss_components={
             name: float(value / max(1, len(ordered)))
             for name, value in sorted(component_sums.items())},
+        mean_training_metrics={
+            name: float(value / max(1, len(ordered)))
+            for name, value in sorted(metric_sums.items())},
         cache_hits=int(cache_hits))
 
 
@@ -1139,6 +1445,38 @@ def roi_cls_selection_key(full_summary: Dict, small_summary: Dict) -> Tuple:
         full_summary)
 
 
+def source_frame_key(row: Dict) -> str:
+    return '{}|{}|{}'.format(
+        row.get('split', ''), row.get('seq', ''), int(row['frame']))
+
+
+def source_correct_frame_keys(rows: Sequence[Dict]) -> List[str]:
+    return sorted(
+        source_frame_key(row) for row in rows
+        if bool(row['metrics']['top1_hit']))
+
+
+def source_top1_retention_summary(
+        baseline_correct_keys: Sequence[str], candidate_rows: Sequence[Dict]
+        ) -> Dict:
+    """Measure retention of the exact source frames that were correct."""
+    baseline = set(str(key) for key in baseline_correct_keys)
+    candidate_correct = {
+        source_frame_key(row) for row in candidate_rows
+        if bool(row['metrics']['top1_hit'])}
+    retained = baseline & candidate_correct
+    lost = baseline - candidate_correct
+    gained = candidate_correct - baseline
+    return dict(
+        baseline_correct_count=len(baseline),
+        retained_correct_count=len(retained),
+        lost_correct_count=len(lost),
+        gained_correct_count=len(gained),
+        candidate_correct_count=len(candidate_correct),
+        lost_frame_keys=sorted(lost),
+        gained_frame_keys=sorted(gained))
+
+
 def make_target_decision(summary: Dict, args,
                          source_summary: Dict = None) -> str:
     if summary['frame_count'] != args.target_end - args.target_start + 1:
@@ -1166,7 +1504,9 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                        best_small_summary: Dict = None,
                        source_sampling: Dict = None,
                        source_baseline_summary: Dict = None,
-                       source_baseline_small_summary: Dict = None) -> Dict:
+                       source_baseline_small_summary: Dict = None,
+                       source_baseline_correct_keys: Sequence[str] = None
+                       ) -> Dict:
     return dict(
         labeller=LABELLER_NAME, protocol_version=PROTOCOL_VERSION,
         source_only=True, frozen_dinov2=True,
@@ -1176,12 +1516,19 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
         best_source_small_val_summary=best_small_summary,
         source_baseline_val_summary=source_baseline_summary,
         source_baseline_small_val_summary=source_baseline_small_summary,
+        source_baseline_correct_keys=(
+            None if source_baseline_correct_keys is None else
+            [str(key) for key in source_baseline_correct_keys]),
         source_sampling=source_sampling,
+        roi_cls_teacher_state=heads.roi_cls_teacher_state(),
         training_protocol=dict(
             train_components=str(args.train_components),
             optimization_loss_components=(
                 ['loss_rpn_cls', 'loss_rpn_bbox', 'loss_cls', 'loss_bbox']
-                if args.train_components == 'all' else ['loss_cls']),
+                if args.train_components == 'all' else (
+                    ['loss_cls', 'loss_roi_pairwise', 'loss_roi_retention']
+                    if args.train_components == 'roi_cls_pairwise'
+                    else ['loss_cls'])),
             trainable_parameter_names=[
                 name for name, parameter in heads.named_parameters()
                 if parameter.requires_grad],
@@ -1195,7 +1542,19 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
             lr_gamma=float(args.lr_gamma),
             checkpoint_interval=int(args.checkpoint_interval),
             selection_epochs=[int(value)
-                              for value in args.selection_epochs]),
+                              for value in args.selection_epochs],
+            pairwise=(None if args.train_components != 'roi_cls_pairwise'
+                      else dict(
+                          margin=float(args.pairwise_margin),
+                          pairwise_loss_weight=float(
+                              args.pairwise_loss_weight),
+                          retention_loss_weight=float(
+                              args.retention_loss_weight),
+                          retention_temperature=float(
+                              args.retention_temperature),
+                          negative_riou_thr=float(
+                              args.pairwise_negative_riou_thr),
+                          nms_iou_thr=float(args.pairwise_nms_iou_thr)))),
         in_channels=int(in_channels), patch_size=int(args.patch_size),
         rpn_feat_channels=int(args.rpn_feat_channels),
         roi_fc_channels=int(args.roi_fc_channels),
@@ -1242,6 +1601,8 @@ def validate_checkpoint(payload: Dict, in_channels: int, args,
 
 def train_source_only(dino, heads, train_records, val_records, args,
                       dino_device, head_device, in_channels: int):
+    roi_cls_mode = args.train_components in (
+        'roi_cls', 'roi_cls_pairwise')
     trainable_names = configure_trainable_components(
         heads, args.train_components)
     trainable_parameters = [
@@ -1264,6 +1625,7 @@ def train_source_only(dino, heads, train_records, val_records, args,
     best_key = None
     source_baseline_summary = None
     source_baseline_small_summary = None
+    source_baseline_correct_keys = None
     history = []
     if args.init_checkpoint:
         payload = torch.load(args.init_checkpoint, map_location='cpu')
@@ -1271,10 +1633,15 @@ def train_source_only(dino, heads, train_records, val_records, args,
             payload, in_channels, args,
             allow_training_mode_mismatch=True)
         heads.load_state_dict(payload['heads_state_dict'], strict=True)
+        if args.train_components == 'roi_cls_pairwise':
+            heads.capture_roi_cls_teacher()
     if args.resume_checkpoint:
         payload = torch.load(args.resume_checkpoint, map_location='cpu')
         validate_checkpoint(payload, in_channels, args)
         heads.load_state_dict(payload['heads_state_dict'], strict=True)
+        if args.train_components == 'roi_cls_pairwise':
+            heads.load_roi_cls_teacher_state(
+                payload.get('roi_cls_teacher_state'))
         if payload.get('optimizer_state_dict') is not None:
             optimizer.load_state_dict(payload['optimizer_state_dict'])
         start_epoch = int(payload.get('epoch', 0)) + 1
@@ -1287,6 +1654,8 @@ def train_source_only(dino, heads, train_records, val_records, args,
             'source_baseline_val_summary')
         source_baseline_small_summary = payload.get(
             'source_baseline_small_val_summary')
+        source_baseline_correct_keys = payload.get(
+            'source_baseline_correct_keys')
 
     frozen_parameter_versions = {
         name: int(parameter._version)
@@ -1298,7 +1667,7 @@ def train_source_only(dino, heads, train_records, val_records, args,
     epoch_train_records = list(train_records)
     source_sampling = None
     small_val_records = []
-    if args.train_components == 'roi_cls':
+    if roi_cls_mode:
         epoch_train_records, source_sampling = source_small_balanced_records(
             train_records, args)
         small_val_records = source_small_records(
@@ -1320,6 +1689,11 @@ def train_source_only(dino, heads, train_records, val_records, args,
                 raise RuntimeError(
                     'ROI-cls resume checkpoint lacks source baseline/small '
                     'validation summaries')
+            if (args.train_components == 'roi_cls_pairwise'
+                    and source_baseline_correct_keys is None):
+                raise RuntimeError(
+                    'Pairwise resume checkpoint lacks exact source-retention '
+                    'baseline keys')
             best_key = roi_cls_selection_key(
                 best_summary, best_small_summary)
         else:
@@ -1327,6 +1701,8 @@ def train_source_only(dino, heads, train_records, val_records, args,
                 dino, heads, val_records, args, dino_device, head_device,
                 role='source_validation_baseline')
             source_baseline_summary = summarize_rows(baseline_rows)
+            source_baseline_correct_keys = source_correct_frame_keys(
+                baseline_rows)
             baseline_small_rows = evaluate_records(
                 dino, heads, small_val_records, args,
                 dino_device, head_device,
@@ -1341,7 +1717,8 @@ def train_source_only(dino, heads, train_records, val_records, args,
                 heads, None, None, 0, 0, best_summary, in_channels, args,
                 global_step, best_small_summary, source_sampling,
                 source_baseline_summary,
-                source_baseline_small_summary), best_path)
+                source_baseline_small_summary,
+                source_baseline_correct_keys), best_path)
             print('[source-baseline] full_top1={}/{} small_top1={}/{} '
                   'fallback_epoch=0'.format(
                       best_summary['top1_hits'],
@@ -1367,7 +1744,7 @@ def train_source_only(dino, heads, train_records, val_records, args,
                 dino, heads, val_records, args, dino_device, head_device,
                 role='source_validation')
             val_summary = summarize_rows(val_rows)
-            if args.train_components == 'roi_cls':
+            if roi_cls_mode:
                 small_val_rows = evaluate_records(
                     dino, heads, small_val_records, args,
                     dino_device, head_device,
@@ -1379,17 +1756,28 @@ def train_source_only(dino, heads, train_records, val_records, args,
                 'A selection epoch must also be a validation epoch')
         if val_summary is None:
             key = None
-        elif args.train_components == 'roi_cls':
+        elif roi_cls_mode:
             key = roi_cls_selection_key(val_summary, small_val_summary)
         else:
             key = source_selection_key(val_summary)
         retention_passed = True
-        if val_summary is not None and args.train_components == 'roi_cls':
-            retention_floor = (
-                int(source_baseline_summary['top1_hits'])
-                - int(args.source_retain_max_top1_drop))
-            retention_passed = bool(
-                int(val_summary['top1_hits']) >= retention_floor)
+        retention_summary = None
+        if val_summary is not None and roi_cls_mode:
+            if args.train_components == 'roi_cls_pairwise':
+                retention_summary = source_top1_retention_summary(
+                    source_baseline_correct_keys, val_rows)
+                retention_floor = (
+                    len(source_baseline_correct_keys)
+                    - int(args.source_retain_max_top1_drop))
+                retention_passed = bool(
+                    retention_summary['retained_correct_count']
+                    >= retention_floor)
+            else:
+                retention_floor = (
+                    int(source_baseline_summary['top1_hits'])
+                    - int(args.source_retain_max_top1_drop))
+                retention_passed = bool(
+                    int(val_summary['top1_hits']) >= retention_floor)
         improved = bool(
             selection_eligible and retention_passed
             and (best_key is None or key > best_key))
@@ -1402,7 +1790,8 @@ def train_source_only(dino, heads, train_records, val_records, args,
                 heads, None, None, epoch, best_epoch, best_summary,
                 in_channels, args, global_step, best_small_summary,
                 source_sampling, source_baseline_summary,
-                source_baseline_small_summary), best_path)
+                source_baseline_small_summary,
+                source_baseline_correct_keys), best_path)
         if evaluate_epoch:
             epoch_path = os.path.join(
                 args.work_dir,
@@ -1412,12 +1801,14 @@ def train_source_only(dino, heads, train_records, val_records, args,
                 best_summary, in_channels, args, global_step,
                 best_small_summary, source_sampling,
                 source_baseline_summary,
-                source_baseline_small_summary), epoch_path)
+                source_baseline_small_summary,
+                source_baseline_correct_keys), epoch_path)
         history.append(dict(
             epoch=int(epoch), train=train_row,
             source_val=val_summary,
             source_small_val=small_val_summary,
             source_retention_passed=bool(retention_passed),
+            source_exact_retention=retention_summary,
             selected_as_best=bool(improved),
             selection_eligible=bool(selection_eligible),
             checkpoint_saved=bool(evaluate_epoch),
@@ -1426,7 +1817,8 @@ def train_source_only(dino, heads, train_records, val_records, args,
             heads, optimizer, scheduler, epoch, best_epoch, best_summary,
             in_channels, args, global_step, best_small_summary,
             source_sampling, source_baseline_summary,
-            source_baseline_small_summary), latest_path)
+            source_baseline_small_summary,
+            source_baseline_correct_keys), latest_path)
         if val_summary is None:
             print('[source-epoch] epoch={} validation=skipped best_epoch={}'
                   .format(epoch, best_epoch))
@@ -1582,16 +1974,23 @@ def main():
                 'to_RotatedROIAlign7x7_to_Shared2FC_cls_and_OBB_reg'),
             source_data=source_protocol,
             checkpoint_selection=(
-                ('source_validation_only_with_roi_cls_small_control'
-                 if args.train_components == 'roi_cls' else
-                 'source_validation_only_over_fixed_candidate_epochs')),
+                'source_validation_only_with_exact_retention_and_'
+                'roi_cls_small_control'
+                if args.train_components == 'roi_cls_pairwise' else
+                'source_validation_only_with_roi_cls_small_control'
+                if args.train_components == 'roi_cls' else
+                'source_validation_only_over_fixed_candidate_epochs'),
             selection_epochs=[int(value)
                               for value in args.selection_epochs],
             training_schedule=dict(
                 train_components=str(args.train_components),
                 optimization_loss_components=(
                     ['loss_rpn_cls', 'loss_rpn_bbox', 'loss_cls', 'loss_bbox']
-                    if args.train_components == 'all' else ['loss_cls']),
+                    if args.train_components == 'all' else (
+                        ['loss_cls', 'loss_roi_pairwise',
+                         'loss_roi_retention']
+                        if args.train_components == 'roi_cls_pairwise'
+                        else ['loss_cls'])),
                 epochs=int(args.epochs), optimizer='SGD',
                 lr=float(args.lr), momentum=float(args.momentum),
                 weight_decay=float(args.weight_decay),
@@ -1601,7 +2000,22 @@ def main():
                 lr_policy='step',
                 lr_steps=[int(value) for value in args.lr_steps],
                 lr_gamma=float(args.lr_gamma),
-                checkpoint_interval=int(args.checkpoint_interval)),
+                checkpoint_interval=int(args.checkpoint_interval),
+                pairwise=(
+                    None if args.train_components != 'roi_cls_pairwise'
+                    else dict(
+                        margin=float(args.pairwise_margin),
+                        pairwise_loss_weight=float(
+                            args.pairwise_loss_weight),
+                        retention_loss_weight=float(
+                            args.retention_loss_weight),
+                        retention_temperature=float(
+                            args.retention_temperature),
+                        negative_riou_thr=float(
+                            args.pairwise_negative_riou_thr),
+                        nms_iou_thr=float(args.pairwise_nms_iou_thr),
+                        source_exact_retention_max_drop=int(
+                            args.source_retain_max_top1_drop)))),
             source_min_top1_rate=float(args.source_min_top1_rate),
             deployment_score_thr=float(args.deployment_score_thr),
             border_margin_ratio=float(args.border_margin_ratio),

@@ -28,6 +28,8 @@ def _args(tmp_path, **overrides):
         latency_warmup=1, reconstruction_check_count=3,
         recall_ks=[20, 100, 1000, 2000], riou_thr=0.5,
         coverage_audit_json=paths['coverage.json'],
+        source_selection_json=None,
+        expected_source_retention_rate=0.985,
         labeller_checkpoint=paths['labeller.pth'],
         dinov2_checkpoint=paths['dino.pth'],
         target_feature_mode='fresh_fp32',
@@ -69,6 +71,81 @@ def test_load_coverage_contract_checks_hashes(tmp_path, monkeypatch):
     _payload, boundaries = audit.load_coverage_contract(
         args.coverage_audit_json, args)
     assert boundaries['lower'] == 1.0
+
+
+def test_coverage_bins_can_be_reused_with_source_only_fc_cls_proof(
+        tmp_path, monkeypatch):
+    proof_path = tmp_path / 'selection.json'
+    args = _args(tmp_path, source_selection_json=str(proof_path))
+    coverage_payload = dict(
+        audit=coverage.AUDIT_NAME,
+        isolation=dict(
+            optimizer_steps=0, dino_parameters_unchanged=True,
+            labeller_parameters_unchanged=True,
+            target_labels_used_for_evaluation_only=True),
+        protocol=dict(source_defined_token_bins=dict(
+            lower=1.0, upper=2.0,
+            labels=['source_small', 'source_medium', 'source_large'])),
+        labeller_checkpoint_sha256='old_labeller',
+        dinov2_checkpoint_sha256='dino')
+    with open(args.coverage_audit_json, 'w', encoding='utf-8') as handle:
+        json.dump(coverage_payload, handle)
+    proof = dict(
+        decision='SOURCE_ONLY_EPOCH_SELECTED_TARGET_NOT_READ',
+        source_only=True, target_data_read=False,
+        min_exact_retention_rate=0.985,
+        selected=dict(
+            epoch=1, output_checkpoint_sha256='new_labeller',
+            source_exact_retention=dict(
+                baseline_correct_count=662,
+                retained_correct_count=653)),
+        parameter_invariants=dict(
+            frozen_tensors_bit_identical=True,
+            changed_parameter_names=[
+                'roi_head.bbox_head.fc_cls.weight',
+                'roi_head.bbox_head.fc_cls.bias']))
+    with proof_path.open('w', encoding='utf-8') as handle:
+        json.dump(proof, handle)
+
+    def fake_hash(path):
+        name = str(path)
+        if name.endswith('labeller.pth'):
+            return 'new_labeller'
+        if name.endswith('dino.pth'):
+            return 'dino'
+        return 'proof'
+
+    monkeypatch.setattr(audit.common, 'file_sha256', fake_hash)
+    payload, boundaries = audit.load_coverage_contract(
+        args.coverage_audit_json, args)
+    assert boundaries['lower'] == 1.0
+    assert payload['_reuse_contract']['mode'] == (
+        'source_token_bins_only_with_fc_cls_change_proof')
+    assert payload['_reuse_contract']['source_selection_proof'][
+        'selected_epoch'] == 1
+
+
+def test_coverage_mismatch_without_source_proof_is_rejected(
+        tmp_path, monkeypatch):
+    args = _args(tmp_path)
+    payload = dict(
+        audit=coverage.AUDIT_NAME,
+        isolation=dict(
+            optimizer_steps=0, dino_parameters_unchanged=True,
+            labeller_parameters_unchanged=True,
+            target_labels_used_for_evaluation_only=True),
+        protocol=dict(source_defined_token_bins=dict(
+            lower=1.0, upper=2.0,
+            labels=['source_small', 'source_medium', 'source_large'])),
+        labeller_checkpoint_sha256='old',
+        dinov2_checkpoint_sha256='dino')
+    with open(args.coverage_audit_json, 'w', encoding='utf-8') as handle:
+        json.dump(payload, handle)
+    monkeypatch.setattr(
+        audit.common, 'file_sha256',
+        lambda path: 'new' if str(path).endswith('labeller.pth') else 'dino')
+    with pytest.raises(RuntimeError, match='source-only selection proof'):
+        audit.load_coverage_contract(args.coverage_audit_json, args)
 
 
 def test_object_attrition_identifies_regression_loss(monkeypatch):
@@ -120,6 +197,34 @@ def test_summarize_attrition_token_bins_do_not_recurse():
     assert summary['source_token_bins']['source_medium']['object_count'] == 0
     assert 'source_token_bins' not in summary['source_token_bins'][
         'source_small']
+
+
+def test_attrition_summary_reports_frame_top1_hits_and_sequence_mcml():
+    def obj(hit):
+        return dict(
+            attrition_cause=(
+                'ROI_TOP1_RESTORED' if hit else
+                'ROI_ORDERING_OR_NMS_REMOVES_GEOMETRY'),
+            source_token_bin='source_small',
+            rpn=dict(best_usable_rank=1),
+            roi_regression=dict(
+                rpn_usable_survives_count=1, decoded_usable_count=1),
+            post_nms=dict(best_usable_rank=(1 if hit else None)),
+            post_valid_content=dict(
+                best_usable_rank=(1 if hit else None), top1_hit=hit),
+            best_foreground_among_rpn_usable=dict(
+                foreground_over_background=hit,
+                foreground_rank=(1 if hit else 2)))
+
+    rows = [
+        dict(seq='a', frame=1, objects=[obj(False)]),
+        dict(seq='a', frame=2, objects=[obj(False)]),
+        dict(seq='b', frame=1, objects=[obj(False)]),
+        dict(seq='b', frame=2, objects=[obj(True)]),
+    ]
+    summary = audit.summarize_attrition(rows, include_token_bins=False)
+    assert summary['final_top1_hits'] == 1
+    assert summary['final_top1_mcml'] == 2
 
 
 def test_nms_indices_are_mapped_back_after_score_filtering():

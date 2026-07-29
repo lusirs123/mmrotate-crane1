@@ -46,6 +46,15 @@ def parse_args():
         help='NAME:SPLIT:SEQ:START:END; repeat for multiple diagnosis slices.')
     parser.add_argument('--source-rpn-limit', type=int, default=0)
     parser.add_argument('--coverage-audit-json', required=True)
+    parser.add_argument(
+        '--source-selection-json',
+        help=(
+            'Source-only epoch-selection proof. Required when the coverage '
+            'audit used a classifier-different but frozen-head-equivalent '
+            'checkpoint; only its source token bins are reused.'))
+    parser.add_argument(
+        '--expected-source-retention-rate', type=float, default=0.985,
+        help='Fixed source-only selection gate expected in the proof JSON.')
     parser.add_argument('--labeller-checkpoint', required=True)
     parser.add_argument('--dinov2-repo', required=True)
     parser.add_argument('--dinov2-checkpoint', required=True)
@@ -118,13 +127,68 @@ def validate_args(args):
         raise ValueError('Recall K cannot exceed --proposal-count')
     if not 0.0 < float(args.riou_thr) <= 1.0:
         raise ValueError('--riou-thr must be in (0, 1]')
+    if not 0.0 < float(args.expected_source_retention_rate) <= 1.0:
+        raise ValueError(
+            '--expected-source-retention-rate must be in (0, 1]')
     for path in (
             args.coverage_audit_json, args.labeller_checkpoint,
             args.dinov2_checkpoint):
         if not os.path.isfile(path):
             raise ValueError('Required input does not exist: {}'.format(path))
+    if (args.source_selection_json
+            and not os.path.isfile(args.source_selection_json)):
+        raise ValueError(
+            'Source-selection proof does not exist: {}'.format(
+                args.source_selection_json))
     if os.path.exists(args.out_json):
         raise ValueError('Refusing to overwrite a completed audit result')
+
+
+def load_source_selection_contract(path: str, args,
+                                   current_checkpoint_sha256: str) -> Dict:
+    with open(path, 'r', encoding='utf-8') as handle:
+        payload = json.load(handle)
+    if payload.get('decision') != 'SOURCE_ONLY_EPOCH_SELECTED_TARGET_NOT_READ':
+        raise RuntimeError('Source-selection proof is not source-only')
+    if (payload.get('source_only') is not True
+            or payload.get('target_data_read') is not False):
+        raise RuntimeError('Source-selection proof used target data')
+    selected = payload.get('selected', {})
+    invariants = payload.get('parameter_invariants', {})
+    expected_rate = float(args.expected_source_retention_rate)
+    proof_rate = float(payload.get('min_exact_retention_rate', -1.0))
+    if not abs(proof_rate - expected_rate) <= 1e-12:
+        raise RuntimeError('Source-selection retention gate mismatch')
+    retention = selected.get('source_exact_retention', {})
+    baseline_count = int(retention.get('baseline_correct_count', 0))
+    retained_count = int(retention.get('retained_correct_count', -1))
+    if (baseline_count <= 0 or retained_count < 0
+            or float(retained_count / baseline_count) < expected_rate):
+        raise RuntimeError(
+            'Selected checkpoint does not pass source-retention gate')
+    if selected.get('output_checkpoint_sha256') != current_checkpoint_sha256:
+        raise RuntimeError(
+            'Source-selection proof does not match current checkpoint')
+    if invariants.get('frozen_tensors_bit_identical') is not True:
+        raise RuntimeError(
+            'Source-selection proof lacks frozen-head equivalence')
+    changed = set(invariants.get('changed_parameter_names', ()))
+    expected = {
+        'roi_head.bbox_head.fc_cls.weight',
+        'roi_head.bbox_head.fc_cls.bias',
+    }
+    if not changed or not changed <= expected:
+        raise RuntimeError(
+            'Source-selection proof changed unauthorized parameters')
+    return dict(
+        path=os.path.abspath(path), sha256=common.file_sha256(path),
+        selected_epoch=int(selected['epoch']),
+        current_checkpoint_sha256=current_checkpoint_sha256,
+        frozen_tensors_bit_identical=True,
+        changed_parameter_names=sorted(changed),
+        min_exact_retention_rate=proof_rate,
+        exact_retention_rate=float(retained_count / baseline_count),
+        target_data_read=False)
 
 
 def load_coverage_contract(path: str, args) -> Tuple[Dict, Dict]:
@@ -140,21 +204,37 @@ def load_coverage_contract(path: str, args) -> Tuple[Dict, Dict]:
         raise RuntimeError('Coverage audit isolation contract is invalid')
     if int(isolation.get('optimizer_steps', -1)) != 0:
         raise RuntimeError('Coverage audit performed optimizer steps')
-    expected = {
-        'labeller_checkpoint_sha256': common.file_sha256(
-            args.labeller_checkpoint),
-        'dinov2_checkpoint_sha256': common.file_sha256(
-            args.dinov2_checkpoint),
-    }
-    for key, value in expected.items():
-        if payload.get(key) != value:
+    current_labeller_sha = common.file_sha256(args.labeller_checkpoint)
+    current_dino_sha = common.file_sha256(args.dinov2_checkpoint)
+    if payload.get('dinov2_checkpoint_sha256') != current_dino_sha:
+        raise RuntimeError(
+            'Coverage audit checkpoint mismatch: dinov2_checkpoint_sha256')
+    coverage_labeller_sha = payload.get('labeller_checkpoint_sha256')
+    if coverage_labeller_sha == current_labeller_sha:
+        reuse_contract = dict(
+            mode='exact_checkpoint_match',
+            coverage_checkpoint_sha256=coverage_labeller_sha,
+            current_checkpoint_sha256=current_labeller_sha,
+            source_selection_proof=None)
+    else:
+        if not args.source_selection_json:
             raise RuntimeError(
-                'Coverage audit checkpoint mismatch: {}'.format(key))
+                'Coverage audit labeller differs; provide the source-only '
+                'selection proof to reuse source token bins')
+        proof = load_source_selection_contract(
+            args.source_selection_json, args, current_labeller_sha)
+        reuse_contract = dict(
+            mode='source_token_bins_only_with_fc_cls_change_proof',
+            coverage_checkpoint_sha256=coverage_labeller_sha,
+            current_checkpoint_sha256=current_labeller_sha,
+            source_selection_proof=proof)
     boundaries = payload.get(
         'protocol', {}).get('source_defined_token_bins')
     if (not isinstance(boundaries, dict)
             or not {'lower', 'upper', 'labels'} <= set(boundaries)):
         raise RuntimeError('Coverage audit lacks source-defined token bins')
+    payload = dict(payload)
+    payload['_reuse_contract'] = reuse_contract
     return payload, boundaries
 
 
@@ -638,6 +718,15 @@ def summarize_attrition(rows: Sequence[Dict],
                         include_token_bins: bool = True) -> Dict:
     objects = [obj for row in rows for obj in row['objects']]
     count = len(objects)
+    frame_outcomes = [dict(
+        seq=row.get('seq', '__summary__'),
+        frame=int(index if row.get('frame') is None else row['frame']),
+        hit=bool(any(
+            obj['post_valid_content']['top1_hit']
+            for obj in row['objects'])))
+        for index, row in enumerate(rows)]
+    frame_top1_hits = int(sum(row['hit'] for row in frame_outcomes))
+    frame_top1_mcml = labeller.longest_miss(frame_outcomes, 'hit')
     causes = {}
     for obj in objects:
         cause = obj['attrition_cause']
@@ -653,6 +742,8 @@ def summarize_attrition(rows: Sequence[Dict],
     if count == 0:
         summary = dict(
             frame_count=len(rows), object_count=0, causes=causes,
+            final_top1_hits=frame_top1_hits,
+            final_top1_mcml=frame_top1_mcml,
             terminal_failure_count=0, terminal_failure_causes={})
         if include_token_bins:
             summary['source_token_bins'] = {
@@ -669,6 +760,8 @@ def summarize_attrition(rows: Sequence[Dict],
     fg_ranks = [row['foreground_rank'] for row in fg_records]
     summary = dict(
         frame_count=int(len(rows)), object_count=int(count), causes=causes,
+        final_top1_hits=frame_top1_hits,
+        final_top1_mcml=frame_top1_mcml,
         terminal_failure_count=int(len(terminal_failures)),
         terminal_failure_causes=terminal_failure_causes,
         rpn_recall=rate(
@@ -700,7 +793,12 @@ def summarize_attrition(rows: Sequence[Dict],
                     obj for obj in row['objects']
                     if obj['source_token_bin'] == label]
                 if grouped:
-                    grouped_rows.append(dict(objects=grouped))
+                    grouped_row = dict(objects=grouped)
+                    if row.get('seq') is not None:
+                        grouped_row['seq'] = row['seq']
+                    if row.get('frame') is not None:
+                        grouped_row['frame'] = row['frame']
+                    grouped_rows.append(grouped_row)
             summary['source_token_bins'][label] = summarize_attrition(
                 grouped_rows, include_token_bins=False)
     return summary
@@ -754,7 +852,7 @@ def main():
     labeller.set_seed(args.seed)
     os.makedirs(args.feature_cache_dir, exist_ok=True)
     os.makedirs(os.path.dirname(os.path.abspath(args.out_json)), exist_ok=True)
-    _coverage_payload, boundaries = load_coverage_contract(
+    coverage_payload, boundaries = load_coverage_contract(
         args.coverage_audit_json, args)
 
     source_records = coverage.discover_dataset_records(
@@ -821,6 +919,11 @@ def main():
             target_role='diagnosis_only',
             target_used_for_training=False,
             target_used_for_checkpoint_selection=False,
+            coverage_reuse_contract=coverage_payload['_reuse_contract'],
+            coverage_reuse_scope=(
+                'source_defined_token_bins_only; current RPN, ROI '
+                'regression, classification, NMS, and valid filtering are '
+                'recomputed'),
             source_defined_token_bins=boundaries,
             source_feature_mode=(
                 'training_fp16_cache_except_explicit_fresh_latency_samples'),
@@ -849,12 +952,13 @@ def main():
         summary = result['summary']
         total_latency = result['latency']['dino_branch_total_ms']
         print('[attrition] {} {} rpn={:.3f} reg={:.3f} nms={:.3f} '
-              'valid={:.3f} top1={:.3f} latency_p50_ms={}'.format(
+              'valid={:.3f} top1={}/{} mcml={} latency_p50_ms={}'.format(
                   name, result['diagnosis'], summary['rpn_recall'],
                   summary['rpn_geometry_survives_roi_regression'],
                   summary['post_nms_recall'],
                   summary['post_valid_recall'],
-                  summary['final_top1_recall'],
+                  summary['final_top1_hits'], summary['frame_count'],
+                  summary['final_top1_mcml'],
                   total_latency['percentiles']['50']))
     print('[json] nonfinite_replacements={}'.format(replacements))
     print('[out] {}'.format(args.out_json))
