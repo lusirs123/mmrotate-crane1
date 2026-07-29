@@ -16,6 +16,7 @@ def _args(tmp_path, **overrides):
         source_train_datasets=None, source_val_datasets=None,
         patch_size=14, rpn_feat_channels=256, roi_fc_channels=1024,
         roi_samples=256, proposal_count=2000, max_detections=2000,
+        roi_nms_iou_thr=0.1,
         valid_content_tolerance=1e-3,
         deployment_score_thr=0.05, border_margin_ratio=0.02,
         epochs=8, lr=0.001, momentum=0.9, weight_decay=1e-4,
@@ -155,6 +156,12 @@ def test_roi_config_is_paper_style_two_fc_with_obb_regression(tmp_path):
     assert config['bbox_head']['type'] == 'RotatedShared2FCBBoxHead'
     assert config['bbox_head']['num_classes'] == 1
     assert config['bbox_head']['reg_class_agnostic'] is True
+
+
+def test_roi_config_propagates_explicit_nms_policy(tmp_path):
+    config = labeller.roi_config(
+        1024, _args(tmp_path, roi_nms_iou_thr=0.5))
+    assert config['test_cfg']['nms']['iou_thr'] == pytest.approx(0.5)
 
 
 def test_scaled_gt_preserves_angle_and_scales_first_four_values(monkeypatch):

@@ -78,6 +78,9 @@ def parse_args():
     parser.add_argument('--roi-samples', type=int, default=256)
     parser.add_argument('--proposal-count', type=int, default=2000)
     parser.add_argument('--max-detections', type=int, default=2000)
+    parser.add_argument(
+        '--roi-nms-iou-thr', type=float, default=0.1,
+        help='Frozen DINO ROI rotated-NMS IoU threshold.')
     parser.add_argument('--valid-content-tolerance', type=float, default=1e-3)
     parser.add_argument('--deployment-score-thr', type=float, default=0.05)
     parser.add_argument('--border-margin-ratio', type=float, default=0.02)
@@ -200,6 +203,9 @@ def validate_args(args):
     args.selection_epochs = selection
     if not 0.0 < args.riou_thr <= 1.0:
         raise ValueError('--riou-thr must be in (0, 1]')
+    roi_nms_iou_thr = float(getattr(args, 'roi_nms_iou_thr', 0.1))
+    if not 0.0 < roi_nms_iou_thr <= 1.0:
+        raise ValueError('--roi-nms-iou-thr must be in (0, 1]')
     if args.valid_content_tolerance < 0.0:
         raise ValueError('--valid-content-tolerance must be non-negative')
     if args.deployment_score_thr < 0.0:
@@ -720,7 +726,8 @@ def roi_config(in_channels: int, args) -> Dict:
             pos_weight=-1, debug=False),
         test_cfg=dict(
             nms_pre=int(args.proposal_count), min_bbox_size=0,
-            score_thr=0.0, nms=dict(iou_thr=0.1),
+            score_thr=0.0,
+            nms=dict(iou_thr=float(getattr(args, 'roi_nms_iou_thr', 0.1))),
             max_per_img=int(args.max_detections)))
 
 

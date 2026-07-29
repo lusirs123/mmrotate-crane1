@@ -53,7 +53,10 @@ dino_rescue = dict(
         height=600, max_long_side=1333, patch_size=14),
     head=dict(
         gpu=0, rpn_feat_channels=256, roi_fc_channels=1024,
-        roi_samples=256, proposal_count=2000, max_detections=2000),
+        roi_samples=256, proposal_count=2000, max_detections=2000,
+        # DINO rescue has its own ROI NMS; BrightAug's main path remains
+        # the custom no-NMS SymEOOD top-1 path.
+        roi_nms_iou_thr=0.1),
     # DINO head has an independent schedule.  Its epoch numbers are unrelated
     # to the frozen BrightAug detector checkpoint selected above.
     train=dict(

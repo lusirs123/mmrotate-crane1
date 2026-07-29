@@ -160,13 +160,17 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
         head_device = torch.device('cuda:{}'.format(head_gpu))
         if not torch.cuda.is_available():
             raise RuntimeError('Frozen DINO inference requires CUDA')
+        roi_nms_iou_thr = float(head_cfg.get('roi_nms_iou_thr', 0.1))
+        if not 0.0 < roi_nms_iou_thr <= 1.0:
+            raise ValueError('DINO ROI NMS IoU threshold must be in (0, 1]')
         args = SimpleNamespace(
             patch_size=int(dinov2.get('patch_size', 14)),
             rpn_feat_channels=int(head_cfg.get('rpn_feat_channels', 256)),
             roi_fc_channels=int(head_cfg.get('roi_fc_channels', 1024)),
             roi_samples=int(head_cfg.get('roi_samples', 256)),
             proposal_count=int(head_cfg.get('proposal_count', 2000)),
-            max_detections=int(head_cfg.get('max_detections', 2000)))
+            max_detections=int(head_cfg.get('max_detections', 2000)),
+            roi_nms_iou_thr=roi_nms_iou_thr)
         dino, loaded_patch_size = common.load_frozen_dinov2(
             dinov2['repo'], dinov2['checkpoint'],
             dinov2.get('model', common.CANONICAL_MODEL), dino_devices,
