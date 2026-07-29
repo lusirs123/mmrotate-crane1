@@ -336,6 +336,71 @@ def original_nms_indices(probabilities: torch.Tensor, score_thr: float,
     return original_indices[keep]
 
 
+def nms_suppression_attribution(
+        decoded: torch.Tensor, probabilities: torch.Tensor,
+        nms_keep: torch.Tensor, decoded_gt_iou: torch.Tensor,
+        score_thr: float, nms_iou_thr: float,
+        usable_riou_thr: float) -> Dict:
+    """Explain the highest-scoring usable decoded ROI at NMS input."""
+    if decoded_gt_iou.numel() == 0:
+        return dict(status='NO_DECODED_USABLE')
+    usable = torch.nonzero(
+        decoded_gt_iou >= float(usable_riou_thr),
+        as_tuple=False).reshape(-1)
+    if not usable.numel():
+        return dict(status='NO_DECODED_USABLE')
+
+    foreground = probabilities[:, 0]
+    local = foreground[usable]
+    candidate = int(usable[int(torch.argmax(local).item())].item())
+    candidate_score = float(foreground[candidate].item())
+    result = dict(
+        candidate_index=candidate,
+        candidate_gt_riou=float(decoded_gt_iou[candidate].item()),
+        candidate_foreground_probability=candidate_score,
+        candidate_foreground_rank=probability_rank(foreground, candidate),
+        score_thr=float(score_thr), nms_iou_thr=float(nms_iou_thr))
+    if candidate_score <= float(score_thr):
+        result['status'] = 'REMOVED_BY_SCORE_THRESHOLD'
+        return result
+
+    kept = nms_keep.long()
+    if bool((kept == candidate).any().item()):
+        result['status'] = 'RETAINED_BY_NMS'
+        return result
+    if not kept.numel():
+        result['status'] = 'NMS_REMOVED_WITHOUT_RETAINED_BOX'
+        return result
+
+    overlaps = rotated_ious(
+        decoded[candidate:candidate + 1], decoded[kept]).reshape(-1)
+    kept_scores = foreground[kept]
+    suppresses = (
+        (overlaps > float(nms_iou_thr))
+        & (kept_scores >= foreground[candidate]))
+    suppressor_local = torch.nonzero(
+        suppresses, as_tuple=False).reshape(-1)
+    if not suppressor_local.numel():
+        result['status'] = 'NMS_REMOVED_SUPPRESSOR_UNATTRIBUTED'
+        result['max_iou_with_kept'] = float(overlaps.max().item())
+        return result
+
+    local_index = int(suppressor_local[
+        int(torch.argmax(kept_scores[suppressor_local]).item())].item())
+    suppressor = int(kept[local_index].item())
+    suppressor_gt_riou = float(decoded_gt_iou[suppressor].item())
+    suppressor_score = float(foreground[suppressor].item())
+    result.update(
+        status=('SUPPRESSED_BY_USABLE_ROI' if suppressor_gt_riou >=
+                float(usable_riou_thr) else 'SUPPRESSED_BY_FALSE_ROI'),
+        suppressor_index=suppressor,
+        suppressor_gt_riou=suppressor_gt_riou,
+        suppressor_foreground_probability=suppressor_score,
+        suppressor_iou_with_candidate=float(overlaps[local_index].item()),
+        suppressor_score_gap=float(suppressor_score - candidate_score))
+    return result
+
+
 def attrition_cause_from_object(obj: Dict) -> str:
     """Classify the terminal failure, after allowing ROI recovery.
 
@@ -365,7 +430,8 @@ def object_attrition_rows(
         probabilities: torch.Tensor, nms_keep: torch.Tensor,
         final_detections: torch.Tensor, valid_detections: np.ndarray,
         gt_scaled: torch.Tensor, gt_original: np.ndarray,
-        threshold: float) -> List[Dict]:
+        threshold: float, score_thr: float = 0.0,
+        nms_iou_thr: float = 0.1) -> List[Dict]:
     rpn_iou = rotated_ious(proposals, gt_scaled)
     decoded_iou = rotated_ious(decoded, gt_scaled)
     final_iou = rotated_ious(final_detections, gt_scaled)
@@ -469,7 +535,10 @@ def object_attrition_rows(
                 best_usable_rank=post_valid_rank,
                 top1_hit=final_top1,
                 best_riou=(0.0 if valid_iou.shape[0] == 0 else
-                           float(valid_iou[:, gt_index].max().item()))))
+                           float(valid_iou[:, gt_index].max().item()))),
+            nms_suppression=nms_suppression_attribution(
+                decoded, probabilities, nms_keep, decoded_values,
+                score_thr, nms_iou_thr, threshold))
         row['attrition_cause'] = attrition_cause_from_object(row)
         rows.append(row)
     return rows
@@ -567,7 +636,9 @@ def manual_rpn_roi_trace(heads, feature: torch.Tensor, img_meta: Dict,
 
     objects = object_attrition_rows(
         proposals, decoded, probabilities, keep, final_scaled, valid,
-        gt_scaled, gt_original, args.riou_thr)
+        gt_scaled, gt_original, args.riou_thr,
+        score_thr=float(heads.roi_head.test_cfg.score_thr),
+        nms_iou_thr=float(heads.roi_head.test_cfg.nms.iou_thr))
     return dict(
         objects=objects,
         counts=dict(
@@ -739,12 +810,18 @@ def summarize_attrition(rows: Sequence[Dict],
         cause = obj['attrition_cause']
         terminal_failure_causes[cause] = (
             terminal_failure_causes.get(cause, 0) + 1)
+    nms_statuses = {}
+    for obj in objects:
+        status = obj.get(
+            'nms_suppression', {}).get('status', 'NOT_RECORDED')
+        nms_statuses[status] = nms_statuses.get(status, 0) + 1
     if count == 0:
         summary = dict(
             frame_count=len(rows), object_count=0, causes=causes,
             final_top1_hits=frame_top1_hits,
             final_top1_mcml=frame_top1_mcml,
-            terminal_failure_count=0, terminal_failure_causes={})
+            terminal_failure_count=0, terminal_failure_causes={},
+            nms_suppression_statuses=nms_statuses)
         if include_token_bins:
             summary['source_token_bins'] = {
                 label: dict(frame_count=0, object_count=0, causes={})
@@ -764,6 +841,7 @@ def summarize_attrition(rows: Sequence[Dict],
         final_top1_mcml=frame_top1_mcml,
         terminal_failure_count=int(len(terminal_failures)),
         terminal_failure_causes=terminal_failure_causes,
+        nms_suppression_statuses=nms_statuses,
         rpn_recall=rate(
             lambda obj: obj['rpn']['best_usable_rank'] is not None),
         rpn_geometry_survives_roi_regression=rate(
@@ -773,6 +851,12 @@ def summarize_attrition(rows: Sequence[Dict],
             lambda obj: obj['roi_regression']['decoded_usable_count'] > 0),
         post_nms_recall=rate(
             lambda obj: obj['post_nms']['best_usable_rank'] is not None),
+        post_nms_recall_at_20=rate(
+            lambda obj: obj['post_nms']['best_usable_rank'] is not None
+            and obj['post_nms']['best_usable_rank'] <= 20),
+        post_nms_recall_at_100=rate(
+            lambda obj: obj['post_nms']['best_usable_rank'] is not None
+            and obj['post_nms']['best_usable_rank'] <= 100),
         post_valid_recall=rate(
             lambda obj: obj['post_valid_content'][
                 'best_usable_rank'] is not None),

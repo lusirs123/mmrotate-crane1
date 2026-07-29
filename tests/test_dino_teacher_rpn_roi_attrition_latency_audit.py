@@ -235,6 +235,32 @@ def test_nms_indices_are_mapped_back_after_score_filtering():
     assert mapped.tolist() == [2]
 
 
+def test_nms_suppression_attributes_false_kept_competitor(monkeypatch):
+    monkeypatch.setattr(
+        audit, 'rotated_ious',
+        lambda boxes, gt: torch.tensor([[0.4]], dtype=torch.float32))
+    decoded = torch.tensor([
+        [0.0, 0.0, 10.0, 10.0, 0.0],
+        [1.0, 0.0, 10.0, 10.0, 0.0]])
+    probabilities = torch.tensor([[0.6, 0.4], [0.9, 0.1]])
+    result = audit.nms_suppression_attribution(
+        decoded, probabilities, torch.tensor([1]),
+        torch.tensor([0.8, 0.1]), score_thr=0.0,
+        nms_iou_thr=0.1, usable_riou_thr=0.5)
+    assert result['status'] == 'SUPPRESSED_BY_FALSE_ROI'
+    assert result['candidate_index'] == 0
+    assert result['suppressor_index'] == 1
+    assert result['suppressor_score_gap'] == pytest.approx(0.3)
+
+
+def test_nms_suppression_reports_retained_usable_candidate():
+    result = audit.nms_suppression_attribution(
+        torch.zeros((1, 5)), torch.tensor([[0.8, 0.2]]),
+        torch.tensor([0]), torch.tensor([0.7]),
+        score_thr=0.0, nms_iou_thr=0.1, usable_riou_thr=0.5)
+    assert result['status'] == 'RETAINED_BY_NMS'
+
+
 def test_diagnose_prefers_rpn_then_regression_then_nms():
     base = dict(
         object_count=10, rpn_recall=1.0,
