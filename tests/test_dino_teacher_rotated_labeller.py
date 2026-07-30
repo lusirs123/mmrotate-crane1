@@ -1,5 +1,6 @@
 import argparse
 import json
+import pathlib
 
 import numpy as np
 import pytest
@@ -16,6 +17,9 @@ def _args(tmp_path, **overrides):
         source_train_datasets=None, source_val_datasets=None,
         patch_size=14, rpn_feat_channels=256, roi_fc_channels=1024,
         roi_samples=256, proposal_count=2000, max_detections=2000,
+        s7_residual=False, s7_channels=128, s7_rpn_feat_channels=128,
+        s7_proposal_count=500, s7_nms_pre=2000,
+        s7_anchor_sizes=[16, 32, 64, 128, 256],
         roi_nms_iou_thr=0.1,
         valid_content_tolerance=1e-3,
         deployment_score_thr=0.05, border_margin_ratio=0.02,
@@ -28,9 +32,11 @@ def _args(tmp_path, **overrides):
         max_mcml=5, source_min_top1_rate=0.8,
         train_components='all', init_checkpoint=None,
         source_small_repeat=1, source_retain_max_top1_drop=0,
-        pairwise_margin=0.5, pairwise_loss_weight=1.0,
+        pairwise_margin=0.5, pairwise_cls_loss_weight=0.25,
+        pairwise_loss_weight=1.0,
         retention_loss_weight=1.0, retention_temperature=1.0,
         pairwise_negative_riou_thr=0.1, pairwise_nms_iou_thr=0.1,
+        pairwise_negatives_per_positive=2,
         resume_checkpoint=None, eval_only_checkpoint=None,
         source_val_results_out=None,
         dinov2_checkpoint=str(checkpoint), dinov2_model='dinov2_vitl14',
@@ -78,6 +84,69 @@ def test_validate_requires_checkpoint_for_pairwise_roi_mode(tmp_path):
     with pytest.raises(ValueError, match='requires an init/resume/eval-only'):
         labeller.validate_args(_args(
             tmp_path, train_components='roi_cls_pairwise'))
+
+
+def test_validate_s7_requires_explicit_mode_and_native_init(tmp_path):
+    with pytest.raises(ValueError, match='enabled together'):
+        labeller.validate_args(_args(tmp_path, s7_residual=True))
+    with pytest.raises(ValueError, match='requires an init/resume/eval-only'):
+        labeller.validate_args(_args(
+            tmp_path, s7_residual=True, train_components='s7_rpn',
+            epochs=4, lr_steps=None, selection_epochs=[1, 2, 3, 4]))
+    init_path = tmp_path / 'init.pth'
+    init_path.write_bytes(b'checkpoint')
+    args = _args(
+        tmp_path, s7_residual=True, train_components='s7_rpn',
+        init_checkpoint=str(init_path), epochs=4, lr_steps=None,
+        selection_epochs=[1, 2, 3, 4])
+    labeller.validate_args(args)
+    assert args.lr_steps == [2, 3]
+
+
+def test_validate_pairwise_v2_requires_matching_nms_policy(tmp_path):
+    init_path = tmp_path / 'init.pth'
+    init_path.write_bytes(b'checkpoint')
+    with pytest.raises(ValueError, match='same NMS IoU threshold'):
+        labeller.validate_args(_args(
+            tmp_path, train_components='roi_cls_pairwise_v2',
+            init_checkpoint=str(init_path), roi_nms_iou_thr=0.5,
+            pairwise_nms_iou_thr=0.1, epochs=4, lr_steps=[2, 3],
+            selection_epochs=[1, 2, 3, 4]))
+
+
+def test_validate_pairwise_v2_requires_exact_source_retention(tmp_path):
+    init_path = tmp_path / 'init.pth'
+    init_path.write_bytes(b'checkpoint')
+    with pytest.raises(ValueError, match='exact source retention'):
+        labeller.validate_args(_args(
+            tmp_path, train_components='roi_cls_pairwise_v2',
+            init_checkpoint=str(init_path), roi_nms_iou_thr=0.5,
+            pairwise_nms_iou_thr=0.5,
+            source_retain_max_top1_drop=1, epochs=4, lr_steps=[2, 3],
+            selection_epochs=[1, 2, 3, 4]))
+
+
+def test_validate_pairwise_v2_limits_schedule_to_four_epochs(tmp_path):
+    init_path = tmp_path / 'init.pth'
+    init_path.write_bytes(b'checkpoint')
+    with pytest.raises(ValueError, match='at most 4 epochs'):
+        labeller.validate_args(_args(
+            tmp_path, train_components='roi_cls_pairwise_v2',
+            init_checkpoint=str(init_path), roi_nms_iou_thr=0.5,
+            pairwise_nms_iou_thr=0.5))
+
+
+def test_validate_pairwise_v2_accepts_four_epoch_schedule(tmp_path):
+    init_path = tmp_path / 'init.pth'
+    init_path.write_bytes(b'checkpoint')
+    args = _args(
+        tmp_path, train_components='roi_cls_pairwise_v2',
+        init_checkpoint=str(init_path), roi_nms_iou_thr=0.5,
+        pairwise_nms_iou_thr=0.5, epochs=4, lr_steps=None,
+        selection_epochs=[1, 2, 3, 4])
+    labeller.validate_args(args)
+    assert args.lr_steps == [2, 3]
+    assert args.selection_epochs == [1, 2, 3, 4]
 
 
 def test_validate_rejects_pairwise_negative_overlap_with_positive_band(
@@ -182,6 +251,52 @@ def test_multiscale_rpn_and_roi_share_feature_stride_contract(tmp_path):
     assert roi['bbox_roi_extractor']['featmap_strides'] == [7, 14, 28]
 
 
+def test_s7_rpn_uses_audited_stride_and_physical_anchor_sizes(tmp_path):
+    args = _args(tmp_path, s7_residual=True)
+    config = labeller.s7_rpn_config(128, args)
+    anchors = config['anchor_generator']
+    assert anchors['strides'] == [7]
+    assert np.asarray(anchors['scales']) * 7 == pytest.approx(
+        [16, 32, 64, 128, 256])
+    assert config['test_cfg']['max_per_img'] == 500
+    assert labeller.roi_candidate_budget(args) == 2500
+
+
+def test_s7_readout_projects_before_upsampling_and_zero_gates_refinement():
+    readout = labeller.ResidualS7Readout(8, 4)
+    feature = torch.randn(1, 8, 3, 5)
+    output = readout(feature)
+    expected = torch.nn.functional.interpolate(
+        readout.projection(feature), scale_factor=2.0,
+        mode='bilinear', align_corners=False)
+    assert output.shape == (1, 4, 6, 10)
+    assert torch.equal(output, expected)
+    assert float(readout.residual_gate.detach()) == pytest.approx(0.0)
+
+
+def test_s7_proposal_merge_keeps_native_rows_before_bounded_supplement():
+    class FakeRpn:
+        def __init__(self, rows):
+            self.rows = rows
+
+        def simple_test_rpn(self, _features, _metas):
+            return [self.rows]
+
+    heads = object.__new__(labeller.FrozenDinoRotatedHeads)
+    torch.nn.Module.__init__(heads)
+    heads._args = argparse.Namespace(patch_size=14, feature_strides=None)
+    heads.s7_enabled = True
+    heads._s7_inference_enabled = True
+    native = torch.tensor([[1, 2, 3, 4, 0, 0.9]], dtype=torch.float32)
+    extra = torch.tensor([[5, 6, 7, 8, 0, 0.8]], dtype=torch.float32)
+    heads.rpn_head = FakeRpn(native)
+    heads.s7_rpn_head = FakeRpn(extra)
+    heads.s7_readout = torch.nn.Identity()
+    feature = torch.zeros((1, 4, 2, 3))
+    _features, proposals = heads.simple_test_proposals(feature, {})
+    assert torch.equal(proposals[0], torch.cat([native, extra], dim=0))
+
+
 def test_scaled_gt_preserves_angle_and_scales_first_four_values(monkeypatch):
     monkeypatch.setattr(
         labeller, 'parse_original_gt',
@@ -237,6 +352,86 @@ def test_roi_cls_mode_trains_only_final_classifier():
     pairwise_names = labeller.configure_trainable_components(
         heads, 'roi_cls_pairwise')
     assert pairwise_names == names
+    pairwise_v2_names = labeller.configure_trainable_components(
+        heads, 'roi_cls_pairwise_v2')
+    assert pairwise_v2_names == names
+
+
+def test_s7_mode_trains_only_readout_and_s7_rpn():
+    class TinyHeads(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.s7_enabled = True
+            self.s7_readout = torch.nn.Conv2d(3, 2, 1)
+            self.s7_rpn_head = torch.nn.Conv2d(2, 2, 1)
+            self.rpn_head = torch.nn.Conv2d(3, 2, 1)
+            self.roi_head = torch.nn.Conv2d(3, 2, 1)
+
+        def s7_inference_enabled(self):
+            return True
+
+    heads = TinyHeads()
+    names = labeller.configure_trainable_components(heads, 's7_rpn')
+    assert names == [
+        's7_readout.weight', 's7_readout.bias',
+        's7_rpn_head.weight', 's7_rpn_head.bias']
+    assert all(
+        parameter.requires_grad == (
+            name.startswith('s7_readout.')
+            or name.startswith('s7_rpn_head.'))
+        for name, parameter in heads.named_parameters())
+
+
+def test_s7_base_checkpoint_load_allows_only_new_branch_keys():
+    class TinyHeads(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.native = torch.nn.Linear(2, 2)
+            self.s7_readout = torch.nn.Linear(2, 2)
+            self.s7_rpn_head = torch.nn.Linear(2, 2)
+            self.enabled = True
+
+        def set_s7_inference_enabled(self, enabled):
+            self.enabled = bool(enabled)
+
+    heads = TinyHeads()
+    native = torch.nn.Linear(2, 2)
+    payload = {'heads_state_dict': {
+        'native.weight': native.weight.detach().clone(),
+        'native.bias': native.bias.detach().clone()}}
+    labeller.load_heads_checkpoint_state(
+        heads, payload, allow_s7_base_initialization=True)
+    assert heads.enabled is False
+    assert torch.equal(heads.native.weight, native.weight)
+
+
+def test_s7_source_gate_requires_absolute_small_and_mcml_targets(tmp_path):
+    args = _args(tmp_path)
+    baseline = dict(top1_hits=677, top1_mcml=3)
+    baseline_small = dict(top1_hits=303, top1_mcml=3)
+    retention = dict(
+        baseline_correct_count=677, retained_correct_count=677,
+        lost_correct_count=0)
+    candidate = dict(top1_hits=678, top1_mcml=3)
+    candidate_small = dict(top1_hits=303, top1_mcml=3)
+    result = labeller.s7_source_selection_gate(
+        baseline, baseline_small, candidate, candidate_small, retention, args)
+    assert result['passed']
+    candidate_small['top1_hits'] = 302
+    assert not labeller.s7_source_selection_gate(
+        baseline, baseline_small, candidate, candidate_small,
+        retention, args)['passed']
+
+
+def test_s7_config_declares_explicit_supplement_checkpoint_and_head():
+    import runpy
+    root = pathlib.Path(__file__).resolve().parents[1]
+    config = runpy.run_path(str(root /
+        'crane_project/configs/crane_symeood_scoped_dino_lowlight_s7_v1.py'))
+    assert config['model']['dino_rescue']['head']['s7_residual'] is True
+    assert config['model']['dino_rescue']['head']['s7_channels'] == 128
+    assert config['model']['dino_head_checkpoint'].endswith(
+        'dino_teacher_s7_residual_v1/labeller_best_source_only.pth')
 
 
 def test_roi_cls_mode_optimizes_only_roi_classification_loss():
@@ -257,6 +452,9 @@ def test_pairwise_roi_mode_optimizes_all_three_authorized_losses():
         loss_bbox=torch.tensor(30.0))
     total = labeller.optimization_loss_total(losses, 'roi_cls_pairwise')
     assert float(total.item()) == pytest.approx(5.5)
+    total_v2 = labeller.optimization_loss_total(
+        losses, 'roi_cls_pairwise_v2')
+    assert float(total_v2.item()) == pytest.approx(5.5)
 
 
 def test_pairwise_margin_loss_rewards_correct_relative_order():
@@ -266,6 +464,15 @@ def test_pairwise_margin_loss_rewards_correct_relative_order():
         torch.tensor([0.0]), torch.tensor([1.0]), margin=0.5)
     assert float(good.item()) == pytest.approx(0.0)
     assert float(bad.item()) == pytest.approx(1.5)
+
+
+def test_paired_margin_loss_does_not_form_cartesian_pairs():
+    loss = labeller.roi_paired_margin_loss(
+        torch.tensor([2.0, 0.0]), torch.tensor([0.0, 1.0]), margin=0.5)
+    assert float(loss.item()) == pytest.approx(0.75)
+    with pytest.raises(ValueError, match='same shape'):
+        labeller.roi_paired_margin_loss(
+            torch.tensor([1.0, 2.0]), torch.tensor([0.0]), margin=0.5)
 
 
 def test_classifier_retention_loss_is_zero_for_identical_logits():
@@ -285,6 +492,44 @@ def test_pairwise_mining_prioritizes_nms_competitor_before_global_false():
         negative_riou_thr=0.1, nms_iou_thr=0.1)
     assert positive.tolist() == [0]
     assert negative.tolist() == [3, 1]
+
+
+def test_pairwise_v2_mines_only_actual_higher_scoring_competitors():
+    overlap = torch.tensor([0.8, 0.0, 0.3, 0.0])
+    scores = torch.tensor([0.2, 0.9, 0.95, 0.1])
+    positive = torch.tensor([0])
+    candidate_iou = torch.tensor([[1.0], [0.6], [0.1], [0.8]])
+    pair_pos, pair_neg, suppressor = (
+        labeller.mine_actual_roi_competitor_pairs(
+            overlap, scores, positive, candidate_iou,
+            positive_riou_thr=0.5, nms_iou_thr=0.5,
+            negatives_per_positive=2))
+    assert pair_pos.tolist() == [0, 0]
+    assert pair_neg.tolist() == [2, 1]
+    assert suppressor.tolist() == [False, True]
+
+
+def test_pairwise_v2_ignores_lower_scoring_nms_overlap():
+    overlap = torch.tensor([0.8, 0.0])
+    scores = torch.tensor([0.7, 0.6])
+    pair_pos, pair_neg, suppressor = (
+        labeller.mine_actual_roi_competitor_pairs(
+            overlap, scores, torch.tensor([0]),
+            torch.tensor([[1.0], [0.9]]),
+            positive_riou_thr=0.5, nms_iou_thr=0.5,
+            negatives_per_positive=1))
+    assert pair_pos.numel() == 0
+    assert pair_neg.numel() == 0
+    assert suppressor.numel() == 0
+
+
+def test_pairwise_v2_uses_best_scoring_usable_roi_per_gt():
+    overlap_by_gt = torch.tensor([
+        [0.8], [0.7], [0.2]])
+    scores = torch.tensor([0.4, 0.9, 1.0])
+    selected = labeller.select_representative_usable_rois(
+        overlap_by_gt, scores, positive_riou_thr=0.5, max_positives=1)
+    assert selected.tolist() == [1]
 
 
 def test_rotated_box_corners_and_valid_content_filter_preserve_order():
@@ -411,6 +656,48 @@ def test_exact_source_retention_detects_swapped_correct_frames():
     assert summary['retained_correct_count'] == 1
     assert summary['lost_frame_keys'] == ['val|seq|2']
     assert summary['gained_frame_keys'] == ['val|seq|3']
+
+
+def test_pairwise_v2_source_gate_requires_strict_small_improvement():
+    baseline_full = dict(top1_hits=662, top1_mcml=7)
+    baseline_small = dict(top1_hits=293, top1_mcml=7)
+    retention = dict(
+        baseline_correct_count=662, retained_correct_count=662,
+        lost_correct_count=0)
+    unchanged = labeller.pairwise_v2_source_selection_gate(
+        baseline_full, baseline_small,
+        dict(top1_hits=662, top1_mcml=7),
+        dict(top1_hits=293, top1_mcml=7), retention)
+    assert not unchanged['passed']
+    improved = labeller.pairwise_v2_source_selection_gate(
+        baseline_full, baseline_small,
+        dict(top1_hits=663, top1_mcml=7),
+        dict(top1_hits=294, top1_mcml=6), retention)
+    assert improved['passed']
+
+
+def test_source_training_progress_is_atomic_and_target_free(tmp_path):
+    args = argparse.Namespace(
+        out_json=str(tmp_path / 'train_result.json'),
+        train_components='roi_cls_pairwise_v2', epochs=4)
+    output_path, replacements = labeller.write_source_training_progress(
+        args, completed_epoch=1, best_epoch=0,
+        best_path=str(tmp_path / 'best.pth'),
+        latest_path=str(tmp_path / 'latest.pth'),
+        baseline_summary=dict(top1_hits=662),
+        baseline_small_summary=dict(top1_hits=293),
+        best_summary=dict(top1_hits=662),
+        best_small_summary=dict(top1_hits=293),
+        history=[dict(epoch=1, pairwise_v2_source_gate=dict(
+            passed=False, checks=dict(exact_old_correct_retention=False)))])
+    with open(output_path, 'r') as handle:
+        payload = json.load(handle)
+    assert output_path.endswith('train_result.partial.json')
+    assert replacements == 0
+    assert payload['target_read'] is False
+    assert payload['completed_epoch'] == 1
+    assert payload['best_epoch'] == 0
+    assert payload['history'][0]['pairwise_v2_source_gate']['passed'] is False
 
 
 def test_source_small_sampling_uses_source_train_threshold_only(

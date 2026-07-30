@@ -35,13 +35,13 @@ from crane_project.tools import dino_teacher_common as common  # noqa: E402
 
 
 LABELLER_NAME = 'Frozen DINOv2 Oriented RPN/ROI Source Labeller V1'
-PROTOCOL_VERSION = 8
+PROTOCOL_VERSION = 10
+PAIRWISE_V2_MAX_EPOCHS = 4
 PAPER_URL = (
     'https://openaccess.thecvf.com/content/CVPR2025/html/'
     'Lavoie_Large_Self-Supervised_Models_Bridge_the_Gap_in_Domain_Adaptive_'
     'Object_CVPR_2025_paper.html')
 PAPER_CODE_URL = 'https://github.com/TRAILab/DINO_Teacher'
-
 
 def parse_args():
     parser = argparse.ArgumentParser(description=LABELLER_NAME)
@@ -83,6 +83,21 @@ def parse_args():
         help=('Optional DINO feature pyramid strides. Default is the original '
               'single stride equal to --patch-size.'))
     parser.add_argument(
+        '--s7-residual', action='store_true',
+        help=('Enable the protected stride-7 residual readout and its '
+              'proposal-only Oriented RPN. The native stride-14 path stays '
+              'unchanged.'))
+    parser.add_argument('--s7-channels', type=int, default=128)
+    parser.add_argument('--s7-rpn-feat-channels', type=int, default=128)
+    parser.add_argument('--s7-proposal-count', type=int, default=500)
+    parser.add_argument('--s7-nms-pre', type=int, default=2000)
+    parser.add_argument(
+        '--s7-anchor-sizes', type=float, nargs='+',
+        default=[16.0, 32.0, 64.0, 128.0, 256.0])
+    parser.add_argument('--s7-source-min-full-top1', type=int, default=677)
+    parser.add_argument('--s7-source-min-small-top1', type=int, default=303)
+    parser.add_argument('--s7-source-max-mcml', type=int, default=3)
+    parser.add_argument(
         '--roi-nms-iou-thr', type=float, default=0.1,
         help='Frozen DINO ROI rotated-NMS IoU threshold.')
     parser.add_argument('--valid-content-tolerance', type=float, default=1e-3)
@@ -95,7 +110,10 @@ def parse_args():
     parser.add_argument('--max-grad-norm', type=float, default=10.0)
     parser.add_argument('--warmup-iters', type=int, default=1000)
     parser.add_argument('--warmup-ratio', type=float, default=0.001)
-    parser.add_argument('--lr-steps', type=int, nargs='+', default=[5, 7])
+    parser.add_argument(
+        '--lr-steps', type=int, nargs='+', default=None,
+        help=('Defaults to [5, 7] for the formal eight-epoch head training '
+              'and [2, 3] for the at-most-four-epoch Pairwise V2 fine-tune.'))
     parser.add_argument('--lr-gamma', type=float, default=0.1)
     parser.add_argument('--checkpoint-interval', type=int, default=1)
     parser.add_argument('--selection-epochs', type=int, nargs='+')
@@ -105,12 +123,15 @@ def parse_args():
     parser.add_argument('--source-min-top1-rate', type=float, default=0.8)
     parser.add_argument(
         '--train-components',
-        choices=['all', 'roi_cls', 'roi_cls_pairwise'], default='all',
+        choices=['all', 'roi_cls', 'roi_cls_pairwise',
+                 'roi_cls_pairwise_v2', 's7_rpn'], default='all',
         help=('Train all RPN/ROI heads, or only the final ROI classifier '
               'fc_cls while keeping RPN, shared ROI FCs, and bbox regression '
               'fixed. roi_cls_pairwise additionally uses source-only '
               'NMS-aware pairwise ranking and the initialized classifier as '
-              'a frozen retention teacher.'))
+              'a frozen retention teacher. roi_cls_pairwise_v2 mines only '
+              'false ROIs that actually outrank a usable ROI. s7_rpn trains '
+              'only the residual stride-7 readout and proposal head.'))
     parser.add_argument(
         '--source-small-repeat', type=int, default=1,
         help='Repeat source-train frames in the lower short-token tertile.')
@@ -118,6 +139,9 @@ def parse_args():
         '--source-retain-max-top1-drop', type=int, default=0,
         help='Maximum source-val top1 drop allowed for ROI-cls selection.')
     parser.add_argument('--pairwise-margin', type=float, default=0.5)
+    parser.add_argument(
+        '--pairwise-cls-loss-weight', type=float, default=0.25,
+        help='Weight of CE on the V2 paired ROI samples.')
     parser.add_argument('--pairwise-loss-weight', type=float, default=1.0)
     parser.add_argument('--retention-loss-weight', type=float, default=1.0)
     parser.add_argument('--retention-temperature', type=float, default=1.0)
@@ -127,6 +151,10 @@ def parse_args():
     parser.add_argument(
         '--pairwise-nms-iou-thr', type=float, default=0.1,
         help='Prioritize false ROIs that can suppress a positive at NMS.')
+    parser.add_argument(
+        '--pairwise-negatives-per-positive', type=int, default=2,
+        help=('Maximum actual higher-scoring false competitors paired with '
+              'each usable ROI in pairwise V2.'))
     parser.add_argument('--feature-cache-dir', required=True)
     parser.add_argument('--work-dir', required=True)
     parser.add_argument(
@@ -162,6 +190,27 @@ def validate_args(args):
     if args.head_gpu in args.dino_gpus:
         raise ValueError(
             'Head GPU must be separate from sharded DINO GPUs on 8GB cards')
+    s7_enabled = bool(getattr(args, 's7_residual', False))
+    s7_positive = (
+        getattr(args, 's7_channels', 128),
+        getattr(args, 's7_rpn_feat_channels', 128),
+        getattr(args, 's7_proposal_count', 500),
+        getattr(args, 's7_nms_pre', 2000))
+    if any(int(value) <= 0 for value in s7_positive):
+        raise ValueError('S7 channel and proposal settings must be positive')
+    if (int(getattr(args, 's7_source_min_full_top1', 677)) < 0
+            or int(getattr(args, 's7_source_min_small_top1', 303)) < 0
+            or int(getattr(args, 's7_source_max_mcml', 3)) < 0):
+        raise ValueError('S7 source gate settings must be non-negative')
+    s7_anchor_sizes = [float(value) for value in getattr(
+        args, 's7_anchor_sizes', [16, 32, 64, 128, 256])]
+    if not s7_anchor_sizes or any(value <= 0.0 for value in s7_anchor_sizes):
+        raise ValueError('--s7-anchor-sizes must be positive')
+    args.s7_anchor_sizes = sorted(set(s7_anchor_sizes))
+    if s7_enabled != (args.train_components == 's7_rpn'):
+        raise ValueError(
+            '--s7-residual and --train-components s7_rpn must be enabled '
+            'together during S7 training')
     positive = (
         args.patch_size, args.rpn_feat_channels, args.roi_fc_channels,
         args.roi_samples, args.proposal_count, args.max_detections,
@@ -177,7 +226,8 @@ def validate_args(args):
     if args.source_retain_max_top1_drop < 0:
         raise ValueError('--source-retain-max-top1-drop must be non-negative')
     pairwise_positive = (
-        args.pairwise_margin, args.pairwise_loss_weight,
+        args.pairwise_margin, args.pairwise_cls_loss_weight,
+        args.pairwise_loss_weight,
         args.retention_loss_weight, args.retention_temperature)
     if any(float(value) <= 0.0 for value in pairwise_positive):
         raise ValueError('Pairwise and retention settings must be positive')
@@ -186,8 +236,15 @@ def validate_args(args):
             '--pairwise-negative-riou-thr must be in [0, --riou-thr)')
     if not 0.0 <= args.pairwise_nms_iou_thr <= 1.0:
         raise ValueError('--pairwise-nms-iou-thr must be in [0, 1]')
+    if args.pairwise_negatives_per_positive < 1:
+        raise ValueError(
+            '--pairwise-negatives-per-positive must be at least 1')
     if not 0.0 < args.warmup_ratio <= 1.0:
         raise ValueError('--warmup-ratio must be in (0, 1]')
+    if args.lr_steps is None:
+        args.lr_steps = (
+            [2, 3] if args.train_components in (
+                'roi_cls_pairwise_v2', 's7_rpn') else [5, 7])
     lr_steps = sorted(set(int(value) for value in args.lr_steps))
     if any(value <= 0 or value >= args.epochs for value in lr_steps):
         raise ValueError('--lr-steps must be within the training schedule')
@@ -219,6 +276,10 @@ def validate_args(args):
         if args.patch_size not in strides:
             raise ValueError('--feature-strides must include --patch-size')
         args.feature_strides = sorted(strides)
+    if s7_enabled and feature_strides(args) != [int(args.patch_size)]:
+        raise ValueError(
+            'S7 residual training protects the native single-scale path and '
+            'cannot be combined with interpolation-only feature strides')
     if args.valid_content_tolerance < 0.0:
         raise ValueError('--valid-content-tolerance must be non-negative')
     if args.deployment_score_thr < 0.0:
@@ -237,13 +298,41 @@ def validate_args(args):
     if args.init_checkpoint and not os.path.isfile(args.init_checkpoint):
         raise ValueError('Init checkpoint does not exist: {}'.format(
             args.init_checkpoint))
-    if (args.train_components in ('roi_cls', 'roi_cls_pairwise')
+    roi_cls_modes = ('roi_cls', 'roi_cls_pairwise',
+                     'roi_cls_pairwise_v2')
+    if (args.train_components in roi_cls_modes
             and not (args.init_checkpoint or args.resume_checkpoint
                      or args.eval_only_checkpoint)):
         raise ValueError(
             '--train-components {} requires an init/resume/eval-only '
             'checkpoint so the validated RPN and OBB regressor are retained'
             .format(args.train_components))
+    if (args.train_components == 's7_rpn'
+            and not (args.init_checkpoint or args.resume_checkpoint
+                     or args.eval_only_checkpoint)):
+        raise ValueError(
+            'S7 RPN mode requires an init/resume/eval-only checkpoint; '
+            'training must initialize from the retained native S14 heads')
+    if args.train_components == 's7_rpn' and args.epochs > 4:
+        raise ValueError(
+            'The first causal S7 readout stage is limited to 4 epochs; '
+            'extend only after source validation shows it is still improving')
+    if args.train_components == 'roi_cls_pairwise_v2':
+        if args.epochs > PAIRWISE_V2_MAX_EPOCHS:
+            raise ValueError(
+                'Pairwise V2 fine-tuning is limited to at most {} epochs; '
+                'the eight-epoch schedule is reserved for formal full-head '
+                'training'.format(PAIRWISE_V2_MAX_EPOCHS))
+        if args.source_retain_max_top1_drop != 0:
+            raise ValueError(
+                'Pairwise V2 requires exact source retention: '
+                '--source-retain-max-top1-drop must be 0')
+        if not math.isclose(
+                float(args.pairwise_nms_iou_thr),
+                float(args.roi_nms_iou_thr), rel_tol=0.0, abs_tol=1e-12):
+            raise ValueError(
+                'Pairwise V2 mining and source validation must use the same '
+                'NMS IoU threshold')
     if (args.source_val_results_out and
             os.path.exists(args.source_val_results_out)):
         raise ValueError('Refusing to overwrite source-val results: {}'.format(
@@ -265,12 +354,19 @@ def configure_trainable_components(heads, train_components: str) -> List[str]:
     if train_components == 'all':
         for parameter in heads.parameters():
             parameter.requires_grad_(True)
-    elif train_components in ('roi_cls', 'roi_cls_pairwise'):
+    elif train_components in (
+            'roi_cls', 'roi_cls_pairwise', 'roi_cls_pairwise_v2'):
         bbox_head = heads.roi_head.bbox_head
         if not hasattr(bbox_head, 'fc_cls'):
             raise RuntimeError('ROI bbox head has no fc_cls classifier')
         for parameter in bbox_head.fc_cls.parameters():
             parameter.requires_grad_(True)
+    elif train_components == 's7_rpn':
+        if not getattr(heads, 's7_enabled', False):
+            raise RuntimeError('S7 train mode requires an S7-enabled head')
+        for module in (heads.s7_readout, heads.s7_rpn_head):
+            for parameter in module.parameters():
+                parameter.requires_grad_(True)
     else:
         raise ValueError('Unsupported train-components: {}'.format(
             train_components))
@@ -286,7 +382,14 @@ def optimization_loss_total(losses: Dict, train_components: str):
         if 'loss_cls' not in losses:
             raise RuntimeError('ROI classification loss is missing')
         return loss_total({'loss_cls': losses['loss_cls']})
-    if train_components == 'roi_cls_pairwise':
+    if train_components == 's7_rpn':
+        required = ('loss_s7_rpn_cls', 'loss_s7_rpn_bbox')
+        missing = [name for name in required if name not in losses]
+        if missing:
+            raise RuntimeError('S7 RPN losses missing: {}'.format(
+                ', '.join(missing)))
+        return loss_total({name: losses[name] for name in required})
+    if train_components in ('roi_cls_pairwise', 'roi_cls_pairwise_v2'):
         required = ('loss_cls', 'loss_roi_pairwise', 'loss_roi_retention')
         missing = [name for name in required if name not in losses]
         if missing:
@@ -315,6 +418,22 @@ def roi_pairwise_margin_loss(positive_log_odds: torch.Tensor,
     violations = (float(margin) - positive_log_odds[:, None]
                   + negative_log_odds[None, :])
     return functional.relu(violations).mean()
+
+
+def roi_paired_margin_loss(positive_log_odds: torch.Tensor,
+                           negative_log_odds: torch.Tensor,
+                           margin: float) -> torch.Tensor:
+    """Rank aligned positive/negative pairs without a Cartesian product."""
+    import torch.nn.functional as functional
+
+    if positive_log_odds.ndim != 1 or negative_log_odds.ndim != 1:
+        raise ValueError('Paired ROI log odds must be one-dimensional')
+    if positive_log_odds.shape != negative_log_odds.shape:
+        raise ValueError('Paired ROI log odds must have the same shape')
+    if positive_log_odds.numel() == 0:
+        return (positive_log_odds.sum() + negative_log_odds.sum()) * 0.0
+    return functional.relu(
+        float(margin) - positive_log_odds + negative_log_odds).mean()
 
 
 def roi_classifier_retention_loss(student_logits: torch.Tensor,
@@ -386,6 +505,92 @@ def select_hard_pairwise_indices(
     return positive_indices, negative_indices
 
 
+def mine_actual_roi_competitor_pairs(
+        gt_overlap: torch.Tensor, foreground_score: torch.Tensor,
+        positive_indices: torch.Tensor,
+        candidate_to_positive_iou: torch.Tensor,
+        positive_riou_thr: float, nms_iou_thr: float,
+        negatives_per_positive: int):
+    """Pair each usable ROI only with false ROIs that currently outrank it.
+
+    A pair is marked as an NMS suppressor only when the false ROI has both a
+    higher score and rotated IoU above the deployment NMS threshold.  Other
+    higher-scoring false ROIs are ordering competitors.  Already-correct
+    positives generate no pair and therefore no unnecessary ranking update.
+    """
+    if gt_overlap.ndim != 1 or foreground_score.ndim != 1:
+        raise ValueError('Competitor mining vectors must be one-dimensional')
+    if gt_overlap.shape != foreground_score.shape:
+        raise ValueError('Competitor mining vectors must have one shape')
+    if positive_indices.ndim != 1:
+        raise ValueError('Positive indices must be one-dimensional')
+    expected_shape = (gt_overlap.numel(), positive_indices.numel())
+    if tuple(candidate_to_positive_iou.shape) != expected_shape:
+        raise ValueError(
+            'Candidate-to-positive IoU must have shape {}'.format(
+                expected_shape))
+    if int(negatives_per_positive) < 1:
+        raise ValueError('negatives_per_positive must be at least 1')
+
+    pair_positive = []
+    pair_negative = []
+    pair_is_suppressor = []
+    false_mask = gt_overlap < float(positive_riou_thr)
+    for column, positive_index in enumerate(positive_indices.tolist()):
+        positive_score = foreground_score[positive_index]
+        outranker_mask = false_mask & (foreground_score > positive_score)
+        competitors = torch.nonzero(
+            outranker_mask, as_tuple=False).reshape(-1)
+        if competitors.numel() == 0:
+            continue
+        order = torch.argsort(
+            foreground_score[competitors], descending=True)
+        competitors = competitors[order[:int(negatives_per_positive)]]
+        suppressors = (
+            candidate_to_positive_iou[competitors, column]
+            > float(nms_iou_thr))
+        pair_positive.extend(
+            [int(positive_index)] * int(competitors.numel()))
+        pair_negative.extend(int(value) for value in competitors.tolist())
+        pair_is_suppressor.extend(
+            bool(value) for value in suppressors.tolist())
+
+    device = gt_overlap.device
+    return (
+        torch.as_tensor(pair_positive, dtype=torch.long, device=device),
+        torch.as_tensor(pair_negative, dtype=torch.long, device=device),
+        torch.as_tensor(
+            pair_is_suppressor, dtype=torch.bool, device=device))
+
+
+def select_representative_usable_rois(
+        overlap_by_gt: torch.Tensor, foreground_score: torch.Tensor,
+        positive_riou_thr: float, max_positives: int) -> torch.Tensor:
+    """Select the highest-scoring usable ROI for each source GT."""
+    if overlap_by_gt.ndim != 2 or foreground_score.ndim != 1:
+        raise ValueError('ROI/GT overlaps must be [N,G] and scores must be [N]')
+    if overlap_by_gt.shape[0] != foreground_score.numel():
+        raise ValueError('ROI/GT overlaps and scores must share N')
+    if int(max_positives) < 1:
+        raise ValueError('max_positives must be at least 1')
+    representatives = []
+    for gt_index in range(overlap_by_gt.shape[1]):
+        usable = torch.nonzero(
+            overlap_by_gt[:, gt_index] >= float(positive_riou_thr),
+            as_tuple=False).reshape(-1)
+        if usable.numel():
+            best = usable[torch.argmax(foreground_score[usable])]
+            representatives.append(int(best))
+    unique = sorted(set(representatives))
+    if len(unique) > int(max_positives):
+        ordered = sorted(
+            unique, key=lambda index: float(foreground_score[index]),
+            reverse=False)
+        unique = ordered[:int(max_positives)]
+    return torch.as_tensor(
+        unique, dtype=torch.long, device=foreground_score.device)
+
+
 def file_identity(path: str) -> Dict:
     stat = os.stat(path)
     return dict(
@@ -417,6 +622,40 @@ def atomic_torch_save(payload: Dict, path: str):
     temporary = path + '.tmp'
     torch.save(payload, temporary)
     os.replace(temporary, path)
+
+
+def source_progress_path(out_json: str) -> str:
+    root, extension = os.path.splitext(os.path.abspath(out_json))
+    if extension.lower() != '.json':
+        return os.path.abspath(out_json) + '.partial.json'
+    return root + '.partial.json'
+
+
+def write_source_training_progress(
+        args, completed_epoch: int, best_epoch: int, best_path: str,
+        latest_path: str, baseline_summary: Dict,
+        baseline_small_summary: Dict, best_summary: Dict,
+        best_small_summary: Dict, history: Sequence[Dict]) -> Tuple[str, int]:
+    """Persist source-only selection evidence before target is ever read."""
+    output_path = source_progress_path(args.out_json)
+    payload = dict(
+        labeller=LABELLER_NAME,
+        protocol_version=PROTOCOL_VERSION,
+        status='SOURCE_ONLY_TRAINING_IN_PROGRESS',
+        target_read=False,
+        train_components=str(args.train_components),
+        configured_epochs=int(args.epochs),
+        completed_epoch=int(completed_epoch),
+        best_epoch=int(best_epoch),
+        best_checkpoint=os.path.abspath(best_path),
+        latest_checkpoint=os.path.abspath(latest_path),
+        source_baseline_validation_summary=baseline_summary,
+        source_baseline_small_validation_summary=baseline_small_summary,
+        source_best_validation_summary=best_summary,
+        source_best_small_validation_summary=best_small_summary,
+        history=list(history))
+    replacements = common.write_json_atomic(output_path, payload)
+    return output_path, replacements
 
 
 def write_detection_rows_pickle(rows: Sequence[Dict], path: str):
@@ -710,6 +949,55 @@ def rpn_proposal_config(args) -> Dict:
         nms=dict(type='nms', iou_threshold=0.8), min_bbox_size=0)
 
 
+def s7_rpn_proposal_config(args) -> Dict:
+    return dict(
+        nms_pre=int(getattr(args, 's7_nms_pre', 2000)),
+        max_per_img=int(getattr(args, 's7_proposal_count', 500)),
+        nms=dict(type='nms', iou_threshold=0.8), min_bbox_size=0)
+
+
+def s7_rpn_config(in_channels: int, args) -> Dict:
+    """Proposal-only stride-7 RPN with source-defined small anchors."""
+    stride = int(args.patch_size) // 2
+    if int(args.patch_size) % 2 != 0 or stride <= 0:
+        raise ValueError('S7 readout requires an even positive patch size')
+    anchor_sizes = [float(value) for value in getattr(
+        args, 's7_anchor_sizes', [16, 32, 64, 128, 256])]
+    return dict(
+        type='OrientedRPNHead', in_channels=int(in_channels),
+        feat_channels=int(getattr(args, 's7_rpn_feat_channels', 128)),
+        version='le90',
+        anchor_generator=dict(
+            type='AnchorGenerator',
+            scales=[size / float(stride) for size in anchor_sizes],
+            ratios=[0.5, 1.0, 2.0], strides=[stride]),
+        bbox_coder=dict(
+            type='MidpointOffsetCoder', angle_range='le90',
+            target_means=[0.0] * 6,
+            target_stds=[1.0, 1.0, 1.0, 1.0, 0.5, 0.5]),
+        loss_cls=dict(
+            type='CrossEntropyLoss', use_sigmoid=True, loss_weight=1.0),
+        loss_bbox=dict(
+            type='SmoothL1Loss', beta=1.0 / 9.0, loss_weight=1.0),
+        train_cfg=dict(
+            assigner=dict(
+                type='MaxIoUAssigner', pos_iou_thr=0.7,
+                neg_iou_thr=0.3, min_pos_iou=0.3,
+                match_low_quality=True, ignore_iof_thr=-1),
+            sampler=dict(
+                type='RandomSampler', num=256, pos_fraction=0.5,
+                neg_pos_ub=-1, add_gt_as_proposals=False),
+            allowed_border=0, pos_weight=-1, debug=False),
+        test_cfg=s7_rpn_proposal_config(args))
+
+
+def roi_candidate_budget(args) -> int:
+    budget = int(args.proposal_count)
+    if bool(getattr(args, 's7_residual', False)):
+        budget += int(getattr(args, 's7_proposal_count', 500))
+    return budget
+
+
 def roi_config(in_channels: int, args) -> Dict:
     strides = feature_strides(args)
     return dict(
@@ -750,10 +1038,41 @@ def roi_config(in_channels: int, args) -> Dict:
                 add_gt_as_proposals=True),
             pos_weight=-1, debug=False),
         test_cfg=dict(
-            nms_pre=int(args.proposal_count), min_bbox_size=0,
+            nms_pre=roi_candidate_budget(args), min_bbox_size=0,
             score_thr=0.0,
             nms=dict(iou_thr=float(getattr(args, 'roi_nms_iou_thr', 0.1))),
             max_per_img=int(args.max_detections)))
+
+
+class ResidualS7Readout(nn.Module):
+    """Low-channel local readout from native DINO S14 tokens to S7."""
+
+    def __init__(self, in_channels: int, out_channels: int):
+        super().__init__()
+        out_channels = int(out_channels)
+        groups = min(32, out_channels)
+        while out_channels % groups != 0:
+            groups -= 1
+        self.projection = nn.Conv2d(
+            int(in_channels), out_channels, kernel_size=1, bias=False)
+        self.refinement = nn.Sequential(
+            nn.Conv2d(
+                out_channels, out_channels, kernel_size=3, padding=1,
+                groups=out_channels, bias=False),
+            nn.GroupNorm(groups, out_channels),
+            nn.GELU(),
+            nn.Conv2d(
+                out_channels, out_channels, kernel_size=1, bias=False))
+        self.residual_gate = nn.Parameter(torch.zeros(()))
+
+    def forward(self, feature: torch.Tensor) -> torch.Tensor:
+        import torch.nn.functional as functional
+
+        base = self.projection(feature)
+        base = functional.interpolate(
+            base, scale_factor=2.0, mode='bilinear', align_corners=False)
+        residual = self.refinement(base)
+        return base + torch.tanh(self.residual_gate) * residual
 
 
 class FrozenDinoRotatedHeads(nn.Module):
@@ -769,8 +1088,47 @@ class FrozenDinoRotatedHeads(nn.Module):
         self.rpn_head.init_weights()
         self.roi_head.init_weights()
         self.proposal_cfg = ConfigDict(rpn_proposal_config(args))
+        self.s7_enabled = bool(getattr(args, 's7_residual', False))
+        self._s7_inference_enabled = self.s7_enabled
+        if self.s7_enabled:
+            s7_channels = int(getattr(args, 's7_channels', 128))
+            self.s7_readout = ResidualS7Readout(
+                int(in_channels), s7_channels)
+            self.s7_rpn_head = build_head(ConfigDict(
+                s7_rpn_config(s7_channels, args)))
+            self.s7_rpn_head.init_weights()
+            self.s7_proposal_cfg = ConfigDict(s7_rpn_proposal_config(args))
+        else:
+            self.s7_readout = None
+            self.s7_rpn_head = None
+            self.s7_proposal_cfg = None
         self._roi_cls_teacher_weight = None
         self._roi_cls_teacher_bias = None
+
+    def set_s7_inference_enabled(self, enabled: bool):
+        if enabled and not self.s7_enabled:
+            raise RuntimeError('Cannot enable S7 proposals on a native head')
+        self._s7_inference_enabled = bool(enabled)
+
+    def s7_inference_enabled(self) -> bool:
+        return bool(self.s7_enabled and self._s7_inference_enabled)
+
+    def s7_feature(self, feature: torch.Tensor) -> torch.Tensor:
+        if not self.s7_enabled:
+            raise RuntimeError('S7 readout is not configured')
+        return self.s7_readout(feature)
+
+    def simple_test_proposals(self, feature: torch.Tensor, img_meta: Dict):
+        """Keep all native proposals and append a bounded S7 supplement."""
+        native_features = self.feature_levels(feature)
+        native = self.rpn_head.simple_test_rpn(
+            native_features, [img_meta])[0]
+        if not self.s7_inference_enabled():
+            return native_features, [native]
+        s7 = self.s7_feature(feature)
+        supplement = self.s7_rpn_head.simple_test_rpn(
+            [s7], [img_meta])[0]
+        return native_features, [torch.cat([native, supplement], dim=0)]
 
     def feature_levels(self, feature: torch.Tensor):
         """Build optional spatial levels from the frozen patch grid.
@@ -873,6 +1231,24 @@ class FrozenDinoRotatedHeads(nn.Module):
         losses.update(roi_losses)
         return losses
 
+    def forward_s7_rpn_train(self, feature: torch.Tensor, img_meta: Dict,
+                             gt_boxes: torch.Tensor) -> Dict:
+        """Train only the S7 readout/RPN; native RPN and ROI stay frozen."""
+        if not self.s7_enabled:
+            raise RuntimeError('S7 RPN training requires an S7-enabled head')
+        losses, _proposals = self.s7_rpn_head.forward_train(
+            [self.s7_feature(feature)], [img_meta], [gt_boxes],
+            gt_labels=None, gt_bboxes_ignore=None,
+            proposal_cfg=self.s7_proposal_cfg)
+        renamed = {}
+        for name, value in losses.items():
+            if name == 'loss_rpn_cls':
+                name = 'loss_s7_rpn_cls'
+            elif name == 'loss_rpn_bbox':
+                name = 'loss_s7_rpn_bbox'
+            renamed[name] = value
+        return renamed
+
     def forward_roi_cls_hard_train(
             self, feature: torch.Tensor, img_meta: Dict,
             gt_boxes: torch.Tensor, max_samples: int,
@@ -883,10 +1259,10 @@ class FrozenDinoRotatedHeads(nn.Module):
         from mmcv.ops import box_iou_rotated
         from mmrotate.core import rbbox2roi
 
-        features = self.feature_levels(feature)
+        features, proposal_list = self.simple_test_proposals(
+            feature, img_meta)
         with torch.no_grad():
-            proposals = self.rpn_head.simple_test_rpn(
-                features, [img_meta])[0][:, :5]
+            proposals = proposal_list[0][:, :5]
             if gt_boxes.shape[0]:
                 proposals = torch.cat([proposals, gt_boxes], dim=0)
         rois = rbbox2roi([proposals])
@@ -901,9 +1277,11 @@ class FrozenDinoRotatedHeads(nn.Module):
                 raise RuntimeError(
                     'ROI-cls hard mining requires class-agnostic regression')
             if gt_boxes.shape[0]:
-                overlap = box_iou_rotated(
-                    decoded.float(), gt_boxes.float()).max(dim=1).values
+                overlap_by_gt = box_iou_rotated(
+                    decoded.float(), gt_boxes.float())
+                overlap = overlap_by_gt.max(dim=1).values
             else:
+                overlap_by_gt = decoded.new_zeros((decoded.shape[0], 0))
                 overlap = decoded.new_zeros((decoded.shape[0],))
             positive = overlap >= float(riou_thr)
             foreground_score = torch.softmax(
@@ -959,10 +1337,10 @@ class FrozenDinoRotatedHeads(nn.Module):
 
         if self._roi_cls_teacher_weight is None:
             raise RuntimeError('ROI retention teacher was not initialized')
-        features = self.feature_levels(feature)
+        features, proposal_list = self.simple_test_proposals(
+            feature, img_meta)
         with torch.no_grad():
-            proposals = self.rpn_head.simple_test_rpn(
-                features, [img_meta])[0][:, :5]
+            proposals = proposal_list[0][:, :5]
             if gt_boxes.shape[0]:
                 proposals = torch.cat([proposals, gt_boxes], dim=0)
         rois = rbbox2roi([proposals])
@@ -1045,9 +1423,125 @@ class FrozenDinoRotatedHeads(nn.Module):
             roi_pair_count=pair_count,
             roi_cls_candidate_count=int(proposals.shape[0]))
 
+    def forward_roi_cls_pairwise_v2_train(
+            self, feature: torch.Tensor, img_meta: Dict,
+            gt_boxes: torch.Tensor, max_samples: int,
+            positive_fraction: float = 0.25, riou_thr: float = 0.5,
+            nms_iou_thr: float = 0.5, pairwise_margin: float = 0.5,
+            cls_loss_weight: float = 0.25,
+            pairwise_loss_weight: float = 1.0,
+            retention_loss_weight: float = 1.0,
+            retention_temperature: float = 1.0,
+            negatives_per_positive: int = 2) -> Dict:
+        """Train ``fc_cls`` on actual source ordering/NMS failures only."""
+        import torch.nn.functional as functional
+        from mmcv.ops import box_iou_rotated
+        from mmrotate.core import rbbox2roi
+
+        if self._roi_cls_teacher_weight is None:
+            raise RuntimeError('ROI retention teacher was not initialized')
+        features, proposal_list = self.simple_test_proposals(
+            feature, img_meta)
+        with torch.no_grad():
+            proposals = proposal_list[0][:, :5]
+            # V2 is a deployment-faithful ordering probe.  Do not append GT
+            # boxes: an injected GT ROI is an oracle positive and can make
+            # every source frame have zero actual competitors.
+        rois = rbbox2roi([proposals])
+        cls_score, bbox_pred, cls_features = self._forward_pairwise_roi(
+            feature, rois)
+        with torch.no_grad():
+            teacher_logits = functional.linear(
+                cls_features.detach(), self._roi_cls_teacher_weight,
+                self._roi_cls_teacher_bias)
+            decoded, _scores = self.roi_head.bbox_head.get_bboxes(
+                rois, cls_score.detach(), bbox_pred.detach(),
+                img_meta['img_shape'], img_meta['scale_factor'],
+                rescale=False, cfg=None)
+            if decoded.shape[1] != 5:
+                raise RuntimeError(
+                    'Pairwise ROI training requires class-agnostic regression')
+            if gt_boxes.shape[0]:
+                overlap_by_gt = box_iou_rotated(
+                    decoded.float(), gt_boxes.float())
+                overlap = overlap_by_gt.max(dim=1).values
+            else:
+                overlap_by_gt = decoded.new_zeros((decoded.shape[0], 0))
+                overlap = decoded.new_zeros((decoded.shape[0],))
+            foreground_score = torch.softmax(
+                cls_score.detach(), dim=1)[:, 0]
+            positive_indices = select_representative_usable_rois(
+                overlap_by_gt, foreground_score,
+                positive_riou_thr=riou_thr,
+                max_positives=max(1, int(max_samples * positive_fraction)))
+            if positive_indices.numel():
+                candidate_to_positive_iou = box_iou_rotated(
+                    decoded.float(), decoded[positive_indices].float())
+            else:
+                candidate_to_positive_iou = decoded.new_zeros(
+                    (decoded.shape[0], 0))
+            (pair_positive_indices, pair_negative_indices,
+             pair_is_suppressor) = mine_actual_roi_competitor_pairs(
+                 overlap, foreground_score, positive_indices,
+                 candidate_to_positive_iou,
+                 positive_riou_thr=riou_thr,
+                 nms_iou_thr=nms_iou_thr,
+                 negatives_per_positive=negatives_per_positive)
+            selected_positive = torch.unique(pair_positive_indices)
+            selected_negative = torch.unique(pair_negative_indices)
+            selected = torch.cat(
+                [selected_positive, selected_negative], dim=0)
+            labels = torch.cat([
+                torch.zeros(
+                    selected_positive.numel(), dtype=torch.long,
+                    device=cls_score.device),
+                torch.ones(
+                    selected_negative.numel(), dtype=torch.long,
+                    device=cls_score.device)], dim=0)
+
+        zero = cls_score.sum() * 0.0
+        if selected.numel():
+            raw_cls = functional.cross_entropy(cls_score[selected], labels)
+            selected_accuracy = (
+                cls_score[selected].argmax(dim=1) == labels).float().mean()
+        else:
+            raw_cls = zero
+            selected_accuracy = cls_score.new_tensor(1.0)
+        log_odds = roi_foreground_log_odds(cls_score)
+        raw_pairwise = roi_paired_margin_loss(
+            log_odds[pair_positive_indices],
+            log_odds[pair_negative_indices], pairwise_margin)
+        raw_retention = roi_classifier_retention_loss(
+            cls_score, teacher_logits, retention_temperature)
+        if pair_positive_indices.numel():
+            pairwise_accuracy = (
+                log_odds[pair_positive_indices]
+                > log_odds[pair_negative_indices]).float().mean()
+        else:
+            pairwise_accuracy = cls_score.new_tensor(1.0)
+        pair_count = int(pair_positive_indices.numel())
+        suppressor_count = int(pair_is_suppressor.sum().item())
+        return dict(
+            loss_cls=(raw_cls * float(cls_loss_weight)),
+            loss_roi_pairwise=(raw_pairwise * float(pairwise_loss_weight)),
+            loss_roi_retention=(raw_retention
+                                * float(retention_loss_weight)),
+            roi_cls_accuracy=selected_accuracy,
+            roi_pairwise_accuracy=pairwise_accuracy,
+            roi_cls_positive_count=int(selected_positive.numel()),
+            roi_cls_hard_negative_count=int(selected_negative.numel()),
+            roi_cls_nms_competitor_count=suppressor_count,
+            roi_cls_ordering_competitor_count=(
+                pair_count - suppressor_count),
+            roi_pair_count=pair_count,
+            roi_pairwise_failure_frame=int(pair_count > 0),
+            roi_pairwise_unopposed_positive_count=(
+                int(positive_indices.numel())
+                - int(selected_positive.numel())),
+            roi_cls_candidate_count=int(proposals.shape[0]))
+
     def simple_test(self, feature: torch.Tensor, img_meta: Dict):
-        features = self.feature_levels(feature)
-        proposals = self.rpn_head.simple_test_rpn(features, [img_meta])
+        features, proposals = self.simple_test_proposals(feature, img_meta)
         results = self.roi_head.simple_test(
             features, proposals, [img_meta], rescale=True)
         if len(results) != 1 or len(results[0]) != 1:
@@ -1112,6 +1606,11 @@ def scheduled_lr(args, epoch: int, global_step: int) -> float:
 def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                 global_step: int, args, dino_device, head_device) -> Dict:
     heads.train()
+    if args.train_components == 's7_rpn':
+        heads.rpn_head.eval()
+        heads.roi_head.eval()
+    if head_device.type == 'cuda':
+        torch.cuda.reset_peak_memory_stats(head_device)
     ordered = list(records)
     random.Random(args.seed + epoch).shuffle(ordered)
     losses = []
@@ -1127,7 +1626,10 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                 dino, record, args, dino_device, head_device))
         cache_hits += int(cached)
         optimizer.zero_grad()
-        if args.train_components == 'roi_cls':
+        if args.train_components == 's7_rpn':
+            output = heads.forward_s7_rpn_train(
+                feature, img_meta, gt_boxes)
+        elif args.train_components == 'roi_cls':
             output = heads.forward_roi_cls_hard_train(
                 feature, img_meta, gt_boxes, args.roi_samples,
                 riou_thr=args.riou_thr)
@@ -1141,6 +1643,18 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                 pairwise_loss_weight=args.pairwise_loss_weight,
                 retention_loss_weight=args.retention_loss_weight,
                 retention_temperature=args.retention_temperature)
+        elif args.train_components == 'roi_cls_pairwise_v2':
+            output = heads.forward_roi_cls_pairwise_v2_train(
+                feature, img_meta, gt_boxes, args.roi_samples,
+                riou_thr=args.riou_thr,
+                nms_iou_thr=args.pairwise_nms_iou_thr,
+                pairwise_margin=args.pairwise_margin,
+                cls_loss_weight=args.pairwise_cls_loss_weight,
+                pairwise_loss_weight=args.pairwise_loss_weight,
+                retention_loss_weight=args.retention_loss_weight,
+                retention_temperature=args.retention_temperature,
+                negatives_per_positive=(
+                    args.pairwise_negatives_per_positive))
         else:
             output = heads.forward_train(
                 feature, img_meta, gt_boxes, gt_labels)
@@ -1163,11 +1677,19 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
         global_step += 1
         losses.append(float(total.item()))
         if (index + 1) % 25 == 0 or index + 1 == len(ordered):
-            print(
+            message = (
                 '[source-train] epoch={} {}/{} loss={:.5f} cache={}/{}'
                 .format(
                     epoch, index + 1, len(ordered),
                     float(np.mean(losses[-25:])), cache_hits, index + 1))
+            if args.train_components == 'roi_cls_pairwise_v2':
+                message += (
+                    ' pair_count_total={} '
+                    'failure_frames_total={}').format(
+                    int(round(metric_sums.get('roi_pair_count', 0.0))),
+                    int(round(metric_sums.get(
+                        'roi_pairwise_failure_frame', 0.0))))
+            print(message)
         del feature, gt_boxes, gt_labels, total
     return dict(
         epoch=int(epoch), count=len(ordered),
@@ -1177,16 +1699,22 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
         optimized_components=(
             ['loss_rpn_cls', 'loss_rpn_bbox', 'loss_cls', 'loss_bbox']
             if args.train_components == 'all' else (
+                ['loss_s7_rpn_cls', 'loss_s7_rpn_bbox']
+                if args.train_components == 's7_rpn' else (
                 ['loss_cls', 'loss_roi_pairwise', 'loss_roi_retention']
-                if args.train_components == 'roi_cls_pairwise'
-                else ['loss_cls'])),
+                if args.train_components in (
+                    'roi_cls_pairwise', 'roi_cls_pairwise_v2')
+                else ['loss_cls']))),
         mean_loss_components={
             name: float(value / max(1, len(ordered)))
             for name, value in sorted(component_sums.items())},
         mean_training_metrics={
             name: float(value / max(1, len(ordered)))
             for name, value in sorted(metric_sums.items())},
-        cache_hits=int(cache_hits))
+        cache_hits=int(cache_hits),
+        head_peak_memory_mb=(
+            float(torch.cuda.max_memory_allocated(head_device) / (1024 ** 2))
+            if head_device.type == 'cuda' else 0.0))
 
 
 def rotated_box_corners(detections: np.ndarray) -> np.ndarray:
@@ -1539,6 +2067,62 @@ def source_top1_retention_summary(
         gained_frame_keys=sorted(gained))
 
 
+def pairwise_v2_source_selection_gate(
+        baseline_full: Dict, baseline_small: Dict,
+        candidate_full: Dict, candidate_small: Dict,
+        retention: Dict) -> Dict:
+    """Strict source-only gate for replacing the formal DINO classifier."""
+    baseline_correct = int(retention['baseline_correct_count'])
+    checks = dict(
+        exact_old_correct_retention=(
+            int(retention['retained_correct_count']) == baseline_correct
+            and int(retention['lost_correct_count']) == 0),
+        full_top1_nonregression=(
+            int(candidate_full['top1_hits'])
+            >= int(baseline_full['top1_hits'])),
+        full_mcml_nonregression=(
+            int(candidate_full['top1_mcml'])
+            <= int(baseline_full['top1_mcml'])),
+        small_top1_strict_improvement=(
+            int(candidate_small['top1_hits'])
+            > int(baseline_small['top1_hits'])),
+        small_mcml_nonregression=(
+            int(candidate_small['top1_mcml'])
+            <= int(baseline_small['top1_mcml'])))
+    return dict(checks=checks, passed=all(checks.values()))
+
+
+def s7_source_selection_gate(
+        baseline_full: Dict, baseline_small: Dict,
+        candidate_full: Dict, candidate_small: Dict,
+        retention: Dict, args) -> Dict:
+    """Source-only absolute and relative gate for enabling S7 proposals."""
+    baseline_correct = int(retention['baseline_correct_count'])
+    checks = dict(
+        exact_old_correct_retention=(
+            int(retention['retained_correct_count']) == baseline_correct
+            and int(retention['lost_correct_count']) == 0),
+        full_top1_nonregression=(
+            int(candidate_full['top1_hits'])
+            >= int(baseline_full['top1_hits'])),
+        full_top1_absolute=(
+            int(candidate_full['top1_hits'])
+            >= int(getattr(args, 's7_source_min_full_top1', 677))),
+        small_top1_nonregression=(
+            int(candidate_small['top1_hits'])
+            >= int(baseline_small['top1_hits'])),
+        small_top1_absolute=(
+            int(candidate_small['top1_hits'])
+            >= int(getattr(args, 's7_source_min_small_top1', 303))),
+        full_mcml_absolute=(
+            int(candidate_full['top1_mcml'])
+            <= int(getattr(args, 's7_source_max_mcml', 3))),
+        small_mcml_absolute=(
+            int(candidate_small['top1_mcml'])
+            <= int(getattr(args, 's7_source_max_mcml', 3))))
+    return dict(checks=checks, passed=all(checks.values()))
+
+
 def make_target_decision(summary: Dict, args,
                          source_summary: Dict = None) -> str:
     if summary['frame_count'] != args.target_end - args.target_start + 1:
@@ -1557,6 +2141,47 @@ def make_target_decision(summary: Dict, args,
             and summary['top1_mcml'] > args.max_mcml):
         return 'DINO_LABELLER_GEOMETRY_ONLY_RANKING_INSUFFICIENT'
     return 'FROZEN_DINO_ROTATED_LABELLER_INSUFFICIENT'
+
+
+def s7_architecture(args) -> Dict:
+    enabled = bool(getattr(args, 's7_residual', False))
+    return dict(
+        enabled=enabled,
+        stride=(int(args.patch_size) // 2 if enabled else None),
+        channels=(int(getattr(args, 's7_channels', 128))
+                  if enabled else None),
+        rpn_feat_channels=(int(getattr(
+            args, 's7_rpn_feat_channels', 128)) if enabled else None),
+        proposal_count=(int(getattr(args, 's7_proposal_count', 500))
+                        if enabled else None),
+        nms_pre=(int(getattr(args, 's7_nms_pre', 2000))
+                 if enabled else None),
+        anchor_sizes=([float(value) for value in getattr(
+            args, 's7_anchor_sizes', [])] if enabled else []))
+
+
+def load_heads_checkpoint_state(heads, payload: Dict,
+                                allow_s7_base_initialization: bool = False):
+    """Load a native checkpoint into S7 only for explicit initialization."""
+    if allow_s7_base_initialization:
+        incompatible = heads.load_state_dict(
+            payload['heads_state_dict'], strict=False)
+        allowed_prefixes = ('s7_readout.', 's7_rpn_head.')
+        disallowed_missing = [
+            name for name in incompatible.missing_keys
+            if not name.startswith(allowed_prefixes)]
+        if disallowed_missing or incompatible.unexpected_keys:
+            raise RuntimeError(
+                'S7 base initialization state mismatch: missing={} '
+                'unexpected={}'.format(
+                    disallowed_missing, incompatible.unexpected_keys))
+        heads.set_s7_inference_enabled(False)
+        return
+    heads.load_state_dict(payload['heads_state_dict'], strict=True)
+    enabled = bool(payload.get(
+        's7_inference_enabled',
+        payload.get('s7_architecture', {}).get('enabled', False)))
+    heads.set_s7_inference_enabled(enabled)
 
 
 def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
@@ -1582,15 +2207,20 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
             None if source_baseline_correct_keys is None else
             [str(key) for key in source_baseline_correct_keys]),
         source_sampling=source_sampling,
+        s7_architecture=s7_architecture(args),
+        s7_inference_enabled=bool(heads.s7_inference_enabled()),
         roi_cls_teacher_state=heads.roi_cls_teacher_state(),
         training_protocol=dict(
             train_components=str(args.train_components),
             optimization_loss_components=(
                 ['loss_rpn_cls', 'loss_rpn_bbox', 'loss_cls', 'loss_bbox']
                 if args.train_components == 'all' else (
+                    ['loss_s7_rpn_cls', 'loss_s7_rpn_bbox']
+                    if args.train_components == 's7_rpn' else (
                     ['loss_cls', 'loss_roi_pairwise', 'loss_roi_retention']
-                    if args.train_components == 'roi_cls_pairwise'
-                    else ['loss_cls'])),
+                    if args.train_components in (
+                        'roi_cls_pairwise', 'roi_cls_pairwise_v2')
+                    else ['loss_cls']))),
             trainable_parameter_names=[
                 name for name, parameter in heads.named_parameters()
                 if parameter.requires_grad],
@@ -1605,9 +2235,14 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
             checkpoint_interval=int(args.checkpoint_interval),
             selection_epochs=[int(value)
                               for value in args.selection_epochs],
-            pairwise=(None if args.train_components != 'roi_cls_pairwise'
+            pairwise=(None if args.train_components not in (
+                          'roi_cls_pairwise', 'roi_cls_pairwise_v2')
                       else dict(
+                          version=(2 if args.train_components ==
+                                   'roi_cls_pairwise_v2' else 1),
                           margin=float(args.pairwise_margin),
+                          cls_loss_weight=float(
+                              args.pairwise_cls_loss_weight),
                           pairwise_loss_weight=float(
                               args.pairwise_loss_weight),
                           retention_loss_weight=float(
@@ -1616,7 +2251,17 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                               args.retention_temperature),
                           negative_riou_thr=float(
                               args.pairwise_negative_riou_thr),
-                          nms_iou_thr=float(args.pairwise_nms_iou_thr)))),
+                          nms_iou_thr=float(args.pairwise_nms_iou_thr),
+                          negatives_per_positive=int(
+                              args.pairwise_negatives_per_positive)))),
+            s7_source_gate=(
+                None if args.train_components != 's7_rpn' else dict(
+                    min_full_top1=int(getattr(
+                        args, 's7_source_min_full_top1', 677)),
+                    min_small_top1=int(getattr(
+                        args, 's7_source_min_small_top1', 303)),
+                    max_mcml=int(getattr(
+                        args, 's7_source_max_mcml', 3)))),
         in_channels=int(in_channels), patch_size=int(args.patch_size),
         rpn_feat_channels=int(args.rpn_feat_channels),
         roi_fc_channels=int(args.roi_fc_channels),
@@ -1631,7 +2276,8 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
 
 
 def validate_checkpoint(payload: Dict, in_channels: int, args,
-                        allow_training_mode_mismatch: bool = False):
+                        allow_training_mode_mismatch: bool = False,
+                        allow_s7_base_initialization: bool = False):
     required = (
         'source_only', 'frozen_dinov2', 'in_channels', 'patch_size',
         'rpn_feat_channels', 'roi_fc_channels', 'heads_state_dict')
@@ -1659,12 +2305,30 @@ def validate_checkpoint(payload: Dict, in_channels: int, args,
     if mismatched:
         raise RuntimeError('Labeller architecture mismatch: {}'.format(
             ', '.join(mismatched)))
+    requested_s7 = s7_architecture(args)
+    stored_s7 = payload.get('s7_architecture', dict(enabled=False))
+    if requested_s7['enabled']:
+        if not bool(stored_s7.get('enabled', False)):
+            if not allow_s7_base_initialization:
+                raise RuntimeError(
+                    'Checkpoint lacks the requested S7 residual branch')
+        else:
+            keys = ('stride', 'channels', 'rpn_feat_channels',
+                    'proposal_count', 'nms_pre', 'anchor_sizes')
+            if any(stored_s7.get(key) != requested_s7.get(key)
+                   for key in keys):
+                raise RuntimeError('S7 checkpoint architecture mismatch')
+    elif bool(stored_s7.get('enabled', False)):
+        raise RuntimeError(
+            'S7 checkpoint cannot load into the native single-scale head')
 
 
 def train_source_only(dino, heads, train_records, val_records, args,
                       dino_device, head_device, in_channels: int):
-    roi_cls_mode = args.train_components in (
-        'roi_cls', 'roi_cls_pairwise')
+    pairwise_modes = ('roi_cls_pairwise', 'roi_cls_pairwise_v2')
+    roi_cls_mode = args.train_components in ('roi_cls',) + pairwise_modes
+    s7_mode = args.train_components == 's7_rpn'
+    protected_source_mode = bool(roi_cls_mode or s7_mode)
     trainable_names = configure_trainable_components(
         heads, args.train_components)
     trainable_parameters = [
@@ -1693,15 +2357,17 @@ def train_source_only(dino, heads, train_records, val_records, args,
         payload = torch.load(args.init_checkpoint, map_location='cpu')
         validate_checkpoint(
             payload, in_channels, args,
-            allow_training_mode_mismatch=True)
-        heads.load_state_dict(payload['heads_state_dict'], strict=True)
-        if args.train_components == 'roi_cls_pairwise':
+            allow_training_mode_mismatch=True,
+            allow_s7_base_initialization=s7_mode)
+        load_heads_checkpoint_state(
+            heads, payload, allow_s7_base_initialization=s7_mode)
+        if args.train_components in pairwise_modes:
             heads.capture_roi_cls_teacher()
     if args.resume_checkpoint:
         payload = torch.load(args.resume_checkpoint, map_location='cpu')
         validate_checkpoint(payload, in_channels, args)
-        heads.load_state_dict(payload['heads_state_dict'], strict=True)
-        if args.train_components == 'roi_cls_pairwise':
+        load_heads_checkpoint_state(heads, payload)
+        if args.train_components in pairwise_modes:
             heads.load_roi_cls_teacher_state(
                 payload.get('roi_cls_teacher_state'))
         if payload.get('optimizer_state_dict') is not None:
@@ -1729,7 +2395,7 @@ def train_source_only(dino, heads, train_records, val_records, args,
     epoch_train_records = list(train_records)
     source_sampling = None
     small_val_records = []
-    if roi_cls_mode:
+    if protected_source_mode:
         epoch_train_records, source_sampling = source_small_balanced_records(
             train_records, args)
         small_val_records = source_small_records(
@@ -1751,14 +2417,16 @@ def train_source_only(dino, heads, train_records, val_records, args,
                 raise RuntimeError(
                     'ROI-cls resume checkpoint lacks source baseline/small '
                     'validation summaries')
-            if (args.train_components == 'roi_cls_pairwise'
+            if ((args.train_components in pairwise_modes or s7_mode)
                     and source_baseline_correct_keys is None):
                 raise RuntimeError(
-                    'Pairwise resume checkpoint lacks exact source-retention '
+                    'Protected resume checkpoint lacks exact source-retention '
                     'baseline keys')
             best_key = roi_cls_selection_key(
                 best_summary, best_small_summary)
         else:
+            if s7_mode:
+                heads.set_s7_inference_enabled(False)
             baseline_rows = evaluate_records(
                 dino, heads, val_records, args, dino_device, head_device,
                 role='source_validation_baseline')
@@ -1781,6 +2449,8 @@ def train_source_only(dino, heads, train_records, val_records, args,
                 source_baseline_summary,
                 source_baseline_small_summary,
                 source_baseline_correct_keys), best_path)
+            if s7_mode:
+                heads.set_s7_inference_enabled(True)
             print('[source-baseline] full_top1={}/{} small_top1={}/{} '
                   'fallback_epoch=0'.format(
                       best_summary['top1_hits'],
@@ -1792,6 +2462,8 @@ def train_source_only(dino, heads, train_records, val_records, args,
 
     selection_epochs = set(int(value) for value in args.selection_epochs)
     for epoch in range(start_epoch, args.epochs + 1):
+        if s7_mode:
+            heads.set_s7_inference_enabled(True)
         train_row = train_epoch(
             dino, heads, optimizer, epoch_train_records, epoch, global_step,
             args, dino_device, head_device)
@@ -1806,7 +2478,7 @@ def train_source_only(dino, heads, train_records, val_records, args,
                 dino, heads, val_records, args, dino_device, head_device,
                 role='source_validation')
             val_summary = summarize_rows(val_rows)
-            if roi_cls_mode:
+            if protected_source_mode:
                 small_val_rows = evaluate_records(
                     dino, heads, small_val_records, args,
                     dino_device, head_device,
@@ -1818,30 +2490,46 @@ def train_source_only(dino, heads, train_records, val_records, args,
                 'A selection epoch must also be a validation epoch')
         if val_summary is None:
             key = None
-        elif roi_cls_mode:
+        elif protected_source_mode:
             key = roi_cls_selection_key(val_summary, small_val_summary)
         else:
             key = source_selection_key(val_summary)
-        retention_passed = True
+        source_gate_passed = True
         retention_summary = None
-        if val_summary is not None and roi_cls_mode:
-            if args.train_components == 'roi_cls_pairwise':
+        pairwise_v2_gate = None
+        if val_summary is not None and protected_source_mode:
+            if args.train_components in pairwise_modes or s7_mode:
                 retention_summary = source_top1_retention_summary(
                     source_baseline_correct_keys, val_rows)
-                retention_floor = (
-                    len(source_baseline_correct_keys)
-                    - int(args.source_retain_max_top1_drop))
-                retention_passed = bool(
-                    retention_summary['retained_correct_count']
-                    >= retention_floor)
+                if s7_mode:
+                    pairwise_v2_gate = s7_source_selection_gate(
+                        source_baseline_summary,
+                        source_baseline_small_summary,
+                        val_summary, small_val_summary,
+                        retention_summary, args)
+                    source_gate_passed = bool(pairwise_v2_gate['passed'])
+                elif args.train_components == 'roi_cls_pairwise_v2':
+                    pairwise_v2_gate = pairwise_v2_source_selection_gate(
+                        source_baseline_summary,
+                        source_baseline_small_summary,
+                        val_summary, small_val_summary,
+                        retention_summary)
+                    source_gate_passed = bool(pairwise_v2_gate['passed'])
+                else:
+                    retention_floor = (
+                        len(source_baseline_correct_keys)
+                        - int(args.source_retain_max_top1_drop))
+                    source_gate_passed = bool(
+                        retention_summary['retained_correct_count']
+                        >= retention_floor)
             else:
                 retention_floor = (
                     int(source_baseline_summary['top1_hits'])
                     - int(args.source_retain_max_top1_drop))
-                retention_passed = bool(
+                source_gate_passed = bool(
                     int(val_summary['top1_hits']) >= retention_floor)
         improved = bool(
-            selection_eligible and retention_passed
+            selection_eligible and source_gate_passed
             and (best_key is None or key > best_key))
         if improved:
             best_key = key
@@ -1865,12 +2553,18 @@ def train_source_only(dino, heads, train_records, val_records, args,
                 source_baseline_summary,
                 source_baseline_small_summary,
                 source_baseline_correct_keys), epoch_path)
+        exact_retention_passed = (
+            bool(pairwise_v2_gate['checks'][
+                'exact_old_correct_retention'])
+            if pairwise_v2_gate is not None else bool(source_gate_passed))
         history.append(dict(
             epoch=int(epoch), train=train_row,
             source_val=val_summary,
             source_small_val=small_val_summary,
-            source_retention_passed=bool(retention_passed),
+            source_selection_gate_passed=bool(source_gate_passed),
+            source_retention_passed=exact_retention_passed,
             source_exact_retention=retention_summary,
+            pairwise_v2_source_gate=pairwise_v2_gate,
             selected_as_best=bool(improved),
             selection_eligible=bool(selection_eligible),
             checkpoint_saved=bool(evaluate_epoch),
@@ -1881,6 +2575,15 @@ def train_source_only(dino, heads, train_records, val_records, args,
             source_sampling, source_baseline_summary,
             source_baseline_small_summary,
             source_baseline_correct_keys), latest_path)
+        progress_path = None
+        progress_replacements = 0
+        if args.train_components in ('roi_cls_pairwise_v2', 's7_rpn'):
+            progress_path, progress_replacements = (
+                write_source_training_progress(
+                    args, epoch, best_epoch, best_path, latest_path,
+                    source_baseline_summary,
+                    source_baseline_small_summary,
+                    best_summary, best_small_summary, history))
         if val_summary is None:
             print('[source-epoch] epoch={} validation=skipped best_epoch={}'
                   .format(epoch, best_epoch))
@@ -1889,12 +2592,37 @@ def train_source_only(dino, heads, train_records, val_records, args,
                           ' {}/{}'.format(
                               small_val_summary['top1_hits'],
                               small_val_summary['frame_count']))
+            gate_label = ('source_gate' if pairwise_v2_gate is not None
+                          else 'retention')
             print('[source-epoch] epoch={} top1={}/{} small_top1={} r100={} '
-                  'retention={} selection_eligible={} best_epoch={}'.format(
+                  '{}={} selection_eligible={} best_epoch={}'.format(
                       epoch, val_summary['top1_hits'],
                       val_summary['frame_count'], small_text,
-                      val_summary['recall_at_100'], retention_passed,
+                      val_summary['recall_at_100'], gate_label,
+                      source_gate_passed,
                       selection_eligible, best_epoch))
+            if pairwise_v2_gate is not None:
+                failed_checks = sorted(
+                    name for name, passed
+                    in pairwise_v2_gate['checks'].items() if not passed)
+                print(
+                    '[source-gate] epoch={} passed={} retained={}/{} '
+                    'lost={} gained={} full_mcml={}->{} small_mcml={}->{} '
+                    'failed={}'.format(
+                        epoch, pairwise_v2_gate['passed'],
+                        retention_summary['retained_correct_count'],
+                        retention_summary['baseline_correct_count'],
+                        retention_summary['lost_correct_count'],
+                        retention_summary['gained_correct_count'],
+                        source_baseline_summary['top1_mcml'],
+                        val_summary['top1_mcml'],
+                        source_baseline_small_summary['top1_mcml'],
+                        small_val_summary['top1_mcml'],
+                        ','.join(failed_checks) if failed_checks else 'none'))
+        if progress_path is not None:
+            print('[source-progress] epoch={} nonfinite_replacements={} '
+                  'out={}'.format(
+                      epoch, progress_replacements, progress_path))
     if not os.path.isfile(best_path):
         raise RuntimeError('No source-selected labeller checkpoint')
     frozen_parameters_unchanged = bool(
@@ -1965,7 +2693,7 @@ def main():
         best_path = args.eval_only_checkpoint
         payload = torch.load(best_path, map_location='cpu')
         validate_checkpoint(payload, in_channels, args)
-        heads.load_state_dict(payload['heads_state_dict'], strict=True)
+        load_heads_checkpoint_state(heads, payload)
         best_epoch = int(payload.get('best_epoch', payload.get('epoch', 0)))
         best_source_summary = payload.get('best_source_val_summary')
         best_source_small_summary = payload.get(
@@ -1993,7 +2721,7 @@ def main():
              dino_device, head_device, in_channels)
         payload = torch.load(best_path, map_location='cpu')
         validate_checkpoint(payload, in_channels, args)
-        heads.load_state_dict(payload['heads_state_dict'], strict=True)
+        load_heads_checkpoint_state(heads, payload)
         current_source_summary = best_source_summary
 
     source_val_results_path = None
@@ -2032,10 +2760,20 @@ def main():
         source_selected_checkpoint=os.path.abspath(best_path),
         protocol=dict(
             architecture=(
+                'frozen_DINOv2_native_S14_plus_protected_residual_S7_RPN_'
+                'to_native_RotatedROIAlign7x7'
+                if args.train_components == 's7_rpn' else
                 'frozen_DINOv2_single_scale_to_OrientedRPN_'
                 'to_RotatedROIAlign7x7_to_Shared2FC_cls_and_OBB_reg'),
             source_data=source_protocol,
             checkpoint_selection=(
+                'source_validation_only_with_exact_retention_small_top1_'
+                'nonregression_absolute_gates_and_proposal_sensitive_'
+                'selection_key_improvement'
+                if args.train_components == 's7_rpn' else
+                'source_validation_only_with_exact_retention_small_top1_'
+                'strict_improvement_and_mcml_nonregression'
+                if args.train_components == 'roi_cls_pairwise_v2' else
                 'source_validation_only_with_exact_retention_and_'
                 'roi_cls_small_control'
                 if args.train_components == 'roi_cls_pairwise' else
@@ -2049,10 +2787,13 @@ def main():
                 optimization_loss_components=(
                     ['loss_rpn_cls', 'loss_rpn_bbox', 'loss_cls', 'loss_bbox']
                     if args.train_components == 'all' else (
+                        ['loss_s7_rpn_cls', 'loss_s7_rpn_bbox']
+                        if args.train_components == 's7_rpn' else (
                         ['loss_cls', 'loss_roi_pairwise',
                          'loss_roi_retention']
-                        if args.train_components == 'roi_cls_pairwise'
-                        else ['loss_cls'])),
+                        if args.train_components in (
+                            'roi_cls_pairwise', 'roi_cls_pairwise_v2')
+                        else ['loss_cls']))),
                 epochs=int(args.epochs), optimizer='SGD',
                 lr=float(args.lr), momentum=float(args.momentum),
                 weight_decay=float(args.weight_decay),
@@ -2064,9 +2805,14 @@ def main():
                 lr_gamma=float(args.lr_gamma),
                 checkpoint_interval=int(args.checkpoint_interval),
                 pairwise=(
-                    None if args.train_components != 'roi_cls_pairwise'
+                    None if args.train_components not in (
+                        'roi_cls_pairwise', 'roi_cls_pairwise_v2')
                     else dict(
+                        version=(2 if args.train_components ==
+                                 'roi_cls_pairwise_v2' else 1),
                         margin=float(args.pairwise_margin),
+                        cls_loss_weight=float(
+                            args.pairwise_cls_loss_weight),
                         pairwise_loss_weight=float(
                             args.pairwise_loss_weight),
                         retention_loss_weight=float(
@@ -2076,6 +2822,8 @@ def main():
                         negative_riou_thr=float(
                             args.pairwise_negative_riou_thr),
                         nms_iou_thr=float(args.pairwise_nms_iou_thr),
+                        negatives_per_positive=int(
+                            args.pairwise_negatives_per_positive),
                         source_exact_retention_max_drop=int(
                             args.source_retain_max_top1_drop)))),
             source_min_top1_rate=float(args.source_min_top1_rate),
@@ -2119,7 +2867,11 @@ def main():
         architecture=dict(
             in_channels=in_channels, patch_size=int(args.patch_size),
             rpn=rpn_config(in_channels, args),
-            roi=roi_config(in_channels, args)),
+            roi=roi_config(in_channels, args),
+            s7=s7_architecture(args),
+            s7_rpn=(s7_rpn_config(
+                int(getattr(args, 's7_channels', 128)), args)
+                if bool(getattr(args, 's7_residual', False)) else None)),
         source=dict(
             train_count=len(source_train), val_count=len(source_val),
             best_epoch=int(best_epoch),

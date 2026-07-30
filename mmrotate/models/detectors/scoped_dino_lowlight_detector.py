@@ -180,7 +180,15 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
             proposal_count=int(head_cfg.get('proposal_count', 2000)),
             max_detections=int(head_cfg.get('max_detections', 2000)),
             roi_nms_iou_thr=roi_nms_iou_thr,
-            feature_strides=feature_strides)
+            feature_strides=feature_strides,
+            s7_residual=bool(head_cfg.get('s7_residual', False)),
+            s7_channels=int(head_cfg.get('s7_channels', 128)),
+            s7_rpn_feat_channels=int(head_cfg.get(
+                's7_rpn_feat_channels', 128)),
+            s7_proposal_count=int(head_cfg.get('s7_proposal_count', 500)),
+            s7_nms_pre=int(head_cfg.get('s7_nms_pre', 2000)),
+            s7_anchor_sizes=[float(value) for value in head_cfg.get(
+                's7_anchor_sizes', [16, 32, 64, 128, 256])])
         dino, loaded_patch_size = common.load_frozen_dinov2(
             dinov2['repo'], dinov2['checkpoint'],
             dinov2.get('model', common.CANONICAL_MODEL), dino_devices,
@@ -191,7 +199,7 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
             int(getattr(dino, 'embed_dim')), args).to(head_device)
         checkpoint = torch.load(dino_head_checkpoint, map_location='cpu')
         labeller.validate_checkpoint(checkpoint, int(getattr(dino, 'embed_dim')), args)
-        heads.load_state_dict(checkpoint['heads_state_dict'], strict=True)
+        labeller.load_heads_checkpoint_state(heads, checkpoint)
         dino.eval()
         heads.eval()
         for parameter in dino.parameters():

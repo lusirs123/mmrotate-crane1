@@ -66,6 +66,27 @@ def test_pairwise_hbb_iou():
     assert overlap[:, 0].tolist() == pytest.approx([1.0, 0.5])
 
 
+def test_feature_map_contract_uses_first_level_device_and_all_shapes():
+    features = [torch.zeros((1, 4, 8, 12)),
+                torch.zeros((1, 4, 4, 6))]
+    sizes, device = audit.feature_map_contract(features)
+    assert sizes == [(8, 12), (4, 6)]
+    assert device == features[0].device
+    with pytest.raises(ValueError, match='at least one'):
+        audit.feature_map_contract([])
+
+
+def test_flatten_rpn_scores_preserves_all_feature_levels():
+    scores = [torch.zeros((1, 3, 4, 5)),
+              torch.ones((1, 3, 2, 3)),
+              torch.full((1, 3, 1, 2), 2.0)]
+    flattened = audit.flatten_rpn_scores(scores, expected_levels=3)
+    assert flattened.shape == (84,)
+    assert flattened[:60].tolist() == pytest.approx([0.5] * 60)
+    with pytest.raises(RuntimeError, match='level count'):
+        audit.flatten_rpn_scores(scores[0], expected_levels=3)
+
+
 def test_source_bins_are_source_defined():
     rows = [dict(objects=[dict(short_token=value)])
             for value in (1.0, 2.0, 3.0, 4.0, 5.0, 6.0)]

@@ -328,25 +328,46 @@ def score_rank(scores: torch.Tensor, index: int) -> int:
     return int((scores > value).sum().item()) + 1
 
 
+def feature_map_contract(features: Sequence[torch.Tensor]):
+    if not features:
+        raise ValueError('RPN coverage requires at least one feature level')
+    device = features[0].device
+    if any(feature.device != device for feature in features):
+        raise ValueError('RPN feature levels must share one device')
+    sizes = [tuple(int(value) for value in feature.shape[-2:])
+             for feature in features]
+    return sizes, device
+
+
+def flatten_rpn_scores(cls_scores: Sequence[torch.Tensor],
+                       expected_levels: int) -> torch.Tensor:
+    if len(cls_scores) != int(expected_levels):
+        raise RuntimeError('RPN score/feature level count mismatch')
+    if any(score.ndim != 4 or score.shape[0] != 1
+           for score in cls_scores):
+        raise RuntimeError('RPN scores must have shape [1,C,H,W] per level')
+    return torch.cat([
+        score[0].permute(1, 2, 0).reshape(-1).sigmoid()
+        for score in cls_scores])
+
+
 def anchor_metrics(rpn_head, features: Sequence[torch.Tensor], img_meta: Dict,
-                   gt_boxes: torch.Tensor, cls_score: torch.Tensor,
+                   gt_boxes: torch.Tensor,
+                   cls_scores: Sequence[torch.Tensor],
                    thresholds: Sequence[float]) -> List[Dict]:
     from mmdet.core import anchor_inside_flags
     from mmrotate.core import obb2xyxy
 
-    featmap_sizes = [tuple(int(value) for value in feature.shape[-2:])
-                     for feature in features]
+    featmap_sizes, feature_device = feature_map_contract(features)
     anchor_list, flag_list = rpn_head.get_anchors(
-        featmap_sizes, [img_meta], device=feature.device)
+        featmap_sizes, [img_meta], device=feature_device)
     anchors = torch.cat(anchor_list[0])
     valid_flags = torch.cat(flag_list[0])
     inside = anchor_inside_flags(
         anchors, valid_flags, img_meta['img_shape'][:2],
         rpn_head.train_cfg.allowed_border)
     anchors = anchors[inside]
-    flat_scores = torch.cat([
-        score[0].permute(1, 2, 0).reshape(-1).sigmoid()
-        for score in cls_score])
+    flat_scores = flatten_rpn_scores(cls_scores, len(features))
     if flat_scores.numel() != inside.numel():
         raise RuntimeError('RPN score/anchor ordering mismatch')
     flat_scores = flat_scores[inside]
@@ -430,7 +451,7 @@ def evaluate_rpn_records(dino, heads, records: Sequence[Dict], args,
             cls_scores, bbox_preds = rpn_outputs
             anchor_rows = anchor_metrics(
                 heads.rpn_head, features, img_meta, gt_boxes,
-                cls_scores[0], args.anchor_iou_thresholds)
+                cls_scores, args.anchor_iou_thresholds)
             proposals = heads.rpn_head.get_bboxes(
                 cls_scores, bbox_preds, img_metas=[img_meta],
                 cfg=heads.proposal_cfg, rescale=False)[0]
