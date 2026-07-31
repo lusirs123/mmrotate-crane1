@@ -20,6 +20,10 @@ def _args(tmp_path, **overrides):
         s7_residual=False, s7_channels=128, s7_rpn_feat_channels=128,
         s7_proposal_count=500, s7_nms_pre=2000,
         s7_anchor_sizes=[16, 32, 64, 128, 256],
+        s7_component_checkpoint=None, s7_protected_merge=False,
+        s7_merge_init_bias=-2.0, s7_merge_margin=0.5,
+        s7_merge_retention_weight=2.0, s7_merge_gain_weight=1.0,
+        s7_merge_prior_weight=0.01,
         roi_nms_iou_thr=0.1,
         valid_content_tolerance=1e-3,
         deployment_score_thr=0.05, border_margin_ratio=0.02,
@@ -99,6 +103,24 @@ def test_validate_s7_requires_explicit_mode_and_native_init(tmp_path):
         tmp_path, s7_residual=True, train_components='s7_rpn',
         init_checkpoint=str(init_path), epochs=4, lr_steps=None,
         selection_epochs=[1, 2, 3, 4])
+    labeller.validate_args(args)
+    assert args.lr_steps == [2, 3]
+
+
+def test_validate_s7_merge_requires_native_and_component_checkpoints(tmp_path):
+    native = tmp_path / 'native.pth'
+    component = tmp_path / 's7_epoch2.pth'
+    native.write_bytes(b'native')
+    component.write_bytes(b's7')
+    with pytest.raises(ValueError, match='component-checkpoint'):
+        labeller.validate_args(_args(
+            tmp_path, s7_residual=True, train_components='s7_merge',
+            init_checkpoint=str(native), epochs=4, lr_steps=None,
+            selection_epochs=[1, 2, 3, 4]))
+    args = _args(
+        tmp_path, s7_residual=True, train_components='s7_merge',
+        init_checkpoint=str(native), s7_component_checkpoint=str(component),
+        epochs=4, lr_steps=None, selection_epochs=[1, 2, 3, 4])
     labeller.validate_args(args)
     assert args.lr_steps == [2, 3]
 
@@ -274,6 +296,14 @@ def test_s7_readout_projects_before_upsampling_and_zero_gates_refinement():
     assert float(readout.residual_gate.detach()) == pytest.approx(0.0)
 
 
+def test_s7_score_calibrator_is_monotonic_and_conservatively_initialized():
+    calibrator = labeller.S7ScoreCalibrator(initial_bias=-2.0)
+    values = calibrator(torch.tensor([-1.0, 0.0, 1.0]))
+    assert values.tolist() == pytest.approx([-3.0, -2.0, -1.0])
+    assert float(calibrator.scale().item()) == pytest.approx(1.0)
+    assert float(calibrator.prior_loss().item()) == pytest.approx(0.0)
+
+
 def test_s7_proposal_merge_keeps_native_rows_before_bounded_supplement():
     class FakeRpn:
         def __init__(self, rows):
@@ -295,6 +325,36 @@ def test_s7_proposal_merge_keeps_native_rows_before_bounded_supplement():
     feature = torch.zeros((1, 4, 2, 3))
     _features, proposals = heads.simple_test_proposals(feature, {})
     assert torch.equal(proposals[0], torch.cat([native, extra], dim=0))
+
+
+def test_protected_merge_runs_nms_per_source_and_records_provenance():
+    heads = object.__new__(labeller.FrozenDinoRotatedHeads)
+    torch.nn.Module.__init__(heads)
+    heads._args = argparse.Namespace(
+        roi_nms_iou_thr=0.5, max_detections=10)
+    heads.s7_score_calibrator = labeller.S7ScoreCalibrator(-2.0)
+    native = torch.tensor([[1, 2, 3, 4, 0, 0.9]], dtype=torch.float32)
+    supplement = torch.tensor([[5, 6, 7, 8, 0, 0.8]], dtype=torch.float32)
+    heads.proposal_sources = lambda _feature, _meta: ([], dict(
+        native_s14=native, supplement_s7=supplement))
+    heads._decode_roi_candidates = lambda _feature, _meta, proposals, rescale: (
+        proposals[:, :5], torch.logit(proposals[:, 5]), proposals[:, 5])
+    calls = []
+
+    def lane_nms(boxes, scores):
+        calls.append(boxes.clone())
+        return torch.cat([boxes, scores[:, None]], dim=1)
+
+    heads._nms_candidate_lane = lane_nms
+    detections = heads._protected_merge_detections(
+        torch.zeros(1), {'img_shape': (10, 10, 3)})
+    assert len(calls) == 2
+    assert torch.equal(calls[0], native[:, :5])
+    assert torch.equal(calls[1], supplement[:, :5])
+    assert detections.shape == (2, 6)
+    assert heads._last_candidate_merge['proposal_source_counts'] == {
+        'native_s14': 1, 'supplement_s7': 1}
+    assert heads._last_candidate_merge['raw_top1_source'] == 'native_s14'
 
 
 def test_scaled_gt_preserves_angle_and_scales_first_four_values(monkeypatch):
@@ -382,6 +442,25 @@ def test_s7_mode_trains_only_readout_and_s7_rpn():
         for name, parameter in heads.named_parameters())
 
 
+def test_s7_merge_mode_trains_only_affine_calibrator():
+    class TinyHeads(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.native = torch.nn.Linear(2, 2)
+            self.s7_readout = torch.nn.Linear(2, 2)
+            self.s7_rpn_head = torch.nn.Linear(2, 2)
+            self.s7_score_calibrator = labeller.S7ScoreCalibrator(-2.0)
+            self.s7_protected_merge = True
+
+    heads = TinyHeads()
+    names = labeller.configure_trainable_components(heads, 's7_merge')
+    assert names == [
+        's7_score_calibrator.raw_scale', 's7_score_calibrator.bias']
+    assert all(
+        parameter.requires_grad == name.startswith('s7_score_calibrator.')
+        for name, parameter in heads.named_parameters())
+
+
 def test_s7_base_checkpoint_load_allows_only_new_branch_keys():
     class TinyHeads(torch.nn.Module):
         def __init__(self):
@@ -405,6 +484,72 @@ def test_s7_base_checkpoint_load_allows_only_new_branch_keys():
     assert torch.equal(heads.native.weight, native.weight)
 
 
+def test_frozen_s7_component_loader_does_not_replace_native_or_calibrator(
+        tmp_path):
+    class TinyHeads(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.native = torch.nn.Linear(2, 2)
+            self.s7_readout = torch.nn.Linear(2, 2)
+            self.s7_rpn_head = torch.nn.Linear(2, 2)
+            self.s7_score_calibrator = labeller.S7ScoreCalibrator(-2.0)
+            self.enabled = False
+
+        def set_s7_inference_enabled(self, enabled):
+            self.enabled = bool(enabled)
+
+    heads = TinyHeads()
+    native_before = heads.native.weight.detach().clone()
+    bias_before = heads.s7_score_calibrator.bias.detach().clone()
+    component_readout = torch.nn.Linear(2, 2)
+    component_rpn = torch.nn.Linear(2, 2)
+    args = _args(
+        tmp_path, s7_residual=True, s7_protected_merge=True,
+        train_components='s7_merge')
+    component_args = _args(
+        tmp_path, s7_residual=True, train_components='s7_rpn')
+    payload = dict(
+        source_only=True, frozen_dinov2=True, in_channels=1024,
+        epoch=2, best_epoch=0, s7_inference_enabled=True,
+        training_protocol=dict(train_components='s7_rpn'),
+        s7_architecture=labeller.s7_architecture(component_args),
+        heads_state_dict={
+            's7_readout.weight': component_readout.weight.detach().clone(),
+            's7_readout.bias': component_readout.bias.detach().clone(),
+            's7_rpn_head.weight': component_rpn.weight.detach().clone(),
+            's7_rpn_head.bias': component_rpn.bias.detach().clone()})
+    summary = labeller.load_frozen_s7_component(
+        heads, payload, in_channels=1024, args=args)
+    assert summary['epoch'] == 2
+    assert heads.enabled is True
+    assert torch.equal(heads.native.weight, native_before)
+    assert torch.equal(heads.s7_score_calibrator.bias, bias_before)
+    assert torch.equal(heads.s7_readout.weight, component_readout.weight)
+
+
+def test_frozen_s7_component_loader_rejects_epoch0_fallback(tmp_path):
+    class TinyHeads(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.s7_readout = torch.nn.Linear(2, 2)
+            self.s7_rpn_head = torch.nn.Linear(2, 2)
+
+    args = _args(
+        tmp_path, s7_residual=True, s7_protected_merge=True,
+        train_components='s7_merge')
+    component_args = _args(
+        tmp_path, s7_residual=True, train_components='s7_rpn')
+    payload = dict(
+        source_only=True, frozen_dinov2=True, in_channels=1024,
+        epoch=0, s7_inference_enabled=False,
+        training_protocol=dict(train_components='s7_rpn'),
+        s7_architecture=labeller.s7_architecture(component_args),
+        heads_state_dict={})
+    with pytest.raises(RuntimeError, match='epoch-0 fallback'):
+        labeller.load_frozen_s7_component(
+            TinyHeads(), payload, in_channels=1024, args=args)
+
+
 def test_s7_source_gate_requires_absolute_small_and_mcml_targets(tmp_path):
     args = _args(tmp_path)
     baseline = dict(top1_hits=677, top1_mcml=3)
@@ -423,6 +568,24 @@ def test_s7_source_gate_requires_absolute_small_and_mcml_targets(tmp_path):
         retention, args)['passed']
 
 
+def test_s7_merge_pair_loss_separates_retention_and_gain_cases():
+    calibrator = labeller.S7ScoreCalibrator(initial_bias=0.0)
+    retain = labeller.s7_merge_pair_losses(
+        torch.tensor([0.2]), torch.tensor([0.8]),
+        torch.tensor([0.7, -1.0]), torch.tensor([0.1, 0.8]),
+        calibrator, margin=0.5)
+    assert float(retain['retention'].item()) == pytest.approx(1.0)
+    assert float(retain['gain'].item()) == pytest.approx(0.0)
+    assert retain['retain_pair_count'] == 1
+    gain = labeller.s7_merge_pair_losses(
+        torch.tensor([0.8]), torch.tensor([0.1]),
+        torch.tensor([0.2, 1.5]), torch.tensor([0.1, 0.8]),
+        calibrator, margin=0.5)
+    assert float(gain['retention'].item()) == pytest.approx(0.0)
+    assert float(gain['gain'].item()) == pytest.approx(0.0)
+    assert gain['gain_pair_count'] == 1
+
+
 def test_s7_config_declares_explicit_supplement_checkpoint_and_head():
     import runpy
     root = pathlib.Path(__file__).resolve().parents[1]
@@ -432,6 +595,18 @@ def test_s7_config_declares_explicit_supplement_checkpoint_and_head():
     assert config['model']['dino_rescue']['head']['s7_channels'] == 128
     assert config['model']['dino_head_checkpoint'].endswith(
         'dino_teacher_s7_residual_v1/labeller_best_source_only.pth')
+
+
+def test_s7_retention_merge_config_uses_new_source_gated_checkpoint():
+    import runpy
+    root = pathlib.Path(__file__).resolve().parents[1]
+    config = runpy.run_path(str(root / 'crane_project/configs/'
+        'crane_symeood_scoped_dino_lowlight_s7_retention_merge_v1.py'))
+    head = config['model']['dino_rescue']['head']
+    assert head['s7_protected_merge'] is True
+    assert head['s7_merge_init_bias'] == pytest.approx(-2.0)
+    assert config['model']['dino_head_checkpoint'].endswith(
+        'dino_teacher_s7_retention_merge_v1/labeller_best_source_only.pth')
 
 
 def test_roi_cls_mode_optimizes_only_roi_classification_loss():

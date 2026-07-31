@@ -35,7 +35,7 @@ from crane_project.tools import dino_teacher_common as common  # noqa: E402
 
 
 LABELLER_NAME = 'Frozen DINOv2 Oriented RPN/ROI Source Labeller V1'
-PROTOCOL_VERSION = 10
+PROTOCOL_VERSION = 11
 PAIRWISE_V2_MAX_EPOCHS = 4
 PAPER_URL = (
     'https://openaccess.thecvf.com/content/CVPR2025/html/'
@@ -98,6 +98,15 @@ def parse_args():
     parser.add_argument('--s7-source-min-small-top1', type=int, default=303)
     parser.add_argument('--s7-source-max-mcml', type=int, default=3)
     parser.add_argument(
+        '--s7-component-checkpoint',
+        help=('Rejected full S7 checkpoint used only as a frozen source for '
+              's7_readout.* and s7_rpn_head.* in s7_merge mode.'))
+    parser.add_argument('--s7-merge-init-bias', type=float, default=-2.0)
+    parser.add_argument('--s7-merge-margin', type=float, default=0.5)
+    parser.add_argument('--s7-merge-retention-weight', type=float, default=2.0)
+    parser.add_argument('--s7-merge-gain-weight', type=float, default=1.0)
+    parser.add_argument('--s7-merge-prior-weight', type=float, default=0.01)
+    parser.add_argument(
         '--roi-nms-iou-thr', type=float, default=0.1,
         help='Frozen DINO ROI rotated-NMS IoU threshold.')
     parser.add_argument('--valid-content-tolerance', type=float, default=1e-3)
@@ -124,14 +133,16 @@ def parse_args():
     parser.add_argument(
         '--train-components',
         choices=['all', 'roi_cls', 'roi_cls_pairwise',
-                 'roi_cls_pairwise_v2', 's7_rpn'], default='all',
+                 'roi_cls_pairwise_v2', 's7_rpn', 's7_merge'], default='all',
         help=('Train all RPN/ROI heads, or only the final ROI classifier '
               'fc_cls while keeping RPN, shared ROI FCs, and bbox regression '
               'fixed. roi_cls_pairwise additionally uses source-only '
               'NMS-aware pairwise ranking and the initialized classifier as '
               'a frozen retention teacher. roi_cls_pairwise_v2 mines only '
               'false ROIs that actually outrank a usable ROI. s7_rpn trains '
-              'only the residual stride-7 readout and proposal head.'))
+              'only the residual stride-7 readout and proposal head. s7_merge '
+              'freezes both proposal paths and trains only a pre-NMS affine '
+              'S7 score calibrator with native-retention pairs.'))
     parser.add_argument(
         '--source-small-repeat', type=int, default=1,
         help='Repeat source-train frames in the lower short-token tertile.')
@@ -207,10 +218,20 @@ def validate_args(args):
     if not s7_anchor_sizes or any(value <= 0.0 for value in s7_anchor_sizes):
         raise ValueError('--s7-anchor-sizes must be positive')
     args.s7_anchor_sizes = sorted(set(s7_anchor_sizes))
-    if s7_enabled != (args.train_components == 's7_rpn'):
+    s7_training_mode = args.train_components in ('s7_rpn', 's7_merge')
+    if s7_enabled != s7_training_mode:
         raise ValueError(
-            '--s7-residual and --train-components s7_rpn must be enabled '
+            '--s7-residual and an S7 train-components mode must be enabled '
             'together during S7 training')
+    merge_positive = (
+        getattr(args, 's7_merge_margin', 0.5),
+        getattr(args, 's7_merge_retention_weight', 2.0),
+        getattr(args, 's7_merge_gain_weight', 1.0),
+        getattr(args, 's7_merge_prior_weight', 0.01))
+    if any(float(value) <= 0.0 for value in merge_positive):
+        raise ValueError('S7 merge margin and loss weights must be positive')
+    if not math.isfinite(float(getattr(args, 's7_merge_init_bias', -2.0))):
+        raise ValueError('--s7-merge-init-bias must be finite')
     positive = (
         args.patch_size, args.rpn_feat_channels, args.roi_fc_channels,
         args.roi_samples, args.proposal_count, args.max_detections,
@@ -244,7 +265,7 @@ def validate_args(args):
     if args.lr_steps is None:
         args.lr_steps = (
             [2, 3] if args.train_components in (
-                'roi_cls_pairwise_v2', 's7_rpn') else [5, 7])
+                'roi_cls_pairwise_v2', 's7_rpn', 's7_merge') else [5, 7])
     lr_steps = sorted(set(int(value) for value in args.lr_steps))
     if any(value <= 0 or value >= args.epochs for value in lr_steps):
         raise ValueError('--lr-steps must be within the training schedule')
@@ -307,16 +328,26 @@ def validate_args(args):
             '--train-components {} requires an init/resume/eval-only '
             'checkpoint so the validated RPN and OBB regressor are retained'
             .format(args.train_components))
-    if (args.train_components == 's7_rpn'
+    if (args.train_components in ('s7_rpn', 's7_merge')
             and not (args.init_checkpoint or args.resume_checkpoint
                      or args.eval_only_checkpoint)):
         raise ValueError(
-            'S7 RPN mode requires an init/resume/eval-only checkpoint; '
-            'training must initialize from the retained native S14 heads')
-    if args.train_components == 's7_rpn' and args.epochs > 4:
+            'S7 mode requires an init/resume/eval-only checkpoint; training '
+            'must initialize from the retained native S14 heads')
+    if args.train_components == 's7_merge':
+        component = getattr(args, 's7_component_checkpoint', None)
+        if args.init_checkpoint and not component:
+            raise ValueError(
+                's7_merge initialization requires --s7-component-checkpoint')
+        if component and not os.path.isfile(component):
+            raise ValueError(
+                'S7 component checkpoint does not exist: {}'.format(component))
+        if args.source_retain_max_top1_drop != 0:
+            raise ValueError('s7_merge requires exact source retention')
+    if args.train_components in ('s7_rpn', 's7_merge') and args.epochs > 4:
         raise ValueError(
-            'The first causal S7 readout stage is limited to 4 epochs; '
-            'extend only after source validation shows it is still improving')
+            'S7 source-only stages are limited to 4 epochs; extend only after '
+            'source validation shows the selected component is improving')
     if args.train_components == 'roi_cls_pairwise_v2':
         if args.epochs > PAIRWISE_V2_MAX_EPOCHS:
             raise ValueError(
@@ -367,6 +398,13 @@ def configure_trainable_components(heads, train_components: str) -> List[str]:
         for module in (heads.s7_readout, heads.s7_rpn_head):
             for parameter in module.parameters():
                 parameter.requires_grad_(True)
+    elif train_components == 's7_merge':
+        if (not getattr(heads, 's7_protected_merge', False)
+                or heads.s7_score_calibrator is None):
+            raise RuntimeError(
+                'S7 merge mode requires the protected score calibrator')
+        for parameter in heads.s7_score_calibrator.parameters():
+            parameter.requires_grad_(True)
     else:
         raise ValueError('Unsupported train-components: {}'.format(
             train_components))
@@ -387,6 +425,15 @@ def optimization_loss_total(losses: Dict, train_components: str):
         missing = [name for name in required if name not in losses]
         if missing:
             raise RuntimeError('S7 RPN losses missing: {}'.format(
+                ', '.join(missing)))
+        return loss_total({name: losses[name] for name in required})
+    if train_components == 's7_merge':
+        required = (
+            'loss_s7_merge_retention', 'loss_s7_merge_gain',
+            'loss_s7_merge_prior')
+        missing = [name for name in required if name not in losses]
+        if missing:
+            raise RuntimeError('S7 merge losses missing: {}'.format(
                 ', '.join(missing)))
         return loss_total({name: losses[name] for name in required})
     if train_components in ('roi_cls_pairwise', 'roi_cls_pairwise_v2'):
@@ -451,6 +498,58 @@ def roi_classifier_retention_loss(student_logits: torch.Tensor,
         functional.log_softmax(student_logits / temperature, dim=1),
         functional.softmax(teacher_logits / temperature, dim=1),
         reduction='batchmean') * (temperature ** 2)
+
+
+def s7_merge_pair_losses(native_log_odds: torch.Tensor,
+                         native_gt_overlap: torch.Tensor,
+                         s7_log_odds: torch.Tensor,
+                         s7_gt_overlap: torch.Tensor,
+                         calibrator: nn.Module, margin: float,
+                         riou_thr: float = 0.5) -> Dict:
+    """Mine one source-only retain or gain pair for monotonic calibration."""
+    if not (native_log_odds.ndim == native_gt_overlap.ndim
+            == s7_log_odds.ndim == s7_gt_overlap.ndim == 1):
+        raise ValueError('S7 merge logits and overlaps must be one-dimensional')
+    if native_log_odds.shape != native_gt_overlap.shape:
+        raise ValueError('Native S14 logits and overlaps must share one shape')
+    if s7_log_odds.shape != s7_gt_overlap.shape:
+        raise ValueError('Supplement S7 logits and overlaps must share one shape')
+    calibrated = calibrator(s7_log_odds)
+    zero = (native_log_odds.sum() + calibrated.sum()) * 0.0
+    retention = zero
+    gain = zero
+    retain_pair_count = 0
+    gain_pair_count = 0
+    native_top1_correct = False
+    if native_log_odds.numel():
+        native_top = torch.argmax(native_log_odds)
+        native_top1_correct = bool(
+            native_gt_overlap[native_top] >= float(riou_thr))
+        if native_top1_correct:
+            wrong = torch.nonzero(
+                s7_gt_overlap < float(riou_thr),
+                as_tuple=False).reshape(-1)
+            if wrong.numel():
+                competitor = wrong[torch.argmax(s7_log_odds[wrong])]
+                retention = torch.relu(
+                    float(margin) + calibrated[competitor]
+                    - native_log_odds[native_top])
+                retain_pair_count = 1
+        else:
+            usable = torch.nonzero(
+                s7_gt_overlap >= float(riou_thr),
+                as_tuple=False).reshape(-1)
+            if usable.numel():
+                supplement = usable[torch.argmax(s7_log_odds[usable])]
+                gain = torch.relu(
+                    float(margin) + native_log_odds[native_top]
+                    - calibrated[supplement])
+                gain_pair_count = 1
+    return dict(
+        retention=retention, gain=gain,
+        retain_pair_count=retain_pair_count,
+        gain_pair_count=gain_pair_count,
+        native_top1_correct=int(native_top1_correct))
 
 
 def select_hard_pairwise_indices(
@@ -1075,6 +1174,31 @@ class ResidualS7Readout(nn.Module):
         return base + torch.tanh(self.residual_gate) * residual
 
 
+class S7ScoreCalibrator(nn.Module):
+    """Monotonic affine calibration for supplement ROI foreground logits."""
+
+    def __init__(self, initial_bias: float = -2.0):
+        super().__init__()
+        self.raw_scale = nn.Parameter(torch.tensor(
+            math.log(math.expm1(1.0)), dtype=torch.float32))
+        self.bias = nn.Parameter(torch.tensor(
+            float(initial_bias), dtype=torch.float32))
+        self.register_buffer(
+            'initial_bias', torch.tensor(float(initial_bias), dtype=torch.float32))
+
+    def scale(self) -> torch.Tensor:
+        import torch.nn.functional as functional
+
+        return functional.softplus(self.raw_scale)
+
+    def forward(self, foreground_log_odds: torch.Tensor) -> torch.Tensor:
+        return self.scale() * foreground_log_odds + self.bias
+
+    def prior_loss(self) -> torch.Tensor:
+        return ((self.scale() - 1.0).square()
+                + (self.bias - self.initial_bias).square())
+
+
 class FrozenDinoRotatedHeads(nn.Module):
     def __init__(self, in_channels: int, args):
         super().__init__()
@@ -1089,6 +1213,10 @@ class FrozenDinoRotatedHeads(nn.Module):
         self.roi_head.init_weights()
         self.proposal_cfg = ConfigDict(rpn_proposal_config(args))
         self.s7_enabled = bool(getattr(args, 's7_residual', False))
+        self.s7_protected_merge = bool(getattr(
+            args, 's7_protected_merge', False) or getattr(
+                args, 'train_components', '') == 's7_merge')
+        self._last_candidate_merge = None
         self._s7_inference_enabled = self.s7_enabled
         if self.s7_enabled:
             s7_channels = int(getattr(args, 's7_channels', 128))
@@ -1098,10 +1226,15 @@ class FrozenDinoRotatedHeads(nn.Module):
                 s7_rpn_config(s7_channels, args)))
             self.s7_rpn_head.init_weights()
             self.s7_proposal_cfg = ConfigDict(s7_rpn_proposal_config(args))
+            self.s7_score_calibrator = (
+                S7ScoreCalibrator(float(getattr(
+                    args, 's7_merge_init_bias', -2.0)))
+                if self.s7_protected_merge else None)
         else:
             self.s7_readout = None
             self.s7_rpn_head = None
             self.s7_proposal_cfg = None
+            self.s7_score_calibrator = None
         self._roi_cls_teacher_weight = None
         self._roi_cls_teacher_bias = None
 
@@ -1118,17 +1251,107 @@ class FrozenDinoRotatedHeads(nn.Module):
             raise RuntimeError('S7 readout is not configured')
         return self.s7_readout(feature)
 
-    def simple_test_proposals(self, feature: torch.Tensor, img_meta: Dict):
-        """Keep all native proposals and append a bounded S7 supplement."""
+    def proposal_sources(self, feature: torch.Tensor, img_meta: Dict):
+        """Return native and supplement proposals without losing provenance."""
         native_features = self.feature_levels(feature)
         native = self.rpn_head.simple_test_rpn(
             native_features, [img_meta])[0]
         if not self.s7_inference_enabled():
-            return native_features, [native]
+            return native_features, dict(native_s14=native)
         s7 = self.s7_feature(feature)
         supplement = self.s7_rpn_head.simple_test_rpn(
             [s7], [img_meta])[0]
-        return native_features, [torch.cat([native, supplement], dim=0)]
+        return native_features, dict(
+            native_s14=native, supplement_s7=supplement)
+
+    def simple_test_proposals(self, feature: torch.Tensor, img_meta: Dict):
+        """Compatibility path for the original unprotected S7 experiment."""
+        native_features, sources = self.proposal_sources(feature, img_meta)
+        proposals = [sources['native_s14']]
+        if 'supplement_s7' in sources:
+            proposals = [torch.cat(
+                [sources['native_s14'], sources['supplement_s7']], dim=0)]
+        return native_features, proposals
+
+    def _decode_roi_candidates(self, feature: torch.Tensor, img_meta: Dict,
+                               proposals: torch.Tensor, rescale: bool):
+        """Run the shared ROI head without NMS and preserve proposal order."""
+        from mmrotate.core import rbbox2roi
+
+        if proposals.shape[0] == 0:
+            return (proposals.new_zeros((0, 5)),
+                    proposals.new_zeros((0,)),
+                    proposals.new_zeros((0,)))
+        rois = rbbox2roi([proposals])
+        cls_score, bbox_pred, _embedding = self._forward_pairwise_roi(
+            feature, rois)
+        decoded, _scores = self.roi_head.bbox_head.get_bboxes(
+            rois, cls_score, bbox_pred, img_meta['img_shape'],
+            img_meta['scale_factor'], rescale=rescale, cfg=None)
+        return (decoded, roi_foreground_log_odds(cls_score),
+                torch.softmax(cls_score, dim=1)[:, 0])
+
+    def _nms_candidate_lane(self, boxes: torch.Tensor,
+                            foreground_scores: torch.Tensor):
+        """Apply ROI NMS within one source so S7 never deletes native boxes."""
+        from mmcv.ops import nms_rotated
+
+        if boxes.shape[0] == 0:
+            return boxes.new_zeros((0, 6))
+        detections, _keep = nms_rotated(
+            boxes, foreground_scores,
+            float(getattr(self._args, 'roi_nms_iou_thr', 0.1)))
+        return detections[:int(self._args.max_detections)]
+
+    def _protected_merge_detections(self, feature: torch.Tensor,
+                                    img_meta: Dict):
+        """Decode, calibrate, and merge two independently NMSed ROI lanes."""
+        if self.s7_score_calibrator is None:
+            raise RuntimeError('Protected S7 merge has no score calibrator')
+        _features, sources = self.proposal_sources(feature, img_meta)
+        native_boxes, native_logits, native_scores = (
+            self._decode_roi_candidates(
+            feature, img_meta, sources['native_s14'], rescale=True)
+        )
+        supplement = sources.get('supplement_s7')
+        if supplement is None:
+            raise RuntimeError('Protected S7 merge requires supplement proposals')
+        s7_boxes, s7_logits, _s7_raw_scores = self._decode_roi_candidates(
+            feature, img_meta, supplement, rescale=True)
+        calibrated_s7_logits = self.s7_score_calibrator(s7_logits)
+        native_detections = self._nms_candidate_lane(
+            native_boxes, native_scores)
+        s7_detections = self._nms_candidate_lane(
+            s7_boxes, torch.sigmoid(calibrated_s7_logits))
+        detections = torch.cat([native_detections, s7_detections], dim=0)
+        source_ids = torch.cat([
+            torch.zeros(
+                native_detections.shape[0], dtype=torch.long,
+                device=detections.device),
+            torch.ones(
+                s7_detections.shape[0], dtype=torch.long,
+                device=detections.device)], dim=0)
+        if detections.shape[0]:
+            order = torch.argsort(detections[:, 5], descending=True)
+            order = order[:int(self._args.max_detections)]
+            detections = detections[order]
+            source_ids = source_ids[order]
+        self._last_candidate_merge = dict(
+            proposal_source_counts=dict(
+                native_s14=int(sources['native_s14'].shape[0]),
+                supplement_s7=int(supplement.shape[0])),
+            post_nms_source_counts=dict(
+                native_s14=int(native_detections.shape[0]),
+                supplement_s7=int(s7_detections.shape[0])),
+            raw_top1_source=(
+                None if source_ids.numel() == 0 else
+                ('native_s14' if int(source_ids[0].item()) == 0
+                 else 'supplement_s7')),
+            s7_affine_scale=float(
+                self.s7_score_calibrator.scale().detach().item()),
+            s7_affine_bias=float(
+                self.s7_score_calibrator.bias.detach().item()))
+        return detections
 
     def feature_levels(self, feature: torch.Tensor):
         """Build optional spatial levels from the frozen patch grid.
@@ -1248,6 +1471,54 @@ class FrozenDinoRotatedHeads(nn.Module):
                 name = 'loss_s7_rpn_bbox'
             renamed[name] = value
         return renamed
+
+    def forward_s7_merge_train(self, feature: torch.Tensor, img_meta: Dict,
+                               gt_boxes: torch.Tensor, riou_thr: float,
+                               margin: float, retention_weight: float,
+                               gain_weight: float,
+                               prior_weight: float) -> Dict:
+        """Train only the S7 pre-NMS score calibration on source pairs."""
+        from mmcv.ops import box_iou_rotated
+
+        if not self.s7_protected_merge or self.s7_score_calibrator is None:
+            raise RuntimeError('S7 merge training requires protected merge')
+        with torch.no_grad():
+            _features, sources = self.proposal_sources(feature, img_meta)
+            supplement = sources.get('supplement_s7')
+            if supplement is None:
+                raise RuntimeError('S7 merge training has no supplement lane')
+            native_boxes, native_logits, _native_scores = (
+                self._decode_roi_candidates(
+                feature, img_meta, sources['native_s14'], rescale=False)
+            )
+            s7_boxes, s7_logits, _s7_scores = self._decode_roi_candidates(
+                feature, img_meta, supplement, rescale=False)
+            if gt_boxes.shape[0] and native_boxes.shape[0]:
+                native_overlap = box_iou_rotated(
+                    native_boxes.float(), gt_boxes.float()).max(dim=1).values
+            else:
+                native_overlap = native_logits.new_zeros(native_logits.shape)
+            if gt_boxes.shape[0] and s7_boxes.shape[0]:
+                s7_overlap = box_iou_rotated(
+                    s7_boxes.float(), gt_boxes.float()).max(dim=1).values
+            else:
+                s7_overlap = s7_logits.new_zeros(s7_logits.shape)
+        pairs = s7_merge_pair_losses(
+            native_logits.detach(), native_overlap.detach(),
+            s7_logits.detach(), s7_overlap.detach(),
+            self.s7_score_calibrator, margin=float(margin),
+            riou_thr=float(riou_thr))
+        prior = self.s7_score_calibrator.prior_loss()
+        return dict(
+            loss_s7_merge_retention=(
+                pairs['retention'] * float(retention_weight)),
+            loss_s7_merge_gain=(pairs['gain'] * float(gain_weight)),
+            loss_s7_merge_prior=(prior * float(prior_weight)),
+            s7_merge_retain_pair_count=pairs['retain_pair_count'],
+            s7_merge_gain_pair_count=pairs['gain_pair_count'],
+            s7_merge_native_top1_correct=pairs['native_top1_correct'],
+            s7_merge_native_candidate_count=int(native_logits.numel()),
+            s7_merge_supplement_candidate_count=int(s7_logits.numel()))
 
     def forward_roi_cls_hard_train(
             self, feature: torch.Tensor, img_meta: Dict,
@@ -1541,6 +1812,12 @@ class FrozenDinoRotatedHeads(nn.Module):
             roi_cls_candidate_count=int(proposals.shape[0]))
 
     def simple_test(self, feature: torch.Tensor, img_meta: Dict):
+        self._last_candidate_merge = None
+        if (self.s7_protected_merge and self.s7_inference_enabled()
+                and self.s7_score_calibrator is not None):
+            detections = self._protected_merge_detections(feature, img_meta)
+            return detections.detach().cpu().numpy().astype(
+                np.float32, copy=False)
         features, proposals = self.simple_test_proposals(feature, img_meta)
         results = self.roi_head.simple_test(
             features, proposals, [img_meta], rescale=True)
@@ -1606,9 +1883,13 @@ def scheduled_lr(args, epoch: int, global_step: int) -> float:
 def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                 global_step: int, args, dino_device, head_device) -> Dict:
     heads.train()
-    if args.train_components == 's7_rpn':
+    if args.train_components in ('s7_rpn', 's7_merge'):
         heads.rpn_head.eval()
         heads.roi_head.eval()
+    if args.train_components == 's7_merge':
+        heads.s7_readout.eval()
+        heads.s7_rpn_head.eval()
+        heads.s7_score_calibrator.train()
     if head_device.type == 'cuda':
         torch.cuda.reset_peak_memory_stats(head_device)
     ordered = list(records)
@@ -1629,6 +1910,14 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
         if args.train_components == 's7_rpn':
             output = heads.forward_s7_rpn_train(
                 feature, img_meta, gt_boxes)
+        elif args.train_components == 's7_merge':
+            output = heads.forward_s7_merge_train(
+                feature, img_meta, gt_boxes,
+                riou_thr=args.riou_thr,
+                margin=args.s7_merge_margin,
+                retention_weight=args.s7_merge_retention_weight,
+                gain_weight=args.s7_merge_gain_weight,
+                prior_weight=args.s7_merge_prior_weight)
         elif args.train_components == 'roi_cls':
             output = heads.forward_roi_cls_hard_train(
                 feature, img_meta, gt_boxes, args.roi_samples,
@@ -1689,6 +1978,13 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                     int(round(metric_sums.get('roi_pair_count', 0.0))),
                     int(round(metric_sums.get(
                         'roi_pairwise_failure_frame', 0.0))))
+            elif args.train_components == 's7_merge':
+                message += (
+                    ' retain_pairs_total={} gain_pairs_total={}').format(
+                    int(round(metric_sums.get(
+                        's7_merge_retain_pair_count', 0.0))),
+                    int(round(metric_sums.get(
+                        's7_merge_gain_pair_count', 0.0))))
             print(message)
         del feature, gt_boxes, gt_labels, total
     return dict(
@@ -1701,10 +1997,13 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
             if args.train_components == 'all' else (
                 ['loss_s7_rpn_cls', 'loss_s7_rpn_bbox']
                 if args.train_components == 's7_rpn' else (
+                ['loss_s7_merge_retention', 'loss_s7_merge_gain',
+                 'loss_s7_merge_prior']
+                if args.train_components == 's7_merge' else (
                 ['loss_cls', 'loss_roi_pairwise', 'loss_roi_retention']
                 if args.train_components in (
                     'roi_cls_pairwise', 'roi_cls_pairwise_v2')
-                else ['loss_cls']))),
+                else ['loss_cls'])))),
         mean_loss_components={
             name: float(value / max(1, len(ordered)))
             for name, value in sorted(component_sums.items())},
@@ -1860,6 +2159,7 @@ def evaluate_records(dino, heads, records: Sequence[Dict], args,
                 prepare_record(
                     dino, record, args, dino_device, head_device))
             raw_detections = heads.simple_test(feature, img_meta)
+            candidate_merge = heads._last_candidate_merge
             raw_metrics = ranked_detection_metrics(
                 raw_detections, original, args.riou_thr,
                 args.deployment_score_thr)
@@ -1886,6 +2186,7 @@ def evaluate_records(dino, heads, records: Sequence[Dict], args,
             rows.append(dict(
                 role=role, split=record['split'], seq=record['seq'],
                 frame=int(record['frame']), feature_cache_hit=bool(cached),
+                candidate_merge=candidate_merge,
                 metrics=metrics,
                 detections=[[float(value) for value in detection]
                             for detection in detections.tolist()]))
@@ -1981,6 +2282,12 @@ def summarize_rows(rows: Sequence[Dict]) -> Dict:
     valid_count = sum(int(row['metrics'].get('valid_detection_count', 0))
                       for row in rows)
     near_border = [row for row in flat if row['near_border'] is True]
+    merge_rows = [row['candidate_merge'] for row in rows
+                  if row.get('candidate_merge') is not None]
+    merge_top1_sources = {
+        source: int(sum(
+            row.get('raw_top1_source') == source for row in merge_rows))
+        for source in ('native_s14', 'supplement_s7')}
     return dict(
         frame_count=len(rows),
         top1_hits=int(sum(row['top1'] for row in flat)),
@@ -2014,6 +2321,16 @@ def summarize_rows(rows: Sequence[Dict]) -> Dict:
             float(border_filtered / raw_count) if raw_count else 0.0),
         near_border_frame_count=len(near_border),
         near_border_top1_hits=int(sum(row['top1'] for row in near_border)),
+        candidate_merge_frame_count=len(merge_rows),
+        raw_top1_source_counts=merge_top1_sources,
+        mean_native_s14_proposal_count=(
+            float(np.mean([
+                row['proposal_source_counts']['native_s14']
+                for row in merge_rows])) if merge_rows else 0.0),
+        mean_supplement_s7_proposal_count=(
+            float(np.mean([
+                row['proposal_source_counts']['supplement_s7']
+                for row in merge_rows])) if merge_rows else 0.0),
         median_top1_score=(float(np.median(top1_scores))
                            if top1_scores else None),
         raw_unfiltered_median_top1_score=(
@@ -2145,8 +2462,12 @@ def make_target_decision(summary: Dict, args,
 
 def s7_architecture(args) -> Dict:
     enabled = bool(getattr(args, 's7_residual', False))
+    protected_merge = bool(getattr(
+        args, 's7_protected_merge', False) or getattr(
+            args, 'train_components', '') == 's7_merge')
     return dict(
         enabled=enabled,
+        protected_merge=(protected_merge if enabled else False),
         stride=(int(args.patch_size) // 2 if enabled else None),
         channels=(int(getattr(args, 's7_channels', 128))
                   if enabled else None),
@@ -2157,7 +2478,10 @@ def s7_architecture(args) -> Dict:
         nms_pre=(int(getattr(args, 's7_nms_pre', 2000))
                  if enabled else None),
         anchor_sizes=([float(value) for value in getattr(
-            args, 's7_anchor_sizes', [])] if enabled else []))
+            args, 's7_anchor_sizes', [])] if enabled else []),
+        merge_initial_bias=(float(getattr(
+            args, 's7_merge_init_bias', -2.0))
+                            if enabled and protected_merge else None))
 
 
 def load_heads_checkpoint_state(heads, payload: Dict,
@@ -2166,7 +2490,8 @@ def load_heads_checkpoint_state(heads, payload: Dict,
     if allow_s7_base_initialization:
         incompatible = heads.load_state_dict(
             payload['heads_state_dict'], strict=False)
-        allowed_prefixes = ('s7_readout.', 's7_rpn_head.')
+        allowed_prefixes = (
+            's7_readout.', 's7_rpn_head.', 's7_score_calibrator.')
         disallowed_missing = [
             name for name in incompatible.missing_keys
             if not name.startswith(allowed_prefixes)]
@@ -2182,6 +2507,51 @@ def load_heads_checkpoint_state(heads, payload: Dict,
         's7_inference_enabled',
         payload.get('s7_architecture', {}).get('enabled', False)))
     heads.set_s7_inference_enabled(enabled)
+
+
+def load_frozen_s7_component(heads, payload: Dict, in_channels: int, args):
+    """Load only S7 readout/RPN tensors from a source-only S7 checkpoint."""
+    if payload.get('source_only') is not True or payload.get(
+            'frozen_dinov2') is not True:
+        raise RuntimeError('S7 component checkpoint is not source-only')
+    stored_mode = payload.get('training_protocol', {}).get('train_components')
+    if stored_mode != 's7_rpn':
+        raise RuntimeError(
+            'S7 component checkpoint must come from s7_rpn training')
+    if payload.get('s7_inference_enabled') is not True:
+        raise RuntimeError(
+            'S7 component checkpoint has S7 disabled; use a raw epoch '
+            'checkpoint, not the epoch-0 fallback best checkpoint')
+    if int(payload.get('in_channels', -1)) != int(in_channels):
+        raise RuntimeError('S7 component checkpoint channel mismatch')
+    stored_s7 = payload.get('s7_architecture', {})
+    requested_s7 = s7_architecture(args)
+    keys = ('stride', 'channels', 'rpn_feat_channels',
+            'proposal_count', 'nms_pre', 'anchor_sizes')
+    if (not bool(stored_s7.get('enabled', False))
+            or any(stored_s7.get(key) != requested_s7.get(key)
+                   for key in keys)):
+        raise RuntimeError('S7 component checkpoint architecture mismatch')
+    prefixes = ('s7_readout.', 's7_rpn_head.')
+    source_state = {
+        name: tensor for name, tensor in payload['heads_state_dict'].items()
+        if name.startswith(prefixes)}
+    expected = {
+        name for name in heads.state_dict() if name.startswith(prefixes)}
+    if set(source_state) != expected:
+        raise RuntimeError(
+            'S7 component state mismatch: missing={} unexpected={}'.format(
+                sorted(expected - set(source_state)),
+                sorted(set(source_state) - expected)))
+    destination = heads.state_dict()
+    destination.update(source_state)
+    heads.load_state_dict(destination, strict=True)
+    heads.set_s7_inference_enabled(True)
+    return dict(
+        epoch=int(payload.get('epoch', -1)),
+        best_epoch=int(payload.get('best_epoch', -1)),
+        inference_enabled_in_component=True,
+        loaded_parameter_names=sorted(source_state))
 
 
 def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
@@ -2217,10 +2587,13 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                 if args.train_components == 'all' else (
                     ['loss_s7_rpn_cls', 'loss_s7_rpn_bbox']
                     if args.train_components == 's7_rpn' else (
+                    ['loss_s7_merge_retention', 'loss_s7_merge_gain',
+                     'loss_s7_merge_prior']
+                    if args.train_components == 's7_merge' else (
                     ['loss_cls', 'loss_roi_pairwise', 'loss_roi_retention']
                     if args.train_components in (
                         'roi_cls_pairwise', 'roi_cls_pairwise_v2')
-                    else ['loss_cls']))),
+                    else ['loss_cls'])))),
             trainable_parameter_names=[
                 name for name, parameter in heads.named_parameters()
                 if parameter.requires_grad],
@@ -2253,15 +2626,29 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                               args.pairwise_negative_riou_thr),
                           nms_iou_thr=float(args.pairwise_nms_iou_thr),
                           negatives_per_positive=int(
-                              args.pairwise_negatives_per_positive)))),
+                              args.pairwise_negatives_per_positive))),
             s7_source_gate=(
-                None if args.train_components != 's7_rpn' else dict(
+                None if args.train_components not in ('s7_rpn', 's7_merge')
+                else dict(
                     min_full_top1=int(getattr(
                         args, 's7_source_min_full_top1', 677)),
                     min_small_top1=int(getattr(
                         args, 's7_source_min_small_top1', 303)),
                     max_mcml=int(getattr(
                         args, 's7_source_max_mcml', 3)))),
+            s7_merge=(
+                None if args.train_components != 's7_merge' else dict(
+                    component_checkpoint=(
+                        None if not getattr(
+                            args, 's7_component_checkpoint', None)
+                        else os.path.abspath(args.s7_component_checkpoint)),
+                    margin=float(args.s7_merge_margin),
+                    retention_weight=float(args.s7_merge_retention_weight),
+                    gain_weight=float(args.s7_merge_gain_weight),
+                    prior_weight=float(args.s7_merge_prior_weight),
+                    initial_bias=float(args.s7_merge_init_bias),
+                    native_nms_protected=True,
+                    proposal_sources=['native_s14', 'supplement_s7']))),
         in_channels=int(in_channels), patch_size=int(args.patch_size),
         rpn_feat_channels=int(args.rpn_feat_channels),
         roi_fc_channels=int(args.roi_fc_channels),
@@ -2315,8 +2702,16 @@ def validate_checkpoint(payload: Dict, in_channels: int, args,
         else:
             keys = ('stride', 'channels', 'rpn_feat_channels',
                     'proposal_count', 'nms_pre', 'anchor_sizes')
-            if any(stored_s7.get(key) != requested_s7.get(key)
-                   for key in keys):
+            architecture_mismatch = any(
+                stored_s7.get(key) != requested_s7.get(key) for key in keys)
+            stored_merge = bool(stored_s7.get('protected_merge', False))
+            requested_merge = bool(requested_s7.get('protected_merge', False))
+            if stored_merge != requested_merge:
+                architecture_mismatch = True
+            if (requested_merge and stored_s7.get('merge_initial_bias')
+                    != requested_s7.get('merge_initial_bias')):
+                architecture_mismatch = True
+            if architecture_mismatch:
                 raise RuntimeError('S7 checkpoint architecture mismatch')
     elif bool(stored_s7.get('enabled', False)):
         raise RuntimeError(
@@ -2327,7 +2722,9 @@ def train_source_only(dino, heads, train_records, val_records, args,
                       dino_device, head_device, in_channels: int):
     pairwise_modes = ('roi_cls_pairwise', 'roi_cls_pairwise_v2')
     roi_cls_mode = args.train_components in ('roi_cls',) + pairwise_modes
-    s7_mode = args.train_components == 's7_rpn'
+    s7_rpn_mode = args.train_components == 's7_rpn'
+    s7_merge_mode = args.train_components == 's7_merge'
+    s7_mode = bool(s7_rpn_mode or s7_merge_mode)
     protected_source_mode = bool(roi_cls_mode or s7_mode)
     trainable_names = configure_trainable_components(
         heads, args.train_components)
@@ -2361,6 +2758,15 @@ def train_source_only(dino, heads, train_records, val_records, args,
             allow_s7_base_initialization=s7_mode)
         load_heads_checkpoint_state(
             heads, payload, allow_s7_base_initialization=s7_mode)
+        if s7_merge_mode:
+            component_payload = torch.load(
+                args.s7_component_checkpoint, map_location='cpu')
+            component_summary = load_frozen_s7_component(
+                heads, component_payload, in_channels, args)
+            print('[s7-component] epoch={} tensors={} checkpoint={}'.format(
+                component_summary['epoch'],
+                len(component_summary['loaded_parameter_names']),
+                os.path.abspath(args.s7_component_checkpoint)))
         if args.train_components in pairwise_modes:
             heads.capture_roi_cls_teacher()
     if args.resume_checkpoint:
@@ -2496,25 +2902,25 @@ def train_source_only(dino, heads, train_records, val_records, args,
             key = source_selection_key(val_summary)
         source_gate_passed = True
         retention_summary = None
-        pairwise_v2_gate = None
+        protected_gate = None
         if val_summary is not None and protected_source_mode:
             if args.train_components in pairwise_modes or s7_mode:
                 retention_summary = source_top1_retention_summary(
                     source_baseline_correct_keys, val_rows)
                 if s7_mode:
-                    pairwise_v2_gate = s7_source_selection_gate(
+                    protected_gate = s7_source_selection_gate(
                         source_baseline_summary,
                         source_baseline_small_summary,
                         val_summary, small_val_summary,
                         retention_summary, args)
-                    source_gate_passed = bool(pairwise_v2_gate['passed'])
+                    source_gate_passed = bool(protected_gate['passed'])
                 elif args.train_components == 'roi_cls_pairwise_v2':
-                    pairwise_v2_gate = pairwise_v2_source_selection_gate(
+                    protected_gate = pairwise_v2_source_selection_gate(
                         source_baseline_summary,
                         source_baseline_small_summary,
                         val_summary, small_val_summary,
                         retention_summary)
-                    source_gate_passed = bool(pairwise_v2_gate['passed'])
+                    source_gate_passed = bool(protected_gate['passed'])
                 else:
                     retention_floor = (
                         len(source_baseline_correct_keys)
@@ -2554,9 +2960,9 @@ def train_source_only(dino, heads, train_records, val_records, args,
                 source_baseline_small_summary,
                 source_baseline_correct_keys), epoch_path)
         exact_retention_passed = (
-            bool(pairwise_v2_gate['checks'][
+            bool(protected_gate['checks'][
                 'exact_old_correct_retention'])
-            if pairwise_v2_gate is not None else bool(source_gate_passed))
+            if protected_gate is not None else bool(source_gate_passed))
         history.append(dict(
             epoch=int(epoch), train=train_row,
             source_val=val_summary,
@@ -2564,7 +2970,11 @@ def train_source_only(dino, heads, train_records, val_records, args,
             source_selection_gate_passed=bool(source_gate_passed),
             source_retention_passed=exact_retention_passed,
             source_exact_retention=retention_summary,
-            pairwise_v2_source_gate=pairwise_v2_gate,
+            source_selection_gate=protected_gate,
+            pairwise_v2_source_gate=(
+                protected_gate if args.train_components ==
+                'roi_cls_pairwise_v2' else None),
+            s7_source_gate=(protected_gate if s7_mode else None),
             selected_as_best=bool(improved),
             selection_eligible=bool(selection_eligible),
             checkpoint_saved=bool(evaluate_epoch),
@@ -2577,7 +2987,8 @@ def train_source_only(dino, heads, train_records, val_records, args,
             source_baseline_correct_keys), latest_path)
         progress_path = None
         progress_replacements = 0
-        if args.train_components in ('roi_cls_pairwise_v2', 's7_rpn'):
+        if args.train_components in (
+                'roi_cls_pairwise_v2', 's7_rpn', 's7_merge'):
             progress_path, progress_replacements = (
                 write_source_training_progress(
                     args, epoch, best_epoch, best_path, latest_path,
@@ -2592,7 +3003,7 @@ def train_source_only(dino, heads, train_records, val_records, args,
                           ' {}/{}'.format(
                               small_val_summary['top1_hits'],
                               small_val_summary['frame_count']))
-            gate_label = ('source_gate' if pairwise_v2_gate is not None
+            gate_label = ('source_gate' if protected_gate is not None
                           else 'retention')
             print('[source-epoch] epoch={} top1={}/{} small_top1={} r100={} '
                   '{}={} selection_eligible={} best_epoch={}'.format(
@@ -2601,15 +3012,15 @@ def train_source_only(dino, heads, train_records, val_records, args,
                       val_summary['recall_at_100'], gate_label,
                       source_gate_passed,
                       selection_eligible, best_epoch))
-            if pairwise_v2_gate is not None:
+            if protected_gate is not None:
                 failed_checks = sorted(
                     name for name, passed
-                    in pairwise_v2_gate['checks'].items() if not passed)
+                    in protected_gate['checks'].items() if not passed)
                 print(
                     '[source-gate] epoch={} passed={} retained={}/{} '
                     'lost={} gained={} full_mcml={}->{} small_mcml={}->{} '
                     'failed={}'.format(
-                        epoch, pairwise_v2_gate['passed'],
+                        epoch, protected_gate['passed'],
                         retention_summary['retained_correct_count'],
                         retention_summary['baseline_correct_count'],
                         retention_summary['lost_correct_count'],
@@ -2761,6 +3172,9 @@ def main():
         protocol=dict(
             architecture=(
                 'frozen_DINOv2_native_S14_plus_protected_residual_S7_RPN_'
+                'to_source_aware_pre_NMS_affine_merge'
+                if args.train_components == 's7_merge' else
+                'frozen_DINOv2_native_S14_plus_protected_residual_S7_RPN_'
                 'to_native_RotatedROIAlign7x7'
                 if args.train_components == 's7_rpn' else
                 'frozen_DINOv2_single_scale_to_OrientedRPN_'
@@ -2770,7 +3184,7 @@ def main():
                 'source_validation_only_with_exact_retention_small_top1_'
                 'nonregression_absolute_gates_and_proposal_sensitive_'
                 'selection_key_improvement'
-                if args.train_components == 's7_rpn' else
+                if args.train_components in ('s7_rpn', 's7_merge') else
                 'source_validation_only_with_exact_retention_small_top1_'
                 'strict_improvement_and_mcml_nonregression'
                 if args.train_components == 'roi_cls_pairwise_v2' else
@@ -2789,11 +3203,14 @@ def main():
                     if args.train_components == 'all' else (
                         ['loss_s7_rpn_cls', 'loss_s7_rpn_bbox']
                         if args.train_components == 's7_rpn' else (
+                        ['loss_s7_merge_retention', 'loss_s7_merge_gain',
+                         'loss_s7_merge_prior']
+                        if args.train_components == 's7_merge' else (
                         ['loss_cls', 'loss_roi_pairwise',
                          'loss_roi_retention']
                         if args.train_components in (
                             'roi_cls_pairwise', 'roi_cls_pairwise_v2')
-                        else ['loss_cls']))),
+                        else ['loss_cls'])))),
                 epochs=int(args.epochs), optimizer='SGD',
                 lr=float(args.lr), momentum=float(args.momentum),
                 weight_decay=float(args.weight_decay),
@@ -2826,6 +3243,21 @@ def main():
                             args.pairwise_negatives_per_positive),
                         source_exact_retention_max_drop=int(
                             args.source_retain_max_top1_drop)))),
+                s7_merge=(
+                    None if args.train_components != 's7_merge' else dict(
+                        component_checkpoint=(
+                            None if not args.s7_component_checkpoint else
+                            os.path.abspath(args.s7_component_checkpoint)),
+                        proposal_sources=['native_s14', 'supplement_s7'],
+                        calibration_stage='ROI_foreground_log_odds_before_NMS',
+                        native_nms_protected=True,
+                        affine_scale_positive=True,
+                        initial_bias=float(args.s7_merge_init_bias),
+                        margin=float(args.s7_merge_margin),
+                        retention_weight=float(
+                            args.s7_merge_retention_weight),
+                        gain_weight=float(args.s7_merge_gain_weight),
+                        prior_weight=float(args.s7_merge_prior_weight))),
             source_min_top1_rate=float(args.source_min_top1_rate),
             deployment_score_thr=float(args.deployment_score_thr),
             border_margin_ratio=float(args.border_margin_ratio),
@@ -2853,6 +3285,9 @@ def main():
             initialization_checkpoint=(
                 None if not args.init_checkpoint
                 else os.path.abspath(args.init_checkpoint)),
+            s7_component_checkpoint=(
+                None if not getattr(args, 's7_component_checkpoint', None)
+                else os.path.abspath(args.s7_component_checkpoint)),
             train_components=str(args.train_components),
             trainable_parameter_names=trainable_names,
             trainable_parameter_count=int(sum(
