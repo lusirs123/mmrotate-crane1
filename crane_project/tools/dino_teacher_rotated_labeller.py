@@ -18,7 +18,7 @@ import pickle
 import random
 import re
 import sys
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import cv2
 import numpy as np
@@ -35,13 +35,17 @@ from crane_project.tools import dino_teacher_common as common  # noqa: E402
 
 
 LABELLER_NAME = 'Frozen DINOv2 Oriented RPN/ROI Source Labeller V1'
-PROTOCOL_VERSION = 11
+PROTOCOL_VERSION = 12
 PAIRWISE_V2_MAX_EPOCHS = 4
 PAPER_URL = (
     'https://openaccess.thecvf.com/content/CVPR2025/html/'
     'Lavoie_Large_Self-Supervised_Models_Bridge_the_Gap_in_Domain_Adaptive_'
     'Object_CVPR_2025_paper.html')
 PAPER_CODE_URL = 'https://github.com/TRAILab/DINO_Teacher'
+LIDERE_PAPER_URL = (
+    'https://openaccess.thecvf.com/content/CVPR2026/html/'
+    'Luddecke_LiDeRe_A_Lightweight_Readout_for_Fast_and_Data-Efficient_'
+    'Dense_Prediction_CVPR_2026_paper.html')
 
 def parse_args():
     parser = argparse.ArgumentParser(description=LABELLER_NAME)
@@ -133,7 +137,8 @@ def parse_args():
     parser.add_argument(
         '--train-components',
         choices=['all', 'roi_cls', 'roi_cls_pairwise',
-                 'roi_cls_pairwise_v2', 's7_rpn', 's7_merge'], default='all',
+                 'roi_cls_pairwise_v2', 's7_rpn', 's7_merge',
+                 's7_lane_arbitration'], default='all',
         help=('Train all RPN/ROI heads, or only the final ROI classifier '
               'fc_cls while keeping RPN, shared ROI FCs, and bbox regression '
               'fixed. roi_cls_pairwise additionally uses source-only '
@@ -142,7 +147,9 @@ def parse_args():
               'false ROIs that actually outrank a usable ROI. s7_rpn trains '
               'only the residual stride-7 readout and proposal head. s7_merge '
               'freezes both proposal paths and trains only a pre-NMS affine '
-              'S7 score calibrator with native-retention pairs.'))
+              'S7 score calibrator with native-retention pairs. '
+              's7_lane_arbitration freezes the epoch-1 merge and trains only '
+              'a bounded source-aware S7 lane arbitrator.'))
     parser.add_argument(
         '--source-small-repeat', type=int, default=1,
         help='Repeat source-train frames in the lower short-token tertile.')
@@ -156,6 +163,9 @@ def parse_args():
     parser.add_argument('--pairwise-loss-weight', type=float, default=1.0)
     parser.add_argument('--retention-loss-weight', type=float, default=1.0)
     parser.add_argument('--retention-temperature', type=float, default=1.0)
+    parser.add_argument('--s7-lane-hidden', type=int, default=32)
+    parser.add_argument('--s7-lane-max-adjustment', type=float, default=2.0)
+    parser.add_argument('--s7-lane-base-epoch', type=int, default=1)
     parser.add_argument(
         '--pairwise-negative-riou-thr', type=float, default=0.1,
         help='Maximum GT RIoU for a decoded ROI to be a pairwise negative.')
@@ -173,6 +183,11 @@ def parse_args():
         help='Initialize head weights without resuming epoch or optimizer.')
     parser.add_argument('--resume-checkpoint')
     parser.add_argument('--eval-only-checkpoint')
+    parser.add_argument(
+        '--source-conflict-result-json',
+        help=('Existing source-only train_result.json whose lost/gained keys '
+              'define a bounded S7 merge conflict audit.'))
+    parser.add_argument('--source-conflict-epoch', type=int, default=1)
     parser.add_argument(
         '--source-val-results-out',
         help='Optional one-class result pickle for read-only source probes.')
@@ -218,7 +233,8 @@ def validate_args(args):
     if not s7_anchor_sizes or any(value <= 0.0 for value in s7_anchor_sizes):
         raise ValueError('--s7-anchor-sizes must be positive')
     args.s7_anchor_sizes = sorted(set(s7_anchor_sizes))
-    s7_training_mode = args.train_components in ('s7_rpn', 's7_merge')
+    s7_training_mode = args.train_components in (
+        's7_rpn', 's7_merge', 's7_lane_arbitration')
     if s7_enabled != s7_training_mode:
         raise ValueError(
             '--s7-residual and an S7 train-components mode must be enabled '
@@ -230,6 +246,12 @@ def validate_args(args):
         getattr(args, 's7_merge_prior_weight', 0.01))
     if any(float(value) <= 0.0 for value in merge_positive):
         raise ValueError('S7 merge margin and loss weights must be positive')
+    if (int(args.s7_lane_hidden) <= 0
+            or float(args.s7_lane_max_adjustment) <= 0.0):
+        raise ValueError('S7 lane arbitration settings must be positive')
+    if int(args.s7_lane_base_epoch) != 1:
+        raise ValueError(
+            's7_lane_arbitration is locked to the audited epoch-1 base')
     if not math.isfinite(float(getattr(args, 's7_merge_init_bias', -2.0))):
         raise ValueError('--s7-merge-init-bias must be finite')
     positive = (
@@ -265,7 +287,8 @@ def validate_args(args):
     if args.lr_steps is None:
         args.lr_steps = (
             [2, 3] if args.train_components in (
-                'roi_cls_pairwise_v2', 's7_rpn', 's7_merge') else [5, 7])
+                'roi_cls_pairwise_v2', 's7_rpn', 's7_merge',
+                's7_lane_arbitration') else [5, 7])
     lr_steps = sorted(set(int(value) for value in args.lr_steps))
     if any(value <= 0 or value >= args.epochs for value in lr_steps):
         raise ValueError('--lr-steps must be within the training schedule')
@@ -316,6 +339,21 @@ def validate_args(args):
             args.resume_checkpoint or args.eval_only_checkpoint):
         raise ValueError(
             '--init-checkpoint cannot be combined with resume/eval-only')
+    conflict_json = getattr(args, 'source_conflict_result_json', None)
+    if conflict_json:
+        if not os.path.isfile(conflict_json):
+            raise ValueError(
+                'Source conflict result does not exist: {}'.format(
+                    conflict_json))
+        if not args.eval_only_checkpoint or not args.skip_target_eval:
+            raise ValueError(
+                'Source conflict audit requires --eval-only-checkpoint and '
+                '--skip-target-eval')
+        if args.train_components != 's7_merge':
+            raise ValueError(
+                'Source conflict audit requires --train-components s7_merge')
+        if int(getattr(args, 'source_conflict_epoch', 1)) <= 0:
+            raise ValueError('--source-conflict-epoch must be positive')
     if args.init_checkpoint and not os.path.isfile(args.init_checkpoint):
         raise ValueError('Init checkpoint does not exist: {}'.format(
             args.init_checkpoint))
@@ -328,7 +366,8 @@ def validate_args(args):
             '--train-components {} requires an init/resume/eval-only '
             'checkpoint so the validated RPN and OBB regressor are retained'
             .format(args.train_components))
-    if (args.train_components in ('s7_rpn', 's7_merge')
+    if (args.train_components in (
+            's7_rpn', 's7_merge', 's7_lane_arbitration')
             and not (args.init_checkpoint or args.resume_checkpoint
                      or args.eval_only_checkpoint)):
         raise ValueError(
@@ -344,7 +383,16 @@ def validate_args(args):
                 'S7 component checkpoint does not exist: {}'.format(component))
         if args.source_retain_max_top1_drop != 0:
             raise ValueError('s7_merge requires exact source retention')
-    if args.train_components in ('s7_rpn', 's7_merge') and args.epochs > 4:
+    if args.train_components == 's7_lane_arbitration':
+        if args.source_retain_max_top1_drop != 0:
+            raise ValueError(
+                's7_lane_arbitration requires exact source retention')
+        if args.s7_component_checkpoint:
+            raise ValueError(
+                's7_lane_arbitration loads one complete epoch-1 checkpoint; '
+                'do not pass --s7-component-checkpoint')
+    if args.train_components in (
+            's7_rpn', 's7_merge', 's7_lane_arbitration') and args.epochs > 4:
         raise ValueError(
             'S7 source-only stages are limited to 4 epochs; extend only after '
             'source validation shows the selected component is improving')
@@ -405,6 +453,13 @@ def configure_trainable_components(heads, train_components: str) -> List[str]:
                 'S7 merge mode requires the protected score calibrator')
         for parameter in heads.s7_score_calibrator.parameters():
             parameter.requires_grad_(True)
+    elif train_components == 's7_lane_arbitration':
+        if (not getattr(heads, 's7_protected_merge', False)
+                or getattr(heads, 's7_lane_arbitrator', None) is None):
+            raise RuntimeError(
+                'S7 lane arbitration requires the protected merge arbitrator')
+        for parameter in heads.s7_lane_arbitrator.parameters():
+            parameter.requires_grad_(True)
     else:
         raise ValueError('Unsupported train-components: {}'.format(
             train_components))
@@ -434,6 +489,15 @@ def optimization_loss_total(losses: Dict, train_components: str):
         missing = [name for name in required if name not in losses]
         if missing:
             raise RuntimeError('S7 merge losses missing: {}'.format(
+                ', '.join(missing)))
+        return loss_total({name: losses[name] for name in required})
+    if train_components == 's7_lane_arbitration':
+        required = (
+            'loss_s7_lane_retention', 'loss_s7_lane_gain',
+            'loss_s7_lane_prior')
+        missing = [name for name in required if name not in losses]
+        if missing:
+            raise RuntimeError('S7 lane losses missing: {}'.format(
                 ', '.join(missing)))
         return loss_total({name: losses[name] for name in required})
     if train_components in ('roi_cls_pairwise', 'roi_cls_pairwise_v2'):
@@ -549,6 +613,8 @@ def s7_merge_pair_losses(native_log_odds: torch.Tensor,
         retention=retention, gain=gain,
         retain_pair_count=retain_pair_count,
         gain_pair_count=gain_pair_count,
+        retention_active=int(float(retention.detach().item()) > 0.0),
+        gain_active=int(float(gain.detach().item()) > 0.0),
         native_top1_correct=int(native_top1_correct))
 
 
@@ -1199,6 +1265,49 @@ class S7ScoreCalibrator(nn.Module):
                 + (self.bias - self.initial_bias).square())
 
 
+class S7LaneArbitrator(nn.Module):
+    """Bounded source-aware residual for the supplemental S7 lane."""
+
+    def __init__(self, embedding_channels: int, hidden: int = 32,
+                 max_adjustment: float = 2.0):
+        super().__init__()
+        self.max_adjustment = float(max_adjustment)
+        if self.max_adjustment <= 0.0:
+            raise ValueError('S7 lane max adjustment must be positive')
+        self.embedding_projection = nn.Sequential(
+            nn.Linear(int(embedding_channels), int(hidden)),
+            nn.LayerNorm(int(hidden)), nn.GELU())
+        self.scalar_projection = nn.Sequential(
+            nn.Linear(3, int(hidden)), nn.GELU())
+        self.output = nn.Linear(int(hidden) * 2, 1)
+        # The new mode starts exactly at the already-audited epoch-1 merge.
+        nn.init.zeros_(self.output.weight)
+        nn.init.zeros_(self.output.bias)
+
+    def forward(self, embedding: torch.Tensor,
+                s7_raw_log_odds: torch.Tensor,
+                native_context: torch.Tensor) -> torch.Tensor:
+        if embedding.ndim != 2 or s7_raw_log_odds.ndim != 1:
+            raise ValueError('S7 lane features have invalid dimensions')
+        if embedding.shape[0] != s7_raw_log_odds.shape[0]:
+            raise ValueError('S7 lane features have mismatched candidate count')
+        if embedding.shape[0] == 0:
+            return s7_raw_log_odds.new_zeros((0,))
+        context = native_context.reshape(()).expand_as(s7_raw_log_odds)
+        scalars = torch.stack((
+            s7_raw_log_odds, context, s7_raw_log_odds - context), dim=1)
+        hidden = torch.cat((
+            self.embedding_projection(embedding),
+            self.scalar_projection(scalars)), dim=1)
+        return (self.max_adjustment * torch.tanh(
+            self.output(hidden).squeeze(1)))
+
+    def prior_loss(self, adjustment: torch.Tensor) -> torch.Tensor:
+        if adjustment.numel() == 0:
+            return adjustment.sum() * 0.0
+        return adjustment.square().mean()
+
+
 class FrozenDinoRotatedHeads(nn.Module):
     def __init__(self, in_channels: int, args):
         super().__init__()
@@ -1215,7 +1324,11 @@ class FrozenDinoRotatedHeads(nn.Module):
         self.s7_enabled = bool(getattr(args, 's7_residual', False))
         self.s7_protected_merge = bool(getattr(
             args, 's7_protected_merge', False) or getattr(
-                args, 'train_components', '') == 's7_merge')
+                args, 'train_components', '') in (
+                    's7_merge', 's7_lane_arbitration'))
+        self.s7_lane_arbitration = bool(getattr(
+            args, 's7_lane_arbitration', False) or getattr(
+                args, 'train_components', '') == 's7_lane_arbitration')
         self._last_candidate_merge = None
         self._s7_inference_enabled = self.s7_enabled
         if self.s7_enabled:
@@ -1230,11 +1343,18 @@ class FrozenDinoRotatedHeads(nn.Module):
                 S7ScoreCalibrator(float(getattr(
                     args, 's7_merge_init_bias', -2.0)))
                 if self.s7_protected_merge else None)
+            self.s7_lane_arbitrator = (
+                S7LaneArbitrator(
+                    int(getattr(args, 'roi_fc_channels', 1024)),
+                    int(getattr(args, 's7_lane_hidden', 32)),
+                    float(getattr(args, 's7_lane_max_adjustment', 2.0)))
+                if self.s7_lane_arbitration else None)
         else:
             self.s7_readout = None
             self.s7_rpn_head = None
             self.s7_proposal_cfg = None
             self.s7_score_calibrator = None
+            self.s7_lane_arbitrator = None
         self._roi_cls_teacher_weight = None
         self._roi_cls_teacher_bias = None
 
@@ -1281,15 +1401,17 @@ class FrozenDinoRotatedHeads(nn.Module):
         if proposals.shape[0] == 0:
             return (proposals.new_zeros((0, 5)),
                     proposals.new_zeros((0,)),
-                    proposals.new_zeros((0,)))
+                    proposals.new_zeros((0,)),
+                    proposals.new_zeros((0, int(
+                        getattr(self._args, 'roi_fc_channels', 1024)))))
         rois = rbbox2roi([proposals])
-        cls_score, bbox_pred, _embedding = self._forward_pairwise_roi(
+        cls_score, bbox_pred, embedding = self._forward_pairwise_roi(
             feature, rois)
         decoded, _scores = self.roi_head.bbox_head.get_bboxes(
             rois, cls_score, bbox_pred, img_meta['img_shape'],
             img_meta['scale_factor'], rescale=rescale, cfg=None)
         return (decoded, roi_foreground_log_odds(cls_score),
-                torch.softmax(cls_score, dim=1)[:, 0])
+                torch.softmax(cls_score, dim=1)[:, 0], embedding)
 
     def _nms_candidate_lane(self, boxes: torch.Tensor,
                             foreground_scores: torch.Tensor):
@@ -1309,16 +1431,25 @@ class FrozenDinoRotatedHeads(nn.Module):
         if self.s7_score_calibrator is None:
             raise RuntimeError('Protected S7 merge has no score calibrator')
         _features, sources = self.proposal_sources(feature, img_meta)
-        native_boxes, native_logits, native_scores = (
+        native_boxes, native_logits, native_scores, _native_embedding = (
             self._decode_roi_candidates(
             feature, img_meta, sources['native_s14'], rescale=True)
         )
         supplement = sources.get('supplement_s7')
         if supplement is None:
             raise RuntimeError('Protected S7 merge requires supplement proposals')
-        s7_boxes, s7_logits, _s7_raw_scores = self._decode_roi_candidates(
-            feature, img_meta, supplement, rescale=True)
+        s7_boxes, s7_logits, _s7_raw_scores, s7_embedding = (
+            self._decode_roi_candidates(
+                feature, img_meta, supplement, rescale=True))
         calibrated_s7_logits = self.s7_score_calibrator(s7_logits)
+        lane_adjustment = s7_logits.new_zeros(s7_logits.shape)
+        lane_arbitrator = getattr(self, 's7_lane_arbitrator', None)
+        if lane_arbitrator is not None:
+            native_context = (native_logits.max() if native_logits.numel()
+                              else s7_logits.new_zeros(()))
+            lane_adjustment = lane_arbitrator(
+                s7_embedding, s7_logits, native_context)
+            calibrated_s7_logits = calibrated_s7_logits + lane_adjustment
         native_detections = self._nms_candidate_lane(
             native_boxes, native_scores)
         s7_detections = self._nms_candidate_lane(
@@ -1347,10 +1478,35 @@ class FrozenDinoRotatedHeads(nn.Module):
                 None if source_ids.numel() == 0 else
                 ('native_s14' if int(source_ids[0].item()) == 0
                  else 'supplement_s7')),
+            source_top1_detections=dict(
+                native_s14=(
+                    None if native_detections.shape[0] == 0 else
+                    [float(value) for value in
+                     native_detections[0].detach().cpu().tolist()]),
+                supplement_s7=(
+                    None if s7_detections.shape[0] == 0 else
+                    [float(value) for value in
+                     s7_detections[0].detach().cpu().tolist()])),
+            source_pre_nms_top_log_odds=dict(
+                native_s14=(
+                    None if native_logits.numel() == 0 else
+                    float(native_logits.max().detach().item())),
+                supplement_s7_raw=(
+                    None if s7_logits.numel() == 0 else
+                    float(s7_logits.max().detach().item())),
+                supplement_s7_calibrated=(
+                    None if calibrated_s7_logits.numel() == 0 else
+                    float(calibrated_s7_logits.max().detach().item()))),
             s7_affine_scale=float(
                 self.s7_score_calibrator.scale().detach().item()),
             s7_affine_bias=float(
-                self.s7_score_calibrator.bias.detach().item()))
+                self.s7_score_calibrator.bias.detach().item()),
+            s7_lane_adjustment_max=float(
+                lane_adjustment.detach().abs().max().item())
+            if lane_adjustment.numel() else 0.0,
+            s7_lane_adjustment_mean=float(
+                lane_adjustment.detach().mean().item())
+            if lane_adjustment.numel() else 0.0)
         return detections
 
     def feature_levels(self, feature: torch.Tensor):
@@ -1487,12 +1643,13 @@ class FrozenDinoRotatedHeads(nn.Module):
             supplement = sources.get('supplement_s7')
             if supplement is None:
                 raise RuntimeError('S7 merge training has no supplement lane')
-            native_boxes, native_logits, _native_scores = (
+            native_boxes, native_logits, _native_scores, _native_embedding = (
                 self._decode_roi_candidates(
                 feature, img_meta, sources['native_s14'], rescale=False)
             )
-            s7_boxes, s7_logits, _s7_scores = self._decode_roi_candidates(
-                feature, img_meta, supplement, rescale=False)
+            s7_boxes, s7_logits, _s7_scores, _s7_embedding = (
+                self._decode_roi_candidates(
+                    feature, img_meta, supplement, rescale=False))
             if gt_boxes.shape[0] and native_boxes.shape[0]:
                 native_overlap = box_iou_rotated(
                     native_boxes.float(), gt_boxes.float()).max(dim=1).values
@@ -1516,9 +1673,97 @@ class FrozenDinoRotatedHeads(nn.Module):
             loss_s7_merge_prior=(prior * float(prior_weight)),
             s7_merge_retain_pair_count=pairs['retain_pair_count'],
             s7_merge_gain_pair_count=pairs['gain_pair_count'],
+            s7_merge_retention_active=pairs['retention_active'],
+            s7_merge_gain_active=pairs['gain_active'],
             s7_merge_native_top1_correct=pairs['native_top1_correct'],
             s7_merge_native_candidate_count=int(native_logits.numel()),
             s7_merge_supplement_candidate_count=int(s7_logits.numel()))
+
+    def forward_s7_lane_arbitration_train(
+            self, feature: torch.Tensor, img_meta: Dict,
+            gt_boxes: torch.Tensor, riou_thr: float, margin: float,
+            retention_weight: float, gain_weight: float,
+            prior_weight: float) -> Dict:
+        """Train only a bounded source-aware residual on the fixed S7 lane."""
+        from mmcv.ops import box_iou_rotated
+
+        if (not self.s7_lane_arbitration
+                or self.s7_score_calibrator is None
+                or self.s7_lane_arbitrator is None):
+            raise RuntimeError(
+                'S7 lane arbitration requires the configured lane arbitrator')
+        with torch.no_grad():
+            _features, sources = self.proposal_sources(feature, img_meta)
+            supplement = sources.get('supplement_s7')
+            if supplement is None:
+                raise RuntimeError('S7 lane training has no supplement lane')
+            native_boxes, native_logits, _native_scores, _native_embedding = (
+                self._decode_roi_candidates(
+                    feature, img_meta, sources['native_s14'], rescale=False))
+            s7_boxes, s7_logits, _s7_scores, s7_embedding = (
+                self._decode_roi_candidates(
+                    feature, img_meta, supplement, rescale=False))
+            if gt_boxes.shape[0] and native_boxes.shape[0]:
+                native_overlap = box_iou_rotated(
+                    native_boxes.float(), gt_boxes.float()).max(dim=1).values
+            else:
+                native_overlap = native_logits.new_zeros(native_logits.shape)
+            if gt_boxes.shape[0] and s7_boxes.shape[0]:
+                s7_overlap = box_iou_rotated(
+                    s7_boxes.float(), gt_boxes.float()).max(dim=1).values
+            else:
+                s7_overlap = s7_logits.new_zeros(s7_logits.shape)
+        native_top = (torch.argmax(native_logits)
+                      if native_logits.numel() else None)
+        native_top_logit = (native_logits[native_top].detach()
+                            if native_top is not None else
+                            s7_logits.new_zeros(()))
+        base_s7_logits = self.s7_score_calibrator(
+            s7_logits.detach()).detach()
+        adjustment = self.s7_lane_arbitrator(
+            s7_embedding.detach(), s7_logits.detach(), native_top_logit)
+        adjusted_s7_logits = base_s7_logits + adjustment
+        native_top1_correct = bool(
+            native_top is not None
+            and native_overlap[native_top] >= float(riou_thr))
+        retention = adjustment.sum() * 0.0
+        gain = adjustment.sum() * 0.0
+        retain_pair_count = 0
+        gain_pair_count = 0
+        if native_top1_correct:
+            wrong = torch.nonzero(
+                s7_overlap < float(riou_thr),
+                as_tuple=False).reshape(-1)
+            if wrong.numel():
+                competitor = wrong[torch.argmax(base_s7_logits[wrong])]
+                retention = torch.relu(
+                    float(margin) + adjusted_s7_logits[competitor]
+                    - native_top_logit)
+                retain_pair_count = 1
+        else:
+            usable = torch.nonzero(
+                s7_overlap >= float(riou_thr),
+                as_tuple=False).reshape(-1)
+            if usable.numel():
+                supplement_index = usable[
+                    torch.argmax(base_s7_logits[usable])]
+                gain = torch.relu(
+                    float(margin) + native_top_logit
+                    - adjusted_s7_logits[supplement_index])
+                gain_pair_count = 1
+        prior = self.s7_lane_arbitrator.prior_loss(adjustment)
+        return dict(
+            loss_s7_lane_retention=(retention * float(retention_weight)),
+            loss_s7_lane_gain=(gain * float(gain_weight)),
+            loss_s7_lane_prior=(prior * float(prior_weight)),
+            s7_lane_retain_pair_count=retain_pair_count,
+            s7_lane_gain_pair_count=gain_pair_count,
+            s7_lane_retention_active=int(float(retention.detach().item()) > 0.0),
+            s7_lane_gain_active=int(float(gain.detach().item()) > 0.0),
+            s7_lane_native_top1_correct=int(native_top1_correct),
+            s7_lane_adjustment_mean=float(adjustment.detach().mean().item())
+            if adjustment.numel() else 0.0,
+            s7_lane_candidate_count=int(s7_logits.numel()))
 
     def forward_roi_cls_hard_train(
             self, feature: torch.Tensor, img_meta: Dict,
@@ -1883,12 +2128,17 @@ def scheduled_lr(args, epoch: int, global_step: int) -> float:
 def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                 global_step: int, args, dino_device, head_device) -> Dict:
     heads.train()
-    if args.train_components in ('s7_rpn', 's7_merge'):
+    if args.train_components in (
+            's7_rpn', 's7_merge', 's7_lane_arbitration'):
         heads.rpn_head.eval()
         heads.roi_head.eval()
-    if args.train_components == 's7_merge':
+    if args.train_components in ('s7_merge', 's7_lane_arbitration'):
         heads.s7_readout.eval()
         heads.s7_rpn_head.eval()
+        heads.s7_score_calibrator.eval()
+    if args.train_components == 's7_lane_arbitration':
+        heads.s7_lane_arbitrator.train()
+    elif args.train_components == 's7_merge':
         heads.s7_score_calibrator.train()
     if head_device.type == 'cuda':
         torch.cuda.reset_peak_memory_stats(head_device)
@@ -1912,6 +2162,14 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                 feature, img_meta, gt_boxes)
         elif args.train_components == 's7_merge':
             output = heads.forward_s7_merge_train(
+                feature, img_meta, gt_boxes,
+                riou_thr=args.riou_thr,
+                margin=args.s7_merge_margin,
+                retention_weight=args.s7_merge_retention_weight,
+                gain_weight=args.s7_merge_gain_weight,
+                prior_weight=args.s7_merge_prior_weight)
+        elif args.train_components == 's7_lane_arbitration':
+            output = heads.forward_s7_lane_arbitration_train(
                 feature, img_meta, gt_boxes,
                 riou_thr=args.riou_thr,
                 margin=args.s7_merge_margin,
@@ -1980,30 +2238,54 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                         'roi_pairwise_failure_frame', 0.0))))
             elif args.train_components == 's7_merge':
                 message += (
-                    ' retain_pairs_total={} gain_pairs_total={}').format(
+                    ' retain_pairs_total={} gain_pairs_total={} '
+                    'retain_active_total={} gain_active_total={}').format(
                     int(round(metric_sums.get(
                         's7_merge_retain_pair_count', 0.0))),
                     int(round(metric_sums.get(
-                        's7_merge_gain_pair_count', 0.0))))
+                        's7_merge_gain_pair_count', 0.0))),
+                    int(round(metric_sums.get(
+                        's7_merge_retention_active', 0.0))),
+                    int(round(metric_sums.get(
+                        's7_merge_gain_active', 0.0))))
+            elif args.train_components == 's7_lane_arbitration':
+                message += (
+                    ' retain_pairs_total={} gain_pairs_total={} '
+                    'retain_active_total={} gain_active_total={}').format(
+                    int(round(metric_sums.get(
+                        's7_lane_retain_pair_count', 0.0))),
+                    int(round(metric_sums.get(
+                        's7_lane_gain_pair_count', 0.0))),
+                    int(round(metric_sums.get(
+                        's7_lane_retention_active', 0.0))),
+                    int(round(metric_sums.get(
+                        's7_lane_gain_active', 0.0))))
             print(message)
         del feature, gt_boxes, gt_labels, total
+    if args.train_components == 'all':
+        optimized_components = [
+            'loss_rpn_cls', 'loss_rpn_bbox', 'loss_cls', 'loss_bbox']
+    elif args.train_components == 's7_rpn':
+        optimized_components = ['loss_s7_rpn_cls', 'loss_s7_rpn_bbox']
+    elif args.train_components == 's7_merge':
+        optimized_components = [
+            'loss_s7_merge_retention', 'loss_s7_merge_gain',
+            'loss_s7_merge_prior']
+    elif args.train_components == 's7_lane_arbitration':
+        optimized_components = [
+            'loss_s7_lane_retention', 'loss_s7_lane_gain',
+            'loss_s7_lane_prior']
+    elif args.train_components in ('roi_cls_pairwise', 'roi_cls_pairwise_v2'):
+        optimized_components = [
+            'loss_cls', 'loss_roi_pairwise', 'loss_roi_retention']
+    else:
+        optimized_components = ['loss_cls']
     return dict(
         epoch=int(epoch), count=len(ordered),
         global_step_end=int(global_step),
         lr_end=float(optimizer.param_groups[0]['lr']),
         mean_loss=float(np.mean(losses)),
-        optimized_components=(
-            ['loss_rpn_cls', 'loss_rpn_bbox', 'loss_cls', 'loss_bbox']
-            if args.train_components == 'all' else (
-                ['loss_s7_rpn_cls', 'loss_s7_rpn_bbox']
-                if args.train_components == 's7_rpn' else (
-                ['loss_s7_merge_retention', 'loss_s7_merge_gain',
-                 'loss_s7_merge_prior']
-                if args.train_components == 's7_merge' else (
-                ['loss_cls', 'loss_roi_pairwise', 'loss_roi_retention']
-                if args.train_components in (
-                    'roi_cls_pairwise', 'roi_cls_pairwise_v2')
-                else ['loss_cls'])))),
+        optimized_components=optimized_components,
         mean_loss_components={
             name: float(value / max(1, len(ordered)))
             for name, value in sorted(component_sums.items())},
@@ -2160,6 +2442,22 @@ def evaluate_records(dino, heads, records: Sequence[Dict], args,
                     dino, record, args, dino_device, head_device))
             raw_detections = heads.simple_test(feature, img_meta)
             candidate_merge = heads._last_candidate_merge
+            if candidate_merge is not None:
+                candidate_merge = dict(candidate_merge)
+                source_metrics = {}
+                for source, detection in candidate_merge.get(
+                        'source_top1_detections', {}).items():
+                    source_detection = np.asarray(
+                        [] if detection is None else [detection],
+                        dtype=np.float32).reshape((-1, 6))
+                    lane_metrics = ranked_detection_metrics(
+                        source_detection, original, args.riou_thr,
+                        args.deployment_score_thr)
+                    source_metrics[source] = dict(
+                        top1_hit=bool(lane_metrics['top1_hit']),
+                        top1_riou=float(lane_metrics['top1_riou']),
+                        top1_score=lane_metrics['top1_score'])
+                candidate_merge['source_top1_metrics'] = source_metrics
             raw_metrics = ranked_detection_metrics(
                 raw_detections, original, args.riou_thr,
                 args.deployment_score_thr)
@@ -2288,6 +2586,12 @@ def summarize_rows(rows: Sequence[Dict]) -> Dict:
         source: int(sum(
             row.get('raw_top1_source') == source for row in merge_rows))
         for source in ('native_s14', 'supplement_s7')}
+    lane_adjustment_maxima = [
+        float(row.get('s7_lane_adjustment_max', 0.0))
+        for row in merge_rows]
+    lane_adjustment_means = [
+        float(row.get('s7_lane_adjustment_mean', 0.0))
+        for row in merge_rows]
     return dict(
         frame_count=len(rows),
         top1_hits=int(sum(row['top1'] for row in flat)),
@@ -2331,6 +2635,15 @@ def summarize_rows(rows: Sequence[Dict]) -> Dict:
             float(np.mean([
                 row['proposal_source_counts']['supplement_s7']
                 for row in merge_rows])) if merge_rows else 0.0),
+        s7_affine_scale=(
+            float(merge_rows[0]['s7_affine_scale']) if merge_rows else None),
+        s7_affine_bias=(
+            float(merge_rows[0]['s7_affine_bias']) if merge_rows else None),
+        s7_lane_adjustment_abs_max=(
+            max(lane_adjustment_maxima) if lane_adjustment_maxima else 0.0),
+        mean_s7_lane_adjustment=(
+            float(np.mean(lane_adjustment_means))
+            if lane_adjustment_means else 0.0),
         median_top1_score=(float(np.median(top1_scores))
                            if top1_scores else None),
         raw_unfiltered_median_top1_score=(
@@ -2363,6 +2676,28 @@ def source_correct_frame_keys(rows: Sequence[Dict]) -> List[str]:
         if bool(row['metrics']['top1_hit']))
 
 
+def load_source_conflict_spec(path: str, epoch: int) -> Dict:
+    with open(path, 'r') as handle:
+        payload = json.load(handle)
+    history = payload.get('source', {}).get('history', [])
+    matches = [row for row in history if int(row.get('epoch', -1)) == int(epoch)]
+    if len(matches) != 1:
+        raise ValueError(
+            'Expected one source history row for epoch {}, found {}'.format(
+                epoch, len(matches)))
+    retention = matches[0].get('source_exact_retention') or {}
+    lost = [str(key) for key in retention.get('lost_frame_keys', [])]
+    gained = [str(key) for key in retention.get('gained_frame_keys', [])]
+    keys = sorted(set(lost + gained))
+    if not keys:
+        raise ValueError(
+            'Source conflict epoch {} has no lost/gained frames'.format(epoch))
+    return dict(
+        result_json=os.path.abspath(path), epoch=int(epoch),
+        lost_frame_keys=sorted(lost), gained_frame_keys=sorted(gained),
+        frame_keys=keys)
+
+
 def source_top1_retention_summary(
         baseline_correct_keys: Sequence[str], candidate_rows: Sequence[Dict]
         ) -> Dict:
@@ -2382,6 +2717,56 @@ def source_top1_retention_summary(
         candidate_correct_count=len(candidate_correct),
         lost_frame_keys=sorted(lost),
         gained_frame_keys=sorted(gained))
+
+
+def s7_calibration_state(heads) -> Optional[Dict]:
+    calibrator = getattr(heads, 's7_score_calibrator', None)
+    if calibrator is None:
+        return None
+    return dict(
+        scale=float(calibrator.scale().detach().item()),
+        bias=float(calibrator.bias.detach().item()),
+        prior_loss=float(calibrator.prior_loss().detach().item()))
+
+
+def source_merge_conflict_summary(
+        baseline_correct_keys: Sequence[str], candidate_rows: Sequence[Dict]
+        ) -> Dict:
+    """Keep compact source-only evidence for frames changed by S7 merge."""
+    retention = source_top1_retention_summary(
+        baseline_correct_keys, candidate_rows)
+    changed_keys = set(
+        retention['lost_frame_keys'] + retention['gained_frame_keys'])
+
+    rows_by_key = {
+        source_frame_key(row): row for row in candidate_rows
+        if source_frame_key(row) in changed_keys}
+    return dict(
+        lost=[source_merge_conflict_row(rows_by_key[key], 'lost')
+              for key in retention['lost_frame_keys']],
+        gained=[source_merge_conflict_row(rows_by_key[key], 'gained')
+                for key in retention['gained_frame_keys']])
+
+
+def source_merge_conflict_row(row: Dict, change: str) -> Dict:
+    if change not in ('lost', 'gained'):
+        raise ValueError('Conflict change must be lost or gained')
+    metrics = row['metrics']
+    merge = row.get('candidate_merge') or {}
+    return dict(
+        frame_key=source_frame_key(row), change=change,
+        merged_top1=dict(
+            source=merge.get('raw_top1_source'),
+            hit=bool(metrics['top1_hit']),
+            riou=float(metrics['top1_riou']),
+            score=metrics['top1_score']),
+        source_top1_metrics=merge.get('source_top1_metrics', {}),
+        source_pre_nms_top_log_odds=merge.get(
+            'source_pre_nms_top_log_odds', {}),
+        s7_affine_scale=merge.get('s7_affine_scale'),
+        s7_affine_bias=merge.get('s7_affine_bias'),
+        s7_lane_adjustment_max=merge.get('s7_lane_adjustment_max'),
+        s7_lane_adjustment_mean=merge.get('s7_lane_adjustment_mean'))
 
 
 def pairwise_v2_source_selection_gate(
@@ -2464,7 +2849,11 @@ def s7_architecture(args) -> Dict:
     enabled = bool(getattr(args, 's7_residual', False))
     protected_merge = bool(getattr(
         args, 's7_protected_merge', False) or getattr(
-            args, 'train_components', '') == 's7_merge')
+            args, 'train_components', '') in (
+                's7_merge', 's7_lane_arbitration'))
+    lane_arbitration = bool(getattr(
+        args, 's7_lane_arbitration', False) or getattr(
+            args, 'train_components', '') == 's7_lane_arbitration')
     return dict(
         enabled=enabled,
         protected_merge=(protected_merge if enabled else False),
@@ -2481,20 +2870,35 @@ def s7_architecture(args) -> Dict:
             args, 's7_anchor_sizes', [])] if enabled else []),
         merge_initial_bias=(float(getattr(
             args, 's7_merge_init_bias', -2.0))
-                            if enabled and protected_merge else None))
+                            if enabled and protected_merge else None),
+        lane_arbitration=(lane_arbitration if enabled and protected_merge
+                          else False),
+        lane_hidden=(int(getattr(args, 's7_lane_hidden', 32))
+                     if lane_arbitration and enabled and protected_merge
+                     else None),
+        lane_max_adjustment=(float(getattr(
+            args, 's7_lane_max_adjustment', 2.0))
+                             if lane_arbitration and enabled and protected_merge
+                             else None))
+
 
 
 def load_heads_checkpoint_state(heads, payload: Dict,
-                                allow_s7_base_initialization: bool = False):
-    """Load a native checkpoint into S7 only for explicit initialization."""
-    if allow_s7_base_initialization:
+                                allow_s7_base_initialization: bool = False,
+                                allow_lane_arbitration_initialization: bool = False):
+    """Load a checkpoint while allowing only explicitly new branch keys."""
+    if allow_s7_base_initialization or allow_lane_arbitration_initialization:
         incompatible = heads.load_state_dict(
             payload['heads_state_dict'], strict=False)
-        allowed_prefixes = (
-            's7_readout.', 's7_rpn_head.', 's7_score_calibrator.')
+        allowed_prefixes = []
+        if allow_s7_base_initialization:
+            allowed_prefixes.extend((
+                's7_readout.', 's7_rpn_head.', 's7_score_calibrator.'))
+        if allow_lane_arbitration_initialization:
+            allowed_prefixes.append('s7_lane_arbitrator.')
         disallowed_missing = [
             name for name in incompatible.missing_keys
-            if not name.startswith(allowed_prefixes)]
+            if not any(name.startswith(prefix) for prefix in allowed_prefixes)]
         if disallowed_missing or incompatible.unexpected_keys:
             raise RuntimeError(
                 'S7 base initialization state mismatch: missing={} '
@@ -2577,6 +2981,11 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
             None if source_baseline_correct_keys is None else
             [str(key) for key in source_baseline_correct_keys]),
         source_sampling=source_sampling,
+        s7_readout_reference=(
+            dict(
+                paper='LiDeRe', url=LIDERE_PAPER_URL,
+                implementation_scope='inspired_lightweight_residual_readout')
+            if bool(getattr(args, 's7_residual', False)) else None),
         s7_architecture=s7_architecture(args),
         s7_inference_enabled=bool(heads.s7_inference_enabled()),
         roi_cls_teacher_state=heads.roi_cls_teacher_state(),
@@ -2590,10 +2999,13 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                     ['loss_s7_merge_retention', 'loss_s7_merge_gain',
                      'loss_s7_merge_prior']
                     if args.train_components == 's7_merge' else (
+                    ['loss_s7_lane_retention', 'loss_s7_lane_gain',
+                     'loss_s7_lane_prior']
+                    if args.train_components == 's7_lane_arbitration' else (
                     ['loss_cls', 'loss_roi_pairwise', 'loss_roi_retention']
                     if args.train_components in (
                         'roi_cls_pairwise', 'roi_cls_pairwise_v2')
-                    else ['loss_cls'])))),
+                    else ['loss_cls']))))),
             trainable_parameter_names=[
                 name for name, parameter in heads.named_parameters()
                 if parameter.requires_grad],
@@ -2628,7 +3040,8 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                           negatives_per_positive=int(
                               args.pairwise_negatives_per_positive))),
             s7_source_gate=(
-                None if args.train_components not in ('s7_rpn', 's7_merge')
+                None if args.train_components not in (
+                    's7_rpn', 's7_merge', 's7_lane_arbitration')
                 else dict(
                     min_full_top1=int(getattr(
                         args, 's7_source_min_full_top1', 677)),
@@ -2648,6 +3061,16 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                     prior_weight=float(args.s7_merge_prior_weight),
                     initial_bias=float(args.s7_merge_init_bias),
                     native_nms_protected=True,
+                    proposal_sources=['native_s14', 'supplement_s7'])),
+            s7_lane_arbitration=(
+                None if args.train_components != 's7_lane_arbitration' else dict(
+                    base_checkpoint=(
+                        None if not getattr(args, 'init_checkpoint', None)
+                        else os.path.abspath(args.init_checkpoint)),
+                    hidden=int(args.s7_lane_hidden),
+                    max_adjustment=float(args.s7_lane_max_adjustment),
+                    base_epoch=int(args.s7_lane_base_epoch),
+                    native_nms_protected=True,
                     proposal_sources=['native_s14', 'supplement_s7']))),
         in_channels=int(in_channels), patch_size=int(args.patch_size),
         rpn_feat_channels=int(args.rpn_feat_channels),
@@ -2664,7 +3087,8 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
 
 def validate_checkpoint(payload: Dict, in_channels: int, args,
                         allow_training_mode_mismatch: bool = False,
-                        allow_s7_base_initialization: bool = False):
+                        allow_s7_base_initialization: bool = False,
+                        allow_lane_arbitration_initialization: bool = False):
     required = (
         'source_only', 'frozen_dinov2', 'in_channels', 'patch_size',
         'rpn_feat_channels', 'roi_fc_channels', 'heads_state_dict')
@@ -2711,6 +3135,17 @@ def validate_checkpoint(payload: Dict, in_channels: int, args,
             if (requested_merge and stored_s7.get('merge_initial_bias')
                     != requested_s7.get('merge_initial_bias')):
                 architecture_mismatch = True
+            if (requested_s7.get('lane_arbitration', False)
+                    != bool(stored_s7.get('lane_arbitration', False))
+                    and not allow_lane_arbitration_initialization):
+                architecture_mismatch = True
+            if (requested_s7.get('lane_arbitration', False)
+                    and bool(stored_s7.get('lane_arbitration', False))
+                    and (stored_s7.get('lane_hidden')
+                         != requested_s7.get('lane_hidden')
+                         or stored_s7.get('lane_max_adjustment')
+                         != requested_s7.get('lane_max_adjustment'))):
+                architecture_mismatch = True
             if architecture_mismatch:
                 raise RuntimeError('S7 checkpoint architecture mismatch')
     elif bool(stored_s7.get('enabled', False)):
@@ -2724,7 +3159,8 @@ def train_source_only(dino, heads, train_records, val_records, args,
     roi_cls_mode = args.train_components in ('roi_cls',) + pairwise_modes
     s7_rpn_mode = args.train_components == 's7_rpn'
     s7_merge_mode = args.train_components == 's7_merge'
-    s7_mode = bool(s7_rpn_mode or s7_merge_mode)
+    s7_lane_mode = args.train_components == 's7_lane_arbitration'
+    s7_mode = bool(s7_rpn_mode or s7_merge_mode or s7_lane_mode)
     protected_source_mode = bool(roi_cls_mode or s7_mode)
     trainable_names = configure_trainable_components(
         heads, args.train_components)
@@ -2752,12 +3188,20 @@ def train_source_only(dino, heads, train_records, val_records, args,
     history = []
     if args.init_checkpoint:
         payload = torch.load(args.init_checkpoint, map_location='cpu')
+        if s7_lane_mode and int(payload.get('epoch', -1)) != int(
+                args.s7_lane_base_epoch):
+            raise RuntimeError(
+                'Lane arbitration base checkpoint must be audited epoch 1; '
+                'found epoch {}'.format(payload.get('epoch')))
         validate_checkpoint(
             payload, in_channels, args,
             allow_training_mode_mismatch=True,
-            allow_s7_base_initialization=s7_mode)
+            allow_s7_base_initialization=(s7_mode and not s7_lane_mode),
+            allow_lane_arbitration_initialization=s7_lane_mode)
         load_heads_checkpoint_state(
-            heads, payload, allow_s7_base_initialization=s7_mode)
+            heads, payload,
+            allow_s7_base_initialization=(s7_mode and not s7_lane_mode),
+            allow_lane_arbitration_initialization=s7_lane_mode)
         if s7_merge_mode:
             component_payload = torch.load(
                 args.s7_component_checkpoint, map_location='cpu')
@@ -2879,6 +3323,7 @@ def train_source_only(dino, heads, train_records, val_records, args,
             or epoch == int(args.epochs))
         val_summary = None
         small_val_summary = None
+        merge_conflicts = None
         if evaluate_epoch:
             val_rows = evaluate_records(
                 dino, heads, val_records, args, dino_device, head_device,
@@ -2908,6 +3353,9 @@ def train_source_only(dino, heads, train_records, val_records, args,
                 retention_summary = source_top1_retention_summary(
                     source_baseline_correct_keys, val_rows)
                 if s7_mode:
+                    if s7_merge_mode or s7_lane_mode:
+                        merge_conflicts = source_merge_conflict_summary(
+                            source_baseline_correct_keys, val_rows)
                     protected_gate = s7_source_selection_gate(
                         source_baseline_summary,
                         source_baseline_small_summary,
@@ -2970,6 +3418,10 @@ def train_source_only(dino, heads, train_records, val_records, args,
             source_selection_gate_passed=bool(source_gate_passed),
             source_retention_passed=exact_retention_passed,
             source_exact_retention=retention_summary,
+            s7_merge_calibration=(
+                s7_calibration_state(heads)
+                if s7_merge_mode or s7_lane_mode else None),
+            s7_merge_conflicts=merge_conflicts,
             source_selection_gate=protected_gate,
             pairwise_v2_source_gate=(
                 protected_gate if args.train_components ==
@@ -2988,7 +3440,8 @@ def train_source_only(dino, heads, train_records, val_records, args,
         progress_path = None
         progress_replacements = 0
         if args.train_components in (
-                'roi_cls_pairwise_v2', 's7_rpn', 's7_merge'):
+                'roi_cls_pairwise_v2', 's7_rpn', 's7_merge',
+                's7_lane_arbitration'):
             progress_path, progress_replacements = (
                 write_source_training_progress(
                     args, epoch, best_epoch, best_path, latest_path,
@@ -3078,6 +3531,26 @@ def main():
             mode='official_source_train_and_val_splits',
             train_datasets=list(args.source_train_datasets),
             val_datasets=list(args.source_val_datasets))
+    source_conflict_spec = None
+    if getattr(args, 'source_conflict_result_json', None):
+        source_conflict_spec = load_source_conflict_spec(
+            args.source_conflict_result_json, args.source_conflict_epoch)
+        records_by_key = {
+            '{}|{}|{}'.format(
+                record['split'], record['seq'], int(record['frame'])): record
+            for record in source_val}
+        missing = sorted(
+            set(source_conflict_spec['frame_keys']) - set(records_by_key))
+        if missing:
+            raise RuntimeError(
+                'Source conflict frames are absent from validation: {}'.format(
+                    ', '.join(missing)))
+        source_val = [records_by_key[key]
+                      for key in source_conflict_spec['frame_keys']]
+        source_protocol['bounded_conflict_audit'] = dict(
+            result_json=source_conflict_spec['result_json'],
+            epoch=source_conflict_spec['epoch'],
+            frame_count=len(source_val))
     targets = [] if args.skip_target_eval else target_records(args)
     if targets:
         assert_training_target_isolation(
@@ -3104,6 +3577,12 @@ def main():
         best_path = args.eval_only_checkpoint
         payload = torch.load(best_path, map_location='cpu')
         validate_checkpoint(payload, in_channels, args)
+        if (source_conflict_spec is not None
+                and int(payload.get('epoch', -1))
+                != int(source_conflict_spec['epoch'])):
+            raise RuntimeError(
+                'Conflict checkpoint epoch {} does not match requested epoch {}'
+                .format(payload.get('epoch'), source_conflict_spec['epoch']))
         load_heads_checkpoint_state(heads, payload)
         best_epoch = int(payload.get('best_epoch', payload.get('epoch', 0)))
         best_source_summary = payload.get('best_source_val_summary')
@@ -3151,7 +3630,10 @@ def main():
     if args.skip_target_eval:
         target_rows = None
         target_summary = None
-        decision = 'SOURCE_ONLY_TRAINING_COMPLETE_TARGET_NOT_READ'
+        decision = (
+            'SOURCE_ONLY_CONFLICT_AUDIT_COMPLETE_TARGET_NOT_READ'
+            if source_conflict_spec is not None else
+            'SOURCE_ONLY_TRAINING_COMPLETE_TARGET_NOT_READ')
     else:
         target_rows = evaluate_records(
             dino, heads, targets, args, dino_device, head_device,
@@ -3164,9 +3646,28 @@ def main():
         dino_versions == common.module_parameter_versions(dino))
     if not dino_unchanged:
         raise RuntimeError('Frozen DINO parameter invariant failed')
+    source_conflict_audit = None
+    if source_conflict_spec is not None:
+        rows_by_key = {
+            source_frame_key(row): row for row in source_val_rows}
+        source_conflict_audit = dict(source_conflict_spec)
+        source_conflict_audit.update(
+            checkpoint=os.path.abspath(args.eval_only_checkpoint),
+            checkpoint_epoch=int(payload.get('epoch', -1)),
+            target_read=False,
+            rows=(
+                [source_merge_conflict_row(rows_by_key[key], 'lost')
+                 for key in source_conflict_spec['lost_frame_keys']]
+                + [source_merge_conflict_row(rows_by_key[key], 'gained')
+                   for key in source_conflict_spec['gained_frame_keys']]))
     payload = dict(
         labeller=LABELLER_NAME, protocol_version=PROTOCOL_VERSION,
         paper=PAPER_URL, paper_code=PAPER_CODE_URL,
+        related_work=dict(
+            lidere=dict(
+                url=LIDERE_PAPER_URL,
+                current_scope='inspired_lightweight_residual_readout',
+                faithful_interpolation_attention_implemented=False)),
         dinov2_checkpoint=os.path.abspath(args.dinov2_checkpoint),
         source_selected_checkpoint=os.path.abspath(best_path),
         protocol=dict(
@@ -3319,6 +3820,7 @@ def main():
             current_inference_rule='valid_rotated_obb_corners',
             history=history,
             source_val_results_pickle=source_val_results_path),
+        source_conflict_audit=source_conflict_audit,
         target_dev=(None if target_summary is None else dict(
             summary=target_summary, rows=target_rows)),
         decision=decision)

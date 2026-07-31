@@ -24,6 +24,9 @@ def _args(tmp_path, **overrides):
         s7_merge_init_bias=-2.0, s7_merge_margin=0.5,
         s7_merge_retention_weight=2.0, s7_merge_gain_weight=1.0,
         s7_merge_prior_weight=0.01,
+        s7_lane_hidden=32, s7_lane_max_adjustment=2.0,
+        s7_lane_base_epoch=1,
+        s7_lane_arbitration=False,
         roi_nms_iou_thr=0.1,
         valid_content_tolerance=1e-3,
         deployment_score_thr=0.05, border_margin_ratio=0.02,
@@ -123,6 +126,36 @@ def test_validate_s7_merge_requires_native_and_component_checkpoints(tmp_path):
         epochs=4, lr_steps=None, selection_epochs=[1, 2, 3, 4])
     labeller.validate_args(args)
     assert args.lr_steps == [2, 3]
+
+
+def test_validate_s7_lane_arbitration_requires_complete_epoch1_checkpoint(
+        tmp_path):
+    checkpoint = tmp_path / 'epoch01.pth'
+    checkpoint.write_bytes(b'checkpoint')
+    args = _args(
+        tmp_path, s7_residual=True,
+        s7_lane_arbitration=True,
+        train_components='s7_lane_arbitration',
+        init_checkpoint=str(checkpoint), epochs=4, lr_steps=None,
+        selection_epochs=[1, 2, 3, 4])
+    labeller.validate_args(args)
+    assert args.lr_steps == [2, 3]
+    with pytest.raises(ValueError, match='component-checkpoint'):
+        labeller.validate_args(
+            _args(tmp_path, s7_residual=True,
+                  s7_lane_arbitration=True,
+                  train_components='s7_lane_arbitration',
+                  init_checkpoint=str(checkpoint),
+                  s7_component_checkpoint=str(checkpoint), epochs=4,
+                  lr_steps=None, selection_epochs=[1, 2, 3, 4]))
+    with pytest.raises(ValueError, match='locked to the audited epoch-1'):
+        labeller.validate_args(
+            _args(tmp_path, s7_residual=True,
+                  s7_lane_arbitration=True,
+                  train_components='s7_lane_arbitration',
+                  init_checkpoint=str(checkpoint), s7_lane_base_epoch=2,
+                  epochs=4, lr_steps=None,
+                  selection_epochs=[1, 2, 3, 4]))
 
 
 def test_validate_pairwise_v2_requires_matching_nms_policy(tmp_path):
@@ -338,7 +371,8 @@ def test_protected_merge_runs_nms_per_source_and_records_provenance():
     heads.proposal_sources = lambda _feature, _meta: ([], dict(
         native_s14=native, supplement_s7=supplement))
     heads._decode_roi_candidates = lambda _feature, _meta, proposals, rescale: (
-        proposals[:, :5], torch.logit(proposals[:, 5]), proposals[:, 5])
+        proposals[:, :5], torch.logit(proposals[:, 5]), proposals[:, 5],
+        torch.zeros((proposals.shape[0], 4)))
     calls = []
 
     def lane_nms(boxes, scores):
@@ -355,6 +389,13 @@ def test_protected_merge_runs_nms_per_source_and_records_provenance():
     assert heads._last_candidate_merge['proposal_source_counts'] == {
         'native_s14': 1, 'supplement_s7': 1}
     assert heads._last_candidate_merge['raw_top1_source'] == 'native_s14'
+    assert heads._last_candidate_merge['source_top1_detections'] == {
+        'native_s14': pytest.approx([1, 2, 3, 4, 0, 0.9]),
+        'supplement_s7': pytest.approx(
+            [5, 6, 7, 8, 0, torch.sigmoid(torch.logit(
+                torch.tensor(0.8)) - 2.0).item()])}
+    assert heads._last_candidate_merge['s7_affine_scale'] == pytest.approx(1.0)
+    assert heads._last_candidate_merge['s7_affine_bias'] == pytest.approx(-2.0)
 
 
 def test_scaled_gt_preserves_angle_and_scales_first_four_values(monkeypatch):
@@ -461,6 +502,50 @@ def test_s7_merge_mode_trains_only_affine_calibrator():
         for name, parameter in heads.named_parameters())
 
 
+def test_s7_lane_arbitrator_starts_at_zero_and_is_bounded():
+    arbitrator = labeller.S7LaneArbitrator(
+        embedding_channels=4, hidden=3, max_adjustment=1.5)
+    embedding = torch.randn(5, 4)
+    raw = torch.randn(5)
+    output = arbitrator(embedding, raw, torch.tensor(0.2))
+    assert torch.equal(output, torch.zeros(5))
+    with torch.no_grad():
+        arbitrator.output.bias.fill_(100.0)
+    output = arbitrator(embedding, raw, torch.tensor(0.2))
+    assert bool(torch.all(output <= 1.5))
+    assert bool(torch.all(output >= -1.5))
+
+
+def test_s7_lane_arbitration_trains_only_lane_module():
+    class TinyHeads(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.native = torch.nn.Linear(2, 2)
+            self.s7_readout = torch.nn.Linear(2, 2)
+            self.s7_rpn_head = torch.nn.Linear(2, 2)
+            self.s7_score_calibrator = labeller.S7ScoreCalibrator(-2.0)
+            self.s7_lane_arbitrator = labeller.S7LaneArbitrator(2, 3)
+            self.s7_protected_merge = True
+
+    heads = TinyHeads()
+    names = labeller.configure_trainable_components(
+        heads, 's7_lane_arbitration')
+    assert all(name.startswith('s7_lane_arbitrator.') for name in names)
+    assert not any(name.startswith('s7_score_calibrator.') for name in names)
+
+
+def test_s7_lane_architecture_records_bounded_arbitration(tmp_path):
+    args = _args(
+        tmp_path, s7_residual=True,
+        train_components='s7_lane_arbitration',
+        s7_protected_merge=True, s7_lane_arbitration=True,
+        s7_lane_hidden=24, s7_lane_max_adjustment=1.25)
+    architecture = labeller.s7_architecture(args)
+    assert architecture['lane_arbitration'] is True
+    assert architecture['lane_hidden'] == 24
+    assert architecture['lane_max_adjustment'] == pytest.approx(1.25)
+
+
 def test_s7_base_checkpoint_load_allows_only_new_branch_keys():
     class TinyHeads(torch.nn.Module):
         def __init__(self):
@@ -482,6 +567,36 @@ def test_s7_base_checkpoint_load_allows_only_new_branch_keys():
         heads, payload, allow_s7_base_initialization=True)
     assert heads.enabled is False
     assert torch.equal(heads.native.weight, native.weight)
+
+
+def test_s7_lane_checkpoint_initialization_allows_only_new_arbitrator_keys():
+    class TinyHeads(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.native = torch.nn.Linear(2, 2)
+            self.s7_readout = torch.nn.Linear(2, 2)
+            self.s7_rpn_head = torch.nn.Linear(2, 2)
+            self.s7_score_calibrator = labeller.S7ScoreCalibrator(-2.0)
+            self.s7_lane_arbitrator = labeller.S7LaneArbitrator(2, 3)
+            self.enabled = True
+
+        def set_s7_inference_enabled(self, enabled):
+            self.enabled = bool(enabled)
+
+    heads = TinyHeads()
+    stored_state = {
+        name: tensor.detach().clone()
+        for name, tensor in heads.state_dict().items()
+        if not name.startswith('s7_lane_arbitrator.')}
+    stored_state['native.weight'].fill_(0.25)
+    payload = {'heads_state_dict': stored_state}
+    labeller.load_heads_checkpoint_state(
+        heads, payload, allow_lane_arbitration_initialization=True)
+    assert heads.enabled is False
+    assert torch.all(heads.native.weight == 0.25)
+    adjustment = heads.s7_lane_arbitrator(
+        torch.ones((1, 2)), torch.ones(1), torch.ones(()))
+    assert torch.equal(adjustment, torch.zeros_like(adjustment))
 
 
 def test_frozen_s7_component_loader_does_not_replace_native_or_calibrator(
@@ -577,6 +692,8 @@ def test_s7_merge_pair_loss_separates_retention_and_gain_cases():
     assert float(retain['retention'].item()) == pytest.approx(1.0)
     assert float(retain['gain'].item()) == pytest.approx(0.0)
     assert retain['retain_pair_count'] == 1
+    assert retain['retention_active'] == 1
+    assert retain['gain_active'] == 0
     gain = labeller.s7_merge_pair_losses(
         torch.tensor([0.8]), torch.tensor([0.1]),
         torch.tensor([0.2, 1.5]), torch.tensor([0.1, 0.8]),
@@ -584,6 +701,66 @@ def test_s7_merge_pair_loss_separates_retention_and_gain_cases():
     assert float(gain['retention'].item()) == pytest.approx(0.0)
     assert float(gain['gain'].item()) == pytest.approx(0.0)
     assert gain['gain_pair_count'] == 1
+    assert gain['retention_active'] == 0
+    assert gain['gain_active'] == 0
+
+
+def test_s7_conflict_summary_keeps_compact_per_source_evidence():
+    merge = dict(
+        raw_top1_source='supplement_s7',
+        source_top1_metrics={
+            'native_s14': dict(top1_hit=True, top1_riou=0.8, top1_score=0.7),
+            'supplement_s7': dict(
+                top1_hit=False, top1_riou=0.1, top1_score=0.8)},
+        source_pre_nms_top_log_odds={
+            'native_s14': 0.9, 'supplement_s7_raw': 2.0,
+            'supplement_s7_calibrated': 1.2},
+        s7_affine_scale=0.9, s7_affine_bias=-0.6)
+    rows = [dict(
+        split='val', seq='seq', frame=1, candidate_merge=merge,
+        metrics=dict(
+            top1_hit=False, top1_riou=0.1, top1_score=0.8))]
+    summary = labeller.source_merge_conflict_summary(['val|seq|1'], rows)
+    assert summary['gained'] == []
+    assert summary['lost'][0]['frame_key'] == 'val|seq|1'
+    assert summary['lost'][0]['merged_top1']['source'] == 'supplement_s7'
+    assert summary['lost'][0]['source_top1_metrics']['native_s14'][
+        'top1_hit'] is True
+
+
+def test_s7_calibration_state_records_effective_parameters():
+    heads = argparse.Namespace(
+        s7_score_calibrator=labeller.S7ScoreCalibrator(-2.0))
+    state = labeller.s7_calibration_state(heads)
+    assert state == pytest.approx(dict(scale=1.0, bias=-2.0, prior_loss=0.0))
+
+
+def test_source_conflict_spec_reads_only_one_epoch_changed_frames(tmp_path):
+    result_path = tmp_path / 'train_result.json'
+    result_path.write_text(json.dumps(dict(source=dict(history=[
+        dict(epoch=1, source_exact_retention=dict(
+            lost_frame_keys=['val|seq|2'],
+            gained_frame_keys=['val|seq|3', 'val|seq|1']))]))))
+    spec = labeller.load_source_conflict_spec(str(result_path), epoch=1)
+    assert spec['lost_frame_keys'] == ['val|seq|2']
+    assert spec['gained_frame_keys'] == ['val|seq|1', 'val|seq|3']
+    assert spec['frame_keys'] == ['val|seq|1', 'val|seq|2', 'val|seq|3']
+
+
+def test_validate_source_conflict_audit_is_eval_only_and_target_free(tmp_path):
+    result_path = tmp_path / 'train_result.json'
+    result_path.write_text('{}')
+    eval_path = tmp_path / 'epoch01.pth'
+    eval_path.write_bytes(b'checkpoint')
+    args = _args(
+        tmp_path, s7_residual=True, train_components='s7_merge', epochs=4,
+        lr_steps=[2, 3], selection_epochs=[1, 2, 3, 4],
+        eval_only_checkpoint=str(eval_path), skip_target_eval=True,
+        source_conflict_result_json=str(result_path), source_conflict_epoch=1)
+    labeller.validate_args(args)
+    args.skip_target_eval = False
+    with pytest.raises(ValueError, match='skip-target-eval'):
+        labeller.validate_args(args)
 
 
 def test_s7_config_declares_explicit_supplement_checkpoint_and_head():
@@ -607,6 +784,24 @@ def test_s7_retention_merge_config_uses_new_source_gated_checkpoint():
     assert head['s7_merge_init_bias'] == pytest.approx(-2.0)
     assert config['model']['dino_head_checkpoint'].endswith(
         'dino_teacher_s7_retention_merge_v1/labeller_best_source_only.pth')
+
+
+def test_s7_lane_arbitration_config_freezes_epoch1_merge_base():
+    import runpy
+    root = pathlib.Path(__file__).resolve().parents[1]
+    config = runpy.run_path(str(root / 'crane_project/configs/'
+        'crane_symeood_scoped_dino_lowlight_s7_lane_arbitration_v1.py'))
+    head = config['model']['dino_rescue']['head']
+    assert head['s7_protected_merge'] is True
+    assert head['s7_lane_arbitration'] is True
+    assert head['s7_lane_hidden'] == 32
+    assert config['model']['dino_head_checkpoint'].endswith(
+        'dino_teacher_s7_lane_arbitration_v1/'
+        'labeller_best_source_only.pth')
+    assert config['s7_lane_training']['base_checkpoint'].endswith(
+        'dino_teacher_s7_retention_merge_v1/'
+        'labeller_epoch_01_source_only.pth')
+    assert config['s7_lane_training']['source_gate'] == 'exact_retention'
 
 
 def test_roi_cls_mode_optimizes_only_roi_classification_loss():

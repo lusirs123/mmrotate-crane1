@@ -191,6 +191,11 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
                 's7_protected_merge', False)),
             s7_merge_init_bias=float(head_cfg.get(
                 's7_merge_init_bias', -2.0)),
+            s7_lane_arbitration=bool(head_cfg.get(
+                's7_lane_arbitration', False)),
+            s7_lane_hidden=int(head_cfg.get('s7_lane_hidden', 32)),
+            s7_lane_max_adjustment=float(head_cfg.get(
+                's7_lane_max_adjustment', 2.0)),
             s7_anchor_sizes=[float(value) for value in head_cfg.get(
                 's7_anchor_sizes', [16, 32, 64, 128, 256])])
         dino, loaded_patch_size = common.load_frozen_dinov2(
