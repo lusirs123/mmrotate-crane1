@@ -26,6 +26,7 @@ def _args(tmp_path, **overrides):
         s7_merge_prior_weight=0.01,
         s7_lane_hidden=32, s7_lane_max_adjustment=2.0,
         s7_lane_base_epoch=1,
+        s7_lane_hard_negatives=4, s7_lane_gain_repeat=8,
         s7_lane_arbitration=False,
         roi_nms_iou_thr=0.1,
         valid_content_tolerance=1e-3,
@@ -154,6 +155,22 @@ def test_validate_s7_lane_arbitration_requires_complete_epoch1_checkpoint(
                   s7_lane_arbitration=True,
                   train_components='s7_lane_arbitration',
                   init_checkpoint=str(checkpoint), s7_lane_base_epoch=2,
+                  epochs=4, lr_steps=None,
+                  selection_epochs=[1, 2, 3, 4]))
+    with pytest.raises(ValueError, match='hard-negatives'):
+        labeller.validate_args(
+            _args(tmp_path, s7_residual=True,
+                  s7_lane_arbitration=True,
+                  train_components='s7_lane_arbitration',
+                  init_checkpoint=str(checkpoint), s7_lane_hard_negatives=0,
+                  epochs=4, lr_steps=None,
+                  selection_epochs=[1, 2, 3, 4]))
+    with pytest.raises(ValueError, match='gain-repeat'):
+        labeller.validate_args(
+            _args(tmp_path, s7_residual=True,
+                  s7_lane_arbitration=True,
+                  train_components='s7_lane_arbitration',
+                  init_checkpoint=str(checkpoint), s7_lane_gain_repeat=33,
                   epochs=4, lr_steps=None,
                   selection_epochs=[1, 2, 3, 4]))
 
@@ -705,6 +722,97 @@ def test_s7_merge_pair_loss_separates_retention_and_gain_cases():
     assert gain['gain_active'] == 0
 
 
+def test_s7_lane_retention_mines_topk_current_adjusted_wrong_candidates():
+    adjusted = torch.tensor([1.2, 0.9, 2.0], requires_grad=True)
+    result = labeller.s7_lane_pair_losses(
+        torch.tensor([1.0]), torch.tensor([0.8]), adjusted,
+        torch.tensor([0.1, 0.2, 0.8]), margin=0.5,
+        hard_negatives=2)
+    assert result['retain_pair_count'] == 2
+    assert result['retention_active'] == 2
+    assert float(result['retention'].item()) == pytest.approx(0.55)
+    result['retention'].backward()
+    assert adjusted.grad.tolist() == pytest.approx([0.5, 0.5, 0.0])
+
+
+def test_s7_lane_gain_beats_native_and_strongest_wrong_s7():
+    adjusted = torch.tensor([1.2, 1.5], requires_grad=True)
+    result = labeller.s7_lane_pair_losses(
+        torch.tensor([1.0]), torch.tensor([0.1]), adjusted,
+        torch.tensor([0.8, 0.1]), margin=0.5,
+        hard_negatives=4)
+    assert result['gain_pair_count'] == 1
+    assert result['gain_s7_competitor_count'] == 1
+    assert result['gain_active'] == 1
+    assert float(result['gain'].item()) == pytest.approx(0.8)
+    result['gain'].backward()
+    assert adjusted.grad.tolist() == pytest.approx([-1.0, 1.0])
+
+
+def test_s7_lane_uses_canonical_optimization_loss_metadata():
+    assert labeller.optimization_loss_component_names(
+        's7_lane_arbitration') == [
+            'loss_s7_lane_retention', 'loss_s7_lane_gain',
+            'loss_s7_lane_prior']
+
+
+def test_s7_lane_train_epoch_replays_gain_frames_source_only(
+        tmp_path, monkeypatch):
+    class TinyHeads(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.rpn_head = torch.nn.Identity()
+            self.roi_head = torch.nn.Identity()
+            self.s7_readout = torch.nn.Identity()
+            self.s7_rpn_head = torch.nn.Identity()
+            self.s7_score_calibrator = torch.nn.Identity()
+            self.s7_lane_arbitrator = torch.nn.Linear(1, 1, bias=False)
+
+        def forward_s7_lane_arbitration_train(
+                self, _feature, img_meta, _gt_boxes, **_kwargs):
+            parameter = self.s7_lane_arbitrator.weight.sum()
+            zero = parameter * 0.0
+            gain_pair = int(img_meta['frame'] == 1)
+            gain = (parameter - 1.0).square() if gain_pair else zero
+            return dict(
+                loss_s7_lane_retention=zero,
+                loss_s7_lane_gain=gain,
+                loss_s7_lane_prior=zero,
+                s7_lane_retain_pair_count=1 - gain_pair,
+                s7_lane_gain_pair_count=gain_pair,
+                s7_lane_retention_active=0,
+                s7_lane_gain_active=gain_pair)
+
+    def fake_prepare(_dino, record, _args, _dino_device, _head_device):
+        return (
+            torch.zeros(1), {'frame': int(record['frame'])},
+            torch.zeros((0, 5)), torch.zeros(0, dtype=torch.long),
+            np.zeros((0, 5), dtype=np.float32), True)
+
+    monkeypatch.setattr(labeller, 'prepare_record', fake_prepare)
+    heads = TinyHeads()
+    optimizer = torch.optim.SGD(
+        heads.s7_lane_arbitrator.parameters(), lr=0.01)
+    args = _args(
+        tmp_path, train_components='s7_lane_arbitration',
+        warmup_iters=0, s7_lane_gain_repeat=3,
+        s7_lane_hard_negatives=4)
+    records = [
+        dict(split='train', seq='seq', frame=1),
+        dict(split='train', seq='seq', frame=2)]
+    summary = labeller.train_epoch(
+        None, heads, optimizer, records, epoch=1, global_step=0,
+        args=args, dino_device=torch.device('cpu'),
+        head_device=torch.device('cpu'))
+    assert summary['count'] == 4
+    assert summary['s7_lane_gain_replay'] == dict(
+        repeat=3, unique_gain_frame_count=1, extra_record_count=2,
+        source_train_only=True)
+    assert summary['optimized_components'] == [
+        'loss_s7_lane_retention', 'loss_s7_lane_gain',
+        'loss_s7_lane_prior']
+
+
 def test_s7_conflict_summary_keeps_compact_per_source_evidence():
     merge = dict(
         raw_top1_source='supplement_s7',
@@ -802,6 +910,22 @@ def test_s7_lane_arbitration_config_freezes_epoch1_merge_base():
         'dino_teacher_s7_retention_merge_v1/'
         'labeller_epoch_01_source_only.pth')
     assert config['s7_lane_training']['source_gate'] == 'exact_retention'
+
+
+def test_s7_lane_arbitration_v2_config_uses_dynamic_source_only_mining():
+    import runpy
+    root = pathlib.Path(__file__).resolve().parents[1]
+    config = runpy.run_path(str(root / 'crane_project/configs/'
+        'crane_symeood_scoped_dino_lowlight_s7_lane_arbitration_v2.py'))
+    training = config['s7_lane_training']
+    assert training['hard_negative_ranking'] == (
+        'current_adjusted_s7_log_odds')
+    assert training['hard_negatives'] == 4
+    assert training['gain_repeat'] == 8
+    assert training['source_train_only'] is True
+    assert config['model']['dino_head_checkpoint'].endswith(
+        'dino_teacher_s7_lane_arbitration_v2/'
+        'labeller_best_source_only.pth')
 
 
 def test_roi_cls_mode_optimizes_only_roi_classification_loss():

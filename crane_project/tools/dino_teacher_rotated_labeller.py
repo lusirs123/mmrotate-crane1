@@ -35,7 +35,7 @@ from crane_project.tools import dino_teacher_common as common  # noqa: E402
 
 
 LABELLER_NAME = 'Frozen DINOv2 Oriented RPN/ROI Source Labeller V1'
-PROTOCOL_VERSION = 12
+PROTOCOL_VERSION = 13
 PAIRWISE_V2_MAX_EPOCHS = 4
 PAPER_URL = (
     'https://openaccess.thecvf.com/content/CVPR2025/html/'
@@ -167,6 +167,14 @@ def parse_args():
     parser.add_argument('--s7-lane-max-adjustment', type=float, default=2.0)
     parser.add_argument('--s7-lane-base-epoch', type=int, default=1)
     parser.add_argument(
+        '--s7-lane-hard-negatives', type=int, default=4,
+        help=('Number of current adjusted-logit S7 false candidates used by '
+              'each native-retention frame.'))
+    parser.add_argument(
+        '--s7-lane-gain-repeat', type=int, default=8,
+        help=('Within each source-train epoch, process each mined gain frame '
+              'this many times in total.'))
+    parser.add_argument(
         '--pairwise-negative-riou-thr', type=float, default=0.1,
         help='Maximum GT RIoU for a decoded ROI to be a pairwise negative.')
     parser.add_argument(
@@ -249,6 +257,10 @@ def validate_args(args):
     if (int(args.s7_lane_hidden) <= 0
             or float(args.s7_lane_max_adjustment) <= 0.0):
         raise ValueError('S7 lane arbitration settings must be positive')
+    if not 1 <= int(args.s7_lane_hard_negatives) <= 32:
+        raise ValueError('--s7-lane-hard-negatives must be within [1, 32]')
+    if not 1 <= int(args.s7_lane_gain_repeat) <= 32:
+        raise ValueError('--s7-lane-gain-repeat must be within [1, 32]')
     if int(args.s7_lane_base_epoch) != 1:
         raise ValueError(
             's7_lane_arbitration is locked to the audited epoch-1 base')
@@ -511,6 +523,28 @@ def optimization_loss_total(losses: Dict, train_components: str):
         train_components))
 
 
+def optimization_loss_component_names(train_components: str) -> List[str]:
+    """Return the canonical loss-name list for logs and checkpoints."""
+    if train_components == 'all':
+        return ['loss_rpn_cls', 'loss_rpn_bbox', 'loss_cls', 'loss_bbox']
+    if train_components == 's7_rpn':
+        return ['loss_s7_rpn_cls', 'loss_s7_rpn_bbox']
+    if train_components == 's7_merge':
+        return [
+            'loss_s7_merge_retention', 'loss_s7_merge_gain',
+            'loss_s7_merge_prior']
+    if train_components == 's7_lane_arbitration':
+        return [
+            'loss_s7_lane_retention', 'loss_s7_lane_gain',
+            'loss_s7_lane_prior']
+    if train_components in ('roi_cls_pairwise', 'roi_cls_pairwise_v2'):
+        return ['loss_cls', 'loss_roi_pairwise', 'loss_roi_retention']
+    if train_components == 'roi_cls':
+        return ['loss_cls']
+    raise ValueError('Unsupported train-components: {}'.format(
+        train_components))
+
+
 def roi_foreground_log_odds(cls_score: torch.Tensor) -> torch.Tensor:
     """Return the foreground-vs-background logit used for ROI ordering."""
     if cls_score.ndim != 2 or cls_score.shape[1] != 2:
@@ -615,6 +649,81 @@ def s7_merge_pair_losses(native_log_odds: torch.Tensor,
         gain_pair_count=gain_pair_count,
         retention_active=int(float(retention.detach().item()) > 0.0),
         gain_active=int(float(gain.detach().item()) > 0.0),
+        native_top1_correct=int(native_top1_correct))
+
+
+def s7_lane_pair_losses(native_log_odds: torch.Tensor,
+                        native_gt_overlap: torch.Tensor,
+                        adjusted_s7_log_odds: torch.Tensor,
+                        s7_gt_overlap: torch.Tensor,
+                        margin: float, hard_negatives: int,
+                        riou_thr: float = 0.5) -> Dict:
+    """Mine current-logit lane pairs without using source-val conflicts."""
+    if not (native_log_odds.ndim == native_gt_overlap.ndim
+            == adjusted_s7_log_odds.ndim == s7_gt_overlap.ndim == 1):
+        raise ValueError('S7 lane logits and overlaps must be one-dimensional')
+    if native_log_odds.shape != native_gt_overlap.shape:
+        raise ValueError('Native lane logits and overlaps must share one shape')
+    if adjusted_s7_log_odds.shape != s7_gt_overlap.shape:
+        raise ValueError('S7 lane logits and overlaps must share one shape')
+    hard_negatives = int(hard_negatives)
+    if hard_negatives <= 0:
+        raise ValueError('S7 lane hard-negative count must be positive')
+    zero = (native_log_odds.sum() + adjusted_s7_log_odds.sum()) * 0.0
+    retention = zero
+    gain = zero
+    retain_pair_count = 0
+    retention_active = 0
+    gain_pair_count = 0
+    gain_s7_competitor_count = 0
+    native_top1_correct = False
+    if native_log_odds.numel():
+        native_top = torch.argmax(native_log_odds)
+        native_top_logit = native_log_odds[native_top]
+        native_top1_correct = bool(
+            native_gt_overlap[native_top] >= float(riou_thr))
+        wrong = torch.nonzero(
+            s7_gt_overlap < float(riou_thr),
+            as_tuple=False).reshape(-1)
+        if native_top1_correct and wrong.numel():
+            count = min(hard_negatives, int(wrong.numel()))
+            order = torch.topk(
+                adjusted_s7_log_odds[wrong].detach(), count).indices
+            competitors = wrong[order]
+            violations = torch.relu(
+                float(margin) + adjusted_s7_log_odds[competitors]
+                - native_top_logit)
+            retention = violations.mean()
+            retain_pair_count = int(count)
+            retention_active = int(
+                (violations.detach() > 0.0).sum().item())
+        elif not native_top1_correct:
+            usable = torch.nonzero(
+                s7_gt_overlap >= float(riou_thr),
+                as_tuple=False).reshape(-1)
+            if usable.numel():
+                usable_order = torch.argmax(
+                    adjusted_s7_log_odds[usable].detach())
+                supplement = usable[usable_order]
+                strongest_competitor = native_top_logit
+                if wrong.numel():
+                    wrong_order = torch.argmax(
+                        adjusted_s7_log_odds[wrong].detach())
+                    strongest_wrong = adjusted_s7_log_odds[wrong[wrong_order]]
+                    strongest_competitor = torch.maximum(
+                        strongest_competitor, strongest_wrong)
+                    gain_s7_competitor_count = 1
+                gain = torch.relu(
+                    float(margin) + strongest_competitor
+                    - adjusted_s7_log_odds[supplement])
+                gain_pair_count = 1
+    return dict(
+        retention=retention, gain=gain,
+        retain_pair_count=retain_pair_count,
+        gain_pair_count=gain_pair_count,
+        retention_active=retention_active,
+        gain_active=int(float(gain.detach().item()) > 0.0),
+        gain_s7_competitor_count=gain_s7_competitor_count,
         native_top1_correct=int(native_top1_correct))
 
 
@@ -1683,7 +1792,7 @@ class FrozenDinoRotatedHeads(nn.Module):
             self, feature: torch.Tensor, img_meta: Dict,
             gt_boxes: torch.Tensor, riou_thr: float, margin: float,
             retention_weight: float, gain_weight: float,
-            prior_weight: float) -> Dict:
+            prior_weight: float, hard_negatives: int) -> Dict:
         """Train only a bounded source-aware residual on the fixed S7 lane."""
         from mmcv.ops import box_iou_rotated
 
@@ -1713,54 +1822,31 @@ class FrozenDinoRotatedHeads(nn.Module):
                     s7_boxes.float(), gt_boxes.float()).max(dim=1).values
             else:
                 s7_overlap = s7_logits.new_zeros(s7_logits.shape)
-        native_top = (torch.argmax(native_logits)
-                      if native_logits.numel() else None)
-        native_top_logit = (native_logits[native_top].detach()
-                            if native_top is not None else
+        native_top_logit = (native_logits.max().detach()
+                            if native_logits.numel() else
                             s7_logits.new_zeros(()))
         base_s7_logits = self.s7_score_calibrator(
             s7_logits.detach()).detach()
         adjustment = self.s7_lane_arbitrator(
             s7_embedding.detach(), s7_logits.detach(), native_top_logit)
         adjusted_s7_logits = base_s7_logits + adjustment
-        native_top1_correct = bool(
-            native_top is not None
-            and native_overlap[native_top] >= float(riou_thr))
-        retention = adjustment.sum() * 0.0
-        gain = adjustment.sum() * 0.0
-        retain_pair_count = 0
-        gain_pair_count = 0
-        if native_top1_correct:
-            wrong = torch.nonzero(
-                s7_overlap < float(riou_thr),
-                as_tuple=False).reshape(-1)
-            if wrong.numel():
-                competitor = wrong[torch.argmax(base_s7_logits[wrong])]
-                retention = torch.relu(
-                    float(margin) + adjusted_s7_logits[competitor]
-                    - native_top_logit)
-                retain_pair_count = 1
-        else:
-            usable = torch.nonzero(
-                s7_overlap >= float(riou_thr),
-                as_tuple=False).reshape(-1)
-            if usable.numel():
-                supplement_index = usable[
-                    torch.argmax(base_s7_logits[usable])]
-                gain = torch.relu(
-                    float(margin) + native_top_logit
-                    - adjusted_s7_logits[supplement_index])
-                gain_pair_count = 1
+        pairs = s7_lane_pair_losses(
+            native_logits.detach(), native_overlap.detach(),
+            adjusted_s7_logits, s7_overlap.detach(), margin,
+            hard_negatives, riou_thr=riou_thr)
         prior = self.s7_lane_arbitrator.prior_loss(adjustment)
         return dict(
-            loss_s7_lane_retention=(retention * float(retention_weight)),
-            loss_s7_lane_gain=(gain * float(gain_weight)),
+            loss_s7_lane_retention=(
+                pairs['retention'] * float(retention_weight)),
+            loss_s7_lane_gain=(pairs['gain'] * float(gain_weight)),
             loss_s7_lane_prior=(prior * float(prior_weight)),
-            s7_lane_retain_pair_count=retain_pair_count,
-            s7_lane_gain_pair_count=gain_pair_count,
-            s7_lane_retention_active=int(float(retention.detach().item()) > 0.0),
-            s7_lane_gain_active=int(float(gain.detach().item()) > 0.0),
-            s7_lane_native_top1_correct=int(native_top1_correct),
+            s7_lane_retain_pair_count=pairs['retain_pair_count'],
+            s7_lane_gain_pair_count=pairs['gain_pair_count'],
+            s7_lane_retention_active=pairs['retention_active'],
+            s7_lane_gain_active=pairs['gain_active'],
+            s7_lane_gain_s7_competitor_count=(
+                pairs['gain_s7_competitor_count']),
+            s7_lane_native_top1_correct=pairs['native_top1_correct'],
             s7_lane_adjustment_mean=float(adjustment.detach().mean().item())
             if adjustment.numel() else 0.0,
             s7_lane_candidate_count=int(s7_logits.numel()))
@@ -2148,6 +2234,8 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
     component_sums = {}
     metric_sums = {}
     cache_hits = 0
+    gain_replayed_keys = set()
+    gain_replay_extra_count = 0
     for index, record in enumerate(ordered):
         current_lr = scheduled_lr(args, epoch, global_step)
         for param_group in optimizer.param_groups:
@@ -2175,7 +2263,8 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                 margin=args.s7_merge_margin,
                 retention_weight=args.s7_merge_retention_weight,
                 gain_weight=args.s7_merge_gain_weight,
-                prior_weight=args.s7_merge_prior_weight)
+                prior_weight=args.s7_merge_prior_weight,
+                hard_negatives=args.s7_lane_hard_negatives)
         elif args.train_components == 'roi_cls':
             output = heads.forward_roi_cls_hard_train(
                 feature, img_meta, gt_boxes, args.roi_samples,
@@ -2205,6 +2294,17 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
         else:
             output = heads.forward_train(
                 feature, img_meta, gt_boxes, gt_labels)
+        if (args.train_components == 's7_lane_arbitration'
+                and int(output.get('s7_lane_gain_pair_count', 0)) > 0):
+            replay_key = (
+                str(record.get('split', '')), str(record.get('seq', '')),
+                int(record.get('frame', -1)))
+            if replay_key not in gain_replayed_keys:
+                gain_replayed_keys.add(replay_key)
+                extra = int(args.s7_lane_gain_repeat) - 1
+                if extra > 0:
+                    ordered.extend([record] * extra)
+                    gain_replay_extra_count += extra
         for name, value in loss_component_means(output).items():
             component_sums[name] = component_sums.get(name, 0.0) + value
         for name, value in output.items():
@@ -2262,25 +2362,9 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                         's7_lane_gain_active', 0.0))))
             print(message)
         del feature, gt_boxes, gt_labels, total
-    if args.train_components == 'all':
-        optimized_components = [
-            'loss_rpn_cls', 'loss_rpn_bbox', 'loss_cls', 'loss_bbox']
-    elif args.train_components == 's7_rpn':
-        optimized_components = ['loss_s7_rpn_cls', 'loss_s7_rpn_bbox']
-    elif args.train_components == 's7_merge':
-        optimized_components = [
-            'loss_s7_merge_retention', 'loss_s7_merge_gain',
-            'loss_s7_merge_prior']
-    elif args.train_components == 's7_lane_arbitration':
-        optimized_components = [
-            'loss_s7_lane_retention', 'loss_s7_lane_gain',
-            'loss_s7_lane_prior']
-    elif args.train_components in ('roi_cls_pairwise', 'roi_cls_pairwise_v2'):
-        optimized_components = [
-            'loss_cls', 'loss_roi_pairwise', 'loss_roi_retention']
-    else:
-        optimized_components = ['loss_cls']
-    return dict(
+    optimized_components = optimization_loss_component_names(
+        args.train_components)
+    summary = dict(
         epoch=int(epoch), count=len(ordered),
         global_step_end=int(global_step),
         lr_end=float(optimizer.param_groups[0]['lr']),
@@ -2296,6 +2380,13 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
         head_peak_memory_mb=(
             float(torch.cuda.max_memory_allocated(head_device) / (1024 ** 2))
             if head_device.type == 'cuda' else 0.0))
+    if args.train_components == 's7_lane_arbitration':
+        summary['s7_lane_gain_replay'] = dict(
+            repeat=int(args.s7_lane_gain_repeat),
+            unique_gain_frame_count=len(gain_replayed_keys),
+            extra_record_count=int(gain_replay_extra_count),
+            source_train_only=True)
+    return summary
 
 
 def rotated_box_corners(detections: np.ndarray) -> np.ndarray:
@@ -2991,21 +3082,8 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
         roi_cls_teacher_state=heads.roi_cls_teacher_state(),
         training_protocol=dict(
             train_components=str(args.train_components),
-            optimization_loss_components=(
-                ['loss_rpn_cls', 'loss_rpn_bbox', 'loss_cls', 'loss_bbox']
-                if args.train_components == 'all' else (
-                    ['loss_s7_rpn_cls', 'loss_s7_rpn_bbox']
-                    if args.train_components == 's7_rpn' else (
-                    ['loss_s7_merge_retention', 'loss_s7_merge_gain',
-                     'loss_s7_merge_prior']
-                    if args.train_components == 's7_merge' else (
-                    ['loss_s7_lane_retention', 'loss_s7_lane_gain',
-                     'loss_s7_lane_prior']
-                    if args.train_components == 's7_lane_arbitration' else (
-                    ['loss_cls', 'loss_roi_pairwise', 'loss_roi_retention']
-                    if args.train_components in (
-                        'roi_cls_pairwise', 'roi_cls_pairwise_v2')
-                    else ['loss_cls']))))),
+            optimization_loss_components=optimization_loss_component_names(
+                args.train_components),
             trainable_parameter_names=[
                 name for name, parameter in heads.named_parameters()
                 if parameter.requires_grad],
@@ -3070,6 +3148,10 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                     hidden=int(args.s7_lane_hidden),
                     max_adjustment=float(args.s7_lane_max_adjustment),
                     base_epoch=int(args.s7_lane_base_epoch),
+                    hard_negatives=int(args.s7_lane_hard_negatives),
+                    gain_repeat=int(args.s7_lane_gain_repeat),
+                    hard_negative_ranking='current_adjusted_s7_log_odds',
+                    gain_competitors=['native_s14', 'wrong_supplement_s7'],
                     native_nms_protected=True,
                     proposal_sources=['native_s14', 'supplement_s7']))),
         in_channels=int(in_channels), patch_size=int(args.patch_size),
@@ -3673,6 +3755,9 @@ def main():
         protocol=dict(
             architecture=(
                 'frozen_DINOv2_native_S14_plus_protected_residual_S7_RPN_'
+                'to_source_aware_pre_NMS_lane_arbitration'
+                if args.train_components == 's7_lane_arbitration' else
+                'frozen_DINOv2_native_S14_plus_protected_residual_S7_RPN_'
                 'to_source_aware_pre_NMS_affine_merge'
                 if args.train_components == 's7_merge' else
                 'frozen_DINOv2_native_S14_plus_protected_residual_S7_RPN_'
@@ -3685,7 +3770,8 @@ def main():
                 'source_validation_only_with_exact_retention_small_top1_'
                 'nonregression_absolute_gates_and_proposal_sensitive_'
                 'selection_key_improvement'
-                if args.train_components in ('s7_rpn', 's7_merge') else
+                if args.train_components in (
+                    's7_rpn', 's7_merge', 's7_lane_arbitration') else
                 'source_validation_only_with_exact_retention_small_top1_'
                 'strict_improvement_and_mcml_nonregression'
                 if args.train_components == 'roi_cls_pairwise_v2' else
@@ -3700,18 +3786,8 @@ def main():
             training_schedule=dict(
                 train_components=str(args.train_components),
                 optimization_loss_components=(
-                    ['loss_rpn_cls', 'loss_rpn_bbox', 'loss_cls', 'loss_bbox']
-                    if args.train_components == 'all' else (
-                        ['loss_s7_rpn_cls', 'loss_s7_rpn_bbox']
-                        if args.train_components == 's7_rpn' else (
-                        ['loss_s7_merge_retention', 'loss_s7_merge_gain',
-                         'loss_s7_merge_prior']
-                        if args.train_components == 's7_merge' else (
-                        ['loss_cls', 'loss_roi_pairwise',
-                         'loss_roi_retention']
-                        if args.train_components in (
-                            'roi_cls_pairwise', 'roi_cls_pairwise_v2')
-                        else ['loss_cls'])))),
+                    optimization_loss_component_names(
+                        args.train_components)),
                 epochs=int(args.epochs), optimizer='SGD',
                 lr=float(args.lr), momentum=float(args.momentum),
                 weight_decay=float(args.weight_decay),
@@ -3759,6 +3835,18 @@ def main():
                             args.s7_merge_retention_weight),
                         gain_weight=float(args.s7_merge_gain_weight),
                         prior_weight=float(args.s7_merge_prior_weight))),
+                s7_lane_arbitration=(
+                    None if args.train_components != 's7_lane_arbitration'
+                    else dict(
+                        base_checkpoint=os.path.abspath(args.init_checkpoint),
+                        base_epoch=int(args.s7_lane_base_epoch),
+                        hard_negatives=int(args.s7_lane_hard_negatives),
+                        gain_repeat=int(args.s7_lane_gain_repeat),
+                        hard_negative_ranking=(
+                            'current_adjusted_s7_log_odds'),
+                        gain_competitors=[
+                            'native_s14', 'wrong_supplement_s7'],
+                        source_train_only=True)),
             source_min_top1_rate=float(args.source_min_top1_rate),
             deployment_score_thr=float(args.deployment_score_thr),
             border_margin_ratio=float(args.border_margin_ratio),

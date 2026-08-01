@@ -1,5 +1,6 @@
 import copy
 import argparse
+import json
 
 from crane_project.tools import dino_teacher_s7_relaxed_target_audit as audit
 
@@ -8,6 +9,7 @@ def _source_result(lost=1, gained=12, retained=676):
     return dict(
         target_dev=None,
         isolation=dict(
+            train_components='s7_merge',
             target_used_for_training=False,
             target_used_for_checkpoint_selection=False,
             target_labels_used_for_evaluation_only=False),
@@ -97,6 +99,7 @@ def test_validate_args_rejects_duplicate_target_slice_names(tmp_path):
         proposal_count=2000, max_detections=2000, roi_nms_iou_thr=0.5,
         s7_channels=128, s7_rpn_feat_channels=128, s7_proposal_count=500,
         s7_nms_pre=2000, s7_anchor_sizes=[16, 32, 64, 128, 256],
+        s7_lane_hidden=32, s7_lane_max_adjustment=2.0,
         target_slices=[duplicate, duplicate, duplicate])
     try:
         audit.validate_args(args)
@@ -104,3 +107,32 @@ def test_validate_args_rejects_duplicate_target_slice_names(tmp_path):
         assert 'three unique target slices' in str(error)
     else:
         raise AssertionError('duplicate target slices were accepted')
+
+
+def test_validate_args_detects_lane_candidate_from_source_result(tmp_path):
+    source_result = tmp_path / 'train_result.json'
+    result = _source_result(lost=0, gained=13, retained=677)
+    result['isolation']['train_components'] = 's7_lane_arbitration'
+    source_result.write_text(json.dumps(result))
+    paths = {}
+    for name in ('baseline_checkpoint', 'candidate_checkpoint',
+                 'dinov2_checkpoint'):
+        path = tmp_path / name
+        path.write_bytes(b'x')
+        paths[name] = str(path)
+    args = argparse.Namespace(
+        source_result_json=str(source_result), source_epoch=1,
+        baseline_checkpoint=paths['baseline_checkpoint'],
+        candidate_checkpoint=paths['candidate_checkpoint'],
+        dinov2_checkpoint=paths['dinov2_checkpoint'],
+        out_json=str(tmp_path / 'result.json'), dino_gpus=[1, 2], head_gpu=0,
+        seed=0, dino_height=600, dino_max_long_side=1333, patch_size=14,
+        rpn_feat_channels=256, roi_fc_channels=1024, roi_samples=256,
+        proposal_count=2000, max_detections=2000, roi_nms_iou_thr=0.5,
+        s7_channels=128, s7_rpn_feat_channels=128, s7_proposal_count=500,
+        s7_nms_pre=2000, s7_anchor_sizes=[16, 32, 64, 128, 256],
+        s7_lane_hidden=32, s7_lane_max_adjustment=2.0,
+        target_slices=None)
+    audit.validate_args(args)
+    assert args.train_components == 's7_lane_arbitration'
+    assert args.s7_lane_arbitration is True

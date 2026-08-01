@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One-shot target-dev comparison for the relaxed-gate S7 merge candidate.
+"""One-shot target-dev comparison for a source-gated S7 candidate.
 
 The exact-retention selector remains unchanged.  This read-only audit admits
 one already-fixed S7 checkpoint through a documented relaxed source gate, then
@@ -21,8 +21,8 @@ from crane_project.tools import (
     dino_teacher_token_scale_rpn_coverage_audit as coverage)
 
 
-AUDIT_NAME = 'DINO S7 Relaxed-Gate Target-Dev Audit V1'
-PROTOCOL_VERSION = 1
+AUDIT_NAME = 'DINO S7 Relaxed-Gate Target-Dev Audit V2'
+PROTOCOL_VERSION = 2
 RELAXED_SOURCE_GATE = dict(
     max_lost_correct=1,
     min_retained_correct=676,
@@ -71,6 +71,8 @@ def parse_args():
         '--s7-anchor-sizes', type=float, nargs='+',
         default=[16.0, 32.0, 64.0, 128.0, 256.0])
     parser.add_argument('--s7-merge-init-bias', type=float, default=-2.0)
+    parser.add_argument('--s7-lane-hidden', type=int, default=32)
+    parser.add_argument('--s7-lane-max-adjustment', type=float, default=2.0)
     parser.add_argument('--riou-thr', type=float, default=0.5)
     parser.add_argument('--deployment-score-thr', type=float, default=0.05)
     parser.add_argument('--valid-content-tolerance', type=float, default=1e-3)
@@ -157,11 +159,13 @@ def validate_args(args):
         args.rpn_feat_channels, args.roi_fc_channels,
         args.roi_samples, args.proposal_count, args.max_detections,
         args.s7_channels, args.s7_rpn_feat_channels,
-        args.s7_proposal_count, args.s7_nms_pre)
+        args.s7_proposal_count, args.s7_nms_pre, args.s7_lane_hidden)
     if any(int(value) <= 0 for value in positive):
         raise ValueError('Head and proposal settings must be positive')
     if not 0.0 < float(args.roi_nms_iou_thr) <= 1.0:
         raise ValueError('--roi-nms-iou-thr must be in (0, 1]')
+    if float(args.s7_lane_max_adjustment) <= 0.0:
+        raise ValueError('--s7-lane-max-adjustment must be positive')
     args.s7_anchor_sizes = sorted(set(float(value)
                                        for value in args.s7_anchor_sizes))
     if not args.s7_anchor_sizes or any(
@@ -181,6 +185,11 @@ def validate_args(args):
             'seq03_small with the predeclared frame ranges')
     with open(args.source_result_json, 'r') as handle:
         args.source_result = json.load(handle)
+    candidate_mode = args.source_result.get('isolation', {}).get(
+        'train_components')
+    if candidate_mode not in ('s7_merge', 's7_lane_arbitration'):
+        raise ValueError(
+            'Source result must describe s7_merge or s7_lane_arbitration')
     args.relaxed_source_gate = relaxed_source_gate(
         args.source_result, args.source_epoch)
     if not args.relaxed_source_gate['passed']:
@@ -191,7 +200,8 @@ def validate_args(args):
     args.feature_strides = None
     args.s7_residual = True
     args.s7_protected_merge = True
-    args.train_components = 's7_merge'
+    args.train_components = candidate_mode
+    args.s7_lane_arbitration = candidate_mode == 's7_lane_arbitration'
     args.s7_component_checkpoint = None
 
 
@@ -341,7 +351,8 @@ def main():
     labeller.validate_checkpoint(
         baseline_payload, in_channels, args,
         allow_training_mode_mismatch=True,
-        allow_s7_base_initialization=True)
+        allow_s7_base_initialization=True,
+        allow_lane_arbitration_initialization=args.s7_lane_arbitration)
     labeller.validate_checkpoint(candidate_payload, in_channels, args)
     if int(candidate_payload.get('epoch', -1)) != int(args.source_epoch):
         raise RuntimeError(
@@ -355,7 +366,8 @@ def main():
     candidate_heads = labeller.FrozenDinoRotatedHeads(
         in_channels, args).to(head_device)
     labeller.load_heads_checkpoint_state(
-        baseline_heads, baseline_payload, allow_s7_base_initialization=True)
+        baseline_heads, baseline_payload, allow_s7_base_initialization=True,
+        allow_lane_arbitration_initialization=args.s7_lane_arbitration)
     labeller.load_heads_checkpoint_state(candidate_heads, candidate_payload)
     baseline_versions = common.module_parameter_versions(baseline_heads)
     candidate_versions = common.module_parameter_versions(candidate_heads)
@@ -394,6 +406,7 @@ def main():
             candidate=os.path.abspath(args.candidate_checkpoint),
             candidate_epoch=int(args.source_epoch)),
         protocol=dict(
+            candidate_mode=str(args.train_components),
             target_role='target_dev_diagnosis_only',
             target_used_for_checkpoint_selection=False,
             target_used_for_parameter_tuning=False,
