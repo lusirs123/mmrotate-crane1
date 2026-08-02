@@ -35,8 +35,10 @@ from crane_project.tools import dino_teacher_common as common  # noqa: E402
 
 
 LABELLER_NAME = 'Frozen DINOv2 Oriented RPN/ROI Source Labeller V1'
-PROTOCOL_VERSION = 13
+PROTOCOL_VERSION = 14
 PAIRWISE_V2_MAX_EPOCHS = 4
+S7_QUALITY_MIN_FULL_TOP1 = 688
+S7_QUALITY_MIN_SMALL_TOP1 = 311
 PAPER_URL = (
     'https://openaccess.thecvf.com/content/CVPR2025/html/'
     'Lavoie_Large_Self-Supervised_Models_Bridge_the_Gap_in_Domain_Adaptive_'
@@ -138,7 +140,8 @@ def parse_args():
         '--train-components',
         choices=['all', 'roi_cls', 'roi_cls_pairwise',
                  'roi_cls_pairwise_v2', 's7_rpn', 's7_merge',
-                 's7_lane_arbitration'], default='all',
+                 's7_lane_arbitration', 's7_quality_suppression'],
+        default='all',
         help=('Train all RPN/ROI heads, or only the final ROI classifier '
               'fc_cls while keeping RPN, shared ROI FCs, and bbox regression '
               'fixed. roi_cls_pairwise additionally uses source-only '
@@ -149,7 +152,9 @@ def parse_args():
               'freezes both proposal paths and trains only a pre-NMS affine '
               'S7 score calibrator with native-retention pairs. '
               's7_lane_arbitration freezes the epoch-1 merge and trains only '
-              'a bounded source-aware S7 lane arbitrator.'))
+              'a bounded source-aware S7 lane arbitrator. '
+              's7_quality_suppression freezes the epoch-1 affine merge and '
+              'trains one lane-wide non-positive source-quality penalty.'))
     parser.add_argument(
         '--source-small-repeat', type=int, default=1,
         help='Repeat source-train frames in the lower short-token tertile.')
@@ -174,6 +179,24 @@ def parse_args():
         '--s7-lane-gain-repeat', type=int, default=8,
         help=('Within each source-train epoch, process each mined gain frame '
               'this many times in total.'))
+    parser.add_argument('--s7-quality-hidden', type=int, default=32)
+    parser.add_argument(
+        '--s7-quality-max-suppression', type=float, default=2.0,
+        help='Maximum lane-wide non-positive S7 log-odds adjustment.')
+    parser.add_argument(
+        '--s7-quality-init-risk-bias', type=float, default=0.0,
+        help=('Initial risk logit. Zero reproduces the audited affine '
+              'epoch-1 behavior exactly while BCE gradients remain active.'))
+    parser.add_argument('--s7-quality-margin', type=float, default=0.5)
+    parser.add_argument('--s7-quality-risk-weight', type=float, default=1.0)
+    parser.add_argument(
+        '--s7-quality-preserve-weight', type=float, default=1.0,
+        help=('Keep suppression near zero when the fixed-affine S7 lane '
+              'winner is source-GT usable; this never promotes S7.'))
+    parser.add_argument(
+        '--s7-quality-retention-weight', type=float, default=2.0)
+    parser.add_argument('--s7-quality-prior-weight', type=float, default=0.01)
+    parser.add_argument('--s7-quality-base-epoch', type=int, default=1)
     parser.add_argument(
         '--pairwise-negative-riou-thr', type=float, default=0.1,
         help='Maximum GT RIoU for a decoded ROI to be a pairwise negative.')
@@ -242,7 +265,8 @@ def validate_args(args):
         raise ValueError('--s7-anchor-sizes must be positive')
     args.s7_anchor_sizes = sorted(set(s7_anchor_sizes))
     s7_training_mode = args.train_components in (
-        's7_rpn', 's7_merge', 's7_lane_arbitration')
+        's7_rpn', 's7_merge', 's7_lane_arbitration',
+        's7_quality_suppression')
     if s7_enabled != s7_training_mode:
         raise ValueError(
             '--s7-residual and an S7 train-components mode must be enabled '
@@ -264,6 +288,29 @@ def validate_args(args):
     if int(args.s7_lane_base_epoch) != 1:
         raise ValueError(
             's7_lane_arbitration is locked to the audited epoch-1 base')
+    quality_positive = (
+        getattr(args, 's7_quality_hidden', 32),
+        getattr(args, 's7_quality_max_suppression', 2.0),
+        getattr(args, 's7_quality_margin', 0.5),
+        getattr(args, 's7_quality_risk_weight', 1.0),
+        getattr(args, 's7_quality_preserve_weight', 1.0),
+        getattr(args, 's7_quality_retention_weight', 2.0),
+        getattr(args, 's7_quality_prior_weight', 0.01))
+    if any(float(value) <= 0.0 for value in quality_positive):
+        raise ValueError('S7 quality suppression settings must be positive')
+    if not math.isfinite(float(getattr(
+            args, 's7_quality_init_risk_bias', 0.0))):
+        raise ValueError('--s7-quality-init-risk-bias must be finite')
+    if int(getattr(args, 's7_quality_base_epoch', 1)) != 1:
+        raise ValueError(
+            's7_quality_suppression is locked to the audited affine epoch-1 '
+            'base')
+    if (bool(getattr(args, 's7_lane_arbitration', False))
+            and (args.train_components == 's7_quality_suppression'
+                 or bool(getattr(args, 's7_quality_suppression', False)))):
+        raise ValueError(
+            'S7 positive lane arbitration and non-positive quality '
+            'suppression are mutually exclusive')
     if not math.isfinite(float(getattr(args, 's7_merge_init_bias', -2.0))):
         raise ValueError('--s7-merge-init-bias must be finite')
     positive = (
@@ -300,7 +347,7 @@ def validate_args(args):
         args.lr_steps = (
             [2, 3] if args.train_components in (
                 'roi_cls_pairwise_v2', 's7_rpn', 's7_merge',
-                's7_lane_arbitration') else [5, 7])
+                's7_lane_arbitration', 's7_quality_suppression') else [5, 7])
     lr_steps = sorted(set(int(value) for value in args.lr_steps))
     if any(value <= 0 or value >= args.epochs for value in lr_steps):
         raise ValueError('--lr-steps must be within the training schedule')
@@ -379,7 +426,8 @@ def validate_args(args):
             'checkpoint so the validated RPN and OBB regressor are retained'
             .format(args.train_components))
     if (args.train_components in (
-            's7_rpn', 's7_merge', 's7_lane_arbitration')
+            's7_rpn', 's7_merge', 's7_lane_arbitration',
+            's7_quality_suppression')
             and not (args.init_checkpoint or args.resume_checkpoint
                      or args.eval_only_checkpoint)):
         raise ValueError(
@@ -403,8 +451,44 @@ def validate_args(args):
             raise ValueError(
                 's7_lane_arbitration loads one complete epoch-1 checkpoint; '
                 'do not pass --s7-component-checkpoint')
+    if args.train_components == 's7_quality_suppression':
+        if args.source_retain_max_top1_drop != 0:
+            raise ValueError(
+                's7_quality_suppression requires exact source retention')
+        if args.s7_component_checkpoint:
+            raise ValueError(
+                's7_quality_suppression loads one complete affine epoch-1 '
+                'checkpoint; do not pass --s7-component-checkpoint')
+        if not getattr(args, 'skip_target_eval', False):
+            raise ValueError(
+                's7_quality_suppression is source-only; pass '
+                '--skip-target-eval and authorize target diagnosis only '
+                'after the formal gate passes')
+        if not math.isclose(
+                float(args.s7_quality_init_risk_bias), 0.0,
+                rel_tol=0.0, abs_tol=1e-12):
+            raise ValueError(
+                's7_quality_suppression requires zero risk-bias '
+                'initialization to reproduce affine epoch 1 exactly')
+        if int(getattr(args, 's7_source_min_full_top1', 677)) < int(
+                S7_QUALITY_MIN_FULL_TOP1):
+            raise ValueError(
+                's7_quality_suppression requires '
+                '--s7-source-min-full-top1 >= {}'.format(
+                    S7_QUALITY_MIN_FULL_TOP1))
+        if int(getattr(args, 's7_source_min_small_top1', 303)) < int(
+                S7_QUALITY_MIN_SMALL_TOP1):
+            raise ValueError(
+                's7_quality_suppression requires '
+                '--s7-source-min-small-top1 >= {}'.format(
+                    S7_QUALITY_MIN_SMALL_TOP1))
+        if int(getattr(args, 's7_source_max_mcml', 3)) > 3:
+            raise ValueError(
+                's7_quality_suppression requires '
+                '--s7-source-max-mcml <= 3')
     if args.train_components in (
-            's7_rpn', 's7_merge', 's7_lane_arbitration') and args.epochs > 4:
+            's7_rpn', 's7_merge', 's7_lane_arbitration',
+            's7_quality_suppression') and args.epochs > 4:
         raise ValueError(
             'S7 source-only stages are limited to 4 epochs; extend only after '
             'source validation shows the selected component is improving')
@@ -472,6 +556,14 @@ def configure_trainable_components(heads, train_components: str) -> List[str]:
                 'S7 lane arbitration requires the protected merge arbitrator')
         for parameter in heads.s7_lane_arbitrator.parameters():
             parameter.requires_grad_(True)
+    elif train_components == 's7_quality_suppression':
+        if (not getattr(heads, 's7_protected_merge', False)
+                or getattr(heads, 's7_quality_suppressor', None) is None):
+            raise RuntimeError(
+                'S7 quality suppression requires the protected affine merge '
+                'and lane-wide suppressor')
+        for parameter in heads.s7_quality_suppressor.parameters():
+            parameter.requires_grad_(True)
     else:
         raise ValueError('Unsupported train-components: {}'.format(
             train_components))
@@ -512,6 +604,15 @@ def optimization_loss_total(losses: Dict, train_components: str):
             raise RuntimeError('S7 lane losses missing: {}'.format(
                 ', '.join(missing)))
         return loss_total({name: losses[name] for name in required})
+    if train_components == 's7_quality_suppression':
+        required = (
+            'loss_s7_quality_risk', 'loss_s7_quality_preserve',
+            'loss_s7_quality_retention', 'loss_s7_quality_prior')
+        missing = [name for name in required if name not in losses]
+        if missing:
+            raise RuntimeError('S7 quality losses missing: {}'.format(
+                ', '.join(missing)))
+        return loss_total({name: losses[name] for name in required})
     if train_components in ('roi_cls_pairwise', 'roi_cls_pairwise_v2'):
         required = ('loss_cls', 'loss_roi_pairwise', 'loss_roi_retention')
         missing = [name for name in required if name not in losses]
@@ -537,6 +638,10 @@ def optimization_loss_component_names(train_components: str) -> List[str]:
         return [
             'loss_s7_lane_retention', 'loss_s7_lane_gain',
             'loss_s7_lane_prior']
+    if train_components == 's7_quality_suppression':
+        return [
+            'loss_s7_quality_risk', 'loss_s7_quality_preserve',
+            'loss_s7_quality_retention', 'loss_s7_quality_prior']
     if train_components in ('roi_cls_pairwise', 'roi_cls_pairwise_v2'):
         return ['loss_cls', 'loss_roi_pairwise', 'loss_roi_retention']
     if train_components == 'roi_cls':
@@ -725,6 +830,69 @@ def s7_lane_pair_losses(native_log_odds: torch.Tensor,
         gain_active=int(float(gain.detach().item()) > 0.0),
         gain_s7_competitor_count=gain_s7_competitor_count,
         native_top1_correct=int(native_top1_correct))
+
+
+def s7_quality_suppression_losses(
+        native_log_odds: torch.Tensor, native_gt_overlap: torch.Tensor,
+        base_s7_log_odds: torch.Tensor, s7_gt_overlap: torch.Tensor,
+        delta: torch.Tensor, risk_logit: torch.Tensor,
+        margin: float, riou_thr: float = 0.5) -> Dict:
+    """Label one lane-wide source risk without any positive promotion."""
+    import torch.nn.functional as functional
+
+    if not (native_log_odds.ndim == native_gt_overlap.ndim
+            == base_s7_log_odds.ndim == s7_gt_overlap.ndim == 1):
+        raise ValueError('S7 quality logits and overlaps must be one-dimensional')
+    if native_log_odds.shape != native_gt_overlap.shape:
+        raise ValueError('Native quality logits and overlaps must share shape')
+    if base_s7_log_odds.shape != s7_gt_overlap.shape:
+        raise ValueError('S7 quality logits and overlaps must share shape')
+    if delta.numel() != 1 or risk_logit.numel() != 1:
+        raise ValueError('S7 quality delta and risk logit must be scalar')
+    zero = (delta.reshape(()) + risk_logit.reshape(())) * 0.0
+    native_top_correct = False
+    s7_top_correct = False
+    risk_pair = False
+    preserve_pair = False
+    retention = zero
+    risk = zero
+    preserve = zero
+    base_gap = 0.0
+    if native_log_odds.numel():
+        native_top = torch.argmax(native_log_odds.detach())
+        native_top_logit = native_log_odds[native_top]
+        native_top_correct = bool(
+            native_gt_overlap[native_top] >= float(riou_thr))
+    else:
+        native_top_logit = zero
+    if base_s7_log_odds.numel():
+        s7_top = torch.argmax(base_s7_log_odds.detach())
+        s7_top_correct = bool(s7_gt_overlap[s7_top] >= float(riou_thr))
+        preserve_pair = bool(s7_top_correct)
+        if native_log_odds.numel():
+            base_top = base_s7_log_odds[s7_top]
+            base_gap = float((base_top - native_top_logit).detach().item())
+            risk_pair = bool(
+                native_top_correct and not s7_top_correct
+                and base_gap + float(margin) > 0.0)
+            if risk_pair:
+                retention = torch.relu(
+                    float(margin) + base_top + delta.reshape(())
+                    - native_top_logit)
+    if risk_pair:
+        risk = functional.binary_cross_entropy_with_logits(
+            risk_logit.reshape(()), torch.ones_like(risk_logit.reshape(())))
+    if preserve_pair:
+        preserve = functional.binary_cross_entropy_with_logits(
+            risk_logit.reshape(()), torch.zeros_like(risk_logit.reshape(())))
+    return dict(
+        risk=risk, preserve=preserve, retention=retention,
+        risk_pair_count=int(risk_pair),
+        preserve_pair_count=int(preserve_pair),
+        retention_active=int(float(retention.detach().item()) > 0.0),
+        native_top1_correct=int(native_top_correct),
+        s7_top1_correct=int(s7_top_correct),
+        base_gap=float(base_gap))
 
 
 def select_hard_pairwise_indices(
@@ -1417,6 +1585,60 @@ class S7LaneArbitrator(nn.Module):
         return adjustment.square().mean()
 
 
+class S7QualitySuppressor(nn.Module):
+    """Predict one bounded non-positive adjustment for the whole S7 lane."""
+
+    def __init__(self, embedding_channels: int, hidden: int = 32,
+                 max_suppression: float = 2.0,
+                 initial_risk_bias: float = 0.0):
+        super().__init__()
+        self.max_suppression = float(max_suppression)
+        if self.max_suppression <= 0.0:
+            raise ValueError('S7 quality max suppression must be positive')
+        self.embedding_projection = nn.Sequential(
+            nn.Linear(int(embedding_channels), int(hidden)),
+            nn.LayerNorm(int(hidden)), nn.GELU())
+        self.scalar_projection = nn.Sequential(
+            nn.Linear(4, int(hidden)), nn.GELU())
+        self.output = nn.Linear(int(hidden) * 2, 1)
+        nn.init.zeros_(self.output.weight)
+        nn.init.constant_(self.output.bias, float(initial_risk_bias))
+
+    def forward(self, embedding: torch.Tensor,
+                s7_raw_log_odds: torch.Tensor,
+                s7_affine_log_odds: torch.Tensor,
+                native_context: torch.Tensor):
+        if (embedding.ndim != 2 or s7_raw_log_odds.ndim != 1
+                or s7_affine_log_odds.ndim != 1):
+            raise ValueError('S7 quality features have invalid dimensions')
+        if (embedding.shape[0] != s7_raw_log_odds.shape[0]
+                or s7_raw_log_odds.shape != s7_affine_log_odds.shape):
+            raise ValueError('S7 quality features have mismatched counts')
+        if embedding.shape[0] == 0:
+            risk_logit = self.output.bias.reshape(())
+            strength = torch.clamp(torch.relu(risk_logit), max=1.0)
+            delta = -self.max_suppression * strength
+            return delta, risk_logit, None
+        top_index = torch.argmax(s7_affine_log_odds.detach())
+        raw_top = s7_raw_log_odds[top_index]
+        affine_top = s7_affine_log_odds[top_index]
+        native_top = native_context.reshape(())
+        scalars = torch.stack((
+            raw_top, affine_top, native_top, affine_top - native_top), dim=0)
+        hidden = torch.cat((
+            self.embedding_projection(
+                embedding[top_index].reshape(1, -1)),
+            self.scalar_projection(scalars.reshape(1, 4))), dim=1)
+        risk_logit = self.output(hidden).reshape(())
+        strength = torch.clamp(torch.relu(risk_logit), max=1.0)
+        delta = -self.max_suppression * strength
+        return delta, risk_logit, top_index
+
+    @staticmethod
+    def prior_loss(delta: torch.Tensor) -> torch.Tensor:
+        return delta.square()
+
+
 class FrozenDinoRotatedHeads(nn.Module):
     def __init__(self, in_channels: int, args):
         super().__init__()
@@ -1433,11 +1655,15 @@ class FrozenDinoRotatedHeads(nn.Module):
         self.s7_enabled = bool(getattr(args, 's7_residual', False))
         self.s7_protected_merge = bool(getattr(
             args, 's7_protected_merge', False) or getattr(
-                args, 'train_components', '') in (
-                    's7_merge', 's7_lane_arbitration'))
+            args, 'train_components', '') in (
+                    's7_merge', 's7_lane_arbitration',
+                    's7_quality_suppression'))
         self.s7_lane_arbitration = bool(getattr(
             args, 's7_lane_arbitration', False) or getattr(
                 args, 'train_components', '') == 's7_lane_arbitration')
+        self.s7_quality_suppression = bool(getattr(
+            args, 's7_quality_suppression', False) or getattr(
+                args, 'train_components', '') == 's7_quality_suppression')
         self._last_candidate_merge = None
         self._s7_inference_enabled = self.s7_enabled
         if self.s7_enabled:
@@ -1458,12 +1684,22 @@ class FrozenDinoRotatedHeads(nn.Module):
                     int(getattr(args, 's7_lane_hidden', 32)),
                     float(getattr(args, 's7_lane_max_adjustment', 2.0)))
                 if self.s7_lane_arbitration else None)
+            self.s7_quality_suppressor = (
+                S7QualitySuppressor(
+                    int(getattr(args, 'roi_fc_channels', 1024)),
+                    int(getattr(args, 's7_quality_hidden', 32)),
+                    float(getattr(
+                        args, 's7_quality_max_suppression', 2.0)),
+                    float(getattr(
+                        args, 's7_quality_init_risk_bias', 0.0)))
+                if self.s7_quality_suppression else None)
         else:
             self.s7_readout = None
             self.s7_rpn_head = None
             self.s7_proposal_cfg = None
             self.s7_score_calibrator = None
             self.s7_lane_arbitrator = None
+            self.s7_quality_suppressor = None
         self._roi_cls_teacher_weight = None
         self._roi_cls_teacher_bias = None
 
@@ -1552,12 +1788,28 @@ class FrozenDinoRotatedHeads(nn.Module):
                 feature, img_meta, supplement, rescale=True))
         calibrated_s7_logits = self.s7_score_calibrator(s7_logits)
         lane_adjustment = s7_logits.new_zeros(s7_logits.shape)
+        quality_delta = s7_logits.new_zeros(())
+        quality_risk_logit = s7_logits.new_zeros(())
         lane_arbitrator = getattr(self, 's7_lane_arbitrator', None)
+        quality_suppressor = getattr(self, 's7_quality_suppressor', None)
+        if lane_arbitrator is not None and quality_suppressor is not None:
+            raise RuntimeError(
+                'Positive lane arbitration and quality suppression are '
+                'mutually exclusive')
         if lane_arbitrator is not None:
             native_context = (native_logits.max() if native_logits.numel()
                               else s7_logits.new_zeros(()))
             lane_adjustment = lane_arbitrator(
                 s7_embedding, s7_logits, native_context)
+            calibrated_s7_logits = calibrated_s7_logits + lane_adjustment
+        elif quality_suppressor is not None:
+            native_context = (native_logits.max() if native_logits.numel()
+                              else s7_logits.new_zeros(()))
+            quality_delta, quality_risk_logit, _top_index = (
+                quality_suppressor(
+                    s7_embedding, s7_logits, calibrated_s7_logits,
+                    native_context))
+            lane_adjustment = quality_delta.expand_as(s7_logits)
             calibrated_s7_logits = calibrated_s7_logits + lane_adjustment
         native_detections = self._nms_candidate_lane(
             native_boxes, native_scores)
@@ -1615,7 +1867,12 @@ class FrozenDinoRotatedHeads(nn.Module):
             if lane_adjustment.numel() else 0.0,
             s7_lane_adjustment_mean=float(
                 lane_adjustment.detach().mean().item())
-            if lane_adjustment.numel() else 0.0)
+            if lane_adjustment.numel() else 0.0,
+            s7_quality_delta=float(quality_delta.detach().item()),
+            s7_quality_risk_logit=float(
+                quality_risk_logit.detach().item()),
+            s7_quality_risk_probability=float(
+                torch.sigmoid(quality_risk_logit.detach()).item()))
         return detections
 
     def feature_levels(self, feature: torch.Tensor):
@@ -1850,6 +2107,73 @@ class FrozenDinoRotatedHeads(nn.Module):
             s7_lane_adjustment_mean=float(adjustment.detach().mean().item())
             if adjustment.numel() else 0.0,
             s7_lane_candidate_count=int(s7_logits.numel()))
+
+    def forward_s7_quality_suppression_train(
+            self, feature: torch.Tensor, img_meta: Dict,
+            gt_boxes: torch.Tensor, riou_thr: float, margin: float,
+            risk_weight: float, preserve_weight: float,
+            retention_weight: float, prior_weight: float) -> Dict:
+        """Train one source-only non-positive adjustment for the whole lane."""
+        from mmcv.ops import box_iou_rotated
+
+        suppressor = getattr(self, 's7_quality_suppressor', None)
+        if (not self.s7_protected_merge
+                or self.s7_score_calibrator is None
+                or suppressor is None):
+            raise RuntimeError(
+                'S7 quality training requires the fixed affine merge and '
+                'lane-wide suppressor')
+        with torch.no_grad():
+            _features, sources = self.proposal_sources(feature, img_meta)
+            supplement = sources.get('supplement_s7')
+            if supplement is None:
+                raise RuntimeError('S7 quality training has no supplement lane')
+            native_boxes, native_logits, _native_scores, _native_embedding = (
+                self._decode_roi_candidates(
+                    feature, img_meta, sources['native_s14'], rescale=False))
+            s7_boxes, s7_logits, _s7_scores, s7_embedding = (
+                self._decode_roi_candidates(
+                    feature, img_meta, supplement, rescale=False))
+            if gt_boxes.shape[0] and native_boxes.shape[0]:
+                native_overlap = box_iou_rotated(
+                    native_boxes.float(), gt_boxes.float()).max(dim=1).values
+            else:
+                native_overlap = native_logits.new_zeros(native_logits.shape)
+            if gt_boxes.shape[0] and s7_boxes.shape[0]:
+                s7_overlap = box_iou_rotated(
+                    s7_boxes.float(), gt_boxes.float()).max(dim=1).values
+            else:
+                s7_overlap = s7_logits.new_zeros(s7_logits.shape)
+        base_s7_logits = self.s7_score_calibrator(
+            s7_logits.detach()).detach()
+        native_top_logit = (native_logits.max().detach()
+                            if native_logits.numel()
+                            else s7_logits.new_zeros(()))
+        delta, risk_logit, _s7_top = suppressor(
+            s7_embedding.detach(), s7_logits.detach(), base_s7_logits,
+            native_top_logit)
+        pairs = s7_quality_suppression_losses(
+            native_logits.detach(), native_overlap.detach(),
+            base_s7_logits, s7_overlap.detach(), delta, risk_logit,
+            margin=float(margin), riou_thr=float(riou_thr))
+        prior = suppressor.prior_loss(delta)
+        return dict(
+            loss_s7_quality_risk=pairs['risk'] * float(risk_weight),
+            loss_s7_quality_preserve=(
+                pairs['preserve'] * float(preserve_weight)),
+            loss_s7_quality_retention=(
+                pairs['retention'] * float(retention_weight)),
+            loss_s7_quality_prior=prior * float(prior_weight),
+            s7_quality_risk_pair_count=pairs['risk_pair_count'],
+            s7_quality_preserve_pair_count=pairs['preserve_pair_count'],
+            s7_quality_retention_active=pairs['retention_active'],
+            s7_quality_native_top1_correct=pairs['native_top1_correct'],
+            s7_quality_s7_top1_correct=pairs['s7_top1_correct'],
+            s7_quality_delta=float(delta.detach().item()),
+            s7_quality_risk_probability=float(
+                torch.sigmoid(risk_logit.detach()).item()),
+            s7_quality_base_gap=pairs['base_gap'],
+            s7_quality_candidate_count=int(s7_logits.numel()))
 
     def forward_roi_cls_hard_train(
             self, feature: torch.Tensor, img_meta: Dict,
@@ -2215,10 +2539,12 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                 global_step: int, args, dino_device, head_device) -> Dict:
     heads.train()
     if args.train_components in (
-            's7_rpn', 's7_merge', 's7_lane_arbitration'):
+            's7_rpn', 's7_merge', 's7_lane_arbitration',
+            's7_quality_suppression'):
         heads.rpn_head.eval()
         heads.roi_head.eval()
-    if args.train_components in ('s7_merge', 's7_lane_arbitration'):
+    if args.train_components in (
+            's7_merge', 's7_lane_arbitration', 's7_quality_suppression'):
         heads.s7_readout.eval()
         heads.s7_rpn_head.eval()
         heads.s7_score_calibrator.eval()
@@ -2226,6 +2552,8 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
         heads.s7_lane_arbitrator.train()
     elif args.train_components == 's7_merge':
         heads.s7_score_calibrator.train()
+    elif args.train_components == 's7_quality_suppression':
+        heads.s7_quality_suppressor.train()
     if head_device.type == 'cuda':
         torch.cuda.reset_peak_memory_stats(head_device)
     ordered = list(records)
@@ -2265,6 +2593,15 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                 gain_weight=args.s7_merge_gain_weight,
                 prior_weight=args.s7_merge_prior_weight,
                 hard_negatives=args.s7_lane_hard_negatives)
+        elif args.train_components == 's7_quality_suppression':
+            output = heads.forward_s7_quality_suppression_train(
+                feature, img_meta, gt_boxes,
+                riou_thr=args.riou_thr,
+                margin=args.s7_quality_margin,
+                risk_weight=args.s7_quality_risk_weight,
+                preserve_weight=args.s7_quality_preserve_weight,
+                retention_weight=args.s7_quality_retention_weight,
+                prior_weight=args.s7_quality_prior_weight)
         elif args.train_components == 'roi_cls':
             output = heads.forward_roi_cls_hard_train(
                 feature, img_meta, gt_boxes, args.roi_samples,
@@ -2360,6 +2697,18 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                         's7_lane_retention_active', 0.0))),
                     int(round(metric_sums.get(
                         's7_lane_gain_active', 0.0))))
+            elif args.train_components == 's7_quality_suppression':
+                message += (
+                    ' risk_pairs_total={} preserve_pairs_total={} '
+                    'retain_active_total={} mean_delta={:.5f}').format(
+                    int(round(metric_sums.get(
+                        's7_quality_risk_pair_count', 0.0))),
+                    int(round(metric_sums.get(
+                        's7_quality_preserve_pair_count', 0.0))),
+                    int(round(metric_sums.get(
+                        's7_quality_retention_active', 0.0))),
+                    float(metric_sums.get('s7_quality_delta', 0.0))
+                    / float(max(1, index + 1)))
             print(message)
         del feature, gt_boxes, gt_labels, total
     optimized_components = optimization_loss_component_names(
@@ -2683,6 +3032,11 @@ def summarize_rows(rows: Sequence[Dict]) -> Dict:
     lane_adjustment_means = [
         float(row.get('s7_lane_adjustment_mean', 0.0))
         for row in merge_rows]
+    quality_deltas = [
+        float(row.get('s7_quality_delta', 0.0)) for row in merge_rows]
+    quality_risks = [
+        float(row.get('s7_quality_risk_probability', 0.0))
+        for row in merge_rows]
     return dict(
         frame_count=len(rows),
         top1_hits=int(sum(row['top1'] for row in flat)),
@@ -2735,6 +3089,14 @@ def summarize_rows(rows: Sequence[Dict]) -> Dict:
         mean_s7_lane_adjustment=(
             float(np.mean(lane_adjustment_means))
             if lane_adjustment_means else 0.0),
+        min_s7_quality_delta=(
+            min(quality_deltas) if quality_deltas else 0.0),
+        mean_s7_quality_delta=(
+            float(np.mean(quality_deltas)) if quality_deltas else 0.0),
+        max_s7_quality_delta=(
+            max(quality_deltas) if quality_deltas else 0.0),
+        mean_s7_quality_risk_probability=(
+            float(np.mean(quality_risks)) if quality_risks else 0.0),
         median_top1_score=(float(np.median(top1_scores))
                            if top1_scores else None),
         raw_unfiltered_median_top1_score=(
@@ -2857,7 +3219,10 @@ def source_merge_conflict_row(row: Dict, change: str) -> Dict:
         s7_affine_scale=merge.get('s7_affine_scale'),
         s7_affine_bias=merge.get('s7_affine_bias'),
         s7_lane_adjustment_max=merge.get('s7_lane_adjustment_max'),
-        s7_lane_adjustment_mean=merge.get('s7_lane_adjustment_mean'))
+        s7_lane_adjustment_mean=merge.get('s7_lane_adjustment_mean'),
+        s7_quality_delta=merge.get('s7_quality_delta'),
+        s7_quality_risk_probability=merge.get(
+            's7_quality_risk_probability'))
 
 
 def pairwise_v2_source_selection_gate(
@@ -2940,11 +3305,15 @@ def s7_architecture(args) -> Dict:
     enabled = bool(getattr(args, 's7_residual', False))
     protected_merge = bool(getattr(
         args, 's7_protected_merge', False) or getattr(
-            args, 'train_components', '') in (
-                's7_merge', 's7_lane_arbitration'))
+        args, 'train_components', '') in (
+                's7_merge', 's7_lane_arbitration',
+                's7_quality_suppression'))
     lane_arbitration = bool(getattr(
         args, 's7_lane_arbitration', False) or getattr(
             args, 'train_components', '') == 's7_lane_arbitration')
+    quality_suppression = bool(getattr(
+        args, 's7_quality_suppression', False) or getattr(
+            args, 'train_components', '') == 's7_quality_suppression')
     return dict(
         enabled=enabled,
         protected_merge=(protected_merge if enabled else False),
@@ -2970,15 +3339,29 @@ def s7_architecture(args) -> Dict:
         lane_max_adjustment=(float(getattr(
             args, 's7_lane_max_adjustment', 2.0))
                              if lane_arbitration and enabled and protected_merge
-                             else None))
+                             else None),
+        quality_suppression=(
+            quality_suppression if enabled and protected_merge else False),
+        quality_hidden=(int(getattr(args, 's7_quality_hidden', 32))
+                        if quality_suppression and enabled and protected_merge
+                        else None),
+        quality_max_suppression=(float(getattr(
+            args, 's7_quality_max_suppression', 2.0))
+            if quality_suppression and enabled and protected_merge else None),
+        quality_initial_risk_bias=(float(getattr(
+            args, 's7_quality_init_risk_bias', 0.0))
+            if quality_suppression and enabled and protected_merge else None))
 
 
 
 def load_heads_checkpoint_state(heads, payload: Dict,
                                 allow_s7_base_initialization: bool = False,
-                                allow_lane_arbitration_initialization: bool = False):
+                                allow_lane_arbitration_initialization: bool = False,
+                                allow_quality_suppression_initialization: bool = False):
     """Load a checkpoint while allowing only explicitly new branch keys."""
-    if allow_s7_base_initialization or allow_lane_arbitration_initialization:
+    if (allow_s7_base_initialization
+            or allow_lane_arbitration_initialization
+            or allow_quality_suppression_initialization):
         incompatible = heads.load_state_dict(
             payload['heads_state_dict'], strict=False)
         allowed_prefixes = []
@@ -2987,6 +3370,8 @@ def load_heads_checkpoint_state(heads, payload: Dict,
                 's7_readout.', 's7_rpn_head.', 's7_score_calibrator.'))
         if allow_lane_arbitration_initialization:
             allowed_prefixes.append('s7_lane_arbitrator.')
+        if allow_quality_suppression_initialization:
+            allowed_prefixes.append('s7_quality_suppressor.')
         disallowed_missing = [
             name for name in incompatible.missing_keys
             if not any(name.startswith(prefix) for prefix in allowed_prefixes)]
@@ -3119,7 +3504,8 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                               args.pairwise_negatives_per_positive))),
             s7_source_gate=(
                 None if args.train_components not in (
-                    's7_rpn', 's7_merge', 's7_lane_arbitration')
+                    's7_rpn', 's7_merge', 's7_lane_arbitration',
+                    's7_quality_suppression')
                 else dict(
                     min_full_top1=int(getattr(
                         args, 's7_source_min_full_top1', 677)),
@@ -3153,6 +3539,30 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                     hard_negative_ranking='current_adjusted_s7_log_odds',
                     gain_competitors=['native_s14', 'wrong_supplement_s7'],
                     native_nms_protected=True,
+                    proposal_sources=['native_s14', 'supplement_s7'])),
+            s7_quality_suppression=(
+                None if args.train_components != 's7_quality_suppression'
+                else dict(
+                    base_checkpoint=(
+                        None if not getattr(args, 'init_checkpoint', None)
+                        else os.path.abspath(args.init_checkpoint)),
+                    base_epoch=int(args.s7_quality_base_epoch),
+                    lane_wide=True,
+                    adjustment_range=[
+                        -float(args.s7_quality_max_suppression), 0.0],
+                    hidden=int(args.s7_quality_hidden),
+                    initial_risk_bias=float(
+                        args.s7_quality_init_risk_bias),
+                    margin=float(args.s7_quality_margin),
+                    risk_weight=float(args.s7_quality_risk_weight),
+                    preserve_weight=float(
+                        args.s7_quality_preserve_weight),
+                    retention_weight=float(
+                        args.s7_quality_retention_weight),
+                    prior_weight=float(args.s7_quality_prior_weight),
+                    positive_promotion=False, gain_replay=False,
+                    source_train_only=True,
+                    native_nms_protected=True,
                     proposal_sources=['native_s14', 'supplement_s7']))),
         in_channels=int(in_channels), patch_size=int(args.patch_size),
         rpn_feat_channels=int(args.rpn_feat_channels),
@@ -3170,7 +3580,8 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
 def validate_checkpoint(payload: Dict, in_channels: int, args,
                         allow_training_mode_mismatch: bool = False,
                         allow_s7_base_initialization: bool = False,
-                        allow_lane_arbitration_initialization: bool = False):
+                        allow_lane_arbitration_initialization: bool = False,
+                        allow_quality_suppression_initialization: bool = False):
     required = (
         'source_only', 'frozen_dinov2', 'in_channels', 'patch_size',
         'rpn_feat_channels', 'roi_fc_channels', 'heads_state_dict')
@@ -3228,6 +3639,21 @@ def validate_checkpoint(payload: Dict, in_channels: int, args,
                          or stored_s7.get('lane_max_adjustment')
                          != requested_s7.get('lane_max_adjustment'))):
                 architecture_mismatch = True
+            stored_quality = bool(stored_s7.get(
+                'quality_suppression', False))
+            requested_quality = bool(requested_s7.get(
+                'quality_suppression', False))
+            if (stored_quality != requested_quality
+                    and not allow_quality_suppression_initialization):
+                architecture_mismatch = True
+            if (stored_quality and requested_quality
+                    and (stored_s7.get('quality_hidden')
+                         != requested_s7.get('quality_hidden')
+                         or stored_s7.get('quality_max_suppression')
+                         != requested_s7.get('quality_max_suppression')
+                         or stored_s7.get('quality_initial_risk_bias')
+                         != requested_s7.get('quality_initial_risk_bias'))):
+                architecture_mismatch = True
             if architecture_mismatch:
                 raise RuntimeError('S7 checkpoint architecture mismatch')
     elif bool(stored_s7.get('enabled', False)):
@@ -3242,7 +3668,9 @@ def train_source_only(dino, heads, train_records, val_records, args,
     s7_rpn_mode = args.train_components == 's7_rpn'
     s7_merge_mode = args.train_components == 's7_merge'
     s7_lane_mode = args.train_components == 's7_lane_arbitration'
-    s7_mode = bool(s7_rpn_mode or s7_merge_mode or s7_lane_mode)
+    s7_quality_mode = args.train_components == 's7_quality_suppression'
+    s7_mode = bool(
+        s7_rpn_mode or s7_merge_mode or s7_lane_mode or s7_quality_mode)
     protected_source_mode = bool(roi_cls_mode or s7_mode)
     trainable_names = configure_trainable_components(
         heads, args.train_components)
@@ -3275,15 +3703,33 @@ def train_source_only(dino, heads, train_records, val_records, args,
             raise RuntimeError(
                 'Lane arbitration base checkpoint must be audited epoch 1; '
                 'found epoch {}'.format(payload.get('epoch')))
+        if s7_quality_mode:
+            if int(payload.get('epoch', -1)) != int(
+                    args.s7_quality_base_epoch):
+                raise RuntimeError(
+                    'Quality suppression base checkpoint must be audited '
+                    'affine epoch 1; found epoch {}'.format(
+                        payload.get('epoch')))
+            stored_mode = payload.get(
+                'training_protocol', {}).get('train_components')
+            if stored_mode != 's7_merge':
+                raise RuntimeError(
+                    'Quality suppression must initialize from the complete '
+                    's7_merge epoch-1 checkpoint; found {}'.format(
+                        stored_mode))
         validate_checkpoint(
             payload, in_channels, args,
             allow_training_mode_mismatch=True,
-            allow_s7_base_initialization=(s7_mode and not s7_lane_mode),
-            allow_lane_arbitration_initialization=s7_lane_mode)
+            allow_s7_base_initialization=(
+                s7_mode and not s7_lane_mode and not s7_quality_mode),
+            allow_lane_arbitration_initialization=s7_lane_mode,
+            allow_quality_suppression_initialization=s7_quality_mode)
         load_heads_checkpoint_state(
             heads, payload,
-            allow_s7_base_initialization=(s7_mode and not s7_lane_mode),
-            allow_lane_arbitration_initialization=s7_lane_mode)
+            allow_s7_base_initialization=(
+                s7_mode and not s7_lane_mode and not s7_quality_mode),
+            allow_lane_arbitration_initialization=s7_lane_mode,
+            allow_quality_suppression_initialization=s7_quality_mode)
         if s7_merge_mode:
             component_payload = torch.load(
                 args.s7_component_checkpoint, map_location='cpu')
@@ -3435,7 +3881,7 @@ def train_source_only(dino, heads, train_records, val_records, args,
                 retention_summary = source_top1_retention_summary(
                     source_baseline_correct_keys, val_rows)
                 if s7_mode:
-                    if s7_merge_mode or s7_lane_mode:
+                    if s7_merge_mode or s7_lane_mode or s7_quality_mode:
                         merge_conflicts = source_merge_conflict_summary(
                             source_baseline_correct_keys, val_rows)
                     protected_gate = s7_source_selection_gate(
@@ -3502,7 +3948,7 @@ def train_source_only(dino, heads, train_records, val_records, args,
             source_exact_retention=retention_summary,
             s7_merge_calibration=(
                 s7_calibration_state(heads)
-                if s7_merge_mode or s7_lane_mode else None),
+                if s7_merge_mode or s7_lane_mode or s7_quality_mode else None),
             s7_merge_conflicts=merge_conflicts,
             source_selection_gate=protected_gate,
             pairwise_v2_source_gate=(
@@ -3523,7 +3969,7 @@ def train_source_only(dino, heads, train_records, val_records, args,
         progress_replacements = 0
         if args.train_components in (
                 'roi_cls_pairwise_v2', 's7_rpn', 's7_merge',
-                's7_lane_arbitration'):
+                's7_lane_arbitration', 's7_quality_suppression'):
             progress_path, progress_replacements = (
                 write_source_training_progress(
                     args, epoch, best_epoch, best_path, latest_path,
@@ -3755,6 +4201,9 @@ def main():
         protocol=dict(
             architecture=(
                 'frozen_DINOv2_native_S14_plus_protected_residual_S7_RPN_'
+                'to_lane_wide_non_positive_source_quality_suppression'
+                if args.train_components == 's7_quality_suppression' else
+                'frozen_DINOv2_native_S14_plus_protected_residual_S7_RPN_'
                 'to_source_aware_pre_NMS_lane_arbitration'
                 if args.train_components == 's7_lane_arbitration' else
                 'frozen_DINOv2_native_S14_plus_protected_residual_S7_RPN_'
@@ -3771,7 +4220,8 @@ def main():
                 'nonregression_absolute_gates_and_proposal_sensitive_'
                 'selection_key_improvement'
                 if args.train_components in (
-                    's7_rpn', 's7_merge', 's7_lane_arbitration') else
+                    's7_rpn', 's7_merge', 's7_lane_arbitration',
+                    's7_quality_suppression') else
                 'source_validation_only_with_exact_retention_small_top1_'
                 'strict_improvement_and_mcml_nonregression'
                 if args.train_components == 'roi_cls_pairwise_v2' else
@@ -3846,6 +4296,24 @@ def main():
                             'current_adjusted_s7_log_odds'),
                         gain_competitors=[
                             'native_s14', 'wrong_supplement_s7'],
+                        source_train_only=True)),
+                s7_quality_suppression=(
+                    None if args.train_components != 's7_quality_suppression'
+                    else dict(
+                        base_checkpoint=os.path.abspath(args.init_checkpoint),
+                        base_epoch=int(args.s7_quality_base_epoch),
+                        lane_wide=True,
+                        adjustment_range=[
+                            -float(args.s7_quality_max_suppression), 0.0],
+                        initial_risk_bias=float(
+                            args.s7_quality_init_risk_bias),
+                        top_candidate_stage='fixed_affine_S7_log_odds',
+                        risk_label=(
+                            'native_top_correct_and_S7_top_wrong_within_'
+                            'source_margin'),
+                        preserve_label='S7_top_RIoU_at_least_threshold',
+                        positive_promotion=False,
+                        gain_replay=False,
                         source_train_only=True)),
             source_min_top1_rate=float(args.source_min_top1_rate),
             deployment_score_thr=float(args.deployment_score_thr),

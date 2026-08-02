@@ -28,6 +28,14 @@ def _args(tmp_path, **overrides):
         s7_lane_base_epoch=1,
         s7_lane_hard_negatives=4, s7_lane_gain_repeat=8,
         s7_lane_arbitration=False,
+        s7_quality_suppression=False,
+        s7_quality_hidden=32, s7_quality_max_suppression=2.0,
+        s7_quality_init_risk_bias=0.0, s7_quality_margin=0.5,
+        s7_quality_risk_weight=1.0, s7_quality_preserve_weight=1.0,
+        s7_quality_retention_weight=2.0, s7_quality_prior_weight=0.01,
+        s7_quality_base_epoch=1,
+        s7_source_min_full_top1=677, s7_source_min_small_top1=303,
+        s7_source_max_mcml=3,
         roi_nms_iou_thr=0.1,
         valid_content_tolerance=1e-3,
         deployment_score_thr=0.05, border_margin_ratio=0.02,
@@ -46,6 +54,7 @@ def _args(tmp_path, **overrides):
         pairwise_negative_riou_thr=0.1, pairwise_nms_iou_thr=0.1,
         pairwise_negatives_per_positive=2,
         resume_checkpoint=None, eval_only_checkpoint=None,
+        skip_target_eval=False,
         source_val_results_out=None,
         dinov2_checkpoint=str(checkpoint), dinov2_model='dinov2_vitl14',
         dino_height=600, dino_max_long_side=1333,
@@ -173,6 +182,31 @@ def test_validate_s7_lane_arbitration_requires_complete_epoch1_checkpoint(
                   init_checkpoint=str(checkpoint), s7_lane_gain_repeat=33,
                   epochs=4, lr_steps=None,
                   selection_epochs=[1, 2, 3, 4]))
+
+
+def test_validate_s7_quality_suppression_locks_source_only_formal_gate(
+        tmp_path):
+    checkpoint = tmp_path / 'affine_epoch01.pth'
+    checkpoint.write_bytes(b'checkpoint')
+    common = dict(
+        s7_residual=True, train_components='s7_quality_suppression',
+        init_checkpoint=str(checkpoint), epochs=4, lr_steps=None,
+        selection_epochs=[1, 2, 3, 4],
+        s7_source_min_full_top1=688,
+        s7_source_min_small_top1=311)
+    with pytest.raises(ValueError, match='source-only'):
+        labeller.validate_args(_args(tmp_path, **common))
+    args = _args(tmp_path, skip_target_eval=True, **common)
+    labeller.validate_args(args)
+    assert args.lr_steps == [2, 3]
+    with pytest.raises(ValueError, match='min-full-top1'):
+        labeller.validate_args(_args(
+            tmp_path, skip_target_eval=True,
+            **dict(common, s7_source_min_full_top1=687)))
+    with pytest.raises(ValueError, match='min-small-top1'):
+        labeller.validate_args(_args(
+            tmp_path, skip_target_eval=True,
+            **dict(common, s7_source_min_small_top1=310)))
 
 
 def test_validate_pairwise_v2_requires_matching_nms_policy(tmp_path):
@@ -533,6 +567,31 @@ def test_s7_lane_arbitrator_starts_at_zero_and_is_bounded():
     assert bool(torch.all(output >= -1.5))
 
 
+def test_s7_quality_suppressor_is_lane_wide_non_positive_and_near_zero():
+    suppressor = labeller.S7QualitySuppressor(
+        embedding_channels=4, hidden=3, max_suppression=2.0,
+        initial_risk_bias=0.0)
+    embedding = torch.randn(5, 4)
+    raw = torch.tensor([-1.0, 0.4, 1.2, 0.2, -0.5])
+    affine = raw - 0.3
+    delta, risk_logit, top_index = suppressor(
+        embedding, raw, affine, torch.tensor(0.8))
+    assert int(top_index) == 2
+    assert -2.0 <= float(delta.item()) <= 0.0
+    assert float(delta.item()) == pytest.approx(0.0)
+    assert float(risk_logit.item()) == pytest.approx(0.0)
+    adjusted = affine + delta.expand_as(affine)
+    assert torch.equal(torch.argsort(adjusted), torch.argsort(affine))
+    torch.nn.functional.binary_cross_entropy_with_logits(
+        risk_logit, torch.ones_like(risk_logit)).backward()
+    assert float(suppressor.output.bias.grad.item()) < 0.0
+    with torch.no_grad():
+        suppressor.output.bias.fill_(100.0)
+    delta, _risk, _top = suppressor(
+        embedding, raw, affine, torch.tensor(0.8))
+    assert float(delta.item()) == pytest.approx(-2.0)
+
+
 def test_s7_lane_arbitration_trains_only_lane_module():
     class TinyHeads(torch.nn.Module):
         def __init__(self):
@@ -551,6 +610,25 @@ def test_s7_lane_arbitration_trains_only_lane_module():
     assert not any(name.startswith('s7_score_calibrator.') for name in names)
 
 
+def test_s7_quality_suppression_trains_only_quality_module():
+    class TinyHeads(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.native = torch.nn.Linear(2, 2)
+            self.s7_readout = torch.nn.Linear(2, 2)
+            self.s7_rpn_head = torch.nn.Linear(2, 2)
+            self.s7_score_calibrator = labeller.S7ScoreCalibrator(-2.0)
+            self.s7_quality_suppressor = labeller.S7QualitySuppressor(2, 3)
+            self.s7_protected_merge = True
+
+    heads = TinyHeads()
+    names = labeller.configure_trainable_components(
+        heads, 's7_quality_suppression')
+    assert names
+    assert all(name.startswith('s7_quality_suppressor.') for name in names)
+    assert not any(name.startswith('s7_score_calibrator.') for name in names)
+
+
 def test_s7_lane_architecture_records_bounded_arbitration(tmp_path):
     args = _args(
         tmp_path, s7_residual=True,
@@ -561,6 +639,21 @@ def test_s7_lane_architecture_records_bounded_arbitration(tmp_path):
     assert architecture['lane_arbitration'] is True
     assert architecture['lane_hidden'] == 24
     assert architecture['lane_max_adjustment'] == pytest.approx(1.25)
+
+
+def test_s7_quality_architecture_records_non_positive_lane_mode(tmp_path):
+    args = _args(
+        tmp_path, s7_residual=True,
+        train_components='s7_quality_suppression',
+        s7_protected_merge=True, s7_quality_suppression=True,
+        s7_quality_hidden=24, s7_quality_max_suppression=1.25,
+        s7_quality_init_risk_bias=-7.0)
+    architecture = labeller.s7_architecture(args)
+    assert architecture['quality_suppression'] is True
+    assert architecture['lane_arbitration'] is False
+    assert architecture['quality_hidden'] == 24
+    assert architecture['quality_max_suppression'] == pytest.approx(1.25)
+    assert architecture['quality_initial_risk_bias'] == pytest.approx(-7.0)
 
 
 def test_s7_base_checkpoint_load_allows_only_new_branch_keys():
@@ -614,6 +707,36 @@ def test_s7_lane_checkpoint_initialization_allows_only_new_arbitrator_keys():
     adjustment = heads.s7_lane_arbitrator(
         torch.ones((1, 2)), torch.ones(1), torch.ones(()))
     assert torch.equal(adjustment, torch.zeros_like(adjustment))
+
+
+def test_s7_quality_checkpoint_initialization_allows_only_new_suppressor_keys():
+    class TinyHeads(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.native = torch.nn.Linear(2, 2)
+            self.s7_readout = torch.nn.Linear(2, 2)
+            self.s7_rpn_head = torch.nn.Linear(2, 2)
+            self.s7_score_calibrator = labeller.S7ScoreCalibrator(-2.0)
+            self.s7_quality_suppressor = labeller.S7QualitySuppressor(2, 3)
+            self.enabled = True
+
+        def set_s7_inference_enabled(self, enabled):
+            self.enabled = bool(enabled)
+
+    heads = TinyHeads()
+    stored_state = {
+        name: tensor.detach().clone()
+        for name, tensor in heads.state_dict().items()
+        if not name.startswith('s7_quality_suppressor.')}
+    stored_state['native.weight'].fill_(0.25)
+    payload = {'heads_state_dict': stored_state}
+    labeller.load_heads_checkpoint_state(
+        heads, payload, allow_quality_suppression_initialization=True)
+    assert heads.enabled is False
+    assert torch.all(heads.native.weight == 0.25)
+    delta, _risk, _top = heads.s7_quality_suppressor(
+        torch.ones((1, 2)), torch.ones(1), torch.ones(1), torch.ones(()))
+    assert float(delta.item()) <= 0.0
 
 
 def test_frozen_s7_component_loader_does_not_replace_native_or_calibrator(
@@ -749,11 +872,55 @@ def test_s7_lane_gain_beats_native_and_strongest_wrong_s7():
     assert adjusted.grad.tolist() == pytest.approx([-1.0, 1.0])
 
 
+def test_s7_quality_losses_suppress_only_competitive_wrong_lane():
+    delta = torch.tensor(-0.1, requires_grad=True)
+    risk_logit = torch.tensor(-2.0, requires_grad=True)
+    result = labeller.s7_quality_suppression_losses(
+        torch.tensor([1.0]), torch.tensor([0.8]),
+        torch.tensor([1.2, 0.5]), torch.tensor([0.1, 0.8]),
+        delta, risk_logit, margin=0.5)
+    assert result['risk_pair_count'] == 1
+    assert result['preserve_pair_count'] == 0
+    assert result['retention_active'] == 1
+    assert float(result['retention'].item()) == pytest.approx(0.6)
+    (result['risk'] + result['retention']).backward()
+    assert float(delta.grad.item()) > 0.0
+    assert float(risk_logit.grad.item()) < 0.0
+
+
+def test_s7_quality_losses_preserve_usable_lane_without_promotion():
+    delta = torch.tensor(-0.1, requires_grad=True)
+    risk_logit = torch.tensor(-2.0, requires_grad=True)
+    result = labeller.s7_quality_suppression_losses(
+        torch.tensor([1.0]), torch.tensor([0.1]),
+        torch.tensor([0.8]), torch.tensor([0.8]),
+        delta, risk_logit, margin=0.5)
+    assert result['risk_pair_count'] == 0
+    assert result['preserve_pair_count'] == 1
+    assert float(result['retention'].item()) == pytest.approx(0.0)
+    result['preserve'].backward()
+    assert float(risk_logit.grad.item()) > 0.0
+    assert delta.grad is None
+
+
 def test_s7_lane_uses_canonical_optimization_loss_metadata():
     assert labeller.optimization_loss_component_names(
         's7_lane_arbitration') == [
             'loss_s7_lane_retention', 'loss_s7_lane_gain',
             'loss_s7_lane_prior']
+
+
+def test_s7_quality_uses_no_gain_or_promotion_loss():
+    names = labeller.optimization_loss_component_names(
+        's7_quality_suppression')
+    assert names == [
+        'loss_s7_quality_risk', 'loss_s7_quality_preserve',
+        'loss_s7_quality_retention', 'loss_s7_quality_prior']
+    assert not any('gain' in name or 'promotion' in name for name in names)
+    losses = {name: torch.tensor(1.0, requires_grad=True) for name in names}
+    total = labeller.optimization_loss_total(
+        losses, 's7_quality_suppression')
+    assert float(total.item()) == pytest.approx(4.0)
 
 
 def test_s7_lane_train_epoch_replays_gain_frames_source_only(
@@ -926,6 +1093,27 @@ def test_s7_lane_arbitration_v2_config_uses_dynamic_source_only_mining():
     assert config['model']['dino_head_checkpoint'].endswith(
         'dino_teacher_s7_lane_arbitration_v2/'
         'labeller_best_source_only.pth')
+
+
+def test_s7_quality_suppression_config_locks_affine_base_and_formal_gate():
+    import runpy
+    root = pathlib.Path(__file__).resolve().parents[1]
+    config = runpy.run_path(str(root / 'crane_project/configs/'
+        'crane_symeood_scoped_dino_lowlight_s7_quality_suppression_v1.py'))
+    head = config['model']['dino_rescue']['head']
+    training = config['s7_quality_training']
+    assert head['s7_quality_suppression'] is True
+    assert head['s7_lane_arbitration'] is False
+    assert training['base_checkpoint'].endswith(
+        'dino_teacher_s7_retention_merge_v1/'
+        'labeller_epoch_01_source_only.pth')
+    assert training['source_gate'] == dict(
+        exact_retention=True, min_full_top1=688,
+        min_small_top1=311, max_mcml=3)
+    assert training['adjustment_range'] == [-2.0, 0.0]
+    assert training['positive_promotion'] is False
+    assert training['gain_replay'] is False
+    assert training['target_gate'] == 'formal_source_gate_only'
 
 
 def test_roi_cls_mode_optimizes_only_roi_classification_loss():
