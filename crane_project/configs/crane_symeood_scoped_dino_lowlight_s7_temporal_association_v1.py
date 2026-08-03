@@ -29,7 +29,9 @@ model = dict(
     scope_manifest=None,
     scope_policy='all_frames',
     temporal_association=dict(
-        enabled=True, source_selected=True, target_used_for_selection=False))
+        enabled=True, source_selected=True, target_used_for_selection=False,
+        source_gate=dict(min_full_top1=688, min_small_top1=311,
+                         max_mcml=3)))
 
 dino_rescue = dict(head=_temporal_head)
 

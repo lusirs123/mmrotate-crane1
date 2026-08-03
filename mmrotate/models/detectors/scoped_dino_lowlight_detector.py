@@ -254,6 +254,26 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
         temporal_cfg = dict(temporal_association or {})
         temporal_enabled = bool(temporal_cfg.get(
             'enabled', args.s7_temporal_association))
+        source_selected = bool(temporal_cfg.get('source_selected', False))
+        if source_selected and not temporal_enabled:
+            raise ValueError(
+                'source_selected temporal runtime requires temporal '
+                'association to be enabled')
+        if source_selected:
+            source_gate = dict(temporal_cfg.get('source_gate', {}))
+            gate = labeller.source_selected_checkpoint_gate(
+                checkpoint,
+                min_full_top1=int(source_gate.get('min_full_top1', 688)),
+                min_small_top1=int(source_gate.get('min_small_top1', 311)),
+                max_mcml=int(source_gate.get('max_mcml', 3)))
+            if not gate['passed']:
+                failed = sorted(
+                    name for name, passed in gate['checks'].items()
+                    if not passed)
+                raise RuntimeError(
+                    'Source-selected temporal checkpoint failed the '
+                    'deployment gate; keep native S14 fallback. failed={}'
+                    .format(','.join(failed)))
         if temporal_enabled != bool(args.s7_temporal_association):
             raise ValueError(
                 'Temporal runtime and DINO head configuration disagree')

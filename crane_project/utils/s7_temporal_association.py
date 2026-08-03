@@ -275,13 +275,21 @@ class CausalTemporalCandidateSelector:
                 selected_index=None,
                 order=torch.arange(detections.shape[0], device=detections.device),
                 reason='no_valid_candidate', reset=True,
-                override=False, pending_count=0)
+                override=False, pending_count=0,
+                candidate_index=None, candidate_source=None,
+                candidate_advantage=None, candidate_margin_ok=False,
+                candidate_continuity_ok=False, candidate_override_ok=False)
 
         reset = not self._continuous(seq, frame)
         if reset:
             self.reset()
             selected = fallback_index
             reason = 'native_fallback_after_reset'
+            candidate = None
+            advantage = None
+            margin_ok = False
+            continuity_ok = False
+            override_ok = False
             self._store_previous(detections, embeddings, selected, seq, frame)
         else:
             cues = build_temporal_cues(
@@ -292,10 +300,12 @@ class CausalTemporalCandidateSelector:
             candidate = int(torch.argmax(masked).item())
             advantage = float(
                 (fused[candidate] - fused[fallback_index]).detach().item())
+            margin_ok = bool(advantage >= self.override_margin)
+            continuity_ok = bool(self._continuity_ok(cues[candidate]))
             override_ok = bool(
                 candidate != fallback_index
-                and advantage >= self.override_margin
-                and self._continuity_ok(cues[candidate]))
+                and margin_ok
+                and continuity_ok)
             if self.override_active and override_ok:
                 selected = candidate
                 reason = 'confirmed_override_continues'
@@ -347,5 +357,15 @@ class CausalTemporalCandidateSelector:
             selected_source=('native_s14' if int(source_ids[selected].item()) == 0
                              else 'supplement_s7'),
             native_fallback_index=(None if native_index is None else int(native_index)),
+            candidate_index=(None if candidate is None else int(candidate)),
+            candidate_source=(
+                None if candidate is None else
+                ('native_s14' if int(source_ids[candidate].item()) == 0
+                 else 'supplement_s7')),
+            candidate_advantage=(
+                None if advantage is None else float(advantage)),
+            candidate_margin_ok=bool(margin_ok),
+            candidate_continuity_ok=bool(continuity_ok),
+            candidate_override_ok=bool(override_ok),
             pending_count=int(self.pending_count),
             override_active=bool(self.override_active))

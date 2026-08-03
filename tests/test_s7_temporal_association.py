@@ -72,6 +72,10 @@ def test_causal_selector_falls_back_then_requires_two_confirmations(monkeypatch)
     assert third['selected_index'] == 1
     assert third['reason'] == 'override_confirmed'
     assert third['override'] is True
+    assert third['candidate_index'] == 1
+    assert third['candidate_margin_ok'] is True
+    assert third['candidate_continuity_ok'] is True
+    assert third['candidate_override_ok'] is True
 
 
 def test_causal_selector_resets_on_gap_and_never_reuses_future_state(monkeypatch):
@@ -90,3 +94,5 @@ def test_causal_selector_resets_on_gap_and_never_reuses_future_state(monkeypatch
     assert after_gap['selected_index'] == 0
     assert after_gap['reset'] is True
     assert after_gap['reason'] == 'native_fallback_after_reset'
+    assert after_gap['candidate_index'] is None
+    assert after_gap['candidate_override_ok'] is False

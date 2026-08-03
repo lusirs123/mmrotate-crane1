@@ -175,6 +175,9 @@ def test_unified_temporal_config_removes_target_slice_routing():
     assert head['s7_temporal_association'] is True
     assert head['s7_quality_suppression'] is False
     assert head['s7_lane_arbitration'] is False
+    assert config['model']['temporal_association']['source_selected'] is True
+    assert config['model']['temporal_association']['source_gate'] == dict(
+        min_full_top1=688, min_small_top1=311, max_mcml=3)
 
 
 def test_full_test_manifest_covers_stream_and_enables_exact_dark_slice():

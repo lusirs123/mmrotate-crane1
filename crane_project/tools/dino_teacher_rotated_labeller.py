@@ -36,7 +36,7 @@ from crane_project.utils import s7_temporal_association as temporal  # noqa: E40
 
 
 LABELLER_NAME = 'Frozen DINOv2 Oriented RPN/ROI Source Labeller V1'
-PROTOCOL_VERSION = 16
+PROTOCOL_VERSION = 17
 PAIRWISE_V2_MAX_EPOCHS = 4
 S7_QUALITY_MIN_FULL_TOP1 = 688
 S7_QUALITY_MIN_SMALL_TOP1 = 311
@@ -3496,6 +3496,83 @@ def top1_temporal_geometry_metrics(
         dfr_transition_count=int(len(dfr_values)))
 
 
+def summarize_temporal_association_audit(rows: Sequence[Dict]) -> Optional[Dict]:
+    """Summarize causal association opportunities without changing outputs.
+
+    This is a source/target-neutral diagnostic. It reports which explicit
+    selector condition blocked a candidate; the existing source gate remains
+    the only checkpoint-selection authority.
+    """
+    temporal_rows = [row for row in rows
+                     if row.get('temporal_selection') is not None]
+    if not temporal_rows:
+        return None
+
+    def native_top1_hit(row):
+        source_metrics = (row.get('candidate_merge') or {}).get(
+            'source_top1_metrics', {})
+        native = source_metrics.get('native_s14')
+        return None if native is None else bool(native.get('top1_hit', False))
+
+    native_known = [row for row in temporal_rows
+                    if native_top1_hit(row) is not None]
+    native_wrong = [row for row in native_known
+                    if not native_top1_hit(row)]
+    usable = [row for row in temporal_rows if row.get('metrics', {}).get(
+        'raw_unfiltered', row.get('metrics', {})).get(
+            'best_usable_rank') is not None]
+    usable_ids = {id(row) for row in usable}
+    candidate_rows = [row for row in temporal_rows
+                      if row['temporal_selection'].get('candidate_index')
+                      is not None]
+    non_fallback = [row for row in candidate_rows
+                    if row['temporal_selection'].get('candidate_index')
+                    != row['temporal_selection'].get(
+                        'native_fallback_index')]
+    non_fallback_ids = {id(row) for row in non_fallback}
+    reason_counts = {}
+    for row in temporal_rows:
+        reason = str(row['temporal_selection'].get('reason'))
+        reason_counts[reason] = reason_counts.get(reason, 0) + 1
+
+    def count(predicate):
+        return int(sum(bool(predicate(row['temporal_selection']))
+                       for row in temporal_rows))
+
+    return dict(
+        frame_count=int(len(temporal_rows)),
+        native_top1_known_count=int(len(native_known)),
+        native_top1_correct_count=int(len(native_known) - len(native_wrong)),
+        native_top1_wrong_count=int(len(native_wrong)),
+        usable_candidate_count=int(len(usable)),
+        usable_candidate_when_native_wrong_count=int(sum(
+            id(row) in usable_ids for row in native_wrong)),
+        fused_non_fallback_candidate_count=int(len(non_fallback)),
+        fused_non_fallback_when_native_wrong_count=int(sum(
+            id(row) in non_fallback_ids for row in native_wrong)),
+        candidate_margin_ok_count=count(
+            lambda selection: selection.get('candidate_margin_ok', False)),
+        candidate_continuity_ok_count=count(
+            lambda selection: selection.get('candidate_continuity_ok', False)),
+        candidate_override_ok_count=count(
+            lambda selection: selection.get('candidate_override_ok', False)),
+        pending_confirmation_count=int(sum(
+            row['temporal_selection'].get('reason') ==
+            'native_fallback_pending_confirmation'
+            for row in temporal_rows)),
+        override_selected_count=int(sum(
+            bool(row['temporal_selection'].get('override', False))
+            for row in temporal_rows)),
+        override_selected_s7_count=int(sum(
+            bool(row['temporal_selection'].get('override', False))
+            and row['temporal_selection'].get('selected_source') ==
+            'supplement_s7' for row in temporal_rows)),
+        reset_count=int(sum(
+            bool(row['temporal_selection'].get('reset', False))
+            for row in temporal_rows)),
+        reason_counts=dict(sorted(reason_counts.items())))
+
+
 def summarize_rows(rows: Sequence[Dict]) -> Dict:
     flat = []
     for row in rows:
@@ -3561,6 +3638,7 @@ def summarize_rows(rows: Sequence[Dict]) -> Dict:
                      if row.get('temporal_selection') is not None]
     temporal_geometry = top1_temporal_geometry_metrics(
         rows, SOURCE_TEMPORAL_ANGLE_LIMIT_DEG)
+    temporal_audit = summarize_temporal_association_audit(rows)
     return dict(
         frame_count=len(rows),
         top1_hits=int(sum(row['top1'] for row in flat)),
@@ -3616,6 +3694,7 @@ def summarize_rows(rows: Sequence[Dict]) -> Dict:
         top1_aci=temporal_geometry['aci'],
         top1_temporal_transition_count=temporal_geometry[
             'transition_count'],
+        temporal_association_audit=temporal_audit,
         raw_top1_source_counts=merge_top1_sources,
         mean_native_s14_proposal_count=(
             float(np.mean([
@@ -4014,6 +4093,41 @@ def load_frozen_s7_component(heads, payload: Dict, in_channels: int, args):
         loaded_parameter_names=sorted(source_state))
 
 
+def source_selected_checkpoint_gate(
+        payload: Dict, min_full_top1: int = 688,
+        min_small_top1: int = 311, max_mcml: int = 3) -> Dict:
+    """Validate the metadata required before enabling a gated S7 runtime.
+
+    A checkpoint with ``best_epoch=0`` is always the native fallback.  The
+    explicit stored gate and retention evidence prevent a deployment config
+    from accidentally turning a failed source-only experiment on.
+    """
+    best = payload.get('best_source_val_summary') or {}
+    best_small = payload.get('best_source_small_val_summary') or {}
+    retention = payload.get('source_exact_retention') or {}
+    checks = dict(
+        positive_best_epoch=int(payload.get('best_epoch', 0)) > 0,
+        temporal_training_protocol=(
+            (payload.get('training_protocol') or {}).get('train_components')
+            == 's7_temporal_association'),
+        stored_source_selection_gate=(
+            payload.get('source_selection_gate_passed') is True),
+        exact_old_correct_retention=(
+            int(retention.get('lost_correct_count', -1)) == 0
+            and int(retention.get('retained_correct_count', -1)) == int(
+                retention.get('baseline_correct_count', -2))),
+        full_top1_absolute=(
+            int(best.get('top1_hits', -1)) >= int(min_full_top1)),
+        small_top1_absolute=(
+            int(best_small.get('top1_hits', -1)) >= int(min_small_top1)),
+        full_mcml_absolute=(
+            int(best.get('top1_mcml', max_mcml + 1)) <= int(max_mcml)),
+        small_mcml_absolute=(
+            int(best_small.get('top1_mcml', max_mcml + 1))
+            <= int(max_mcml)))
+    return dict(checks=checks, passed=all(checks.values()))
+
+
 def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                        best_epoch: int, best_summary: Dict,
                        in_channels: int, args,
@@ -4022,7 +4136,9 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                        source_sampling: Dict = None,
                        source_baseline_summary: Dict = None,
                        source_baseline_small_summary: Dict = None,
-                       source_baseline_correct_keys: Sequence[str] = None
+                       source_baseline_correct_keys: Sequence[str] = None,
+                       source_selection_gate_passed: Optional[bool] = None,
+                       source_exact_retention: Optional[Dict] = None
                        ) -> Dict:
     return dict(
         labeller=LABELLER_NAME, protocol_version=PROTOCOL_VERSION,
@@ -4031,6 +4147,10 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
         global_step=int(global_step),
         best_source_val_summary=best_summary,
         best_source_small_val_summary=best_small_summary,
+        source_selection_gate_passed=(
+            None if source_selection_gate_passed is None
+            else bool(source_selection_gate_passed)),
+        source_exact_retention=source_exact_retention,
         source_baseline_val_summary=source_baseline_summary,
         source_baseline_small_val_summary=source_baseline_small_summary,
         source_baseline_correct_keys=(
@@ -4328,6 +4448,8 @@ def train_source_only(dino, heads, train_records, val_records, args,
     source_baseline_summary = None
     source_baseline_small_summary = None
     source_baseline_correct_keys = None
+    source_initial_temporal_summary = None
+    source_initial_temporal_small_summary = None
     s7_quality_support_audit = None
     history = []
     if args.init_checkpoint:
@@ -4488,7 +4610,9 @@ def train_source_only(dino, heads, train_records, val_records, args,
                 global_step, best_small_summary, source_sampling,
                 source_baseline_summary,
                 source_baseline_small_summary,
-                source_baseline_correct_keys), best_path)
+                source_baseline_correct_keys,
+                source_selection_gate_passed=False,
+                source_exact_retention=None), best_path)
             if s7_mode:
                 heads.set_s7_inference_enabled(True)
             print('[source-baseline] full_top1={}/{} small_top1={}/{} '
@@ -4497,6 +4621,28 @@ def train_source_only(dino, heads, train_records, val_records, args,
                       best_summary['frame_count'],
                       best_small_summary['top1_hits'],
                       best_small_summary['frame_count']))
+            if s7_temporal_mode:
+                initial_temporal_rows = evaluate_records(
+                    dino, heads, val_records, args, dino_device, head_device,
+                    role='source_validation_initial_temporal')
+                source_initial_temporal_summary = summarize_rows(
+                    initial_temporal_rows)
+                initial_small_rows = [
+                    row for row in initial_temporal_rows
+                    if source_frame_key(row) in small_keys]
+                source_initial_temporal_small_summary = summarize_rows(
+                    initial_small_rows)
+                print(
+                    '[source-temporal-initial] full_top1={}/{} '
+                    'small_top1={}/{} overrides={} resets={}'.format(
+                        source_initial_temporal_summary['top1_hits'],
+                        source_initial_temporal_summary['frame_count'],
+                        source_initial_temporal_small_summary['top1_hits'],
+                        source_initial_temporal_small_summary['frame_count'],
+                        source_initial_temporal_summary[
+                            'temporal_override_count'],
+                        source_initial_temporal_summary[
+                            'temporal_reset_count']))
     elif best_summary is not None:
         best_key = source_selection_key(best_summary)
 
@@ -4532,7 +4678,9 @@ def train_source_only(dino, heads, train_records, val_records, args,
                 source_sampling, source_baseline_summary,
                 source_baseline_small_summary,
                 frozen_parameters_unchanged, history,
-                s7_quality_support_audit)
+                s7_quality_support_audit,
+                source_initial_temporal_summary,
+                source_initial_temporal_small_summary)
 
     selection_epochs = set(int(value) for value in args.selection_epochs)
     for epoch in range(start_epoch, args.epochs + 1):
@@ -4630,7 +4778,9 @@ def train_source_only(dino, heads, train_records, val_records, args,
                 in_channels, args, global_step, best_small_summary,
                 source_sampling, source_baseline_summary,
                 source_baseline_small_summary,
-                source_baseline_correct_keys), best_path)
+                source_baseline_correct_keys,
+                source_selection_gate_passed=True,
+                source_exact_retention=retention_summary), best_path)
         if evaluate_epoch:
             epoch_path = os.path.join(
                 args.work_dir,
@@ -4641,7 +4791,9 @@ def train_source_only(dino, heads, train_records, val_records, args,
                 best_small_summary, source_sampling,
                 source_baseline_summary,
                 source_baseline_small_summary,
-                source_baseline_correct_keys), epoch_path)
+                source_baseline_correct_keys,
+                source_selection_gate_passed=source_gate_passed,
+                source_exact_retention=retention_summary), epoch_path)
         exact_retention_passed = (
             bool(protected_gate['checks'][
                 'exact_old_correct_retention'])
@@ -4675,7 +4827,9 @@ def train_source_only(dino, heads, train_records, val_records, args,
             in_channels, args, global_step, best_small_summary,
             source_sampling, source_baseline_summary,
             source_baseline_small_summary,
-            source_baseline_correct_keys), latest_path)
+            source_baseline_correct_keys,
+            source_selection_gate_passed=source_gate_passed,
+            source_exact_retention=retention_summary), latest_path)
         progress_path = None
         progress_replacements = 0
         if args.train_components in (
@@ -4751,7 +4905,9 @@ def train_source_only(dino, heads, train_records, val_records, args,
     return (best_path, best_epoch, best_summary, best_small_summary,
             source_sampling, source_baseline_summary,
             source_baseline_small_summary, frozen_parameters_unchanged,
-            history, s7_quality_support_audit)
+            history, s7_quality_support_audit,
+            source_initial_temporal_summary,
+            source_initial_temporal_small_summary)
 
 
 def main():
@@ -4825,6 +4981,8 @@ def main():
         heads, args.train_components)
     source_val_rows = None
     s7_quality_support_audit = None
+    source_initial_temporal_summary = None
+    source_initial_temporal_small_summary = None
 
     if args.eval_only_checkpoint:
         best_path = args.eval_only_checkpoint
@@ -4860,9 +5018,11 @@ def main():
          source_sampling, source_baseline_summary,
          source_baseline_small_summary,
          frozen_head_parameters_unchanged, history,
-         s7_quality_support_audit) = train_source_only(
-             dino, heads, source_train, source_val, args,
-             dino_device, head_device, in_channels)
+         s7_quality_support_audit,
+         source_initial_temporal_summary,
+         source_initial_temporal_small_summary) = train_source_only(
+            dino, heads, source_train, source_val, args,
+            dino_device, head_device, in_channels)
         payload = torch.load(best_path, map_location='cpu')
         validate_checkpoint(payload, in_channels, args)
         load_heads_checkpoint_state(heads, payload)
@@ -4891,6 +5051,10 @@ def main():
             'S7_QUALITY_RISK_SUPPORT_TARGET_NOT_READ'
             if (s7_quality_support_audit is not None
                 and not s7_quality_support_audit['training_allowed']) else
+            'SOURCE_ONLY_SOURCE_GATE_FAILED_NATIVE_FALLBACK_'
+            'TARGET_NOT_READ'
+            if (args.train_components == 's7_temporal_association'
+                and int(best_epoch) == 0) else
             'SOURCE_ONLY_TRAINING_COMPLETE_TARGET_NOT_READ')
     else:
         target_rows = evaluate_records(
@@ -5135,6 +5299,10 @@ def main():
             best_small_validation_summary=best_source_small_summary,
             baseline_validation_summary=source_baseline_summary,
             baseline_small_validation_summary=source_baseline_small_summary,
+            initial_temporal_validation_summary=(
+                source_initial_temporal_summary),
+            initial_temporal_small_validation_summary=(
+                source_initial_temporal_small_summary),
             small_sampling=source_sampling,
             current_inference_validation_summary=current_source_summary,
             current_inference_rule='valid_rotated_obb_corners',

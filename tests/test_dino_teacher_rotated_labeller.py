@@ -922,6 +922,65 @@ def test_s7_source_gate_requires_absolute_small_and_mcml_targets(tmp_path):
         retention, args)['passed']
 
 
+def test_source_selected_checkpoint_gate_requires_positive_selected_epoch():
+    payload = dict(
+        best_epoch=0,
+        best_source_val_summary=dict(top1_hits=677, top1_mcml=3),
+        best_source_small_val_summary=dict(top1_hits=303, top1_mcml=3),
+        source_selection_gate_passed=False,
+        source_exact_retention=None,
+        training_protocol=dict(train_components='s7_temporal_association'))
+    result = labeller.source_selected_checkpoint_gate(payload)
+    assert result['passed'] is False
+    assert result['checks']['positive_best_epoch'] is False
+    assert result['checks']['stored_source_selection_gate'] is False
+
+
+def test_source_selected_checkpoint_gate_requires_exact_retention_and_gate():
+    payload = dict(
+        best_epoch=1,
+        best_source_val_summary=dict(top1_hits=688, top1_mcml=3),
+        best_source_small_val_summary=dict(top1_hits=311, top1_mcml=3),
+        source_selection_gate_passed=True,
+        source_exact_retention=dict(
+            baseline_correct_count=677, retained_correct_count=677,
+            lost_correct_count=0),
+        training_protocol=dict(train_components='s7_temporal_association'))
+    result = labeller.source_selected_checkpoint_gate(payload)
+    assert result['passed'] is True
+
+
+def test_temporal_association_audit_reports_blocking_conditions():
+    rows = [
+        dict(
+            metrics=dict(raw_unfiltered=dict(best_usable_rank=4)),
+            candidate_merge=dict(source_top1_metrics=dict(
+                native_s14=dict(top1_hit=False))),
+            temporal_selection=dict(
+                reason='native_fallback_pending_confirmation', reset=False,
+                override=False, selected_source='native_s14',
+                native_fallback_index=0, candidate_index=1,
+                candidate_margin_ok=True, candidate_continuity_ok=True,
+                candidate_override_ok=True)),
+        dict(
+            metrics=dict(raw_unfiltered=dict(best_usable_rank=None)),
+            candidate_merge=dict(source_top1_metrics=dict(
+                native_s14=dict(top1_hit=True))),
+            temporal_selection=dict(
+                reason='native_fallback_no_override_evidence', reset=False,
+                override=False, selected_source='native_s14',
+                native_fallback_index=0, candidate_index=1,
+                candidate_margin_ok=False, candidate_continuity_ok=True,
+                candidate_override_ok=False)),
+    ]
+    audit = labeller.summarize_temporal_association_audit(rows)
+    assert audit['frame_count'] == 2
+    assert audit['native_top1_wrong_count'] == 1
+    assert audit['usable_candidate_when_native_wrong_count'] == 1
+    assert audit['pending_confirmation_count'] == 1
+    assert audit['candidate_override_ok_count'] == 1
+
+
 def test_s7_merge_pair_loss_separates_retention_and_gain_cases():
     calibrator = labeller.S7ScoreCalibrator(initial_bias=0.0)
     retain = labeller.s7_merge_pair_losses(
