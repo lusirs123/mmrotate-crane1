@@ -34,6 +34,15 @@ def _args(tmp_path, **overrides):
         s7_quality_risk_weight=1.0, s7_quality_preserve_weight=1.0,
         s7_quality_retention_weight=2.0, s7_quality_prior_weight=0.01,
         s7_quality_base_epoch=1,
+        s7_temporal_association=False, s7_temporal_base_epoch=1,
+        s7_temporal_margin=0.5, s7_temporal_retention_weight=2.0,
+        s7_temporal_gain_weight=1.0, s7_temporal_prior_weight=0.01,
+        s7_temporal_max_candidates=100,
+        s7_temporal_min_confirmations=2,
+        s7_temporal_override_margin=0.25,
+        s7_temporal_max_center_distance=3.0,
+        s7_temporal_min_riou=0.05,
+        s7_temporal_min_appearance=0.20,
         s7_source_min_full_top1=677, s7_source_min_small_top1=303,
         s7_source_max_mcml=3,
         roi_nms_iou_thr=0.1,
@@ -207,6 +216,33 @@ def test_validate_s7_quality_suppression_locks_source_only_formal_gate(
         labeller.validate_args(_args(
             tmp_path, skip_target_eval=True,
             **dict(common, s7_source_min_small_top1=310)))
+
+
+def test_validate_s7_temporal_association_requires_continuous_source_protocol(
+        tmp_path):
+    checkpoint = tmp_path / 'affine_epoch01.pth'
+    checkpoint.write_bytes(b'checkpoint')
+    common = dict(
+        s7_residual=True, s7_temporal_association=True,
+        train_components='s7_temporal_association',
+        init_checkpoint=str(checkpoint), skip_target_eval=True,
+        epochs=4, lr_steps=None, selection_epochs=[1, 2, 3, 4],
+        s7_source_min_full_top1=688,
+        s7_source_min_small_top1=311)
+    with pytest.raises(ValueError, match='formal source train/val'):
+        labeller.validate_args(_args(tmp_path, **common))
+    args = _args(
+        tmp_path,
+        source_train_datasets=['train:train', 'train_sim:train'],
+        source_val_datasets=['val:val'], **common)
+    labeller.validate_args(args)
+    assert args.lr_steps == [2, 3]
+    with pytest.raises(ValueError, match='frame repetition'):
+        labeller.validate_args(_args(
+            tmp_path,
+            source_train_datasets=['train:train'],
+            source_val_datasets=['val:val'], source_small_repeat=2,
+            **common))
 
 
 def test_validate_pairwise_v2_requires_matching_nms_policy(tmp_path):
@@ -428,7 +464,8 @@ def test_protected_merge_runs_nms_per_source_and_records_provenance():
 
     def lane_nms(boxes, scores):
         calls.append(boxes.clone())
-        return torch.cat([boxes, scores[:, None]], dim=1)
+        return (torch.cat([boxes, scores[:, None]], dim=1),
+                torch.arange(boxes.shape[0]))
 
     heads._nms_candidate_lane = lane_nms
     detections = heads._protected_merge_detections(
@@ -629,6 +666,25 @@ def test_s7_quality_suppression_trains_only_quality_module():
     assert not any(name.startswith('s7_score_calibrator.') for name in names)
 
 
+def test_s7_temporal_association_trains_only_six_cue_weights():
+    class TinyHeads(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.native = torch.nn.Linear(2, 2)
+            self.s7_score_calibrator = labeller.S7ScoreCalibrator(-2.0)
+            self.s7_temporal_scorer = (
+                labeller.temporal.S7TemporalAssociationScorer())
+            self.s7_protected_merge = True
+
+    heads = TinyHeads()
+    names = labeller.configure_trainable_components(
+        heads, 's7_temporal_association')
+    assert names == ['s7_temporal_scorer.raw_weights']
+    assert heads.s7_temporal_scorer.raw_weights.numel() == 6
+    assert not heads.native.weight.requires_grad
+    assert not heads.s7_score_calibrator.bias.requires_grad
+
+
 def test_s7_lane_architecture_records_bounded_arbitration(tmp_path):
     args = _args(
         tmp_path, s7_residual=True,
@@ -654,6 +710,20 @@ def test_s7_quality_architecture_records_non_positive_lane_mode(tmp_path):
     assert architecture['quality_hidden'] == 24
     assert architecture['quality_max_suppression'] == pytest.approx(1.25)
     assert architecture['quality_initial_risk_bias'] == pytest.approx(-7.0)
+
+
+def test_s7_temporal_architecture_records_causal_candidate_policy(tmp_path):
+    args = _args(
+        tmp_path, s7_residual=True,
+        train_components='s7_temporal_association',
+        s7_protected_merge=True, s7_temporal_association=True,
+        s7_temporal_max_candidates=100,
+        s7_temporal_min_confirmations=2)
+    architecture = labeller.s7_architecture(args)
+    assert architecture['temporal_association'] is True
+    assert architecture['temporal_cues'] == list(labeller.temporal.CUE_NAMES)
+    assert architecture['temporal_max_candidates'] == 100
+    assert architecture['temporal_min_confirmations'] == 2
 
 
 def test_s7_base_checkpoint_load_allows_only_new_branch_keys():
@@ -737,6 +807,35 @@ def test_s7_quality_checkpoint_initialization_allows_only_new_suppressor_keys():
     delta, _risk, _top = heads.s7_quality_suppressor(
         torch.ones((1, 2)), torch.ones(1), torch.ones(1), torch.ones(()))
     assert float(delta.item()) <= 0.0
+
+
+def test_s7_temporal_checkpoint_initialization_allows_only_new_scorer_keys():
+    class TinyHeads(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.native = torch.nn.Linear(2, 2)
+            self.s7_readout = torch.nn.Linear(2, 2)
+            self.s7_rpn_head = torch.nn.Linear(2, 2)
+            self.s7_score_calibrator = labeller.S7ScoreCalibrator(-2.0)
+            self.s7_temporal_scorer = (
+                labeller.temporal.S7TemporalAssociationScorer())
+            self.enabled = True
+
+        def set_s7_inference_enabled(self, enabled):
+            self.enabled = bool(enabled)
+
+    heads = TinyHeads()
+    stored_state = {
+        name: tensor.detach().clone()
+        for name, tensor in heads.state_dict().items()
+        if not name.startswith('s7_temporal_scorer.')}
+    stored_state['native.weight'].fill_(0.25)
+    payload = {'heads_state_dict': stored_state}
+    labeller.load_heads_checkpoint_state(
+        heads, payload, allow_temporal_association_initialization=True)
+    assert heads.enabled is False
+    assert torch.all(heads.native.weight == 0.25)
+    assert heads.s7_temporal_scorer.raw_weights.numel() == 6
 
 
 def test_frozen_s7_component_loader_does_not_replace_native_or_calibrator(
@@ -882,6 +981,8 @@ def test_s7_quality_losses_suppress_only_competitive_wrong_lane():
     assert result['risk_pair_count'] == 1
     assert result['preserve_pair_count'] == 0
     assert result['retention_active'] == 1
+    assert result['native_top1_riou'] == pytest.approx(0.8)
+    assert result['s7_top1_riou'] == pytest.approx(0.1)
     assert float(result['retention'].item()) == pytest.approx(0.6)
     (result['risk'] + result['retention']).backward()
     assert float(delta.grad.item()) > 0.0
@@ -901,6 +1002,61 @@ def test_s7_quality_losses_preserve_usable_lane_without_promotion():
     result['preserve'].backward()
     assert float(risk_logit.grad.item()) > 0.0
     assert delta.grad is None
+
+
+def test_s7_quality_support_audit_reports_zero_risk_and_exclusions():
+    rows = [
+        dict(
+            frame_key='train|seq_a|1', split='train', seq='seq_a',
+            risk_pair=False, preserve_pair=True,
+            native_top1_correct=False, s7_top1_correct=True,
+            native_top1_riou=0.1, s7_top1_riou=0.8,
+            base_gap=0.2, s7_candidate_count=10),
+        dict(
+            frame_key='train|seq_a|2', split='train', seq='seq_a',
+            risk_pair=False, preserve_pair=False,
+            native_top1_correct=True, s7_top1_correct=False,
+            native_top1_riou=0.7, s7_top1_riou=0.2,
+            base_gap=-0.6, s7_candidate_count=10),
+        dict(
+            frame_key='train|seq_b|3', split='train', seq='seq_b',
+            risk_pair=False, preserve_pair=False,
+            native_top1_correct=False, s7_top1_correct=False,
+            native_top1_riou=0.2, s7_top1_riou=0.1,
+            base_gap=0.9, s7_candidate_count=10),
+    ]
+    result = labeller.summarize_s7_quality_support_rows(
+        rows, margin=0.5, riou_thr=0.5)
+    assert result['status'] == 'FAIL_ZERO_RISK_SUPPORT'
+    assert result['training_allowed'] is False
+    assert result['training_skipped'] is True
+    assert result['risk_pair_count'] == 0
+    assert result['preserve_pair_count'] == 1
+    assert result['s7_top1_wrong_count'] == 2
+    assert result['native_correct_s7_wrong_count'] == 1
+    assert (
+        result['native_correct_s7_wrong_excluded_by_margin_count'] == 1)
+    assert result['s7_wrong_sequence_counts'] == {
+        'train|seq_a': 1, 'train|seq_b': 1}
+    assert result['s7_wrong_frames'][0]['excluded_by_margin'] is True
+    assert result['s7_wrong_frames'][0][
+        'suppression_to_match_native'] == pytest.approx(0.0)
+
+
+def test_s7_quality_support_audit_allows_a_matching_risk_pair():
+    rows = [dict(
+        frame_key='train|seq|1', split='train', seq='seq',
+        risk_pair=True, preserve_pair=False,
+        native_top1_correct=True, s7_top1_correct=False,
+        native_top1_riou=0.8, s7_top1_riou=0.1,
+        base_gap=-0.4, s7_candidate_count=10)]
+    result = labeller.summarize_s7_quality_support_rows(
+        rows, margin=0.5, riou_thr=0.5)
+    assert result['status'] == 'PASS'
+    assert result['training_allowed'] is True
+    assert result['risk_pair_count'] == 1
+    assert result['s7_wrong_frames'][0][
+        'suppression_for_margin'] == pytest.approx(0.1)
 
 
 def test_s7_lane_uses_canonical_optimization_loss_metadata():
@@ -1111,6 +1267,10 @@ def test_s7_quality_suppression_config_locks_affine_base_and_formal_gate():
         exact_retention=True, min_full_top1=688,
         min_small_top1=311, max_mcml=3)
     assert training['adjustment_range'] == [-2.0, 0.0]
+    assert training['source_support_preflight'] == dict(
+        exact_training_risk_miner=True, minimum_risk_pairs=1,
+        zero_risk_action='skip_optimization_and_keep_epoch_0',
+        report_all_s7_wrong_frames=True)
     assert training['positive_promotion'] is False
     assert training['gain_replay'] is False
     assert training['target_gate'] == 'formal_source_gate_only'
@@ -1302,6 +1462,46 @@ def test_longest_miss_resets_at_sequence_boundary():
     assert labeller.longest_miss(rows, 'hit') == 2
 
 
+def test_top1_temporal_geometry_metrics_match_project_dfr_aci_definitions():
+    rows = [
+        dict(seq='a', frame=1, detections=[
+            [0, 0, 6, 8, 0.0, 0.9]]),
+        dict(seq='a', frame=2, detections=[
+            [0, 0, 12, 16, np.deg2rad(17.5), 0.9]]),
+        dict(seq='a', frame=4, detections=[
+            [0, 0, 24, 32, np.deg2rad(35.0), 0.9]]),
+    ]
+    metrics = labeller.top1_temporal_geometry_metrics(rows, 35.0)
+    assert metrics['dfr_fraction_per_frame'] == pytest.approx(1.0)
+    assert metrics['dfr_percent_per_frame'] == pytest.approx(100.0)
+    assert metrics['aci'] == pytest.approx(0.5)
+    assert metrics['transition_count'] == 1
+
+
+def test_temporal_source_gate_rejects_dfr_or_aci_regression(tmp_path):
+    args = _args(
+        tmp_path, train_components='s7_temporal_association',
+        s7_source_min_full_top1=688, s7_source_min_small_top1=311)
+    baseline = dict(
+        top1_hits=677, top1_mcml=3,
+        top1_dfr_fraction_per_frame=0.02, top1_aci=0.95)
+    baseline_small = dict(top1_hits=303, top1_mcml=3)
+    retention = dict(
+        baseline_correct_count=677, retained_correct_count=677,
+        lost_correct_count=0)
+    candidate = dict(
+        top1_hits=688, top1_mcml=3,
+        top1_dfr_fraction_per_frame=0.03, top1_aci=0.94)
+    candidate_small = dict(top1_hits=311, top1_mcml=3)
+    result = labeller.s7_source_selection_gate(
+        baseline, baseline_small, candidate, candidate_small,
+        retention, args)
+    assert result['checks']['source_temporal_metrics_available'] is True
+    assert result['checks']['source_dfr_nonregression'] is False
+    assert result['checks']['source_aci_nonregression'] is False
+    assert result['passed'] is False
+
+
 def test_source_selection_prioritizes_top1_before_oracle_recall():
     a = dict(top1_hits=5, recall_at_20=5,
              recall_at_100=5, mean_top1_riou=0.5)
@@ -1380,6 +1580,33 @@ def test_source_training_progress_is_atomic_and_target_free(tmp_path):
     assert payload['completed_epoch'] == 1
     assert payload['best_epoch'] == 0
     assert payload['history'][0]['pairwise_v2_source_gate']['passed'] is False
+
+
+def test_source_training_progress_records_zero_risk_preflight_stop(tmp_path):
+    args = argparse.Namespace(
+        out_json=str(tmp_path / 'train_result.json'),
+        train_components='s7_quality_suppression', epochs=4)
+    audit = dict(
+        status='FAIL_ZERO_RISK_SUPPORT', training_allowed=False,
+        training_skipped=True, risk_pair_count=0, target_read=False)
+    output_path, replacements = labeller.write_source_training_progress(
+        args, completed_epoch=0, best_epoch=0,
+        best_path=str(tmp_path / 'best.pth'),
+        latest_path=str(tmp_path / 'best.pth'),
+        baseline_summary=dict(top1_hits=677),
+        baseline_small_summary=dict(top1_hits=303),
+        best_summary=dict(top1_hits=677),
+        best_small_summary=dict(top1_hits=303), history=[],
+        status='SOURCE_ONLY_TRAINING_SKIPPED_ZERO_S7_QUALITY_RISK_SUPPORT',
+        s7_quality_support_audit=audit)
+    with open(output_path, 'r') as handle:
+        payload = json.load(handle)
+    assert replacements == 0
+    assert payload['completed_epoch'] == 0
+    assert payload['best_epoch'] == 0
+    assert payload['target_read'] is False
+    assert payload['status'].endswith('ZERO_S7_QUALITY_RISK_SUPPORT')
+    assert payload['s7_quality_support_audit'] == audit
 
 
 def test_source_small_sampling_uses_source_train_threshold_only(

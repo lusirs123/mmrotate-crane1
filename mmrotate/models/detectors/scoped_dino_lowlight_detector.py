@@ -95,9 +95,11 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
                  baseline_config,
                  dino_rescue,
                  dino_head_checkpoint,
-                 scope_manifest,
+                 scope_manifest=None,
                  scope_split='test',
+                 scope_policy='manifest',
                  stabilizer=None,
+                 temporal_association=None,
                  pretrained=None,
                  train_cfg=None,
                  test_cfg=None,
@@ -110,7 +112,20 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
         super().__init__(init_cfg=init_cfg)
         self.fp16_enabled = False
         self._scope_split = str(scope_split)
-        self._scope_intervals = _load_scope(scope_manifest, self._scope_split)
+        self._scope_policy = str(scope_policy)
+        if self._scope_policy == 'all_frames':
+            if scope_manifest is not None:
+                raise ValueError(
+                    'all_frames scope policy must not receive a manifest')
+            self._scope_intervals = None
+        elif self._scope_policy == 'manifest':
+            if scope_manifest is None:
+                raise ValueError('manifest scope policy requires a manifest')
+            self._scope_intervals = _load_scope(
+                scope_manifest, self._scope_split)
+        else:
+            raise ValueError('Unknown scope policy: {}'.format(
+                self._scope_policy))
         stabilizer = dict(stabilizer or {})
         self._alpha = float(stabilizer.get('alpha', 0.25))
         if not 0.0 < self._alpha <= 1.0:
@@ -203,6 +218,20 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
                 's7_quality_max_suppression', 2.0)),
             s7_quality_init_risk_bias=float(head_cfg.get(
                 's7_quality_init_risk_bias', 0.0)),
+            s7_temporal_association=bool(head_cfg.get(
+                's7_temporal_association', False)),
+            s7_temporal_max_candidates=int(head_cfg.get(
+                's7_temporal_max_candidates', 100)),
+            s7_temporal_min_confirmations=int(head_cfg.get(
+                's7_temporal_min_confirmations', 2)),
+            s7_temporal_override_margin=float(head_cfg.get(
+                's7_temporal_override_margin', 0.25)),
+            s7_temporal_max_center_distance=float(head_cfg.get(
+                's7_temporal_max_center_distance', 3.0)),
+            s7_temporal_min_riou=float(head_cfg.get(
+                's7_temporal_min_riou', 0.05)),
+            s7_temporal_min_appearance=float(head_cfg.get(
+                's7_temporal_min_appearance', 0.20)),
             s7_anchor_sizes=[float(value) for value in head_cfg.get(
                 's7_anchor_sizes', [16, 32, 64, 128, 256])])
         dino, loaded_patch_size = common.load_frozen_dinov2(
@@ -222,6 +251,22 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
             parameter.requires_grad_(False)
         for parameter in heads.parameters():
             parameter.requires_grad_(False)
+        temporal_cfg = dict(temporal_association or {})
+        temporal_enabled = bool(temporal_cfg.get(
+            'enabled', args.s7_temporal_association))
+        if temporal_enabled != bool(args.s7_temporal_association):
+            raise ValueError(
+                'Temporal runtime and DINO head configuration disagree')
+        temporal_selector = (
+            labeller.temporal.CausalTemporalCandidateSelector(
+                heads.s7_temporal_scorer,
+                max_candidates=args.s7_temporal_max_candidates,
+                min_confirmations=args.s7_temporal_min_confirmations,
+                override_margin=args.s7_temporal_override_margin,
+                max_center_distance=args.s7_temporal_max_center_distance,
+                min_rotated_iou=args.s7_temporal_min_riou,
+                min_appearance_similarity=args.s7_temporal_min_appearance)
+            if temporal_enabled else None)
         # Keep both modules out of nn.Module._modules.  MMDataParallel must
         # never move the sharded transformer or replicate it to GPU 0.
         self.__dict__['_dino_runtime'] = dict(
@@ -230,7 +275,8 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
             height=int(dinov2.get('height', common.CANONICAL_DINO_HEIGHT)),
             max_long_side=int(dinov2.get(
                 'max_long_side', common.CANONICAL_DINO_MAX_LONG_SIDE)),
-            patch_size=args.patch_size)
+            patch_size=args.patch_size,
+            temporal_selector=temporal_selector)
 
     def _load_from_state_dict(self, state_dict, prefix, local_metadata,
                               strict, missing_keys, unexpected_keys,
@@ -267,6 +313,9 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
         self._previous_box = None
         self._previous_seq = None
         self._previous_frame = None
+        runtime = self.__dict__.get('_dino_runtime')
+        if runtime is not None and runtime.get('temporal_selector') is not None:
+            runtime['temporal_selector'].reset()
 
     def _stabilize(self, detections, seq, frame):
         current = np.asarray(detections, dtype=np.float32).copy()
@@ -322,7 +371,8 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
         meta = img_metas[0]
         image_path = _filename(meta)
         seq, frame = _sequence_frame(image_path)
-        enabled = _in_scope(self._scope_intervals, seq, frame)
+        enabled = (True if self._scope_policy == 'all_frames' else
+                   _in_scope(self._scope_intervals, seq, frame))
         if not enabled:
             self._reset_temporal()
             return [[baseline]]
@@ -348,6 +398,22 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
         feature_meta = runtime['labeller'].feature_meta(image_path, dino_meta)
         with torch.no_grad():
             dino_detections = runtime['heads'].simple_test(feature, feature_meta)
+            selector = runtime.get('temporal_selector')
+            if selector is not None:
+                pool = runtime['heads']._last_temporal_pool
+                if pool is None or pool['detections'].shape[0] != dino_detections.shape[0]:
+                    raise RuntimeError(
+                        'Temporal runtime candidate metadata is unavailable')
+                valid = runtime['labeller'].valid_rotated_detection_mask(
+                    dino_detections, feature_meta)
+                selection = selector.select(
+                    pool['detections'], pool['embeddings'], pool['source_ids'],
+                    seq, frame,
+                    valid_mask=torch.as_tensor(
+                        valid, dtype=torch.bool,
+                        device=pool['detections'].device))
+                order = selection['order'].detach().cpu().numpy()
+                dino_detections = dino_detections[order]
         dino_detections, _stats = runtime['labeller'].filter_valid_rotated_detections(
             dino_detections, feature_meta)
         selected = (dino_detections[:1] if dino_detections.shape[0] > 0

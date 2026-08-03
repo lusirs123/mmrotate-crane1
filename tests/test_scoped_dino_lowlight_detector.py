@@ -163,6 +163,20 @@ def test_formal_config_builds_integrated_model_and_paper_metrics():
     assert config['evaluation']['paper_temporal'] is True
 
 
+def test_unified_temporal_config_removes_target_slice_routing():
+    root = pathlib.Path(__file__).resolve().parents[1]
+    config = runpy.run_path(
+        str(root / 'crane_project/configs/'
+            'crane_symeood_scoped_dino_lowlight_s7_temporal_association_v1.py'))
+    assert config['model']['scope_policy'] == 'all_frames'
+    assert config['model']['scope_manifest'] is None
+    assert config['model']['temporal_association']['enabled'] is True
+    head = config['model']['dino_rescue']['head']
+    assert head['s7_temporal_association'] is True
+    assert head['s7_quality_suppression'] is False
+    assert head['s7_lane_arbitration'] is False
+
+
 def test_full_test_manifest_covers_stream_and_enables_exact_dark_slice():
     root = pathlib.Path(__file__).resolve().parents[1]
     manifest = root / (
