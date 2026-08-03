@@ -36,7 +36,7 @@ from crane_project.utils import s7_temporal_association as temporal  # noqa: E40
 
 
 LABELLER_NAME = 'Frozen DINOv2 Oriented RPN/ROI Source Labeller V1'
-PROTOCOL_VERSION = 17
+PROTOCOL_VERSION = 18
 PAIRWISE_V2_MAX_EPOCHS = 4
 S7_QUALITY_MIN_FULL_TOP1 = 688
 S7_QUALITY_MIN_SMALL_TOP1 = 311
@@ -160,7 +160,9 @@ def parse_args():
               's7_quality_suppression freezes the epoch-1 affine merge and '
               'trains one lane-wide non-positive source-quality penalty. '
               's7_temporal_association freezes every detector component and '
-              'fits only six positive causal association cue weights.'))
+              'fits only six positive causal association cue weights. The '
+              'optional quality-head flag adds dense continuous candidate '
+              'max-RIoU supervision.'))
     parser.add_argument(
         '--source-small-repeat', type=int, default=1,
         help='Repeat source-train frames in the lower short-token tertile.')
@@ -207,6 +209,13 @@ def parse_args():
         '--s7-temporal-association', action='store_true',
         help=('Enable source-only causal multi-cue candidate association on '
               'the fixed affine epoch-1 native/S7 pool.'))
+    parser.add_argument(
+        '--s7-temporal-quality-head', action='store_true',
+        help=('Add a source-only candidate-level continuous max-RIoU head as '
+              'the seventh temporal cue.'))
+    parser.add_argument('--s7-temporal-quality-hidden', type=int, default=128)
+    parser.add_argument(
+        '--s7-temporal-quality-loss-weight', type=float, default=1.0)
     parser.add_argument('--s7-temporal-base-epoch', type=int, default=1)
     parser.add_argument('--s7-temporal-margin', type=float, default=0.5)
     parser.add_argument(
@@ -348,6 +357,10 @@ def validate_args(args):
     if not -1.0 <= float(getattr(
             args, 's7_temporal_min_appearance', 0.20)) <= 1.0:
         raise ValueError('--s7-temporal-min-appearance must be in [-1, 1]')
+    if int(getattr(args, 's7_temporal_quality_hidden', 128)) <= 0:
+        raise ValueError('--s7-temporal-quality-hidden must be positive')
+    if float(getattr(args, 's7_temporal_quality_loss_weight', 1.0)) <= 0.0:
+        raise ValueError('--s7-temporal-quality-loss-weight must be positive')
     if (bool(getattr(args, 's7_lane_arbitration', False))
             and (args.train_components == 's7_quality_suppression'
                  or bool(getattr(args, 's7_quality_suppression', False)))):
@@ -359,6 +372,12 @@ def validate_args(args):
         raise ValueError(
             '--s7-temporal-association and its train-components mode must be '
             'enabled together during temporal fitting')
+    quality_head_enabled = bool(getattr(
+        args, 's7_temporal_quality_head', False))
+    if quality_head_enabled and not temporal_enabled:
+        raise ValueError(
+            '--s7-temporal-quality-head requires '
+            '--s7-temporal-association and its train-components mode')
     if temporal_enabled and (bool(getattr(args, 's7_lane_arbitration', False))
                              or bool(getattr(
                                  args, 's7_quality_suppression', False))):
@@ -657,8 +676,15 @@ def configure_trainable_components(heads, train_components: str) -> List[str]:
             raise RuntimeError(
                 'S7 temporal association requires the protected affine '
                 'candidate pool and temporal scorer')
-        for parameter in heads.s7_temporal_scorer.parameters():
-            parameter.requires_grad_(True)
+        if bool(getattr(heads, 's7_temporal_quality_head_enabled', False)):
+            quality_head = getattr(heads, 's7_candidate_quality_head', None)
+            if quality_head is None:
+                raise RuntimeError('Temporal quality head is not configured')
+            for parameter in quality_head.parameters():
+                parameter.requires_grad_(True)
+        else:
+            for parameter in heads.s7_temporal_scorer.parameters():
+                parameter.requires_grad_(True)
     else:
         raise ValueError('Unsupported train-components: {}'.format(
             train_components))
@@ -709,6 +735,9 @@ def optimization_loss_total(losses: Dict, train_components: str):
                 ', '.join(missing)))
         return loss_total({name: losses[name] for name in required})
     if train_components == 's7_temporal_association':
+        if 'loss_s7_candidate_quality' in losses:
+            return loss_total({'loss_s7_candidate_quality':
+                               losses['loss_s7_candidate_quality']})
         required = (
             'loss_s7_temporal_retention', 'loss_s7_temporal_gain',
             'loss_s7_temporal_prior')
@@ -728,7 +757,8 @@ def optimization_loss_total(losses: Dict, train_components: str):
         train_components))
 
 
-def optimization_loss_component_names(train_components: str) -> List[str]:
+def optimization_loss_component_names(train_components: str,
+                                      quality_head: bool = False) -> List[str]:
     """Return the canonical loss-name list for logs and checkpoints."""
     if train_components == 'all':
         return ['loss_rpn_cls', 'loss_rpn_bbox', 'loss_cls', 'loss_bbox']
@@ -747,6 +777,8 @@ def optimization_loss_component_names(train_components: str) -> List[str]:
             'loss_s7_quality_risk', 'loss_s7_quality_preserve',
             'loss_s7_quality_retention', 'loss_s7_quality_prior']
     if train_components == 's7_temporal_association':
+        if quality_head:
+            return ['loss_s7_candidate_quality']
         return [
             'loss_s7_temporal_retention', 'loss_s7_temporal_gain',
             'loss_s7_temporal_prior']
@@ -1879,7 +1911,13 @@ class FrozenDinoRotatedHeads(nn.Module):
                 args, 'train_components', '') == 's7_quality_suppression')
         self.s7_temporal_association = bool(getattr(
             args, 's7_temporal_association', False) or getattr(
-                args, 'train_components', '') == 's7_temporal_association')
+            args, 'train_components', '') == 's7_temporal_association')
+        self.s7_temporal_quality_head_enabled = bool(getattr(
+            args, 's7_temporal_quality_head', False))
+        if (self.s7_temporal_quality_head_enabled
+                and not self.s7_temporal_association):
+            raise ValueError(
+                'Temporal quality head requires temporal association')
         self._last_candidate_merge = None
         self._last_temporal_pool = None
         self._s7_inference_enabled = self.s7_enabled
@@ -1911,8 +1949,16 @@ class FrozenDinoRotatedHeads(nn.Module):
                         args, 's7_quality_init_risk_bias', 0.0)))
                 if self.s7_quality_suppression else None)
             self.s7_temporal_scorer = (
-                temporal.S7TemporalAssociationScorer()
+                temporal.S7TemporalAssociationScorer(
+                    cue_names=(temporal.QUALITY_CUE_NAMES
+                               if self.s7_temporal_quality_head_enabled
+                               else temporal.CUE_NAMES))
                 if self.s7_temporal_association else None)
+            self.s7_candidate_quality_head = (
+                temporal.S7CandidateQualityHead(
+                    int(getattr(args, 'roi_fc_channels', 1024)),
+                    int(getattr(args, 's7_temporal_quality_hidden', 128)))
+                if self.s7_temporal_quality_head_enabled else None)
         else:
             self.s7_readout = None
             self.s7_rpn_head = None
@@ -1921,6 +1967,7 @@ class FrozenDinoRotatedHeads(nn.Module):
             self.s7_lane_arbitrator = None
             self.s7_quality_suppressor = None
             self.s7_temporal_scorer = None
+            self.s7_candidate_quality_head = None
         self._roi_cls_teacher_weight = None
         self._roi_cls_teacher_bias = None
 
@@ -2056,10 +2103,16 @@ class FrozenDinoRotatedHeads(nn.Module):
             detections = detections[order]
             embeddings = embeddings[order]
             source_ids = source_ids[order]
+        quality_logits = None
+        if (bool(getattr(self, 's7_temporal_quality_head_enabled', False))
+                and getattr(self, 's7_candidate_quality_head', None) is not None):
+            quality_logits = self.s7_candidate_quality_head(
+                embeddings, detections, source_ids).detach()
         self._last_temporal_pool = dict(
             detections=detections.detach(),
             embeddings=embeddings.detach(),
             source_ids=source_ids.detach(),
+            quality_logits=quality_logits,
             candidate_limit=int(getattr(
                 self._args, 's7_temporal_max_candidates', 100)))
         self._last_candidate_merge = dict(
@@ -2482,6 +2535,43 @@ class FrozenDinoRotatedHeads(nn.Module):
         pairs['_temporal_teacher_embedding'] = teacher_embedding
         pairs['_temporal_teacher_usable'] = bool(teacher_usable)
         return pairs
+
+    def forward_s7_temporal_quality_train(
+            self, feature: torch.Tensor, img_meta: Dict,
+            gt_boxes: torch.Tensor, riou_thr: float,
+            quality_weight: float, max_candidates: int) -> Dict:
+        """Fit dense candidate max-RIoU quality on the fixed affine pool."""
+        from mmcv.ops import box_iou_rotated
+
+        quality_head = getattr(self, 's7_candidate_quality_head', None)
+        if (not self.s7_protected_merge
+                or self.s7_score_calibrator is None
+                or quality_head is None):
+            raise RuntimeError(
+                'Temporal quality training requires the fixed affine pool '
+                'and candidate quality head')
+        with torch.no_grad():
+            self._protected_merge_detections(
+                feature, img_meta, rescale=False)
+            pool = self._last_temporal_pool
+            if pool is None:
+                raise RuntimeError('Temporal candidate pool was not produced')
+            limit = min(int(max_candidates), int(pool['detections'].shape[0]))
+            detections = pool['detections'][:limit]
+            embeddings = pool['embeddings'][:limit]
+            source_ids = pool['source_ids'][:limit]
+            if gt_boxes.shape[0] and detections.shape[0]:
+                overlap = box_iou_rotated(
+                    detections[:, :5].float(), gt_boxes.float()).max(
+                        dim=1).values
+            else:
+                overlap = detections.new_zeros((detections.shape[0],))
+        losses = temporal.candidate_quality_losses(
+            quality_head, embeddings, detections, source_ids, overlap,
+            riou_threshold=riou_thr)
+        losses['loss_s7_candidate_quality'] = (
+            losses['loss_s7_candidate_quality'] * float(quality_weight))
+        return losses
 
     def forward_roi_cls_hard_train(
             self, feature: torch.Tensor, img_meta: Dict,
@@ -2925,7 +3015,11 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
     elif args.train_components == 's7_quality_suppression':
         heads.s7_quality_suppressor.train()
     elif args.train_components == 's7_temporal_association':
-        heads.s7_temporal_scorer.train()
+        if bool(getattr(args, 's7_temporal_quality_head', False)):
+            heads.s7_temporal_scorer.eval()
+            heads.s7_candidate_quality_head.train()
+        else:
+            heads.s7_temporal_scorer.train()
     if head_device.type == 'cuda':
         torch.cuda.reset_peak_memory_stats(head_device)
     ordered = list(records)
@@ -2993,16 +3087,23 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                 retention_weight=args.s7_quality_retention_weight,
                 prior_weight=args.s7_quality_prior_weight)
         elif args.train_components == 's7_temporal_association':
-            output = heads.forward_s7_temporal_association_train(
-                feature, img_meta, gt_boxes,
-                previous_box=temporal_previous_box,
-                previous_embedding=temporal_previous_embedding,
-                riou_thr=args.riou_thr,
-                margin=args.s7_temporal_margin,
-                retention_weight=args.s7_temporal_retention_weight,
-                gain_weight=args.s7_temporal_gain_weight,
-                prior_weight=args.s7_temporal_prior_weight,
-                max_candidates=args.s7_temporal_max_candidates)
+            if bool(getattr(args, 's7_temporal_quality_head', False)):
+                output = heads.forward_s7_temporal_quality_train(
+                    feature, img_meta, gt_boxes,
+                    riou_thr=args.riou_thr,
+                    quality_weight=args.s7_temporal_quality_loss_weight,
+                    max_candidates=args.s7_temporal_max_candidates)
+            else:
+                output = heads.forward_s7_temporal_association_train(
+                    feature, img_meta, gt_boxes,
+                    previous_box=temporal_previous_box,
+                    previous_embedding=temporal_previous_embedding,
+                    riou_thr=args.riou_thr,
+                    margin=args.s7_temporal_margin,
+                    retention_weight=args.s7_temporal_retention_weight,
+                    gain_weight=args.s7_temporal_gain_weight,
+                    prior_weight=args.s7_temporal_prior_weight,
+                    max_candidates=args.s7_temporal_max_candidates)
         elif args.train_components == 'roi_cls':
             output = heads.forward_roi_cls_hard_train(
                 feature, img_meta, gt_boxes, args.roi_samples,
@@ -3032,7 +3133,9 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
         else:
             output = heads.forward_train(
                 feature, img_meta, gt_boxes, gt_labels)
-        if args.train_components == 's7_temporal_association':
+        if (args.train_components == 's7_temporal_association'
+                and not bool(getattr(
+                    args, 's7_temporal_quality_head', False))):
             teacher_usable = bool(output.pop('_temporal_teacher_usable'))
             temporal_previous_box = output.pop('_temporal_teacher_box')
             temporal_previous_embedding = output.pop(
@@ -3120,18 +3223,30 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                     float(metric_sums.get('s7_quality_delta', 0.0))
                     / float(max(1, index + 1)))
             elif args.train_components == 's7_temporal_association':
-                message += (
-                    ' retain_pairs_total={} gain_pairs_total={} '
-                    'weights={}').format(
-                    int(round(metric_sums.get(
-                        's7_temporal_retention_pair_count', 0.0))),
-                    int(round(metric_sums.get(
-                        's7_temporal_gain_pair_count', 0.0))),
-                    heads.s7_temporal_scorer.state_summary())
+                if bool(getattr(args, 's7_temporal_quality_head', False)):
+                    message += (
+                        ' quality_candidates={} usable={} mean_target={:.4f}').format(
+                        int(round(metric_sums.get(
+                            's7_candidate_quality_count', 0.0))),
+                        int(round(metric_sums.get(
+                            's7_candidate_quality_usable_count', 0.0))),
+                        float(metric_sums.get(
+                            's7_candidate_quality_mean_target', 0.0))
+                        / float(max(1, index + 1)))
+                else:
+                    message += (
+                        ' retain_pairs_total={} gain_pairs_total={} '
+                        'weights={}').format(
+                        int(round(metric_sums.get(
+                            's7_temporal_retention_pair_count', 0.0))),
+                        int(round(metric_sums.get(
+                            's7_temporal_gain_pair_count', 0.0))),
+                        heads.s7_temporal_scorer.state_summary())
             print(message)
         del feature, gt_boxes, gt_labels, total
     optimized_components = optimization_loss_component_names(
-        args.train_components)
+        args.train_components,
+        quality_head=bool(getattr(args, 's7_temporal_quality_head', False)))
     summary = dict(
         epoch=int(epoch), count=len(ordered),
         global_step_end=int(global_step),
@@ -3347,7 +3462,8 @@ def evaluate_records(dino, heads, records: Sequence[Dict], args,
                     int(record['frame']),
                     valid_mask=torch.as_tensor(
                         valid_mask_np, dtype=torch.bool,
-                        device=pool_detections.device))
+                        device=pool_detections.device),
+                    quality_logits=temporal_pool.get('quality_logits'))
                 order = temporal_selection.pop('order').detach().cpu().numpy()
                 raw_detections = raw_detections[order]
             if candidate_merge is not None:
@@ -3958,6 +4074,8 @@ def s7_architecture(args) -> Dict:
     temporal_association = bool(getattr(
         args, 's7_temporal_association', False) or getattr(
             args, 'train_components', '') == 's7_temporal_association')
+    temporal_quality_head = bool(getattr(
+        args, 's7_temporal_quality_head', False))
     return dict(
         enabled=enabled,
         protected_merge=(protected_merge if enabled else False),
@@ -3997,9 +4115,19 @@ def s7_architecture(args) -> Dict:
             if quality_suppression and enabled and protected_merge else None),
         temporal_association=(
             temporal_association if enabled and protected_merge else False),
-        temporal_cues=(list(temporal.CUE_NAMES)
+        temporal_cues=(list(temporal.QUALITY_CUE_NAMES)
+                       if temporal_quality_head and temporal_association
+                       and enabled and protected_merge else
+                       list(temporal.CUE_NAMES)
                        if temporal_association and enabled and protected_merge
                        else []),
+        temporal_quality_head=(
+            temporal_quality_head if temporal_association and enabled
+            and protected_merge else False),
+        temporal_quality_hidden=(int(getattr(
+            args, 's7_temporal_quality_hidden', 128))
+            if temporal_quality_head and temporal_association and enabled
+            and protected_merge else None),
         temporal_max_candidates=(int(getattr(
             args, 's7_temporal_max_candidates', 100))
             if temporal_association and enabled and protected_merge else None),
@@ -4030,7 +4158,8 @@ def load_heads_checkpoint_state(heads, payload: Dict,
         if allow_quality_suppression_initialization:
             allowed_prefixes.append('s7_quality_suppressor.')
         if allow_temporal_association_initialization:
-            allowed_prefixes.append('s7_temporal_scorer.')
+            allowed_prefixes.extend((
+                's7_temporal_scorer.', 's7_candidate_quality_head.'))
         disallowed_missing = [
             name for name in incompatible.missing_keys
             if not any(name.startswith(prefix) for prefix in allowed_prefixes)]
@@ -4168,7 +4297,9 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
         training_protocol=dict(
             train_components=str(args.train_components),
             optimization_loss_components=optimization_loss_component_names(
-                args.train_components),
+                args.train_components,
+                quality_head=bool(getattr(
+                    args, 's7_temporal_quality_head', False))),
             trainable_parameter_names=[
                 name for name, parameter in heads.named_parameters()
                 if parameter.requires_grad],
@@ -4276,7 +4407,11 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                         None if not getattr(args, 'init_checkpoint', None)
                         else os.path.abspath(args.init_checkpoint)),
                     base_epoch=int(args.s7_temporal_base_epoch),
-                    cues=list(temporal.CUE_NAMES),
+                    cues=list(
+                        temporal.QUALITY_CUE_NAMES
+                        if bool(getattr(
+                            args, 's7_temporal_quality_head', False))
+                        else temporal.CUE_NAMES),
                     max_candidates=int(args.s7_temporal_max_candidates),
                     min_confirmations=int(
                         args.s7_temporal_min_confirmations),
@@ -4293,9 +4428,18 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                         args.s7_temporal_retention_weight),
                     gain_weight=float(args.s7_temporal_gain_weight),
                     prior_weight=float(args.s7_temporal_prior_weight),
+                    quality_head_hidden=int(getattr(
+                        args, 's7_temporal_quality_hidden', 128)),
+                    quality_loss_weight=float(getattr(
+                        args, 's7_temporal_quality_loss_weight', 1.0)),
                     source_train_only=True, target_read=False,
-                    candidate_quality_head=False,
-                    training_state='previous_source_GT_usable_candidate',
+                    candidate_quality_head=bool(getattr(
+                        args, 's7_temporal_quality_head', False)),
+                    training_state=(
+                        'dense_source_candidate_max_riou'
+                        if bool(getattr(
+                            args, 's7_temporal_quality_head', False))
+                        else 'previous_source_GT_usable_candidate'),
                     inference_state='strictly_previous_selected_candidate',
                     reset_on=['sequence_change', 'frame_gap'],
                     native_fallback=True))),
@@ -4404,6 +4548,17 @@ def validate_checkpoint(payload: Dict, in_channels: int, args,
                          != requested_s7.get('temporal_max_candidates')
                          or stored_s7.get('temporal_min_confirmations')
                          != requested_s7.get('temporal_min_confirmations'))):
+                architecture_mismatch = True
+            stored_temporal_quality = bool(stored_s7.get(
+                'temporal_quality_head', False))
+            requested_temporal_quality = bool(requested_s7.get(
+                'temporal_quality_head', False))
+            if (stored_temporal_quality != requested_temporal_quality
+                    and not allow_temporal_association_initialization):
+                architecture_mismatch = True
+            if (stored_temporal_quality and requested_temporal_quality
+                    and stored_s7.get('temporal_quality_hidden')
+                    != requested_s7.get('temporal_quality_hidden')):
                 architecture_mismatch = True
             if architecture_mismatch:
                 raise RuntimeError('S7 checkpoint architecture mismatch')
@@ -5095,6 +5250,11 @@ def main():
         protocol=dict(
             architecture=(
                 'frozen_DINOv2_native_S14_plus_protected_residual_S7_RPN_'
+                'to_source_only_causal_multi_cue_candidate_quality_association'
+                if (args.train_components == 's7_temporal_association'
+                    and bool(getattr(
+                        args, 's7_temporal_quality_head', False))) else
+                'frozen_DINOv2_native_S14_plus_protected_residual_S7_RPN_'
                 'to_source_only_causal_multi_cue_candidate_association'
                 if args.train_components == 's7_temporal_association' else
                 'frozen_DINOv2_native_S14_plus_protected_residual_S7_RPN_'
@@ -5134,7 +5294,9 @@ def main():
                 train_components=str(args.train_components),
                 optimization_loss_components=(
                     optimization_loss_component_names(
-                        args.train_components)),
+                        args.train_components,
+                        quality_head=bool(getattr(
+                            args, 's7_temporal_quality_head', False)))),
                 epochs=int(args.epochs), optimizer='SGD',
                 lr=float(args.lr), momentum=float(args.momentum),
                 weight_decay=float(args.weight_decay),
@@ -5223,9 +5385,22 @@ def main():
                     else dict(
                         base_checkpoint=os.path.abspath(args.init_checkpoint),
                         base_epoch=int(args.s7_temporal_base_epoch),
-                        cues=list(temporal.CUE_NAMES),
-                        learned_parameter_count=len(temporal.CUE_NAMES),
-                        candidate_quality_head=False,
+                        cues=list(
+                            temporal.QUALITY_CUE_NAMES
+                            if bool(getattr(
+                                args, 's7_temporal_quality_head', False))
+                            else temporal.CUE_NAMES),
+                        learned_parameter_count=(
+                            len(temporal.QUALITY_CUE_NAMES)
+                            if bool(getattr(
+                                args, 's7_temporal_quality_head', False))
+                            else len(temporal.CUE_NAMES)),
+                        candidate_quality_head=bool(getattr(
+                            args, 's7_temporal_quality_head', False)),
+                        quality_head_hidden=int(getattr(
+                            args, 's7_temporal_quality_hidden', 128)),
+                        quality_loss_weight=float(getattr(
+                            args, 's7_temporal_quality_loss_weight', 1.0)),
                         max_candidates=int(args.s7_temporal_max_candidates),
                         min_confirmations=int(
                             args.s7_temporal_min_confirmations),
@@ -5238,7 +5413,11 @@ def main():
                             args.s7_temporal_min_appearance),
                         dfr_aci_angle_limit_deg=(
                             SOURCE_TEMPORAL_ANGLE_LIMIT_DEG),
-                        training_state='previous_source_GT_usable_candidate',
+                        training_state=(
+                            'dense_source_candidate_max_riou'
+                            if bool(getattr(
+                                args, 's7_temporal_quality_head', False))
+                            else 'previous_source_GT_usable_candidate'),
                         inference_state=(
                             'strictly_previous_selected_candidate'),
                         native_fallback=True,

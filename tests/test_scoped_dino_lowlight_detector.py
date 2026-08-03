@@ -180,6 +180,23 @@ def test_unified_temporal_config_removes_target_slice_routing():
         min_full_top1=688, min_small_top1=311, max_mcml=3)
 
 
+def test_temporal_quality_config_is_source_only_and_unified():
+    root = pathlib.Path(__file__).resolve().parents[1]
+    config = runpy.run_path(
+        str(root / 'crane_project/configs/'
+            'crane_symeood_scoped_dino_lowlight_s7_temporal_quality_association_v1.py'))
+    assert config['model']['scope_policy'] == 'all_frames'
+    assert config['model']['scope_manifest'] is None
+    assert config['model']['temporal_association']['target_used_for_selection'] is False
+    head = config['model']['dino_rescue']['head']
+    assert head['s7_temporal_association'] is True
+    assert head['s7_temporal_quality_head'] is True
+    assert head['s7_temporal_quality_hidden'] == 128
+    assert config['s7_temporal_quality_training']['target_read'] is False
+    assert config['s7_temporal_quality_training']['positive_promotion'] is False
+    assert config['s7_temporal_quality_training']['gain_replay'] is False
+
+
 def test_full_test_manifest_covers_stream_and_enables_exact_dark_slice():
     root = pathlib.Path(__file__).resolve().parents[1]
     manifest = root / (

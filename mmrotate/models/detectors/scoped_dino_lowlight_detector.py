@@ -220,6 +220,10 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
                 's7_quality_init_risk_bias', 0.0)),
             s7_temporal_association=bool(head_cfg.get(
                 's7_temporal_association', False)),
+            s7_temporal_quality_head=bool(head_cfg.get(
+                's7_temporal_quality_head', False)),
+            s7_temporal_quality_hidden=int(head_cfg.get(
+                's7_temporal_quality_hidden', 128)),
             s7_temporal_max_candidates=int(head_cfg.get(
                 's7_temporal_max_candidates', 100)),
             s7_temporal_min_confirmations=int(head_cfg.get(
@@ -431,7 +435,8 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
                     seq, frame,
                     valid_mask=torch.as_tensor(
                         valid, dtype=torch.bool,
-                        device=pool['detections'].device))
+                        device=pool['detections'].device),
+                    quality_logits=pool.get('quality_logits'))
                 order = selection['order'].detach().cpu().numpy()
                 dino_detections = dino_detections[order]
         dino_detections, _stats = runtime['labeller'].filter_valid_rotated_detections(

@@ -30,6 +30,37 @@ def test_temporal_cues_combine_score_motion_geometry_and_appearance():
     assert cues[1, 1] < 0.0
 
 
+def test_quality_cue_is_optional_and_keeps_the_six_cue_compatibility():
+    detections = _detections()
+    embeddings = torch.tensor([[1.0, 0.0], [1.0, 0.0]])
+    quality = torch.tensor([0.0, 1.5])
+    cues = temporal.build_temporal_cues(
+        detections, embeddings, detections[0, :5], embeddings[0],
+        rotated_iou_fn=_unit_iou, candidate_quality=quality)
+    assert cues.shape == (2, len(temporal.QUALITY_CUE_NAMES))
+    assert cues[:, -1].tolist() == pytest.approx([0.0, 1.5])
+
+
+def test_candidate_quality_head_is_constant_before_training_and_has_dense_gradients():
+    head = temporal.S7CandidateQualityHead(embedding_channels=4, hidden=8)
+    detections = torch.tensor([
+        [10.0, 10.0, 8.0, 4.0, 0.0, 0.4],
+        [11.0, 10.0, 8.0, 4.0, 0.1, 0.9],
+        [12.0, 10.0, 7.0, 5.0, 0.2, 0.7]])
+    embeddings = torch.randn(3, 4)
+    source_ids = torch.tensor([0, 1, 1])
+    logits = head(embeddings, detections, source_ids)
+    assert logits.tolist() == pytest.approx([0.0, 0.0, 0.0])
+    losses = temporal.candidate_quality_losses(
+        head, embeddings, detections, source_ids,
+        gt_overlap=torch.tensor([0.8, 0.2, 0.0]), riou_threshold=0.5)
+    assert losses['s7_candidate_quality_count'] == 3
+    assert losses['s7_candidate_quality_usable_count'] == 1
+    losses['loss_s7_candidate_quality'].backward()
+    assert head.output.weight.grad is not None
+    assert torch.isfinite(head.output.weight.grad).all()
+
+
 def test_temporal_pair_loss_updates_only_relative_association_weights():
     scorer = temporal.S7TemporalAssociationScorer()
     cues = torch.tensor([
@@ -76,6 +107,28 @@ def test_causal_selector_falls_back_then_requires_two_confirmations(monkeypatch)
     assert third['candidate_margin_ok'] is True
     assert third['candidate_continuity_ok'] is True
     assert third['candidate_override_ok'] is True
+
+
+def test_quality_aware_selector_requires_and_consumes_aligned_quality_logits(
+        monkeypatch):
+    monkeypatch.setattr(temporal, '_default_rotated_iou', _unit_iou)
+    scorer = temporal.S7TemporalAssociationScorer(
+        cue_names=temporal.QUALITY_CUE_NAMES)
+    selector = temporal.CausalTemporalCandidateSelector(
+        scorer, min_confirmations=1, override_margin=0.0)
+    detections = _detections()
+    embeddings = torch.tensor([[1.0, 0.0], [1.0, 0.0]])
+    sources = torch.tensor([0, 1])
+    with pytest.raises(ValueError, match='aligned logits'):
+        selector.select(detections, embeddings, sources, 'seq', 1)
+    first = selector.select(
+        detections, embeddings, sources, 'seq', 1,
+        quality_logits=torch.tensor([0.0, 2.0]))
+    assert first['selected_index'] == 0
+    second = selector.select(
+        detections, embeddings, sources, 'seq', 2,
+        quality_logits=torch.tensor([0.0, 2.0]))
+    assert second['candidate_index'] == 1
 
 
 def test_causal_selector_resets_on_gap_and_never_reuses_future_state(monkeypatch):

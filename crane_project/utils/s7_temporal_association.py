@@ -1,9 +1,10 @@
 """Causal multi-cue association for the protected native/S7 candidate pool.
 
-The detector and both proposal lanes stay frozen.  This module learns only six
-non-negative cue weights on source video and applies a native-first causal
-selector at inference.  It never reads sequence identities as features and it
-never accesses a future frame.
+The detector and both proposal lanes stay frozen.  The original mode learns
+six non-negative cue weights; the optional quality mode adds one dense,
+source-supervised candidate-quality cue.  Both apply a native-first causal
+selector at inference.  They never read sequence identities as features and
+never access a future frame.
 """
 
 import math
@@ -21,6 +22,7 @@ CUE_NAMES = (
     'periodic_angle_similarity',
     'dino_roi_appearance_similarity',
 )
+QUALITY_CUE_NAMES = CUE_NAMES + ('candidate_quality_logit',)
 
 
 def _inverse_softplus(value: float) -> float:
@@ -33,13 +35,16 @@ def _inverse_softplus(value: float) -> float:
 class S7TemporalAssociationScorer(nn.Module):
     """Positive linear fusion of score, motion, geometry and appearance."""
 
-    def __init__(self, initial_weights=None):
+    def __init__(self, initial_weights=None, cue_names=None):
         super().__init__()
+        self.cue_names = tuple(cue_names or CUE_NAMES)
         if initial_weights is None:
             initial_weights = [1.0, 1.0, 1.0, 0.5, 0.5, 0.5]
-        if len(initial_weights) != len(CUE_NAMES):
+            if len(self.cue_names) == len(QUALITY_CUE_NAMES):
+                initial_weights.append(0.5)
+        if len(initial_weights) != len(self.cue_names):
             raise ValueError('Expected {} temporal cue weights'.format(
-                len(CUE_NAMES)))
+                len(self.cue_names)))
         initial = torch.tensor(
             [float(value) for value in initial_weights], dtype=torch.float32)
         if bool((initial <= 0.0).any().item()) or not bool(
@@ -56,9 +61,9 @@ class S7TemporalAssociationScorer(nn.Module):
         return functional.softplus(self.raw_weights)
 
     def forward(self, cues: torch.Tensor) -> torch.Tensor:
-        if cues.ndim != 2 or cues.shape[1] != len(CUE_NAMES):
+        if cues.ndim != 2 or cues.shape[1] != len(self.cue_names):
             raise ValueError('Temporal cues must have shape [N, {}]'.format(
-                len(CUE_NAMES)))
+                len(self.cue_names)))
         if not bool(torch.isfinite(cues).all().item()):
             raise ValueError('Temporal cues contain non-finite values')
         return cues @ self.weights()
@@ -68,7 +73,94 @@ class S7TemporalAssociationScorer(nn.Module):
 
     def state_summary(self) -> Dict[str, float]:
         values = self.weights().detach().cpu().tolist()
-        return {name: float(value) for name, value in zip(CUE_NAMES, values)}
+        return {name: float(value)
+                for name, value in zip(self.cue_names, values)}
+
+
+class S7CandidateQualityHead(nn.Module):
+    """Predict continuous candidate max-RIoU from frozen ROI evidence."""
+
+    SCALAR_CHANNELS = 6
+
+    def __init__(self, embedding_channels: int, hidden: int = 128):
+        super().__init__()
+        if int(embedding_channels) <= 0 or int(hidden) <= 0:
+            raise ValueError('Candidate quality dimensions must be positive')
+        self.embedding_projection = nn.Sequential(
+            nn.Linear(int(embedding_channels), int(hidden)),
+            nn.LayerNorm(int(hidden)), nn.GELU())
+        self.scalar_projection = nn.Sequential(
+            nn.Linear(self.SCALAR_CHANNELS, int(hidden)), nn.GELU())
+        self.output = nn.Linear(int(hidden) * 2, 1)
+        # A zero output makes the new quality cue constant before training;
+        # the audited affine/temporal ordering is therefore the exact start.
+        nn.init.zeros_(self.output.weight)
+        nn.init.zeros_(self.output.bias)
+
+    @staticmethod
+    def _scalar_features(detections: torch.Tensor,
+                         source_ids: torch.Tensor) -> torch.Tensor:
+        eps = 1e-6
+        boxes = detections[:, :5]
+        scores = detections[:, 5].clamp(eps, 1.0 - eps)
+        score_logit = torch.log(scores) - torch.log1p(-scores)
+        width = boxes[:, 2].abs().clamp_min(eps)
+        height = boxes[:, 3].abs().clamp_min(eps)
+        return torch.stack((
+            score_logit.clamp(-12.0, 12.0),
+            torch.log(width),
+            torch.log(height),
+            torch.log(width / height),
+            torch.sin(boxes[:, 4]),
+            source_ids.to(dtype=detections.dtype)), dim=1)
+
+    def forward(self, embedding: torch.Tensor, detections: torch.Tensor,
+                source_ids: torch.Tensor) -> torch.Tensor:
+        if (embedding.ndim != 2 or detections.ndim != 2
+                or detections.shape[1] != 6
+                or source_ids.shape != (detections.shape[0],)
+                or embedding.shape[0] != detections.shape[0]):
+            raise ValueError('Candidate quality inputs are misaligned')
+        if detections.shape[0] == 0:
+            return detections.new_zeros((0,))
+        scalars = self._scalar_features(detections, source_ids)
+        hidden = torch.cat((
+            self.embedding_projection(embedding.float()),
+            self.scalar_projection(scalars.float())), dim=1)
+        return self.output(hidden).reshape(-1)
+
+
+def candidate_quality_losses(
+        quality_head: S7CandidateQualityHead, embedding: torch.Tensor,
+        detections: torch.Tensor, source_ids: torch.Tensor,
+        gt_overlap: torch.Tensor, riou_threshold: float) -> Dict:
+    """Dense source-only continuous max-RIoU supervision."""
+    if gt_overlap.ndim != 1 or gt_overlap.shape[0] != detections.shape[0]:
+        raise ValueError('Candidate quality targets are misaligned')
+    logits = quality_head(embedding, detections, source_ids)
+    if logits.numel() == 0:
+        zero = quality_head.output.bias.sum() * 0.0
+        return dict(
+            loss_s7_candidate_quality=zero,
+            s7_candidate_quality_count=0,
+            s7_candidate_quality_usable_count=0,
+            s7_candidate_quality_mean_target=0.0,
+            s7_candidate_quality_mean_prediction=0.0)
+    target = gt_overlap.detach().float().clamp(0.0, 1.0)
+    prediction = torch.sigmoid(logits)
+    per_candidate = torch.nn.functional.smooth_l1_loss(
+        prediction, target, reduction='none')
+    # Give high-RIoU candidates more influence while retaining every
+    # candidate as supervision; this is not a sparse gain-pair miner.
+    weights = (1.0 + 3.0 * target).detach()
+    loss = (per_candidate * weights).sum() / weights.sum().clamp_min(1e-6)
+    return dict(
+        loss_s7_candidate_quality=loss,
+        s7_candidate_quality_count=int(target.numel()),
+        s7_candidate_quality_usable_count=int(
+            (target >= float(riou_threshold)).sum().item()),
+        s7_candidate_quality_mean_target=float(target.mean().item()),
+        s7_candidate_quality_mean_prediction=float(prediction.mean().item()))
 
 
 def _default_rotated_iou(current: torch.Tensor,
@@ -82,7 +174,8 @@ def _default_rotated_iou(current: torch.Tensor,
 def build_temporal_cues(
         detections: torch.Tensor, embeddings: torch.Tensor,
         previous_box: torch.Tensor, previous_embedding: torch.Tensor,
-        rotated_iou_fn: Optional[Callable] = None) -> torch.Tensor:
+        rotated_iou_fn: Optional[Callable] = None,
+        candidate_quality: Optional[torch.Tensor] = None) -> torch.Tensor:
     """Build candidate cues relative to one strictly previous-frame state."""
     if detections.ndim != 2 or detections.shape[1] != 6:
         raise ValueError('Temporal detections must have shape [N, 6]')
@@ -93,7 +186,12 @@ def build_temporal_cues(
     if previous_embedding.shape[0] != embeddings.shape[1]:
         raise ValueError('Previous embedding channel count does not match')
     if detections.shape[0] == 0:
-        return detections.new_zeros((0, len(CUE_NAMES)))
+        cue_count = (len(QUALITY_CUE_NAMES) if candidate_quality is not None
+                     else len(CUE_NAMES))
+        return detections.new_zeros((0, cue_count))
+    if candidate_quality is not None and candidate_quality.shape != (
+            detections.shape[0],):
+        raise ValueError('Candidate quality logits are misaligned')
 
     eps = 1e-6
     boxes = detections[:, :5]
@@ -127,13 +225,18 @@ def build_temporal_cues(
         previous_embedding.float().reshape(1, -1), dim=1, eps=eps)
     appearance = (normalized_embedding * normalized_previous).sum(dim=1)
 
-    return torch.stack((
+    base = torch.stack((
         score_logit.clamp(-12.0, 12.0),
         -normalized_center,
         rotated_iou,
         -scale_change.clamp(max=12.0),
         angle_similarity,
         appearance.clamp(-1.0, 1.0)), dim=1)
+    if candidate_quality is None:
+        return base
+    return torch.cat((base, candidate_quality.to(
+        device=base.device, dtype=base.dtype).clamp(-12.0, 12.0).reshape(
+            -1, 1)), dim=1)
 
 
 def temporal_pair_losses(
@@ -250,13 +353,19 @@ class CausalTemporalCandidateSelector:
 
     def select(self, detections: torch.Tensor, embeddings: torch.Tensor,
                source_ids: torch.Tensor, seq: str, frame: int,
-               valid_mask: Optional[torch.Tensor] = None) -> Dict:
+               valid_mask: Optional[torch.Tensor] = None,
+               quality_logits: Optional[torch.Tensor] = None) -> Dict:
         if detections.ndim != 2 or detections.shape[1] != 6:
             raise ValueError('Temporal selector expects [N, 6] detections')
         if (embeddings.ndim != 2
                 or embeddings.shape[0] != detections.shape[0]
                 or source_ids.shape != (detections.shape[0],)):
             raise ValueError('Temporal selector candidate metadata is misaligned')
+        uses_quality = 'candidate_quality_logit' in self.scorer.cue_names
+        if uses_quality and (quality_logits is None
+                             or quality_logits.shape != (detections.shape[0],)):
+            raise ValueError(
+                'Quality-aware temporal selector requires aligned logits')
         if valid_mask is None:
             valid_mask = torch.ones(
                 detections.shape[0], dtype=torch.bool, device=detections.device)
@@ -294,7 +403,7 @@ class CausalTemporalCandidateSelector:
         else:
             cues = build_temporal_cues(
                 detections, embeddings, self.previous_box,
-                self.previous_embedding)
+                self.previous_embedding, candidate_quality=quality_logits)
             fused = self.scorer(cues)
             masked = fused.masked_fill(~eligible, float('-inf'))
             candidate = int(torch.argmax(masked).item())
@@ -322,7 +431,8 @@ class CausalTemporalCandidateSelector:
                 else:
                     pending_cues = build_temporal_cues(
                         detections, embeddings, self.pending_box,
-                        self.pending_embedding)
+                        self.pending_embedding,
+                        candidate_quality=quality_logits)
                     self.pending_count = (
                         self.pending_count + 1
                         if self._continuity_ok(pending_cues[candidate]) else 1)

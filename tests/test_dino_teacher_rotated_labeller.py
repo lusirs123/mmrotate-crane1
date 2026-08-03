@@ -35,6 +35,8 @@ def _args(tmp_path, **overrides):
         s7_quality_retention_weight=2.0, s7_quality_prior_weight=0.01,
         s7_quality_base_epoch=1,
         s7_temporal_association=False, s7_temporal_base_epoch=1,
+        s7_temporal_quality_head=False, s7_temporal_quality_hidden=128,
+        s7_temporal_quality_loss_weight=1.0,
         s7_temporal_margin=0.5, s7_temporal_retention_weight=2.0,
         s7_temporal_gain_weight=1.0, s7_temporal_prior_weight=0.01,
         s7_temporal_max_candidates=100,
@@ -685,6 +687,29 @@ def test_s7_temporal_association_trains_only_six_cue_weights():
     assert not heads.s7_score_calibrator.bias.requires_grad
 
 
+def test_s7_temporal_quality_trains_only_candidate_quality_head():
+    class TinyHeads(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.native = torch.nn.Linear(2, 2)
+            self.s7_score_calibrator = labeller.S7ScoreCalibrator(-2.0)
+            self.s7_temporal_scorer = (
+                labeller.temporal.S7TemporalAssociationScorer(
+                    cue_names=labeller.temporal.QUALITY_CUE_NAMES))
+            self.s7_candidate_quality_head = (
+                labeller.temporal.S7CandidateQualityHead(2, 4))
+            self.s7_temporal_quality_head_enabled = True
+            self.s7_protected_merge = True
+
+    heads = TinyHeads()
+    names = labeller.configure_trainable_components(
+        heads, 's7_temporal_association')
+    assert names
+    assert all(name.startswith('s7_candidate_quality_head.') for name in names)
+    assert not any(name.startswith('s7_temporal_scorer.') for name in names)
+    assert not any(name.startswith('s7_score_calibrator.') for name in names)
+
+
 def test_s7_lane_architecture_records_bounded_arbitration(tmp_path):
     args = _args(
         tmp_path, s7_residual=True,
@@ -724,6 +749,19 @@ def test_s7_temporal_architecture_records_causal_candidate_policy(tmp_path):
     assert architecture['temporal_cues'] == list(labeller.temporal.CUE_NAMES)
     assert architecture['temporal_max_candidates'] == 100
     assert architecture['temporal_min_confirmations'] == 2
+
+
+def test_s7_temporal_quality_architecture_records_dense_candidate_head(tmp_path):
+    args = _args(
+        tmp_path, s7_residual=True,
+        train_components='s7_temporal_association',
+        s7_protected_merge=True, s7_temporal_association=True,
+        s7_temporal_quality_head=True, s7_temporal_quality_hidden=24)
+    architecture = labeller.s7_architecture(args)
+    assert architecture['temporal_cues'] == list(
+        labeller.temporal.QUALITY_CUE_NAMES)
+    assert architecture['temporal_quality_head'] is True
+    assert architecture['temporal_quality_hidden'] == 24
 
 
 def test_s7_base_checkpoint_load_allows_only_new_branch_keys():
