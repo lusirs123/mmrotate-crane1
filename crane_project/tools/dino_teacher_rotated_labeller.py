@@ -36,7 +36,7 @@ from crane_project.utils import s7_temporal_association as temporal  # noqa: E40
 
 
 LABELLER_NAME = 'Frozen DINOv2 Oriented RPN/ROI Source Labeller V1'
-PROTOCOL_VERSION = 18
+PROTOCOL_VERSION = 20
 PAIRWISE_V2_MAX_EPOCHS = 4
 S7_QUALITY_MIN_FULL_TOP1 = 688
 S7_QUALITY_MIN_SMALL_TOP1 = 311
@@ -251,6 +251,21 @@ def parse_args():
         help=('Existing source-only train_result.json whose lost/gained keys '
               'define a bounded S7 merge conflict audit.'))
     parser.add_argument('--source-conflict-epoch', type=int, default=1)
+    parser.add_argument(
+        '--source-temporal-attribution-audit', action='store_true',
+        help=(
+            'Read-only source-val attribution of a fixed rejected temporal '
+            'checkpoint.  This never trains, selects a checkpoint, or reads '
+            'target data.'))
+    parser.add_argument(
+        '--source-temporal-attribution-epoch', type=int, default=4,
+        help='Exact rejected checkpoint epoch authorized for attribution.')
+    parser.add_argument(
+        '--source-temporal-immediate-override-audit', action='store_true',
+        help=(
+            'Run one fixed-checkpoint source-only inference audit with a '
+            'one-frame confirmation for candidates that pass margin and '
+            'continuity.  No training, checkpoint selection, or target read.'))
     parser.add_argument(
         '--source-val-results-out',
         help='Optional one-class result pickle for read-only source probes.')
@@ -487,6 +502,43 @@ def validate_args(args):
                 'Source conflict audit requires --train-components s7_merge')
         if int(getattr(args, 'source_conflict_epoch', 1)) <= 0:
             raise ValueError('--source-conflict-epoch must be positive')
+    attribution_audit = bool(getattr(
+        args, 'source_temporal_attribution_audit', False))
+    immediate_override_audit = bool(getattr(
+        args, 'source_temporal_immediate_override_audit', False))
+    if attribution_audit and immediate_override_audit:
+        raise ValueError(
+            'Temporal attribution and immediate-override audits are '
+            'mutually exclusive')
+    readonly_temporal_audit = attribution_audit or immediate_override_audit
+    if readonly_temporal_audit:
+        if conflict_json:
+            raise ValueError(
+                'Temporal attribution and source conflict audits are '
+                'mutually exclusive')
+        if not args.eval_only_checkpoint or not args.skip_target_eval:
+            raise ValueError(
+                'Temporal attribution audit requires '
+                '--eval-only-checkpoint and --skip-target-eval')
+        if not os.path.isfile(args.eval_only_checkpoint):
+            raise ValueError(
+                'Temporal attribution checkpoint does not exist: {}'.format(
+                    args.eval_only_checkpoint))
+        if args.train_components != 's7_temporal_association':
+            raise ValueError(
+                'Temporal attribution audit requires --train-components '
+                's7_temporal_association')
+        if not bool(getattr(args, 's7_temporal_association', False)):
+            raise ValueError(
+                'Temporal attribution audit requires '
+                '--s7-temporal-association')
+        if not bool(getattr(args, 's7_temporal_quality_head', False)):
+            raise ValueError(
+                'Temporal attribution audit requires the trained '
+                '--s7-temporal-quality-head')
+        if int(getattr(args, 'source_temporal_attribution_epoch', 4)) <= 0:
+            raise ValueError(
+                '--source-temporal-attribution-epoch must be positive')
     if args.init_checkpoint and not os.path.isfile(args.init_checkpoint):
         raise ValueError('Init checkpoint does not exist: {}'.format(
             args.init_checkpoint))
@@ -3413,6 +3465,113 @@ def ranked_detection_metrics(detections: np.ndarray, gt_original: np.ndarray,
             top1_score < float(deployment_score_thr)))
 
 
+def _temporal_candidate_evidence(
+        detections: np.ndarray, source_ids: np.ndarray,
+        index: Optional[int], original: np.ndarray, args) -> Optional[Dict]:
+    """Return compact one-candidate source-GT evidence for a fixed index."""
+    if index is None:
+        return None
+    index = int(index)
+    if index < 0 or index >= int(detections.shape[0]):
+        raise RuntimeError('Temporal attribution candidate index is invalid')
+    metrics = ranked_detection_metrics(
+        detections[index:index + 1], original, args.riou_thr,
+        args.deployment_score_thr)
+    return dict(
+        index=index,
+        source=('native_s14' if int(source_ids[index]) == 0
+                else 'supplement_s7'),
+        top1_hit=bool(metrics['top1_hit']),
+        top1_riou=float(metrics['top1_riou']),
+        top1_score=metrics['top1_score'])
+
+
+def temporal_selection_attribution(
+        pool_detections: torch.Tensor, source_ids: torch.Tensor,
+        quality_logits: Optional[torch.Tensor], valid_mask: np.ndarray,
+        selection: Dict, original: np.ndarray, args) -> Dict:
+    """Audit selector stages without changing its output or temporal state."""
+    detections = pool_detections.detach().cpu().numpy().astype(
+        np.float32, copy=False)
+    sources = source_ids.detach().cpu().numpy().astype(np.int64, copy=False)
+    valid = np.asarray(valid_mask, dtype=bool).reshape(-1)
+    if (detections.shape[0] != sources.shape[0]
+            or valid.shape[0] != sources.shape[0]):
+        raise RuntimeError('Temporal attribution candidate metadata disagrees')
+    bounded = np.arange(detections.shape[0]) < int(
+        getattr(args, 's7_temporal_max_candidates', 100))
+    eligible = valid & bounded
+    eligible_indices = np.flatnonzero(eligible)
+    native_indices = np.flatnonzero(eligible & (sources == 0))
+    fallback_index = (
+        int(native_indices[0]) if native_indices.size else
+        int(eligible_indices[0]) if eligible_indices.size else None)
+    selected_index = selection.get('selected_index')
+    candidate_index = selection.get('candidate_index')
+    margin_index = (
+        candidate_index if selection.get('candidate_margin_ok', False)
+        else fallback_index)
+    preconfirmation_index = (
+        candidate_index if selection.get('candidate_override_ok', False)
+        else fallback_index)
+
+    quality_ranked = None
+    quality_top_index = None
+    if quality_logits is not None and eligible_indices.size:
+        quality = quality_logits.detach().cpu().numpy().reshape(-1)
+        if quality.shape[0] != detections.shape[0]:
+            raise RuntimeError('Temporal attribution quality logits disagree')
+        quality_order = eligible_indices[np.argsort(
+            -quality[eligible_indices], kind='stable')]
+        quality_top_index = int(quality_order[0])
+        quality_metrics = ranked_detection_metrics(
+            detections[quality_order], original, args.riou_thr,
+            args.deployment_score_thr)
+        quality_ranked = dict(
+            top1_hit=bool(quality_metrics['top1_hit']),
+            best_usable_rank=quality_metrics['best_usable_rank'],
+            recall_at_20=bool(
+                quality_metrics['best_usable_rank'] is not None
+                and quality_metrics['best_usable_rank'] <= 20),
+            recall_at_100=bool(
+                quality_metrics['best_usable_rank'] is not None
+                and quality_metrics['best_usable_rank'] <= 100))
+
+    return dict(
+        read_only=True,
+        eligible_candidate_count=int(eligible_indices.size),
+        fallback=_temporal_candidate_evidence(
+            detections, sources, fallback_index, original, args),
+        quality_only=_temporal_candidate_evidence(
+            detections, sources, quality_top_index, original, args),
+        quality_ranked=quality_ranked,
+        fused_candidate=_temporal_candidate_evidence(
+            detections, sources, candidate_index, original, args),
+        margin_counterfactual=_temporal_candidate_evidence(
+            detections, sources, margin_index, original, args),
+        preconfirmation_counterfactual=_temporal_candidate_evidence(
+            detections, sources, preconfirmation_index, original, args),
+        final_selected=_temporal_candidate_evidence(
+            detections, sources, selected_index, original, args),
+        candidate_margin_ok=bool(selection.get(
+            'candidate_margin_ok', False)),
+        candidate_continuity_ok=bool(selection.get(
+            'candidate_continuity_ok', False)),
+        candidate_override_ok=bool(selection.get(
+            'candidate_override_ok', False)),
+        pending_confirmation=bool(
+            selection.get('reason') ==
+            'native_fallback_pending_confirmation'))
+
+
+def temporal_runtime_min_confirmations(args) -> int:
+    """Return the inference confirmation count for the explicit audit mode."""
+    if bool(getattr(
+            args, 'source_temporal_immediate_override_audit', False)):
+        return 1
+    return int(getattr(args, 's7_temporal_min_confirmations', 2))
+
+
 def evaluate_records(dino, heads, records: Sequence[Dict], args,
                      dino_device, head_device, role: str):
     heads.eval()
@@ -3426,8 +3585,7 @@ def evaluate_records(dino, heads, records: Sequence[Dict], args,
             temporal_scorer,
             max_candidates=int(getattr(
                 args, 's7_temporal_max_candidates', 100)),
-            min_confirmations=int(getattr(
-                args, 's7_temporal_min_confirmations', 2)),
+            min_confirmations=temporal_runtime_min_confirmations(args),
             override_margin=float(getattr(
                 args, 's7_temporal_override_margin', 0.25)),
             max_center_distance=float(getattr(
@@ -3444,6 +3602,7 @@ def evaluate_records(dino, heads, records: Sequence[Dict], args,
             raw_detections = heads.simple_test(feature, img_meta)
             candidate_merge = heads._last_candidate_merge
             temporal_selection = None
+            temporal_attribution = None
             temporal_pool = getattr(heads, '_last_temporal_pool', None)
             if temporal_selector is not None:
                 if temporal_pool is None:
@@ -3464,6 +3623,19 @@ def evaluate_records(dino, heads, records: Sequence[Dict], args,
                         valid_mask_np, dtype=torch.bool,
                         device=pool_detections.device),
                     quality_logits=temporal_pool.get('quality_logits'))
+                if bool(getattr(
+                        args, 'source_temporal_attribution_audit', False)
+                        or getattr(
+                            args, 'source_temporal_immediate_override_audit',
+                            False)):
+                    if role != 'source_validation':
+                        raise RuntimeError(
+                            'Temporal attribution is restricted to source '
+                            'validation')
+                    temporal_attribution = temporal_selection_attribution(
+                        pool_detections, temporal_pool['source_ids'],
+                        temporal_pool.get('quality_logits'), valid_mask_np,
+                        temporal_selection, original, args)
                 order = temporal_selection.pop('order').detach().cpu().numpy()
                 raw_detections = raw_detections[order]
             if candidate_merge is not None:
@@ -3511,6 +3683,7 @@ def evaluate_records(dino, heads, records: Sequence[Dict], args,
                 frame=int(record['frame']), feature_cache_hit=bool(cached),
                 candidate_merge=candidate_merge,
                 temporal_selection=temporal_selection,
+                temporal_attribution=temporal_attribution,
                 metrics=metrics,
                 detections=[[float(value) for value in detection]
                             for detection in detections.tolist()]))
@@ -3612,6 +3785,119 @@ def top1_temporal_geometry_metrics(
         dfr_transition_count=int(len(dfr_values)))
 
 
+def summarize_temporal_readonly_attribution(
+        rows: Sequence[Dict]) -> Optional[Dict]:
+    """Aggregate fixed-checkpoint selector-stage source correctness."""
+    attributed = [row for row in rows
+                  if row.get('temporal_attribution') is not None]
+    if not attributed:
+        return None
+
+    def stage_summary(name: str) -> Dict:
+        evidence = [row['temporal_attribution'].get(name)
+                    for row in attributed]
+        comparable = [
+            (row['temporal_attribution'].get('fallback'), candidate)
+            for row, candidate in zip(attributed, evidence)
+            if (row['temporal_attribution'].get('fallback') is not None
+                and candidate is not None)]
+        return dict(
+            evaluated_count=int(sum(item is not None for item in evidence)),
+            top1_hits=int(sum(bool(item.get('top1_hit', False))
+                              for item in evidence if item is not None)),
+            gained_vs_fallback_count=int(sum(
+                not bool(fallback['top1_hit'])
+                and bool(candidate['top1_hit'])
+                for fallback, candidate in comparable)),
+            lost_vs_fallback_count=int(sum(
+                bool(fallback['top1_hit'])
+                and not bool(candidate['top1_hit'])
+                for fallback, candidate in comparable)))
+
+    stages = {
+        name: stage_summary(name) for name in (
+            'fallback', 'quality_only', 'fused_candidate',
+            'margin_counterfactual', 'preconfirmation_counterfactual',
+            'final_selected')}
+    for stage in stages.values():
+        stage['net_gain_vs_fallback'] = int(
+            stage['gained_vs_fallback_count']
+            - stage['lost_vs_fallback_count'])
+
+    pending = [row for row in attributed
+               if row['temporal_attribution']['pending_confirmation']]
+    quality_ranked = [row['temporal_attribution']['quality_ranked']
+                      for row in attributed
+                      if row['temporal_attribution']['quality_ranked']
+                      is not None]
+
+    def condition_summary(name: str) -> Dict:
+        selected = [row['temporal_attribution'] for row in attributed
+                    if row['temporal_attribution'][name]]
+        candidates = [item['fused_candidate'] for item in selected
+                      if item['fused_candidate'] is not None]
+        comparable = [
+            (item['fallback'], item['fused_candidate']) for item in selected
+            if (item['fallback'] is not None
+                and item['fused_candidate'] is not None)]
+        return dict(
+            frame_count=int(len(selected)),
+            candidate_top1_hits=int(sum(
+                bool(item['top1_hit']) for item in candidates)),
+            candidate_gain_count=int(sum(
+                not fallback['top1_hit'] and candidate['top1_hit']
+                for fallback, candidate in comparable)),
+            candidate_loss_count=int(sum(
+                fallback['top1_hit'] and not candidate['top1_hit']
+                for fallback, candidate in comparable)))
+
+    usable_quality_ranks = [
+        int(item['best_usable_rank']) for item in quality_ranked
+        if item['best_usable_rank'] is not None]
+
+    return dict(
+        read_only=True,
+        frame_count=int(len(attributed)),
+        stages=stages,
+        conditions=dict(
+            margin_ok=condition_summary('candidate_margin_ok'),
+            continuity_ok=condition_summary('candidate_continuity_ok'),
+            margin_and_continuity_ok=condition_summary(
+                'candidate_override_ok')),
+        pending_confirmation=dict(
+            frame_count=int(len(pending)),
+            candidate_top1_hits=int(sum(bool(
+                row['temporal_attribution']['fused_candidate']
+                and row['temporal_attribution']['fused_candidate'][
+                    'top1_hit']) for row in pending)),
+            candidate_gain_count=int(sum(bool(
+                row['temporal_attribution']['fallback']
+                and not row['temporal_attribution']['fallback']['top1_hit']
+                and row['temporal_attribution']['fused_candidate']
+                and row['temporal_attribution']['fused_candidate'][
+                    'top1_hit']) for row in pending)),
+            candidate_loss_count=int(sum(bool(
+                row['temporal_attribution']['fallback']
+                and row['temporal_attribution']['fallback']['top1_hit']
+                and row['temporal_attribution']['fused_candidate']
+                and not row['temporal_attribution']['fused_candidate'][
+                    'top1_hit']) for row in pending))),
+        quality_ranked=dict(
+            evaluated_count=int(len(quality_ranked)),
+            top1_hits=int(sum(item['top1_hit'] for item in quality_ranked)),
+            usable_candidate_count=int(len(usable_quality_ranks)),
+            mean_best_usable_rank=(
+                float(np.mean(usable_quality_ranks))
+                if usable_quality_ranks else None),
+            median_best_usable_rank=(
+                float(np.median(usable_quality_ranks))
+                if usable_quality_ranks else None),
+            recall_at_20=int(sum(item['recall_at_20']
+                                 for item in quality_ranked)),
+            recall_at_100=int(sum(item['recall_at_100']
+                                  for item in quality_ranked))))
+
+
 def summarize_temporal_association_audit(rows: Sequence[Dict]) -> Optional[Dict]:
     """Summarize causal association opportunities without changing outputs.
 
@@ -3686,7 +3972,95 @@ def summarize_temporal_association_audit(rows: Sequence[Dict]) -> Optional[Dict]
         reset_count=int(sum(
             bool(row['temporal_selection'].get('reset', False))
             for row in temporal_rows)),
-        reason_counts=dict(sorted(reason_counts.items())))
+        reason_counts=dict(sorted(reason_counts.items())),
+        readonly_attribution=summarize_temporal_readonly_attribution(rows))
+
+
+def build_source_temporal_attribution_audit(
+        full_summary: Dict, small_summary: Dict, args,
+        checkpoint: str, checkpoint_epoch: int) -> Dict:
+    """Make the bounded stop/go decision for one rejected checkpoint."""
+    if full_summary is None or small_summary is None:
+        raise RuntimeError(
+            'Temporal attribution requires full and source-small summaries')
+
+    def extract(summary: Dict, label: str) -> Dict:
+        association = summary.get('temporal_association_audit') or {}
+        attribution = association.get('readonly_attribution')
+        if attribution is None:
+            raise RuntimeError(
+                'Temporal attribution evidence is absent for {}'.format(
+                    label))
+        stages = attribution['stages']
+        fallback = stages['fallback']
+        preconfirmation = stages['preconfirmation_counterfactual']
+        final = stages['final_selected']
+        if (fallback['evaluated_count'] != int(summary['frame_count'])
+                or preconfirmation['evaluated_count']
+                != int(summary['frame_count'])
+                or final['evaluated_count'] != int(summary['frame_count'])):
+            raise RuntimeError(
+                'Temporal attribution has incomplete {} frame coverage'.format(
+                    label))
+        return dict(
+            frame_count=int(summary['frame_count']),
+            fallback_top1_hits=int(fallback['top1_hits']),
+            final_top1_hits=int(final['top1_hits']),
+            preconfirmation_top1_hits=int(preconfirmation['top1_hits']),
+            preconfirmation_gained_vs_fallback_count=int(
+                preconfirmation['gained_vs_fallback_count']),
+            preconfirmation_lost_vs_fallback_count=int(
+                preconfirmation['lost_vs_fallback_count']),
+            pending_confirmation=attribution['pending_confirmation'],
+            stages=stages,
+            conditions=attribution['conditions'],
+            quality_ranked=attribution['quality_ranked'])
+
+    full = extract(full_summary, 'full source validation')
+    small = extract(small_summary, 'small source validation')
+    full_minimum = int(getattr(args, 's7_source_min_full_top1', 688))
+    small_minimum = int(getattr(args, 's7_source_min_small_top1', 311))
+    checks = dict(
+        full_preconfirmation_absolute=(
+            full['preconfirmation_top1_hits'] >= full_minimum),
+        small_preconfirmation_absolute=(
+            small['preconfirmation_top1_hits'] >= small_minimum),
+        full_preconfirmation_exact_retention=(
+            full['preconfirmation_lost_vs_fallback_count'] == 0),
+        small_preconfirmation_exact_retention=(
+            small['preconfirmation_lost_vs_fallback_count'] == 0))
+    confirmation_revision_supported = bool(all(checks.values()))
+    return dict(
+        mode='fixed_rejected_checkpoint_source_val_readonly_attribution',
+        checkpoint=os.path.abspath(checkpoint),
+        checkpoint_epoch=int(checkpoint_epoch),
+        checkpoint_selected_for_deployment=False,
+        parameter_update=False,
+        checkpoint_selection=False,
+        best_epoch_selection=False,
+        target_read=False,
+        fused_candidate_definition='argmax_of_seven_cues',
+        preconfirmation_definition=(
+            'one_step_candidate_if_margin_and_continuity_pass_else_fallback'),
+        counterfactual_updates_temporal_state=False,
+        full=full,
+        small=small,
+        required_absolute=dict(full=full_minimum, small=small_minimum),
+        final_shortfall=dict(
+            full=max(0, full_minimum - full['final_top1_hits']),
+            small=max(0, small_minimum - small['final_top1_hits'])),
+        preconfirmation_shortfall=dict(
+            full=max(
+                0, full_minimum - full['preconfirmation_top1_hits']),
+            small=max(
+                0, small_minimum - small['preconfirmation_top1_hits'])),
+        checks=checks,
+        confirmation_rule_revision_supported=(
+            confirmation_revision_supported),
+        recommendation=(
+            'ALLOW_ONE_BOUNDED_CONFIRMATION_RULE_REVISION'
+            if confirmation_revision_supported else
+            'CLOSE_CURRENT_QUALITY_TEMPORAL_MERGE_KEEP_NATIVE_BASELINE'))
 
 
 def summarize_rows(rows: Sequence[Dict]) -> Dict:
@@ -5138,6 +5512,9 @@ def main():
     s7_quality_support_audit = None
     source_initial_temporal_summary = None
     source_initial_temporal_small_summary = None
+    source_temporal_attribution_audit = None
+    source_temporal_immediate_override_audit = None
+    current_source_small_summary = None
 
     if args.eval_only_checkpoint:
         best_path = args.eval_only_checkpoint
@@ -5149,6 +5526,17 @@ def main():
             raise RuntimeError(
                 'Conflict checkpoint epoch {} does not match requested epoch {}'
                 .format(payload.get('epoch'), source_conflict_spec['epoch']))
+        if (bool(getattr(
+                args, 'source_temporal_attribution_audit', False)
+                or getattr(args, 'source_temporal_immediate_override_audit',
+                            False))
+                and int(payload.get('epoch', -1)) != int(getattr(
+                    args, 'source_temporal_attribution_epoch', 4))):
+            raise RuntimeError(
+                'Temporal attribution checkpoint epoch {} does not match '
+                'the fixed requested epoch {}'.format(
+                    payload.get('epoch'),
+                    args.source_temporal_attribution_epoch))
         load_heads_checkpoint_state(heads, payload)
         best_epoch = int(payload.get('best_epoch', payload.get('epoch', 0)))
         best_source_summary = payload.get('best_source_val_summary')
@@ -5167,6 +5555,61 @@ def main():
             dino, heads, source_val, args, dino_device, head_device,
             role='source_validation')
         current_source_summary = summarize_rows(source_val_rows)
+        if bool(getattr(
+                args, 'source_temporal_attribution_audit', False)
+                or getattr(args, 'source_temporal_immediate_override_audit',
+                            False)):
+            if (not source_sampling
+                    or source_sampling.get('short_token_threshold') is None):
+                raise RuntimeError(
+                    'Temporal attribution checkpoint has no source-small '
+                    'sampling definition')
+            small_keys = {
+                (record['split'], record['seq'], int(record['frame']))
+                for record in source_small_records(
+                    source_val, args,
+                    source_sampling['short_token_threshold'])}
+            source_small_rows = [
+                row for row in source_val_rows
+                if (row['split'], row['seq'], int(row['frame']))
+                in small_keys]
+            current_source_small_summary = summarize_rows(source_small_rows)
+            source_temporal_attribution_audit = (
+                build_source_temporal_attribution_audit(
+                    current_source_summary, current_source_small_summary,
+                    args, best_path, int(payload.get('epoch', -1))))
+            if bool(getattr(
+                    args, 'source_temporal_immediate_override_audit', False)):
+                source_temporal_immediate_override_audit = dict(
+                    mode=(
+                        'fixed_rejected_checkpoint_source_only_recursive_'
+                        'immediate_override'),
+                    checkpoint=os.path.abspath(best_path),
+                    checkpoint_epoch=int(payload.get('epoch', -1)),
+                    checkpoint_selected_for_deployment=False,
+                    parameter_update=False, checkpoint_selection=False,
+                    best_epoch_selection=False, target_read=False,
+                    configured_min_confirmations=int(
+                        args.s7_temporal_min_confirmations),
+                    runtime_min_confirmations=temporal_runtime_min_confirmations(
+                        args),
+                    override_condition=(
+                        'candidate_margin_ok_and_candidate_continuity_ok'),
+                    native_fallback=True,
+                    source_full_summary=current_source_summary,
+                    source_small_summary=current_source_small_summary,
+                    readonly_attribution=(
+                        source_temporal_attribution_audit),
+                    formal_gate_reference=dict(
+                        full_min_top1=int(
+                            getattr(args, 's7_source_min_full_top1', 688)),
+                        small_min_top1=int(
+                            getattr(args, 's7_source_min_small_top1', 311)),
+                        max_mcml=int(
+                            getattr(args, 's7_source_max_mcml', 3))),
+                    next_stage=(
+                        'evaluate_EKF_or_Kalman_postprocessing_after_source_'
+                        'inference_audit'))
     else:
         (best_path, best_epoch,
          best_source_summary, best_source_small_summary,
@@ -5200,6 +5643,12 @@ def main():
         target_rows = None
         target_summary = None
         decision = (
+            'SOURCE_ONLY_TEMPORAL_IMMEDIATE_OVERRIDE_AUDIT_COMPLETE_'
+            'TARGET_NOT_READ'
+            if source_temporal_immediate_override_audit is not None else
+            'SOURCE_ONLY_TEMPORAL_ATTRIBUTION_AUDIT_COMPLETE_'
+            'TARGET_NOT_READ'
+            if source_temporal_attribution_audit is not None else
             'SOURCE_ONLY_CONFLICT_AUDIT_COMPLETE_TARGET_NOT_READ'
             if source_conflict_spec is not None else
             'SOURCE_ONLY_TRAINING_SKIPPED_ZERO_'
@@ -5383,7 +5832,9 @@ def main():
                 s7_temporal_association=(
                     None if args.train_components != 's7_temporal_association'
                     else dict(
-                        base_checkpoint=os.path.abspath(args.init_checkpoint),
+                        base_checkpoint=(
+                            None if not args.init_checkpoint else
+                            os.path.abspath(args.init_checkpoint)),
                         base_epoch=int(args.s7_temporal_base_epoch),
                         cues=list(
                             temporal.QUALITY_CUE_NAMES
@@ -5446,6 +5897,11 @@ def main():
                 'unlabelled target-train split was supplied.')),
         isolation=dict(
             dino_frozen=True, dino_parameters_unchanged=dino_unchanged,
+            read_only_evaluation=bool(
+                source_temporal_attribution_audit is not None
+                or source_temporal_immediate_override_audit is not None),
+            parameter_updates_performed=bool(
+                not args.eval_only_checkpoint),
             initialization_checkpoint=(
                 None if not args.init_checkpoint
                 else os.path.abspath(args.init_checkpoint)),
@@ -5484,11 +5940,17 @@ def main():
                 source_initial_temporal_small_summary),
             small_sampling=source_sampling,
             current_inference_validation_summary=current_source_summary,
+            current_inference_small_validation_summary=(
+                current_source_small_summary),
             current_inference_rule='valid_rotated_obb_corners',
             s7_quality_support_audit=s7_quality_support_audit,
             history=history,
             source_val_results_pickle=source_val_results_path),
         source_conflict_audit=source_conflict_audit,
+        source_temporal_attribution_audit=(
+            source_temporal_attribution_audit),
+        source_temporal_immediate_override_audit=(
+            source_temporal_immediate_override_audit),
         target_dev=(None if target_summary is None else dict(
             summary=target_summary, rows=target_rows)),
         decision=decision)

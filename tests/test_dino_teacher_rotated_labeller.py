@@ -66,6 +66,10 @@ def _args(tmp_path, **overrides):
         pairwise_negatives_per_positive=2,
         resume_checkpoint=None, eval_only_checkpoint=None,
         skip_target_eval=False,
+        source_conflict_result_json=None, source_conflict_epoch=1,
+        source_temporal_attribution_audit=False,
+        source_temporal_attribution_epoch=4,
+        source_temporal_immediate_override_audit=False,
         source_val_results_out=None,
         dinov2_checkpoint=str(checkpoint), dinov2_model='dinov2_vitl14',
         dino_height=600, dino_max_long_side=1333,
@@ -1019,6 +1023,87 @@ def test_temporal_association_audit_reports_blocking_conditions():
     assert audit['candidate_override_ok_count'] == 1
 
 
+def test_temporal_readonly_attribution_reports_stage_gains_and_losses():
+    def evidence(hit):
+        return dict(top1_hit=hit)
+
+    rows = [
+        dict(temporal_attribution=dict(
+            fallback=evidence(False), quality_only=evidence(True),
+            quality_ranked=dict(
+                top1_hit=True, best_usable_rank=1,
+                recall_at_20=True, recall_at_100=True),
+            fused_candidate=evidence(True),
+            margin_counterfactual=evidence(True),
+            preconfirmation_counterfactual=evidence(True),
+            final_selected=evidence(False), candidate_margin_ok=True,
+            candidate_continuity_ok=True, candidate_override_ok=True,
+            pending_confirmation=True)),
+        dict(temporal_attribution=dict(
+            fallback=evidence(True), quality_only=evidence(False),
+            quality_ranked=dict(
+                top1_hit=False, best_usable_rank=3,
+                recall_at_20=True, recall_at_100=True),
+            fused_candidate=evidence(False),
+            margin_counterfactual=evidence(False),
+            preconfirmation_counterfactual=evidence(False),
+            final_selected=evidence(True), candidate_margin_ok=True,
+            candidate_continuity_ok=True, candidate_override_ok=True,
+            pending_confirmation=True)),
+    ]
+    audit = labeller.summarize_temporal_readonly_attribution(rows)
+    preconfirmation = audit['stages']['preconfirmation_counterfactual']
+    assert preconfirmation['top1_hits'] == 1
+    assert preconfirmation['gained_vs_fallback_count'] == 1
+    assert preconfirmation['lost_vs_fallback_count'] == 1
+    assert audit['pending_confirmation']['candidate_gain_count'] == 1
+    assert audit['pending_confirmation']['candidate_loss_count'] == 1
+    assert audit['quality_ranked']['recall_at_100'] == 2
+    assert audit['quality_ranked']['median_best_usable_rank'] == 2.0
+
+
+def test_temporal_attribution_decision_requires_absolute_and_zero_loss(
+        tmp_path):
+    def summary(frame_count, fallback, final, preconfirmation, lost):
+        stages = {
+            name: dict(
+                evaluated_count=frame_count, top1_hits=value,
+                gained_vs_fallback_count=max(0, value - fallback),
+                lost_vs_fallback_count=(lost if name ==
+                                        'preconfirmation_counterfactual'
+                                        else 0),
+                net_gain_vs_fallback=value - fallback)
+            for name, value in (
+                ('fallback', fallback), ('quality_only', fallback),
+                ('fused_candidate', fallback),
+                ('margin_counterfactual', preconfirmation),
+                ('preconfirmation_counterfactual', preconfirmation),
+                ('final_selected', final))}
+        attribution = dict(
+            stages=stages, pending_confirmation={}, conditions={},
+            quality_ranked={})
+        return dict(
+            frame_count=frame_count,
+            temporal_association_audit=dict(
+                readonly_attribution=attribution))
+
+    args = _args(
+        tmp_path, s7_source_min_full_top1=688,
+        s7_source_min_small_top1=311)
+    passed = labeller.build_source_temporal_attribution_audit(
+        summary(738, 677, 681, 688, 0),
+        summary(350, 303, 306, 311, 0), args,
+        str(tmp_path / 'epoch04.pth'), 4)
+    assert passed['confirmation_rule_revision_supported'] is True
+    assert passed['final_shortfall'] == dict(full=7, small=5)
+    failed = labeller.build_source_temporal_attribution_audit(
+        summary(738, 677, 681, 688, 1),
+        summary(350, 303, 306, 311, 0), args,
+        str(tmp_path / 'epoch04.pth'), 4)
+    assert failed['confirmation_rule_revision_supported'] is False
+    assert failed['recommendation'].startswith('CLOSE_CURRENT')
+
+
 def test_s7_merge_pair_loss_separates_retention_and_gain_cases():
     calibrator = labeller.S7ScoreCalibrator(initial_bias=0.0)
     retain = labeller.s7_merge_pair_losses(
@@ -1289,6 +1374,56 @@ def test_validate_source_conflict_audit_is_eval_only_and_target_free(tmp_path):
     args.skip_target_eval = False
     with pytest.raises(ValueError, match='skip-target-eval'):
         labeller.validate_args(args)
+
+
+def test_validate_temporal_attribution_is_fixed_eval_only_and_target_free(
+        tmp_path):
+    checkpoint = tmp_path / 'labeller_epoch_04_source_only.pth'
+    checkpoint.write_bytes(b'checkpoint')
+    common = dict(
+        s7_residual=True, s7_temporal_association=True,
+        s7_temporal_quality_head=True,
+        train_components='s7_temporal_association',
+        source_train_datasets=['train:train'],
+        source_val_datasets=['val:val'],
+        source_small_repeat=1, s7_source_min_full_top1=688,
+        s7_source_min_small_top1=311,
+        epochs=4, lr_steps=[2, 3], selection_epochs=[1, 2, 3, 4],
+        eval_only_checkpoint=str(checkpoint), skip_target_eval=True,
+        source_temporal_attribution_audit=True,
+        source_temporal_attribution_epoch=4)
+    labeller.validate_args(_args(tmp_path, **common))
+    with pytest.raises(ValueError, match='eval-only-checkpoint'):
+        labeller.validate_args(_args(
+            tmp_path, **dict(common, eval_only_checkpoint=None)))
+    with pytest.raises(ValueError, match='skip-target-eval'):
+        labeller.validate_args(_args(
+            tmp_path, **dict(common, skip_target_eval=False)))
+    with pytest.raises(ValueError, match='quality-head'):
+        labeller.validate_args(_args(
+            tmp_path, **dict(common, s7_temporal_quality_head=False)))
+
+
+def test_validate_immediate_override_audit_is_explicit_and_readonly(tmp_path):
+    checkpoint = tmp_path / 'labeller_epoch_04_source_only.pth'
+    checkpoint.write_bytes(b'checkpoint')
+    args = _args(
+        tmp_path, s7_residual=True, s7_temporal_association=True,
+        s7_temporal_quality_head=True,
+        train_components='s7_temporal_association',
+        source_train_datasets=['train:train'],
+        source_val_datasets=['val:val'], source_small_repeat=1,
+        s7_source_min_full_top1=688, s7_source_min_small_top1=311,
+        epochs=4, lr_steps=[2, 3], selection_epochs=[1, 2, 3, 4],
+        eval_only_checkpoint=str(checkpoint), skip_target_eval=True,
+        source_temporal_immediate_override_audit=True,
+        source_temporal_attribution_epoch=4)
+    labeller.validate_args(args)
+    assert labeller.temporal_runtime_min_confirmations(args) == 1
+    with pytest.raises(ValueError, match='mutually exclusive'):
+        conflicting = vars(args).copy()
+        conflicting['source_temporal_attribution_audit'] = True
+        labeller.validate_args(_args(tmp_path, **conflicting))
 
 
 def test_s7_config_declares_explicit_supplement_checkpoint_and_head():
