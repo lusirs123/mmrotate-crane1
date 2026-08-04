@@ -162,7 +162,8 @@ def parse_args():
               's7_temporal_association freezes every detector component and '
               'fits only six positive causal association cue weights. The '
               'optional quality-head flag adds dense continuous candidate '
-              'max-RIoU supervision.'))
+              'max-RIoU supervision. The relative-quality flag adds a '
+              'source-only same-frame pairwise ranking term on that head.'))
     parser.add_argument(
         '--source-small-repeat', type=int, default=1,
         help='Repeat source-train frames in the lower short-token tertile.')
@@ -216,6 +217,22 @@ def parse_args():
     parser.add_argument('--s7-temporal-quality-hidden', type=int, default=128)
     parser.add_argument(
         '--s7-temporal-quality-loss-weight', type=float, default=1.0)
+    parser.add_argument(
+        '--s7-temporal-relative-quality', action='store_true',
+        help=(
+            'Add source-only same-frame candidate relative-ranking loss to '
+            'the continuous max-RIoU quality head.'))
+    parser.add_argument(
+        '--s7-temporal-relative-quality-weight', type=float, default=0.5)
+    parser.add_argument(
+        '--s7-temporal-relative-quality-margin', type=float, default=0.25)
+    parser.add_argument(
+        '--s7-temporal-relative-quality-min-gap', type=float, default=0.10)
+    parser.add_argument(
+        '--s7-temporal-relative-quality-max-pairs', type=int, default=128)
+    parser.add_argument(
+        '--s7-temporal-relative-base-epoch', type=int, default=4,
+        help='Epoch of the source-gated pointwise quality checkpoint.')
     parser.add_argument('--s7-temporal-base-epoch', type=int, default=1)
     parser.add_argument('--s7-temporal-margin', type=float, default=0.5)
     parser.add_argument(
@@ -376,6 +393,32 @@ def validate_args(args):
         raise ValueError('--s7-temporal-quality-hidden must be positive')
     if float(getattr(args, 's7_temporal_quality_loss_weight', 1.0)) <= 0.0:
         raise ValueError('--s7-temporal-quality-loss-weight must be positive')
+    relative_quality = bool(getattr(
+        args, 's7_temporal_relative_quality', False))
+    relative_quality_positive = (
+        getattr(args, 's7_temporal_relative_quality_weight', 0.5),
+        getattr(args, 's7_temporal_relative_quality_margin', 0.25),
+        getattr(args, 's7_temporal_relative_quality_min_gap', 0.10),
+        getattr(args, 's7_temporal_relative_quality_max_pairs', 128))
+    if relative_quality and any(
+            float(value) <= 0.0 for value in relative_quality_positive):
+        raise ValueError(
+            'Relative candidate quality weights, margin, gap and pair '
+            'count must be positive')
+    if relative_quality and not bool(getattr(
+            args, 's7_temporal_quality_head', False)):
+        raise ValueError(
+            '--s7-temporal-relative-quality requires '
+            '--s7-temporal-quality-head')
+    if relative_quality and int(
+            getattr(args, 's7_temporal_min_confirmations', 2)) != 1:
+        raise ValueError(
+            'Relative candidate quality training is locked to the audited '
+            'one-frame immediate-override policy')
+    if relative_quality and int(getattr(
+            args, 's7_temporal_relative_base_epoch', 4)) <= 0:
+        raise ValueError(
+            '--s7-temporal-relative-base-epoch must be positive')
     if (bool(getattr(args, 's7_lane_arbitration', False))
             and (args.train_components == 's7_quality_suppression'
                  or bool(getattr(args, 's7_quality_suppression', False)))):
@@ -628,6 +671,16 @@ def validate_args(args):
             raise ValueError(
                 's7_temporal_association requires formal source train/val '
                 'datasets; modulus-split frames are not continuous video')
+        if relative_quality:
+            if not args.init_checkpoint or args.resume_checkpoint \
+                    or args.eval_only_checkpoint:
+                raise ValueError(
+                    'Relative candidate quality training requires an '
+                    'init checkpoint and cannot resume or run eval-only')
+            if int(getattr(args, 'source_small_repeat', 1)) != 1:
+                raise ValueError(
+                    'Relative candidate quality training forbids frame '
+                    'repetition')
         if int(args.source_small_repeat) != 1:
             raise ValueError(
                 's7_temporal_association forbids frame repetition because it '
@@ -788,8 +841,13 @@ def optimization_loss_total(losses: Dict, train_components: str):
         return loss_total({name: losses[name] for name in required})
     if train_components == 's7_temporal_association':
         if 'loss_s7_candidate_quality' in losses:
-            return loss_total({'loss_s7_candidate_quality':
-                               losses['loss_s7_candidate_quality']})
+            quality_losses = {
+                'loss_s7_candidate_quality':
+                    losses['loss_s7_candidate_quality']}
+            if 'loss_s7_candidate_quality_relative' in losses:
+                quality_losses['loss_s7_candidate_quality_relative'] = (
+                    losses['loss_s7_candidate_quality_relative'])
+            return loss_total(quality_losses)
         required = (
             'loss_s7_temporal_retention', 'loss_s7_temporal_gain',
             'loss_s7_temporal_prior')
@@ -809,8 +867,9 @@ def optimization_loss_total(losses: Dict, train_components: str):
         train_components))
 
 
-def optimization_loss_component_names(train_components: str,
-                                      quality_head: bool = False) -> List[str]:
+def optimization_loss_component_names(
+        train_components: str, quality_head: bool = False,
+        relative_quality: bool = False) -> List[str]:
     """Return the canonical loss-name list for logs and checkpoints."""
     if train_components == 'all':
         return ['loss_rpn_cls', 'loss_rpn_bbox', 'loss_cls', 'loss_bbox']
@@ -830,7 +889,10 @@ def optimization_loss_component_names(train_components: str,
             'loss_s7_quality_retention', 'loss_s7_quality_prior']
     if train_components == 's7_temporal_association':
         if quality_head:
-            return ['loss_s7_candidate_quality']
+            names = ['loss_s7_candidate_quality']
+            if relative_quality:
+                names.append('loss_s7_candidate_quality_relative')
+            return names
         return [
             'loss_s7_temporal_retention', 'loss_s7_temporal_gain',
             'loss_s7_temporal_prior']
@@ -2591,8 +2653,12 @@ class FrozenDinoRotatedHeads(nn.Module):
     def forward_s7_temporal_quality_train(
             self, feature: torch.Tensor, img_meta: Dict,
             gt_boxes: torch.Tensor, riou_thr: float,
-            quality_weight: float, max_candidates: int) -> Dict:
-        """Fit dense candidate max-RIoU quality on the fixed affine pool."""
+            quality_weight: float, max_candidates: int,
+            relative_weight: float = 0.0,
+            relative_margin: float = 0.25,
+            relative_min_gap: float = 0.10,
+            relative_max_pairs: int = 128) -> Dict:
+        """Fit pointwise and optional relative quality on fixed affine pool."""
         from mmcv.ops import box_iou_rotated
 
         quality_head = getattr(self, 's7_candidate_quality_head', None)
@@ -2620,9 +2686,18 @@ class FrozenDinoRotatedHeads(nn.Module):
                 overlap = detections.new_zeros((detections.shape[0],))
         losses = temporal.candidate_quality_losses(
             quality_head, embeddings, detections, source_ids, overlap,
-            riou_threshold=riou_thr)
+            riou_threshold=riou_thr,
+            relative_margin=(
+                float(relative_margin) if float(relative_weight) > 0.0
+                else None),
+            relative_min_gap=float(relative_min_gap),
+            relative_max_pairs=int(relative_max_pairs))
         losses['loss_s7_candidate_quality'] = (
             losses['loss_s7_candidate_quality'] * float(quality_weight))
+        if 'loss_s7_candidate_quality_relative' in losses:
+            losses['loss_s7_candidate_quality_relative'] = (
+                losses['loss_s7_candidate_quality_relative']
+                * float(relative_weight))
         return losses
 
     def forward_roi_cls_hard_train(
@@ -3144,7 +3219,16 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                     feature, img_meta, gt_boxes,
                     riou_thr=args.riou_thr,
                     quality_weight=args.s7_temporal_quality_loss_weight,
-                    max_candidates=args.s7_temporal_max_candidates)
+                    max_candidates=args.s7_temporal_max_candidates,
+                    relative_weight=(
+                        args.s7_temporal_relative_quality_weight
+                        if bool(getattr(
+                            args, 's7_temporal_relative_quality', False))
+                        else 0.0),
+                    relative_margin=args.s7_temporal_relative_quality_margin,
+                    relative_min_gap=args.s7_temporal_relative_quality_min_gap,
+                    relative_max_pairs=(
+                        args.s7_temporal_relative_quality_max_pairs))
             else:
                 output = heads.forward_s7_temporal_association_train(
                     feature, img_meta, gt_boxes,
@@ -3285,6 +3369,19 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                         float(metric_sums.get(
                             's7_candidate_quality_mean_target', 0.0))
                         / float(max(1, index + 1)))
+                    if bool(getattr(
+                            args, 's7_temporal_relative_quality', False)):
+                        message += (
+                            ' relative_pairs={} active={} acc={:.4f}').format(
+                            int(round(metric_sums.get(
+                                's7_candidate_quality_relative_pair_count',
+                                0.0))),
+                            int(round(metric_sums.get(
+                                's7_candidate_quality_relative_active_count',
+                                0.0))),
+                            float(metric_sums.get(
+                                's7_candidate_quality_relative_accuracy', 0.0))
+                            / float(max(1, index + 1)))
                 else:
                     message += (
                         ' retain_pairs_total={} gain_pairs_total={} '
@@ -3298,7 +3395,9 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
         del feature, gt_boxes, gt_labels, total
     optimized_components = optimization_loss_component_names(
         args.train_components,
-        quality_head=bool(getattr(args, 's7_temporal_quality_head', False)))
+        quality_head=bool(getattr(args, 's7_temporal_quality_head', False)),
+        relative_quality=bool(getattr(
+            args, 's7_temporal_relative_quality', False)))
     summary = dict(
         epoch=int(epoch), count=len(ordered),
         global_step_end=int(global_step),
@@ -4673,7 +4772,9 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
             optimization_loss_components=optimization_loss_component_names(
                 args.train_components,
                 quality_head=bool(getattr(
-                    args, 's7_temporal_quality_head', False))),
+                    args, 's7_temporal_quality_head', False)),
+                relative_quality=bool(getattr(
+                    args, 's7_temporal_relative_quality', False))),
             trainable_parameter_names=[
                 name for name, parameter in heads.named_parameters()
                 if parameter.requires_grad],
@@ -4780,7 +4881,11 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                     base_checkpoint=(
                         None if not getattr(args, 'init_checkpoint', None)
                         else os.path.abspath(args.init_checkpoint)),
-                    base_epoch=int(args.s7_temporal_base_epoch),
+                    base_epoch=int(
+                        args.s7_temporal_relative_base_epoch
+                        if bool(getattr(
+                            args, 's7_temporal_relative_quality', False))
+                        else args.s7_temporal_base_epoch),
                     cues=list(
                         temporal.QUALITY_CUE_NAMES
                         if bool(getattr(
@@ -4806,11 +4911,24 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                         args, 's7_temporal_quality_hidden', 128)),
                     quality_loss_weight=float(getattr(
                         args, 's7_temporal_quality_loss_weight', 1.0)),
+                    relative_quality=bool(getattr(
+                        args, 's7_temporal_relative_quality', False)),
+                    relative_quality_weight=float(getattr(
+                        args, 's7_temporal_relative_quality_weight', 0.5)),
+                    relative_quality_margin=float(getattr(
+                        args, 's7_temporal_relative_quality_margin', 0.25)),
+                    relative_quality_min_gap=float(getattr(
+                        args, 's7_temporal_relative_quality_min_gap', 0.10)),
+                    relative_quality_max_pairs=int(getattr(
+                        args, 's7_temporal_relative_quality_max_pairs', 128)),
                     source_train_only=True, target_read=False,
                     candidate_quality_head=bool(getattr(
                         args, 's7_temporal_quality_head', False)),
                     training_state=(
-                        'dense_source_candidate_max_riou'
+                        'dense_source_candidate_max_riou_plus_relative_rank'
+                        if bool(getattr(
+                            args, 's7_temporal_relative_quality', False))
+                        else 'dense_source_candidate_max_riou'
                         if bool(getattr(
                             args, 's7_temporal_quality_head', False))
                         else 'previous_source_GT_usable_candidate'),
@@ -4835,7 +4953,8 @@ def validate_checkpoint(payload: Dict, in_channels: int, args,
                         allow_s7_base_initialization: bool = False,
                         allow_lane_arbitration_initialization: bool = False,
                         allow_quality_suppression_initialization: bool = False,
-                        allow_temporal_association_initialization: bool = False):
+                        allow_temporal_association_initialization: bool = False,
+                        allow_temporal_policy_mismatch: bool = False):
     required = (
         'source_only', 'frozen_dinov2', 'in_channels', 'patch_size',
         'rpn_feat_channels', 'roi_fc_channels', 'heads_state_dict')
@@ -4920,8 +5039,10 @@ def validate_checkpoint(payload: Dict, in_channels: int, args,
                          != requested_s7.get('temporal_cues')
                          or stored_s7.get('temporal_max_candidates')
                          != requested_s7.get('temporal_max_candidates')
-                         or stored_s7.get('temporal_min_confirmations')
-                         != requested_s7.get('temporal_min_confirmations'))):
+                         or (stored_s7.get('temporal_min_confirmations')
+                             != requested_s7.get(
+                                 'temporal_min_confirmations')
+                             and not allow_temporal_policy_mismatch))):
                 architecture_mismatch = True
             stored_temporal_quality = bool(stored_s7.get(
                 'temporal_quality_head', False))
@@ -4950,6 +5071,8 @@ def train_source_only(dino, heads, train_records, val_records, args,
     s7_lane_mode = args.train_components == 's7_lane_arbitration'
     s7_quality_mode = args.train_components == 's7_quality_suppression'
     s7_temporal_mode = args.train_components == 's7_temporal_association'
+    s7_temporal_relative_mode = bool(getattr(
+        args, 's7_temporal_relative_quality', False))
     s7_mode = bool(
         s7_rpn_mode or s7_merge_mode or s7_lane_mode or s7_quality_mode
         or s7_temporal_mode)
@@ -5002,7 +5125,7 @@ def train_source_only(dino, heads, train_records, val_records, args,
                     'Quality suppression must initialize from the complete '
                     's7_merge epoch-1 checkpoint; found {}'.format(
                         stored_mode))
-        if s7_temporal_mode:
+        if s7_temporal_mode and not s7_temporal_relative_mode:
             if int(payload.get('epoch', -1)) != int(
                     args.s7_temporal_base_epoch):
                 raise RuntimeError(
@@ -5016,6 +5139,26 @@ def train_source_only(dino, heads, train_records, val_records, args,
                     'Temporal association must initialize from the complete '
                     's7_merge epoch-1 checkpoint; found {}'.format(
                         stored_mode))
+        if s7_temporal_relative_mode:
+            if int(payload.get('epoch', -1)) != int(
+                    args.s7_temporal_relative_base_epoch):
+                raise RuntimeError(
+                    'Relative candidate quality must initialize from fixed '
+                    'pointwise quality epoch {}; found {}'.format(
+                        args.s7_temporal_relative_base_epoch,
+                        payload.get('epoch')))
+            stored_mode = payload.get(
+                'training_protocol', {}).get('train_components')
+            if stored_mode != 's7_temporal_association':
+                raise RuntimeError(
+                    'Relative candidate quality must initialize from the '
+                    'complete temporal quality checkpoint; found {}'.format(
+                        stored_mode))
+            stored_s7 = payload.get('s7_architecture', {})
+            if not bool(stored_s7.get('temporal_quality_head', False)):
+                raise RuntimeError(
+                    'Relative candidate quality requires a pointwise '
+                    'candidate quality head checkpoint')
         validate_checkpoint(
             payload, in_channels, args,
             allow_training_mode_mismatch=True,
@@ -5024,7 +5167,9 @@ def train_source_only(dino, heads, train_records, val_records, args,
                 and not s7_temporal_mode),
             allow_lane_arbitration_initialization=s7_lane_mode,
             allow_quality_suppression_initialization=s7_quality_mode,
-            allow_temporal_association_initialization=s7_temporal_mode)
+            allow_temporal_association_initialization=(
+                s7_temporal_mode and not s7_temporal_relative_mode),
+            allow_temporal_policy_mismatch=s7_temporal_relative_mode)
         load_heads_checkpoint_state(
             heads, payload,
             allow_s7_base_initialization=(
@@ -5032,7 +5177,8 @@ def train_source_only(dino, heads, train_records, val_records, args,
                 and not s7_temporal_mode),
             allow_lane_arbitration_initialization=s7_lane_mode,
             allow_quality_suppression_initialization=s7_quality_mode,
-            allow_temporal_association_initialization=s7_temporal_mode)
+            allow_temporal_association_initialization=(
+                s7_temporal_mode and not s7_temporal_relative_mode))
         if s7_merge_mode:
             component_payload = torch.load(
                 args.s7_component_checkpoint, map_location='cpu')
@@ -5745,7 +5891,9 @@ def main():
                     optimization_loss_component_names(
                         args.train_components,
                         quality_head=bool(getattr(
-                            args, 's7_temporal_quality_head', False)))),
+                            args, 's7_temporal_quality_head', False)),
+                        relative_quality=bool(getattr(
+                            args, 's7_temporal_relative_quality', False)))),
                 epochs=int(args.epochs), optimizer='SGD',
                 lr=float(args.lr), momentum=float(args.momentum),
                 weight_decay=float(args.weight_decay),
@@ -5835,7 +5983,11 @@ def main():
                         base_checkpoint=(
                             None if not args.init_checkpoint else
                             os.path.abspath(args.init_checkpoint)),
-                        base_epoch=int(args.s7_temporal_base_epoch),
+                        base_epoch=int(
+                            args.s7_temporal_relative_base_epoch
+                            if bool(getattr(
+                                args, 's7_temporal_relative_quality', False))
+                            else args.s7_temporal_base_epoch),
                         cues=list(
                             temporal.QUALITY_CUE_NAMES
                             if bool(getattr(
@@ -5852,6 +6004,16 @@ def main():
                             args, 's7_temporal_quality_hidden', 128)),
                         quality_loss_weight=float(getattr(
                             args, 's7_temporal_quality_loss_weight', 1.0)),
+                        relative_quality=bool(getattr(
+                            args, 's7_temporal_relative_quality', False)),
+                        relative_quality_weight=float(getattr(
+                            args, 's7_temporal_relative_quality_weight', 0.5)),
+                        relative_quality_margin=float(getattr(
+                            args, 's7_temporal_relative_quality_margin', 0.25)),
+                        relative_quality_min_gap=float(getattr(
+                            args, 's7_temporal_relative_quality_min_gap', 0.10)),
+                        relative_quality_max_pairs=int(getattr(
+                            args, 's7_temporal_relative_quality_max_pairs', 128)),
                         max_candidates=int(args.s7_temporal_max_candidates),
                         min_confirmations=int(
                             args.s7_temporal_min_confirmations),
@@ -5865,7 +6027,10 @@ def main():
                         dfr_aci_angle_limit_deg=(
                             SOURCE_TEMPORAL_ANGLE_LIMIT_DEG),
                         training_state=(
-                            'dense_source_candidate_max_riou'
+                            'dense_source_candidate_max_riou_plus_relative_rank'
+                            if bool(getattr(
+                                args, 's7_temporal_relative_quality', False))
+                            else 'dense_source_candidate_max_riou'
                             if bool(getattr(
                                 args, 's7_temporal_quality_head', False))
                             else 'previous_source_GT_usable_candidate'),

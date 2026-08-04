@@ -61,6 +61,39 @@ def test_candidate_quality_head_is_constant_before_training_and_has_dense_gradie
     assert torch.isfinite(head.output.weight.grad).all()
 
 
+def test_candidate_quality_relative_ranking_builds_deterministic_pairs():
+    logits = torch.zeros(3, requires_grad=True)
+    result = temporal.candidate_quality_relative_ranking_loss(
+        logits, torch.tensor([0.9, 0.5, 0.0]),
+        margin=0.25, min_gap=0.1, max_pairs=2)
+    assert result['s7_candidate_quality_relative_pair_count'] == 2
+    assert result['s7_candidate_quality_relative_active_count'] == 2
+    assert result['s7_candidate_quality_relative_accuracy'] == pytest.approx(0.0)
+    assert result['s7_candidate_quality_relative_mean_gap'] == pytest.approx(
+        0.45)
+    result['loss_s7_candidate_quality_relative'].backward()
+    assert logits.grad is not None
+    assert torch.isfinite(logits.grad).all()
+
+
+def test_candidate_quality_losses_can_add_relative_ranking_term():
+    head = temporal.S7CandidateQualityHead(embedding_channels=4, hidden=8)
+    detections = torch.tensor([
+        [10.0, 10.0, 8.0, 4.0, 0.0, 0.4],
+        [11.0, 10.0, 8.0, 4.0, 0.1, 0.9],
+        [12.0, 10.0, 7.0, 5.0, 0.2, 0.7]])
+    losses = temporal.candidate_quality_losses(
+        head, torch.randn(3, 4), detections, torch.tensor([0, 0, 1]),
+        gt_overlap=torch.tensor([0.8, 0.3, 0.0]), riou_threshold=0.5,
+        relative_margin=0.25, relative_min_gap=0.1, relative_max_pairs=8)
+    assert losses['s7_candidate_quality_relative_pair_count'] == 2
+    total = (losses['loss_s7_candidate_quality']
+             + losses['loss_s7_candidate_quality_relative'])
+    total.backward()
+    assert head.output.weight.grad is not None
+    assert torch.isfinite(head.output.weight.grad).all()
+
+
 def test_temporal_pair_loss_updates_only_relative_association_weights():
     scorer = temporal.S7TemporalAssociationScorer()
     cues = torch.tensor([

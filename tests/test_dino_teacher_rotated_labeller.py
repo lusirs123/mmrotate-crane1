@@ -37,6 +37,12 @@ def _args(tmp_path, **overrides):
         s7_temporal_association=False, s7_temporal_base_epoch=1,
         s7_temporal_quality_head=False, s7_temporal_quality_hidden=128,
         s7_temporal_quality_loss_weight=1.0,
+        s7_temporal_relative_quality=False,
+        s7_temporal_relative_quality_weight=0.5,
+        s7_temporal_relative_quality_margin=0.25,
+        s7_temporal_relative_quality_min_gap=0.10,
+        s7_temporal_relative_quality_max_pairs=128,
+        s7_temporal_relative_base_epoch=4,
         s7_temporal_margin=0.5, s7_temporal_retention_weight=2.0,
         s7_temporal_gain_weight=1.0, s7_temporal_prior_weight=0.01,
         s7_temporal_max_candidates=100,
@@ -249,6 +255,40 @@ def test_validate_s7_temporal_association_requires_continuous_source_protocol(
             source_train_datasets=['train:train'],
             source_val_datasets=['val:val'], source_small_repeat=2,
             **common))
+
+
+def test_validate_relative_quality_uses_pointwise_quality_checkpoint(
+        tmp_path):
+    checkpoint = tmp_path / 'quality_epoch04.pth'
+    checkpoint.write_bytes(b'checkpoint')
+    common = dict(
+        s7_residual=True, s7_temporal_association=True,
+        s7_temporal_quality_head=True,
+        s7_temporal_relative_quality=True,
+        train_components='s7_temporal_association',
+        init_checkpoint=str(checkpoint), skip_target_eval=True,
+        source_train_datasets=['train:train'],
+        source_val_datasets=['val:val'], source_small_repeat=1,
+        s7_source_min_full_top1=688, s7_source_min_small_top1=311,
+        s7_temporal_min_confirmations=1,
+        epochs=4, lr_steps=[2, 3], selection_epochs=[1, 2, 3, 4])
+    args = _args(tmp_path, **common)
+    labeller.validate_args(args)
+    assert args.lr_steps == [2, 3]
+    with pytest.raises(ValueError, match='quality-head'):
+        labeller.validate_args(_args(
+            tmp_path, **dict(common, s7_temporal_quality_head=False)))
+    with pytest.raises(ValueError, match='S7 mode requires'):
+        labeller.validate_args(_args(
+            tmp_path, **dict(common, init_checkpoint=None)))
+
+
+def test_relative_quality_is_included_in_temporal_loss_metadata():
+    assert labeller.optimization_loss_component_names(
+        's7_temporal_association', quality_head=True,
+        relative_quality=True) == [
+            'loss_s7_candidate_quality',
+            'loss_s7_candidate_quality_relative']
 
 
 def test_validate_pairwise_v2_requires_matching_nms_policy(tmp_path):
@@ -1447,6 +1487,24 @@ def test_s7_retention_merge_config_uses_new_source_gated_checkpoint():
     assert head['s7_merge_init_bias'] == pytest.approx(-2.0)
     assert config['model']['dino_head_checkpoint'].endswith(
         'dino_teacher_s7_retention_merge_v1/labeller_best_source_only.pth')
+
+
+def test_s7_temporal_relative_quality_config_declares_phase_two_b_protocol():
+    import runpy
+    root = pathlib.Path(__file__).resolve().parents[1]
+    config = runpy.run_path(str(root / 'crane_project/configs/'
+        'crane_symeood_scoped_dino_lowlight_s7_temporal_relative_quality_v1.py'))
+    head = config['model']['dino_rescue']['head']
+    training = config['s7_temporal_quality_training']
+    assert head['s7_temporal_quality_head'] is True
+    assert head['s7_temporal_relative_quality'] is True
+    assert head['s7_temporal_min_confirmations'] == 1
+    assert training['base_epoch'] == 4
+    assert training['relative_quality'] is True
+    assert training['source_only'] is True
+    assert training['target_read'] is False
+    assert training['positive_promotion'] is False
+    assert training['gain_replay'] is False
 
 
 def test_s7_lane_arbitration_config_freezes_epoch1_merge_base():

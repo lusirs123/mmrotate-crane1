@@ -2,9 +2,10 @@
 
 The detector and both proposal lanes stay frozen.  The original mode learns
 six non-negative cue weights; the optional quality mode adds one dense,
-source-supervised candidate-quality cue.  Both apply a native-first causal
-selector at inference.  They never read sequence identities as features and
-never access a future frame.
+source-supervised candidate-quality cue and may add a same-frame
+relative-ranking term.  Both apply a native-first causal selector at
+inference.  They never read sequence identities as features and never access
+a future frame.
 """
 
 import math
@@ -130,22 +131,91 @@ class S7CandidateQualityHead(nn.Module):
         return self.output(hidden).reshape(-1)
 
 
+def candidate_quality_relative_ranking_loss(
+        quality_logits: torch.Tensor, gt_overlap: torch.Tensor,
+        margin: float = 0.25, min_gap: float = 0.10,
+        max_pairs: int = 128) -> Dict:
+    """Build deterministic same-frame source-only relative-quality pairs."""
+    if quality_logits.ndim != 1 or gt_overlap.ndim != 1:
+        raise ValueError('Relative quality inputs must be vectors')
+    if quality_logits.shape != gt_overlap.shape:
+        raise ValueError('Relative quality logits and targets are misaligned')
+    if float(margin) <= 0.0 or float(min_gap) <= 0.0 or int(max_pairs) <= 0:
+        raise ValueError(
+            'Relative quality margin, gap and pair count must be positive')
+    zero = quality_logits.sum() * 0.0
+    if quality_logits.numel() < 2:
+        return dict(
+            loss_s7_candidate_quality_relative=zero,
+            s7_candidate_quality_relative_pair_count=0,
+            s7_candidate_quality_relative_active_count=0,
+            s7_candidate_quality_relative_accuracy=0.0,
+            s7_candidate_quality_relative_mean_gap=0.0)
+
+    target = gt_overlap.detach().float().clamp(0.0, 1.0)
+    order = torch.argsort(target, descending=True).detach().cpu().tolist()
+    target_cpu = target.detach().cpu().tolist()
+    positive_indices = []
+    negative_indices = []
+    # Pair each candidate with the nearest lower-quality candidate separated
+    # by the configured target gap.  This gives broad rank supervision while
+    # keeping the per-frame loss bounded and deterministic.
+    for position, positive in enumerate(order):
+        for negative in order[position + 1:]:
+            if float(target_cpu[positive] - target_cpu[negative]) >= float(
+                    min_gap):
+                positive_indices.append(positive)
+                negative_indices.append(negative)
+                break
+        if len(positive_indices) >= int(max_pairs):
+            break
+    if not positive_indices:
+        return dict(
+            loss_s7_candidate_quality_relative=zero,
+            s7_candidate_quality_relative_pair_count=0,
+            s7_candidate_quality_relative_active_count=0,
+            s7_candidate_quality_relative_accuracy=0.0,
+            s7_candidate_quality_relative_mean_gap=0.0)
+
+    positive = quality_logits.new_tensor(positive_indices, dtype=torch.long)
+    negative = quality_logits.new_tensor(negative_indices, dtype=torch.long)
+    gaps = target[positive] - target[negative]
+    logit_gaps = quality_logits[positive] - quality_logits[negative]
+    per_pair = torch.relu(float(margin) - logit_gaps)
+    return dict(
+        loss_s7_candidate_quality_relative=per_pair.mean(),
+        s7_candidate_quality_relative_pair_count=int(per_pair.numel()),
+        s7_candidate_quality_relative_active_count=int(
+            (per_pair > 0.0).sum().item()),
+        s7_candidate_quality_relative_accuracy=float(
+            (logit_gaps > 0.0).float().mean().item()),
+        s7_candidate_quality_relative_mean_gap=float(gaps.mean().item()))
+
+
 def candidate_quality_losses(
         quality_head: S7CandidateQualityHead, embedding: torch.Tensor,
         detections: torch.Tensor, source_ids: torch.Tensor,
-        gt_overlap: torch.Tensor, riou_threshold: float) -> Dict:
-    """Dense source-only continuous max-RIoU supervision."""
+        gt_overlap: torch.Tensor, riou_threshold: float,
+        relative_margin: Optional[float] = None,
+        relative_min_gap: float = 0.10,
+        relative_max_pairs: int = 128) -> Dict:
+    """Dense source-only continuous max-RIoU and optional relative ranking."""
     if gt_overlap.ndim != 1 or gt_overlap.shape[0] != detections.shape[0]:
         raise ValueError('Candidate quality targets are misaligned')
     logits = quality_head(embedding, detections, source_ids)
     if logits.numel() == 0:
         zero = quality_head.output.bias.sum() * 0.0
-        return dict(
+        result = dict(
             loss_s7_candidate_quality=zero,
             s7_candidate_quality_count=0,
             s7_candidate_quality_usable_count=0,
             s7_candidate_quality_mean_target=0.0,
             s7_candidate_quality_mean_prediction=0.0)
+        if relative_margin is not None:
+            result.update(candidate_quality_relative_ranking_loss(
+                logits, gt_overlap, relative_margin, relative_min_gap,
+                relative_max_pairs))
+        return result
     target = gt_overlap.detach().float().clamp(0.0, 1.0)
     prediction = torch.sigmoid(logits)
     per_candidate = torch.nn.functional.smooth_l1_loss(
@@ -154,13 +224,18 @@ def candidate_quality_losses(
     # candidate as supervision; this is not a sparse gain-pair miner.
     weights = (1.0 + 3.0 * target).detach()
     loss = (per_candidate * weights).sum() / weights.sum().clamp_min(1e-6)
-    return dict(
+    result = dict(
         loss_s7_candidate_quality=loss,
         s7_candidate_quality_count=int(target.numel()),
         s7_candidate_quality_usable_count=int(
             (target >= float(riou_threshold)).sum().item()),
         s7_candidate_quality_mean_target=float(target.mean().item()),
         s7_candidate_quality_mean_prediction=float(prediction.mean().item()))
+    if relative_margin is not None:
+        result.update(candidate_quality_relative_ranking_loss(
+            logits, gt_overlap, relative_margin, relative_min_gap,
+            relative_max_pairs))
+    return result
 
 
 def _default_rotated_iou(current: torch.Tensor,
