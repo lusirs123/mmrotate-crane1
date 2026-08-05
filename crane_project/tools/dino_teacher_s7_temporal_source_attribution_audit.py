@@ -28,8 +28,9 @@ AUDIT_NAME = 'DINO S7 Temporal Source Attribution Audit V1'
 EXPECTED_EPOCH = 4
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(description=AUDIT_NAME)
+def parse_args(description=None):
+    parser = argparse.ArgumentParser(
+        description=(AUDIT_NAME if description is None else description))
     parser.add_argument(
         '--data-root', default='crane_project/data/crane_grab/')
     parser.add_argument('--source-result-json', required=True)

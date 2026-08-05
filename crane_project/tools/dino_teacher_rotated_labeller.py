@@ -672,7 +672,12 @@ def validate_args(args):
                 's7_temporal_association requires formal source train/val '
                 'datasets; modulus-split frames are not continuous video')
         if relative_quality:
-            if not args.init_checkpoint or args.resume_checkpoint \
+            if readonly_temporal_audit:
+                if args.init_checkpoint or args.resume_checkpoint:
+                    raise ValueError(
+                        'Relative candidate quality attribution is '
+                        'eval-only and cannot initialize or resume training')
+            elif not args.init_checkpoint or args.resume_checkpoint \
                     or args.eval_only_checkpoint:
                 raise ValueError(
                     'Relative candidate quality training requires an '
@@ -5754,8 +5759,8 @@ def main():
                         max_mcml=int(
                             getattr(args, 's7_source_max_mcml', 3))),
                     next_stage=(
-                        'evaluate_EKF_or_Kalman_postprocessing_after_source_'
-                        'inference_audit'))
+                        'run_stage3_source_only_student_training_after_'
+                        'source_gate'))
     else:
         (best_path, best_epoch,
          best_source_summary, best_source_small_summary,

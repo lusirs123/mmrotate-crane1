@@ -291,6 +291,27 @@ def test_relative_quality_is_included_in_temporal_loss_metadata():
             'loss_s7_candidate_quality_relative']
 
 
+def test_validate_relative_quality_allows_fixed_source_attribution(
+        tmp_path):
+    checkpoint = tmp_path / 'relative_epoch04.pth'
+    checkpoint.write_bytes(b'checkpoint')
+    args = _args(
+        tmp_path,
+        s7_residual=True, s7_temporal_association=True,
+        s7_temporal_quality_head=True, s7_temporal_relative_quality=True,
+        train_components='s7_temporal_association',
+        source_train_datasets=['train:train'],
+        source_val_datasets=['val:val'], source_small_repeat=1,
+        s7_source_min_full_top1=688, s7_source_min_small_top1=311,
+        s7_temporal_min_confirmations=1,
+        epochs=4, lr_steps=[2, 3], selection_epochs=[1, 2, 3, 4],
+        eval_only_checkpoint=str(checkpoint), skip_target_eval=True,
+        source_temporal_attribution_audit=True,
+        source_temporal_attribution_epoch=4)
+    labeller.validate_args(args)
+    assert args.eval_only_checkpoint == str(checkpoint)
+
+
 def test_validate_pairwise_v2_requires_matching_nms_policy(tmp_path):
     init_path = tmp_path / 'init.pth'
     init_path.write_bytes(b'checkpoint')
