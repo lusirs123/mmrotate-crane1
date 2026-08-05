@@ -43,6 +43,14 @@ def _args(tmp_path, **overrides):
         s7_temporal_relative_quality_min_gap=0.10,
         s7_temporal_relative_quality_max_pairs=128,
         s7_temporal_relative_base_epoch=4,
+        s7_temporal_student=False, s7_student_base_epoch=4,
+        s7_student_hidden=128, s7_student_quality_loss_weight=1.0,
+        s7_student_relative_loss_weight=0.5,
+        s7_student_distillation_weight=1.0,
+        s7_student_distillation_temperature=1.0,
+        s7_student_small_loss_weight=2.0,
+        s7_student_small_token_thr=4.0,
+        s7_student_teacher_result_json=None,
         s7_temporal_margin=0.5, s7_temporal_retention_weight=2.0,
         s7_temporal_gain_weight=1.0, s7_temporal_prior_weight=0.01,
         s7_temporal_max_candidates=100,
@@ -775,6 +783,28 @@ def test_s7_temporal_quality_trains_only_candidate_quality_head():
     assert not any(name.startswith('s7_score_calibrator.') for name in names)
 
 
+def test_s7_temporal_student_trains_only_separate_student_head():
+    class TinyHeads(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.native = torch.nn.Linear(2, 2)
+            self.s7_score_calibrator = labeller.S7ScoreCalibrator(-2.0)
+            self.s7_candidate_quality_head = (
+                labeller.temporal.S7CandidateQualityHead(2, 4))
+            self.s7_candidate_student_head = (
+                labeller.temporal.S7CandidateQualityHead(2, 4))
+            self.s7_protected_merge = True
+
+    heads = TinyHeads()
+    names = labeller.configure_trainable_components(
+        heads, 's7_temporal_student')
+    assert names
+    assert all(name.startswith('s7_candidate_student_head.') for name in names)
+    assert not any(name.startswith('s7_candidate_quality_head.')
+                   for name in names)
+    assert not heads.native.weight.requires_grad
+
+
 def test_s7_lane_architecture_records_bounded_arbitration(tmp_path):
     args = _args(
         tmp_path, s7_residual=True,
@@ -827,6 +857,18 @@ def test_s7_temporal_quality_architecture_records_dense_candidate_head(tmp_path)
         labeller.temporal.QUALITY_CUE_NAMES)
     assert architecture['temporal_quality_head'] is True
     assert architecture['temporal_quality_hidden'] == 24
+
+
+def test_s7_temporal_student_architecture_records_unified_student(tmp_path):
+    args = _args(
+        tmp_path, s7_residual=True,
+        train_components='s7_temporal_student',
+        s7_protected_merge=True, s7_temporal_association=True,
+        s7_temporal_quality_head=True, s7_temporal_relative_quality=True,
+        s7_temporal_min_confirmations=1, s7_temporal_student=True)
+    architecture = labeller.s7_architecture(args)
+    assert architecture['temporal_student'] is True
+    assert architecture['temporal_student_hidden'] == 128
 
 
 def test_s7_base_checkpoint_load_allows_only_new_branch_keys():
@@ -939,6 +981,41 @@ def test_s7_temporal_checkpoint_initialization_allows_only_new_scorer_keys():
     assert heads.enabled is False
     assert torch.all(heads.native.weight == 0.25)
     assert heads.s7_temporal_scorer.raw_weights.numel() == 6
+
+
+def test_s7_student_initialization_copies_frozen_teacher_exactly():
+    class TinyHeads(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.native = torch.nn.Linear(2, 2)
+            self.s7_candidate_quality_head = (
+                labeller.temporal.S7CandidateQualityHead(2, 4))
+            self.s7_candidate_student_head = (
+                labeller.temporal.S7CandidateQualityHead(2, 4))
+            self.enabled = True
+
+        def set_s7_inference_enabled(self, enabled):
+            self.enabled = bool(enabled)
+
+        def initialize_temporal_student_from_teacher(self):
+            self.s7_candidate_student_head.load_state_dict(
+                self.s7_candidate_quality_head.state_dict(), strict=True)
+
+    heads = TinyHeads()
+    with torch.no_grad():
+        heads.s7_candidate_quality_head.output.bias.fill_(0.75)
+    stored_state = {
+        name: tensor.detach().clone()
+        for name, tensor in heads.state_dict().items()
+        if not name.startswith('s7_candidate_student_head.')}
+    labeller.load_heads_checkpoint_state(
+        heads, {'heads_state_dict': stored_state},
+        allow_temporal_student_initialization=True)
+    teacher = heads.s7_candidate_quality_head.state_dict()
+    student = heads.s7_candidate_student_head.state_dict()
+    assert teacher.keys() == student.keys()
+    assert all(torch.equal(teacher[name], student[name]) for name in teacher)
+    assert heads.enabled is False
 
 
 def test_frozen_s7_component_loader_does_not_replace_native_or_calibrator(
@@ -1465,6 +1542,61 @@ def test_validate_temporal_attribution_is_fixed_eval_only_and_target_free(
             tmp_path, **dict(common, s7_temporal_quality_head=False)))
 
 
+def test_validate_stage3_student_is_source_only_and_exact_copy_compatible(
+        tmp_path):
+    checkpoint = tmp_path / 'phase2_epoch04.pth'
+    checkpoint.write_bytes(b'checkpoint')
+    teacher_result = tmp_path / 'phase2_train_result.json'
+    teacher_result.write_text(json.dumps(dict(
+        source=dict(
+            best_epoch=4,
+            best_validation_summary=dict(
+                frame_count=738, top1_hits=691, top1_mcml=3,
+                recall_at_100=738, top1_dfr_fraction_per_frame=0.08,
+                top1_aci=0.83),
+            best_small_validation_summary=dict(
+                frame_count=350, top1_hits=312, top1_mcml=3,
+                recall_at_100=350, top1_dfr_fraction_per_frame=0.08,
+                top1_aci=0.83)),
+        source_selected_checkpoint=str(checkpoint),
+        isolation=dict(train_components='s7_temporal_association'),
+        target_dev=None)))
+    args = _args(
+        tmp_path, s7_residual=True, s7_temporal_association=True,
+        s7_temporal_quality_head=True, s7_temporal_relative_quality=True,
+        s7_temporal_min_confirmations=1, s7_temporal_student=True,
+        train_components='s7_temporal_student',
+        source_train_datasets=['train:train'],
+        source_val_datasets=['val:val'],
+        source_small_repeat=1, s7_source_min_full_top1=688,
+        s7_source_min_small_top1=311, epochs=4, lr_steps=[2, 3],
+        selection_epochs=[1, 2, 3, 4],
+        init_checkpoint=str(checkpoint), skip_target_eval=True,
+        s7_student_teacher_result_json=str(teacher_result))
+    labeller.validate_args(args)
+    with pytest.raises(ValueError, match='hidden size must match'):
+        labeller.validate_args(_args(
+            tmp_path, **dict(vars(args), s7_student_hidden=64)))
+    with pytest.raises(ValueError, match='source-only'):
+        labeller.validate_args(_args(
+            tmp_path, **dict(vars(args), skip_target_eval=False)))
+
+
+def test_stage3_teacher_reproduction_gate_rejects_native_gate_only_match():
+    expected = dict(
+        frame_count=738, top1_hits=691, top1_mcml=3, recall_at_100=738,
+        top1_dfr_fraction_per_frame=0.08, top1_aci=0.83)
+    actual = dict(expected, top1_hits=688)
+    gate = labeller.stage3_teacher_reproduction_gate(
+        expected, dict(expected, frame_count=350, top1_hits=312,
+                       recall_at_100=350),
+        actual, dict(expected, frame_count=350, top1_hits=312,
+                     recall_at_100=350))
+    assert gate['passed'] is False
+    assert gate['checks']['full_top1_hits'] is False
+    assert gate['mismatches']['full_top1_hits']['expected'] == 691
+
+
 def test_validate_immediate_override_audit_is_explicit_and_readonly(tmp_path):
     checkpoint = tmp_path / 'labeller_epoch_04_source_only.pth'
     checkpoint.write_bytes(b'checkpoint')
@@ -1526,6 +1658,23 @@ def test_s7_temporal_relative_quality_config_declares_phase_two_b_protocol():
     assert training['target_read'] is False
     assert training['positive_promotion'] is False
     assert training['gain_replay'] is False
+
+
+def test_s7_temporal_student_config_declares_stage_three_isolation():
+    import runpy
+    root = pathlib.Path(__file__).resolve().parents[1]
+    config = runpy.run_path(str(root / 'crane_project/configs/'
+        'crane_symeood_scoped_dino_lowlight_s7_temporal_student_v1.py'))
+    head = config['model']['dino_rescue']['head']
+    training = config['s7_temporal_student_training']
+    assert head['s7_temporal_student'] is True
+    assert training['stage'] == 3
+    assert training['trainable_parameters'] == (
+        'student_candidate_quality_head_only')
+    assert training['source_only'] is True
+    assert training['target_read'] is False
+    assert training['inference_slice_routing'] is False
+    assert training['pseudo_label_training'] is False
 
 
 def test_s7_lane_arbitration_config_freezes_epoch1_merge_base():

@@ -238,6 +238,80 @@ def candidate_quality_losses(
     return result
 
 
+def candidate_student_losses(
+        student_head: S7CandidateQualityHead,
+        teacher_head: S7CandidateQualityHead,
+        embedding: torch.Tensor, detections: torch.Tensor,
+        source_ids: torch.Tensor, gt_overlap: torch.Tensor,
+        riou_threshold: float, quality_weight: float = 1.0,
+        relative_weight: float = 0.5, relative_margin: float = 0.25,
+        relative_min_gap: float = 0.10, relative_max_pairs: int = 128,
+        distillation_weight: float = 1.0,
+        distillation_temperature: float = 1.0,
+        supervised_frame_weight: float = 1.0) -> Dict:
+    """Train a source-only student while retaining the fixed quality teacher.
+
+    Source GT supplies continuous max-RIoU and same-frame relative-order
+    supervision. Bernoulli distillation keeps the student close to the
+    already source-gated phase-2 teacher. ``supervised_frame_weight`` may
+    emphasize a geometrically small source frame, but is never an inference
+    input.
+    """
+    positive = (
+        quality_weight, relative_weight, distillation_weight,
+        distillation_temperature, supervised_frame_weight)
+    if any(float(value) <= 0.0 for value in positive):
+        raise ValueError(
+            'Student loss weights and temperature must be positive')
+    with torch.no_grad():
+        teacher_logits = teacher_head(
+            embedding, detections, source_ids).detach()
+    losses = candidate_quality_losses(
+        student_head, embedding, detections, source_ids, gt_overlap,
+        riou_threshold=riou_threshold,
+        relative_margin=float(relative_margin),
+        relative_min_gap=float(relative_min_gap),
+        relative_max_pairs=int(relative_max_pairs))
+    student_logits = student_head(embedding, detections, source_ids)
+    if student_logits.numel() == 0:
+        distillation = student_head.output.bias.sum() * 0.0
+        mean_abs_error = 0.0
+        top1_agreement = 1.0
+    else:
+        temperature = float(distillation_temperature)
+        eps = 1e-6
+        teacher_probability = torch.sigmoid(
+            teacher_logits / temperature).clamp(eps, 1.0 - eps)
+        student_probability = torch.sigmoid(
+            student_logits / temperature).clamp(eps, 1.0 - eps)
+        distillation = (
+            teacher_probability * (
+                torch.log(teacher_probability)
+                - torch.log(student_probability))
+            + (1.0 - teacher_probability) * (
+                torch.log1p(-teacher_probability)
+                - torch.log1p(-student_probability))).mean()
+        distillation = distillation * (temperature ** 2)
+        mean_abs_error = float(
+            (student_logits.detach() - teacher_logits).abs().mean().item())
+        top1_agreement = float(
+            int(torch.argmax(student_logits.detach()).item())
+            == int(torch.argmax(teacher_logits).item()))
+    frame_weight = float(supervised_frame_weight)
+    losses['loss_s7_student_quality'] = (
+        losses.pop('loss_s7_candidate_quality')
+        * float(quality_weight) * frame_weight)
+    losses['loss_s7_student_relative'] = (
+        losses.pop('loss_s7_candidate_quality_relative')
+        * float(relative_weight) * frame_weight)
+    losses['loss_s7_student_distillation'] = (
+        distillation * float(distillation_weight))
+    losses['s7_student_teacher_mean_abs_logit_error'] = mean_abs_error
+    losses['s7_student_teacher_top1_agreement'] = top1_agreement
+    losses['s7_student_supervised_frame_weight'] = frame_weight
+    return losses
+
+
 def _default_rotated_iou(current: torch.Tensor,
                          previous: torch.Tensor) -> torch.Tensor:
     from mmcv.ops import box_iou_rotated

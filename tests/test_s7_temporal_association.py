@@ -94,6 +94,29 @@ def test_candidate_quality_losses_can_add_relative_ranking_term():
     assert torch.isfinite(head.output.weight.grad).all()
 
 
+def test_candidate_student_combines_source_quality_relative_and_distillation():
+    teacher = temporal.S7CandidateQualityHead(embedding_channels=4, hidden=8)
+    student = temporal.S7CandidateQualityHead(embedding_channels=4, hidden=8)
+    with torch.no_grad():
+        teacher.output.bias.fill_(0.5)
+    detections = torch.tensor([
+        [10.0, 10.0, 8.0, 4.0, 0.0, 0.4],
+        [11.0, 10.0, 8.0, 4.0, 0.1, 0.9],
+        [12.0, 10.0, 7.0, 5.0, 0.2, 0.7]])
+    losses = temporal.candidate_student_losses(
+        student, teacher, torch.randn(3, 4), detections,
+        torch.tensor([0, 0, 1]), torch.tensor([0.8, 0.3, 0.0]),
+        riou_threshold=0.5, supervised_frame_weight=2.0)
+    total = (losses['loss_s7_student_quality']
+             + losses['loss_s7_student_relative']
+             + losses['loss_s7_student_distillation'])
+    total.backward()
+    assert student.output.weight.grad is not None
+    assert torch.isfinite(student.output.weight.grad).all()
+    assert teacher.output.weight.grad is None
+    assert losses['s7_student_supervised_frame_weight'] == pytest.approx(2.0)
+
+
 def test_temporal_pair_loss_updates_only_relative_association_weights():
     scorer = temporal.S7TemporalAssociationScorer()
     cues = torch.tensor([

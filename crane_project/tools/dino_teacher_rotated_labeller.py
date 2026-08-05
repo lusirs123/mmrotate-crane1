@@ -36,7 +36,7 @@ from crane_project.utils import s7_temporal_association as temporal  # noqa: E40
 
 
 LABELLER_NAME = 'Frozen DINOv2 Oriented RPN/ROI Source Labeller V1'
-PROTOCOL_VERSION = 20
+PROTOCOL_VERSION = 22
 PAIRWISE_V2_MAX_EPOCHS = 4
 S7_QUALITY_MIN_FULL_TOP1 = 688
 S7_QUALITY_MIN_SMALL_TOP1 = 311
@@ -144,7 +144,7 @@ def parse_args():
         choices=['all', 'roi_cls', 'roi_cls_pairwise',
                  'roi_cls_pairwise_v2', 's7_rpn', 's7_merge',
                  's7_lane_arbitration', 's7_quality_suppression',
-                 's7_temporal_association'],
+                 's7_temporal_association', 's7_temporal_student'],
         default='all',
         help=('Train all RPN/ROI heads, or only the final ROI classifier '
               'fc_cls while keeping RPN, shared ROI FCs, and bbox regression '
@@ -163,7 +163,10 @@ def parse_args():
               'fits only six positive causal association cue weights. The '
               'optional quality-head flag adds dense continuous candidate '
               'max-RIoU supervision. The relative-quality flag adds a '
-              'source-only same-frame pairwise ranking term on that head.'))
+              'source-only same-frame pairwise ranking term on that head. '
+              's7_temporal_student freezes the source-gated phase-2 teacher '
+              'and trains only a copied student quality head with source GT, '
+              'relative ranking, and teacher distillation.'))
     parser.add_argument(
         '--source-small-repeat', type=int, default=1,
         help='Repeat source-train frames in the lower short-token tertile.')
@@ -233,6 +236,25 @@ def parse_args():
     parser.add_argument(
         '--s7-temporal-relative-base-epoch', type=int, default=4,
         help='Epoch of the source-gated pointwise quality checkpoint.')
+    parser.add_argument('--s7-temporal-student', action='store_true')
+    parser.add_argument('--s7-student-base-epoch', type=int, default=4)
+    parser.add_argument('--s7-student-hidden', type=int, default=128)
+    parser.add_argument('--s7-student-quality-loss-weight', type=float,
+                        default=1.0)
+    parser.add_argument('--s7-student-relative-loss-weight', type=float,
+                        default=0.5)
+    parser.add_argument('--s7-student-distillation-weight', type=float,
+                        default=1.0)
+    parser.add_argument('--s7-student-distillation-temperature', type=float,
+                        default=1.0)
+    parser.add_argument('--s7-student-small-loss-weight', type=float,
+                        default=2.0)
+    parser.add_argument('--s7-student-small-token-thr', type=float,
+                        default=4.0)
+    parser.add_argument(
+        '--s7-student-teacher-result-json', default=None,
+        help=('Stage-2 source result used to verify that the copied stage-3 '
+              'teacher reproduces its source summaries before optimization.'))
     parser.add_argument('--s7-temporal-base-epoch', type=int, default=1)
     parser.add_argument('--s7-temporal-margin', type=float, default=0.5)
     parser.add_argument(
@@ -330,7 +352,8 @@ def validate_args(args):
     args.s7_anchor_sizes = sorted(set(s7_anchor_sizes))
     s7_training_mode = args.train_components in (
         's7_rpn', 's7_merge', 's7_lane_arbitration',
-        's7_quality_suppression', 's7_temporal_association')
+        's7_quality_suppression', 's7_temporal_association',
+        's7_temporal_student')
     if s7_enabled != s7_training_mode:
         raise ValueError(
             '--s7-residual and an S7 train-components mode must be enabled '
@@ -419,6 +442,34 @@ def validate_args(args):
             args, 's7_temporal_relative_base_epoch', 4)) <= 0:
         raise ValueError(
             '--s7-temporal-relative-base-epoch must be positive')
+    student_mode = args.train_components == 's7_temporal_student'
+    if bool(getattr(args, 's7_temporal_student', False)) != student_mode:
+        raise ValueError(
+            '--s7-temporal-student and its train-components mode must be '
+            'enabled together during stage-3 training')
+    student_positive = (
+        getattr(args, 's7_student_base_epoch', 4),
+        getattr(args, 's7_student_hidden', 128),
+        getattr(args, 's7_student_quality_loss_weight', 1.0),
+        getattr(args, 's7_student_relative_loss_weight', 0.5),
+        getattr(args, 's7_student_distillation_weight', 1.0),
+        getattr(args, 's7_student_distillation_temperature', 1.0),
+        getattr(args, 's7_student_small_loss_weight', 2.0),
+        getattr(args, 's7_student_small_token_thr', 4.0))
+    if student_mode and any(float(value) <= 0.0
+                            for value in student_positive):
+        raise ValueError('S7 temporal student settings must be positive')
+    if student_mode and int(getattr(
+            args, 's7_student_hidden', 128)) != int(getattr(
+                args, 's7_temporal_quality_hidden', 128)):
+        raise ValueError(
+            'S7 temporal student hidden size must match the phase-2 teacher '
+            'for exact-copy initialization')
+    if student_mode and not (relative_quality and bool(getattr(
+            args, 's7_temporal_quality_head', False))):
+        raise ValueError(
+            's7_temporal_student requires the phase-2 quality and relative '
+            'quality architecture')
     if (bool(getattr(args, 's7_lane_arbitration', False))
             and (args.train_components == 's7_quality_suppression'
                  or bool(getattr(args, 's7_quality_suppression', False)))):
@@ -426,7 +477,8 @@ def validate_args(args):
             'S7 positive lane arbitration and non-positive quality '
             'suppression are mutually exclusive')
     temporal_enabled = bool(getattr(args, 's7_temporal_association', False))
-    if temporal_enabled != (args.train_components == 's7_temporal_association'):
+    if temporal_enabled != (args.train_components in (
+            's7_temporal_association', 's7_temporal_student')):
         raise ValueError(
             '--s7-temporal-association and its train-components mode must be '
             'enabled together during temporal fitting')
@@ -479,7 +531,8 @@ def validate_args(args):
             [2, 3] if args.train_components in (
                 'roi_cls_pairwise_v2', 's7_rpn', 's7_merge',
                 's7_lane_arbitration', 's7_quality_suppression',
-                's7_temporal_association') else [5, 7])
+                's7_temporal_association', 's7_temporal_student')
+            else [5, 7])
     lr_steps = sorted(set(int(value) for value in args.lr_steps))
     if any(value <= 0 or value >= args.epochs for value in lr_steps):
         raise ValueError('--lr-steps must be within the training schedule')
@@ -585,6 +638,41 @@ def validate_args(args):
     if args.init_checkpoint and not os.path.isfile(args.init_checkpoint):
         raise ValueError('Init checkpoint does not exist: {}'.format(
             args.init_checkpoint))
+    if student_mode:
+        teacher_result_json = getattr(
+            args, 's7_student_teacher_result_json', None)
+        if not teacher_result_json or not os.path.isfile(teacher_result_json):
+            raise ValueError(
+                's7_temporal_student requires the phase-2 source result JSON')
+        with open(teacher_result_json, 'r') as handle:
+            teacher_result = json.load(handle)
+        teacher_source = teacher_result.get('source') or {}
+        teacher_isolation = teacher_result.get('isolation') or {}
+        if teacher_result.get('target_dev') is not None:
+            raise ValueError(
+                'Stage-3 teacher result must not contain target-dev output')
+        if int(teacher_source.get('best_epoch', -1)) != int(
+                args.s7_student_base_epoch):
+            raise ValueError(
+                'Stage-3 teacher result must select phase-2 epoch {}; found '
+                '{}'.format(args.s7_student_base_epoch,
+                             teacher_source.get('best_epoch')))
+        if teacher_isolation.get('train_components') != (
+                's7_temporal_association'):
+            raise ValueError(
+                'Stage-3 teacher result must come from phase-2 '
+                's7_temporal_association training')
+        selected = teacher_result.get('source_selected_checkpoint')
+        if (not selected or not args.init_checkpoint
+                or os.path.realpath(selected) != os.path.realpath(
+                    args.init_checkpoint)):
+            raise ValueError(
+                'Stage-3 teacher result must select --init-checkpoint')
+        if not teacher_source.get('best_validation_summary') or not (
+                teacher_source.get('best_small_validation_summary')):
+            raise ValueError(
+                'Stage-3 teacher result lacks phase-2 source summaries')
+        args.s7_student_teacher_result = teacher_result
     roi_cls_modes = ('roi_cls', 'roi_cls_pairwise',
                      'roi_cls_pairwise_v2')
     if (args.train_components in roi_cls_modes
@@ -596,7 +684,8 @@ def validate_args(args):
             .format(args.train_components))
     if (args.train_components in (
             's7_rpn', 's7_merge', 's7_lane_arbitration',
-            's7_quality_suppression', 's7_temporal_association')
+            's7_quality_suppression', 's7_temporal_association',
+            's7_temporal_student')
             and not (args.init_checkpoint or args.resume_checkpoint
                      or args.eval_only_checkpoint)):
         raise ValueError(
@@ -655,7 +744,8 @@ def validate_args(args):
             raise ValueError(
                 's7_quality_suppression requires '
                 '--s7-source-max-mcml <= 3')
-    if args.train_components == 's7_temporal_association':
+    if args.train_components in (
+            's7_temporal_association', 's7_temporal_student'):
         if args.source_retain_max_top1_drop != 0:
             raise ValueError(
                 's7_temporal_association requires exact source retention')
@@ -671,7 +761,13 @@ def validate_args(args):
             raise ValueError(
                 's7_temporal_association requires formal source train/val '
                 'datasets; modulus-split frames are not continuous video')
-        if relative_quality:
+        if student_mode and (not args.init_checkpoint
+                             or args.resume_checkpoint
+                             or args.eval_only_checkpoint):
+            raise ValueError(
+                's7_temporal_student requires a fresh phase-2 init '
+                'checkpoint and cannot resume or run eval-only')
+        if relative_quality and not student_mode:
             if readonly_temporal_audit:
                 if args.init_checkpoint or args.resume_checkpoint:
                     raise ValueError(
@@ -702,9 +798,15 @@ def validate_args(args):
             raise ValueError(
                 's7_temporal_association requires '
                 '--s7-source-max-mcml <= 3')
+        if student_mode:
+            if int(args.source_small_repeat) != 1:
+                raise ValueError(
+                    's7_temporal_student uses loss weighting and forbids '
+                    'source frame repetition')
     if args.train_components in (
             's7_rpn', 's7_merge', 's7_lane_arbitration',
-            's7_quality_suppression', 's7_temporal_association') and args.epochs > 4:
+            's7_quality_suppression', 's7_temporal_association',
+            's7_temporal_student') and args.epochs > 4:
         raise ValueError(
             'S7 source-only stages are limited to 4 epochs; extend only after '
             'source validation shows the selected component is improving')
@@ -795,6 +897,15 @@ def configure_trainable_components(heads, train_components: str) -> List[str]:
         else:
             for parameter in heads.s7_temporal_scorer.parameters():
                 parameter.requires_grad_(True)
+    elif train_components == 's7_temporal_student':
+        if (not getattr(heads, 's7_protected_merge', False)
+                or getattr(heads, 's7_candidate_quality_head', None) is None
+                or getattr(heads, 's7_candidate_student_head', None) is None):
+            raise RuntimeError(
+                'S7 temporal student requires the fixed phase-2 teacher and '
+                'a separate student head')
+        for parameter in heads.s7_candidate_student_head.parameters():
+            parameter.requires_grad_(True)
     else:
         raise ValueError('Unsupported train-components: {}'.format(
             train_components))
@@ -861,6 +972,15 @@ def optimization_loss_total(losses: Dict, train_components: str):
             raise RuntimeError('S7 temporal losses missing: {}'.format(
                 ', '.join(missing)))
         return loss_total({name: losses[name] for name in required})
+    if train_components == 's7_temporal_student':
+        required = (
+            'loss_s7_student_quality', 'loss_s7_student_relative',
+            'loss_s7_student_distillation')
+        missing = [name for name in required if name not in losses]
+        if missing:
+            raise RuntimeError('S7 student losses missing: {}'.format(
+                ', '.join(missing)))
+        return loss_total({name: losses[name] for name in required})
     if train_components in ('roi_cls_pairwise', 'roi_cls_pairwise_v2'):
         required = ('loss_cls', 'loss_roi_pairwise', 'loss_roi_retention')
         missing = [name for name in required if name not in losses]
@@ -901,6 +1021,10 @@ def optimization_loss_component_names(
         return [
             'loss_s7_temporal_retention', 'loss_s7_temporal_gain',
             'loss_s7_temporal_prior']
+    if train_components == 's7_temporal_student':
+        return [
+            'loss_s7_student_quality', 'loss_s7_student_relative',
+            'loss_s7_student_distillation']
     if train_components in ('roi_cls_pairwise', 'roi_cls_pairwise_v2'):
         return ['loss_cls', 'loss_roi_pairwise', 'loss_roi_retention']
     if train_components == 'roi_cls':
@@ -2021,7 +2145,8 @@ class FrozenDinoRotatedHeads(nn.Module):
             args, 's7_protected_merge', False) or getattr(
             args, 'train_components', '') in (
                     's7_merge', 's7_lane_arbitration',
-                    's7_quality_suppression', 's7_temporal_association'))
+                    's7_quality_suppression', 's7_temporal_association',
+                    's7_temporal_student'))
         self.s7_lane_arbitration = bool(getattr(
             args, 's7_lane_arbitration', False) or getattr(
                 args, 'train_components', '') == 's7_lane_arbitration')
@@ -2030,7 +2155,11 @@ class FrozenDinoRotatedHeads(nn.Module):
                 args, 'train_components', '') == 's7_quality_suppression')
         self.s7_temporal_association = bool(getattr(
             args, 's7_temporal_association', False) or getattr(
-            args, 'train_components', '') == 's7_temporal_association')
+            args, 'train_components', '') in (
+                's7_temporal_association', 's7_temporal_student'))
+        self.s7_temporal_student = bool(getattr(
+            args, 's7_temporal_student', False) or getattr(
+                args, 'train_components', '') == 's7_temporal_student')
         self.s7_temporal_quality_head_enabled = bool(getattr(
             args, 's7_temporal_quality_head', False))
         if (self.s7_temporal_quality_head_enabled
@@ -2078,6 +2207,11 @@ class FrozenDinoRotatedHeads(nn.Module):
                     int(getattr(args, 'roi_fc_channels', 1024)),
                     int(getattr(args, 's7_temporal_quality_hidden', 128)))
                 if self.s7_temporal_quality_head_enabled else None)
+            self.s7_candidate_student_head = (
+                temporal.S7CandidateQualityHead(
+                    int(getattr(args, 'roi_fc_channels', 1024)),
+                    int(getattr(args, 's7_student_hidden', 128)))
+                if self.s7_temporal_student else None)
         else:
             self.s7_readout = None
             self.s7_rpn_head = None
@@ -2087,6 +2221,7 @@ class FrozenDinoRotatedHeads(nn.Module):
             self.s7_quality_suppressor = None
             self.s7_temporal_scorer = None
             self.s7_candidate_quality_head = None
+            self.s7_candidate_student_head = None
         self._roi_cls_teacher_weight = None
         self._roi_cls_teacher_bias = None
 
@@ -2223,15 +2358,25 @@ class FrozenDinoRotatedHeads(nn.Module):
             embeddings = embeddings[order]
             source_ids = source_ids[order]
         quality_logits = None
+        teacher_quality_logits = None
         if (bool(getattr(self, 's7_temporal_quality_head_enabled', False))
                 and getattr(self, 's7_candidate_quality_head', None) is not None):
-            quality_logits = self.s7_candidate_quality_head(
+            teacher_quality_logits = self.s7_candidate_quality_head(
                 embeddings, detections, source_ids).detach()
+            quality_logits = teacher_quality_logits
+            if bool(getattr(self, 's7_temporal_student', False)):
+                student_head = getattr(
+                    self, 's7_candidate_student_head', None)
+                if student_head is None:
+                    raise RuntimeError('Temporal student head is missing')
+                quality_logits = student_head(
+                    embeddings, detections, source_ids).detach()
         self._last_temporal_pool = dict(
             detections=detections.detach(),
             embeddings=embeddings.detach(),
             source_ids=source_ids.detach(),
             quality_logits=quality_logits,
+            teacher_quality_logits=teacher_quality_logits,
             candidate_limit=int(getattr(
                 self._args, 's7_temporal_max_candidates', 100)))
         self._last_candidate_merge = dict(
@@ -2705,6 +2850,75 @@ class FrozenDinoRotatedHeads(nn.Module):
                 * float(relative_weight))
         return losses
 
+    def initialize_temporal_student_from_teacher(self):
+        """Copy the selected phase-2 teacher into the stage-3 student."""
+        teacher = getattr(self, 's7_candidate_quality_head', None)
+        student = getattr(self, 's7_candidate_student_head', None)
+        if teacher is None or student is None:
+            raise RuntimeError(
+                'Temporal teacher/student heads are not configured')
+        student.load_state_dict(teacher.state_dict(), strict=True)
+
+    def forward_s7_temporal_student_train(
+            self, feature: torch.Tensor, img_meta: Dict,
+            gt_boxes: torch.Tensor, riou_thr: float,
+            quality_weight: float, relative_weight: float,
+            relative_margin: float, relative_min_gap: float,
+            relative_max_pairs: int, distillation_weight: float,
+            distillation_temperature: float, small_loss_weight: float,
+            small_token_threshold: float, max_candidates: int) -> Dict:
+        """Fit only the stage-3 source student on the fixed phase-2 pool."""
+        from mmcv.ops import box_iou_rotated
+
+        teacher = getattr(self, 's7_candidate_quality_head', None)
+        student = getattr(self, 's7_candidate_student_head', None)
+        if (not self.s7_protected_merge
+                or self.s7_score_calibrator is None
+                or teacher is None or student is None):
+            raise RuntimeError(
+                'Temporal student training requires the fixed phase-2 '
+                'teacher and protected affine candidate pool')
+        with torch.no_grad():
+            self._protected_merge_detections(
+                feature, img_meta, rescale=False)
+            pool = self._last_temporal_pool
+            if pool is None:
+                raise RuntimeError('Temporal candidate pool was not produced')
+            limit = min(int(max_candidates), int(pool['detections'].shape[0]))
+            detections = pool['detections'][:limit]
+            embeddings = pool['embeddings'][:limit]
+            source_ids = pool['source_ids'][:limit]
+            if gt_boxes.shape[0] and detections.shape[0]:
+                overlap = box_iou_rotated(
+                    detections[:, :5].float(), gt_boxes.float()).max(
+                        dim=1).values
+            else:
+                overlap = detections.new_zeros((detections.shape[0],))
+            if gt_boxes.shape[0]:
+                short_tokens = float(
+                    gt_boxes[:, 2:4].abs().min().item()) / float(
+                        getattr(self._args, 'patch_size', 14))
+            else:
+                short_tokens = float('inf')
+            frame_weight = (
+                float(small_loss_weight)
+                if short_tokens <= float(small_token_threshold) else 1.0)
+        losses = temporal.candidate_student_losses(
+            student, teacher, embeddings, detections, source_ids, overlap,
+            riou_threshold=riou_thr,
+            quality_weight=quality_weight,
+            relative_weight=relative_weight,
+            relative_margin=relative_margin,
+            relative_min_gap=relative_min_gap,
+            relative_max_pairs=relative_max_pairs,
+            distillation_weight=distillation_weight,
+            distillation_temperature=distillation_temperature,
+            supervised_frame_weight=frame_weight)
+        losses['s7_student_small_source_frame'] = int(frame_weight > 1.0)
+        losses['s7_student_short_tokens'] = (
+            0.0 if not math.isfinite(short_tokens) else short_tokens)
+        return losses
+
     def forward_roi_cls_hard_train(
             self, feature: torch.Tensor, img_meta: Dict,
             gt_boxes: torch.Tensor, max_samples: int,
@@ -3131,12 +3345,13 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
     heads.train()
     if args.train_components in (
             's7_rpn', 's7_merge', 's7_lane_arbitration',
-            's7_quality_suppression', 's7_temporal_association'):
+            's7_quality_suppression', 's7_temporal_association',
+            's7_temporal_student'):
         heads.rpn_head.eval()
         heads.roi_head.eval()
     if args.train_components in (
             's7_merge', 's7_lane_arbitration', 's7_quality_suppression',
-            's7_temporal_association'):
+            's7_temporal_association', 's7_temporal_student'):
         heads.s7_readout.eval()
         heads.s7_rpn_head.eval()
         heads.s7_score_calibrator.eval()
@@ -3152,10 +3367,15 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
             heads.s7_candidate_quality_head.train()
         else:
             heads.s7_temporal_scorer.train()
+    elif args.train_components == 's7_temporal_student':
+        heads.s7_temporal_scorer.eval()
+        heads.s7_candidate_quality_head.eval()
+        heads.s7_candidate_student_head.train()
     if head_device.type == 'cuda':
         torch.cuda.reset_peak_memory_stats(head_device)
     ordered = list(records)
-    if args.train_components == 's7_temporal_association':
+    if args.train_components in (
+            's7_temporal_association', 's7_temporal_student'):
         ordered = sorted(
             ordered, key=lambda row: (
                 str(row.get('split', '')), str(row.get('seq', '')),
@@ -3245,6 +3465,22 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                     gain_weight=args.s7_temporal_gain_weight,
                     prior_weight=args.s7_temporal_prior_weight,
                     max_candidates=args.s7_temporal_max_candidates)
+        elif args.train_components == 's7_temporal_student':
+            output = heads.forward_s7_temporal_student_train(
+                feature, img_meta, gt_boxes,
+                riou_thr=args.riou_thr,
+                quality_weight=args.s7_student_quality_loss_weight,
+                relative_weight=args.s7_student_relative_loss_weight,
+                relative_margin=args.s7_temporal_relative_quality_margin,
+                relative_min_gap=args.s7_temporal_relative_quality_min_gap,
+                relative_max_pairs=(
+                    args.s7_temporal_relative_quality_max_pairs),
+                distillation_weight=args.s7_student_distillation_weight,
+                distillation_temperature=(
+                    args.s7_student_distillation_temperature),
+                small_loss_weight=args.s7_student_small_loss_weight,
+                small_token_threshold=args.s7_student_small_token_thr,
+                max_candidates=args.s7_temporal_max_candidates)
         elif args.train_components == 'roi_cls':
             output = heads.forward_roi_cls_hard_train(
                 feature, img_meta, gt_boxes, args.roi_samples,
@@ -3396,6 +3632,17 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                         int(round(metric_sums.get(
                             's7_temporal_gain_pair_count', 0.0))),
                         heads.s7_temporal_scorer.state_summary())
+            elif args.train_components == 's7_temporal_student':
+                message += (
+                    ' student_candidates={} small_frames={} '
+                    'teacher_top1_agreement={:.4f}').format(
+                    int(round(metric_sums.get(
+                        's7_candidate_quality_count', 0.0))),
+                    int(round(metric_sums.get(
+                        's7_student_small_source_frame', 0.0))),
+                    float(metric_sums.get(
+                        's7_student_teacher_top1_agreement', 0.0))
+                    / float(max(1, index + 1)))
             print(message)
         del feature, gt_boxes, gt_labels, total
     optimized_components = optimization_loss_component_names(
@@ -4497,7 +4744,8 @@ def s7_source_selection_gate(
         small_mcml_absolute=(
             int(candidate_small['top1_mcml'])
             <= int(getattr(args, 's7_source_max_mcml', 3))))
-    if getattr(args, 'train_components', '') == 's7_temporal_association':
+    if getattr(args, 'train_components', '') in (
+            's7_temporal_association', 's7_temporal_student'):
         baseline_dfr = baseline_full.get('top1_dfr_fraction_per_frame')
         candidate_dfr = candidate_full.get('top1_dfr_fraction_per_frame')
         baseline_aci = baseline_full.get('top1_aci')
@@ -4514,6 +4762,62 @@ def s7_source_selection_gate(
                 baseline_aci is not None and candidate_aci is not None
                 and float(candidate_aci) + 1e-12 >= float(baseline_aci)))
     return dict(checks=checks, passed=all(checks.values()))
+
+
+STAGE3_TEACHER_EXACT_FIELDS = (
+    'frame_count', 'top1_hits', 'top1_mcml', 'recall_at_100',
+    'top1_dfr_fraction_per_frame', 'top1_aci')
+STAGE3_TEACHER_FLOAT_FIELDS = frozenset((
+    'top1_dfr_fraction_per_frame', 'top1_aci'))
+
+
+def stage3_teacher_reproduction_gate(
+        expected_full: Dict, expected_small: Dict,
+        actual_full: Dict, actual_small: Dict,
+        tolerance: float = 1e-9) -> Dict:
+    """Require the copied stage-2 teacher to reproduce source evidence.
+
+    The ordinary S7 source gate is intentionally relative to native S14.  It
+    is therefore insufficient for stage 3 initialization: a copied teacher
+    could lose part of the phase-2 gain and still satisfy the native gate.
+    This guard compares the actual first inference with the locked phase-2
+    result before any student optimizer step is allowed.
+    """
+    checks = {}
+    mismatches = {}
+    for prefix, expected, actual in (
+            ('full', expected_full or {}, actual_full or {}),
+            ('small', expected_small or {}, actual_small or {})):
+        for field in STAGE3_TEACHER_EXACT_FIELDS:
+            name = '{}_{}'.format(prefix, field)
+            expected_value = expected.get(field)
+            actual_value = actual.get(field)
+            if field in STAGE3_TEACHER_FLOAT_FIELDS:
+                passed = (
+                    expected_value is not None
+                    and actual_value is not None
+                    and math.isclose(
+                        float(actual_value), float(expected_value),
+                        rel_tol=0.0, abs_tol=float(tolerance)))
+            else:
+                passed = (expected_value is not None
+                          and actual_value is not None
+                          and int(actual_value) == int(expected_value))
+            checks[name] = bool(passed)
+            if not passed:
+                mismatches[name] = dict(
+                    expected=expected_value, actual=actual_value)
+    return dict(
+        passed=all(checks.values()), checks=checks, mismatches=mismatches,
+        tolerance=float(tolerance),
+        expected=dict(full={field: (expected_full or {}).get(field)
+                             for field in STAGE3_TEACHER_EXACT_FIELDS},
+                      small={field: (expected_small or {}).get(field)
+                             for field in STAGE3_TEACHER_EXACT_FIELDS}),
+        actual=dict(full={field: (actual_full or {}).get(field)
+                           for field in STAGE3_TEACHER_EXACT_FIELDS},
+                    small={field: (actual_small or {}).get(field)
+                           for field in STAGE3_TEACHER_EXACT_FIELDS}))
 
 
 def make_target_decision(summary: Dict, args,
@@ -4542,7 +4846,8 @@ def s7_architecture(args) -> Dict:
         args, 's7_protected_merge', False) or getattr(
         args, 'train_components', '') in (
                 's7_merge', 's7_lane_arbitration',
-                's7_quality_suppression', 's7_temporal_association'))
+                's7_quality_suppression', 's7_temporal_association',
+                's7_temporal_student'))
     lane_arbitration = bool(getattr(
         args, 's7_lane_arbitration', False) or getattr(
             args, 'train_components', '') == 's7_lane_arbitration')
@@ -4551,9 +4856,13 @@ def s7_architecture(args) -> Dict:
             args, 'train_components', '') == 's7_quality_suppression')
     temporal_association = bool(getattr(
         args, 's7_temporal_association', False) or getattr(
-            args, 'train_components', '') == 's7_temporal_association')
+            args, 'train_components', '') in (
+                's7_temporal_association', 's7_temporal_student'))
     temporal_quality_head = bool(getattr(
         args, 's7_temporal_quality_head', False))
+    temporal_student = bool(getattr(
+        args, 's7_temporal_student', False) or getattr(
+            args, 'train_components', '') == 's7_temporal_student')
     return dict(
         enabled=enabled,
         protected_merge=(protected_merge if enabled else False),
@@ -4606,6 +4915,13 @@ def s7_architecture(args) -> Dict:
             args, 's7_temporal_quality_hidden', 128))
             if temporal_quality_head and temporal_association and enabled
             and protected_merge else None),
+        temporal_student=(
+            temporal_student if temporal_association and enabled
+            and protected_merge else False),
+        temporal_student_hidden=(int(getattr(
+            args, 's7_student_hidden', 128))
+            if temporal_student and temporal_association and enabled
+            and protected_merge else None),
         temporal_max_candidates=(int(getattr(
             args, 's7_temporal_max_candidates', 100))
             if temporal_association and enabled and protected_merge else None),
@@ -4619,12 +4935,14 @@ def load_heads_checkpoint_state(heads, payload: Dict,
                                 allow_s7_base_initialization: bool = False,
                                 allow_lane_arbitration_initialization: bool = False,
                                 allow_quality_suppression_initialization: bool = False,
-                                allow_temporal_association_initialization: bool = False):
+                                allow_temporal_association_initialization: bool = False,
+                                allow_temporal_student_initialization: bool = False):
     """Load a checkpoint while allowing only explicitly new branch keys."""
     if (allow_s7_base_initialization
             or allow_lane_arbitration_initialization
             or allow_quality_suppression_initialization
-            or allow_temporal_association_initialization):
+            or allow_temporal_association_initialization
+            or allow_temporal_student_initialization):
         incompatible = heads.load_state_dict(
             payload['heads_state_dict'], strict=False)
         allowed_prefixes = []
@@ -4638,6 +4956,8 @@ def load_heads_checkpoint_state(heads, payload: Dict,
         if allow_temporal_association_initialization:
             allowed_prefixes.extend((
                 's7_temporal_scorer.', 's7_candidate_quality_head.'))
+        if allow_temporal_student_initialization:
+            allowed_prefixes.append('s7_candidate_student_head.')
         disallowed_missing = [
             name for name in incompatible.missing_keys
             if not any(name.startswith(prefix) for prefix in allowed_prefixes)]
@@ -4647,6 +4967,8 @@ def load_heads_checkpoint_state(heads, payload: Dict,
                 'unexpected={}'.format(
                     disallowed_missing, incompatible.unexpected_keys))
         heads.set_s7_inference_enabled(False)
+        if allow_temporal_student_initialization:
+            heads.initialize_temporal_student_from_teacher()
         return
     heads.load_state_dict(payload['heads_state_dict'], strict=True)
     enabled = bool(payload.get(
@@ -4716,7 +5038,7 @@ def source_selected_checkpoint_gate(
         positive_best_epoch=int(payload.get('best_epoch', 0)) > 0,
         temporal_training_protocol=(
             (payload.get('training_protocol') or {}).get('train_components')
-            == 's7_temporal_association'),
+            in ('s7_temporal_association', 's7_temporal_student')),
         stored_source_selection_gate=(
             payload.get('source_selection_gate_passed') is True),
         exact_old_correct_retention=(
@@ -4758,6 +5080,9 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
             None if source_selection_gate_passed is None
             else bool(source_selection_gate_passed)),
         source_exact_retention=source_exact_retention,
+        s7_student_teacher_reproduction=(
+            getattr(args, 's7_student_teacher_reproduction_gate', None)
+            if args.train_components == 's7_temporal_student' else None),
         source_baseline_val_summary=source_baseline_summary,
         source_baseline_small_val_summary=source_baseline_small_summary,
         source_baseline_correct_keys=(
@@ -4816,7 +5141,8 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
             s7_source_gate=(
                 None if args.train_components not in (
                     's7_rpn', 's7_merge', 's7_lane_arbitration',
-                    's7_quality_suppression', 's7_temporal_association')
+                    's7_quality_suppression', 's7_temporal_association',
+                    's7_temporal_student')
                 else dict(
                     min_full_top1=int(getattr(
                         args, 's7_source_min_full_top1', 677)),
@@ -4881,7 +5207,8 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                     native_nms_protected=True,
                     proposal_sources=['native_s14', 'supplement_s7'])),
             s7_temporal_association=(
-                None if args.train_components != 's7_temporal_association'
+                None if args.train_components not in (
+                    's7_temporal_association', 's7_temporal_student')
                 else dict(
                     base_checkpoint=(
                         None if not getattr(args, 'init_checkpoint', None)
@@ -4940,6 +5267,29 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                     inference_state='strictly_previous_selected_candidate',
                     reset_on=['sequence_change', 'frame_gap'],
                     native_fallback=True))),
+            s7_temporal_student=(
+                None if args.train_components != 's7_temporal_student'
+                else dict(
+                    base_checkpoint=os.path.abspath(args.init_checkpoint),
+                    base_epoch=int(args.s7_student_base_epoch),
+                    teacher='frozen_phase2_relative_quality_epoch4',
+                    student_head='candidate_quality_head_copy',
+                    quality_loss_weight=float(
+                        args.s7_student_quality_loss_weight),
+                    relative_loss_weight=float(
+                        args.s7_student_relative_loss_weight),
+                    distillation_weight=float(
+                        args.s7_student_distillation_weight),
+                    distillation_temperature=float(
+                        args.s7_student_distillation_temperature),
+                    small_loss_weight=float(
+                        args.s7_student_small_loss_weight),
+                    small_token_threshold=float(
+                        args.s7_student_small_token_thr),
+                    small_weight_training_only=True,
+                    inference_slice_routing=False,
+                    source_only=True, target_read=False,
+                    frozen_detector=True, frozen_teacher=True)),
         in_channels=int(in_channels), patch_size=int(args.patch_size),
         rpn_feat_channels=int(args.rpn_feat_channels),
         roi_fc_channels=int(args.roi_fc_channels),
@@ -4959,6 +5309,7 @@ def validate_checkpoint(payload: Dict, in_channels: int, args,
                         allow_lane_arbitration_initialization: bool = False,
                         allow_quality_suppression_initialization: bool = False,
                         allow_temporal_association_initialization: bool = False,
+                        allow_temporal_student_initialization: bool = False,
                         allow_temporal_policy_mismatch: bool = False):
     required = (
         'source_only', 'frozen_dinov2', 'in_channels', 'patch_size',
@@ -5060,6 +5411,17 @@ def validate_checkpoint(payload: Dict, in_channels: int, args,
                     and stored_s7.get('temporal_quality_hidden')
                     != requested_s7.get('temporal_quality_hidden')):
                 architecture_mismatch = True
+            stored_student = bool(stored_s7.get(
+                'temporal_student', False))
+            requested_student = bool(requested_s7.get(
+                'temporal_student', False))
+            if (stored_student != requested_student
+                    and not allow_temporal_student_initialization):
+                architecture_mismatch = True
+            if (stored_student and requested_student
+                    and stored_s7.get('temporal_student_hidden')
+                    != requested_s7.get('temporal_student_hidden')):
+                architecture_mismatch = True
             if architecture_mismatch:
                 raise RuntimeError('S7 checkpoint architecture mismatch')
     elif bool(stored_s7.get('enabled', False)):
@@ -5076,12 +5438,14 @@ def train_source_only(dino, heads, train_records, val_records, args,
     s7_lane_mode = args.train_components == 's7_lane_arbitration'
     s7_quality_mode = args.train_components == 's7_quality_suppression'
     s7_temporal_mode = args.train_components == 's7_temporal_association'
+    s7_student_mode = args.train_components == 's7_temporal_student'
     s7_temporal_relative_mode = bool(getattr(
         args, 's7_temporal_relative_quality', False))
     s7_mode = bool(
         s7_rpn_mode or s7_merge_mode or s7_lane_mode or s7_quality_mode
-        or s7_temporal_mode)
+        or s7_temporal_mode or s7_student_mode)
     protected_source_mode = bool(roi_cls_mode or s7_mode)
+    args.s7_student_teacher_reproduction_gate = None
     trainable_names = configure_trainable_components(
         heads, args.train_components)
     trainable_parameters = [
@@ -5144,7 +5508,7 @@ def train_source_only(dino, heads, train_records, val_records, args,
                     'Temporal association must initialize from the complete '
                     's7_merge epoch-1 checkpoint; found {}'.format(
                         stored_mode))
-        if s7_temporal_relative_mode:
+        if s7_temporal_relative_mode and not s7_student_mode:
             if int(payload.get('epoch', -1)) != int(
                     args.s7_temporal_relative_base_epoch):
                 raise RuntimeError(
@@ -5164,26 +5528,54 @@ def train_source_only(dino, heads, train_records, val_records, args,
                 raise RuntimeError(
                     'Relative candidate quality requires a pointwise '
                     'candidate quality head checkpoint')
+        if s7_student_mode:
+            if int(payload.get('epoch', -1)) != int(
+                    args.s7_student_base_epoch):
+                raise RuntimeError(
+                    'Temporal student must initialize from selected phase-2 '
+                    'epoch {}; found {}'.format(
+                        args.s7_student_base_epoch, payload.get('epoch')))
+            stored_mode = payload.get(
+                'training_protocol', {}).get('train_components')
+            stored_s7 = payload.get('s7_architecture', {})
+            if (stored_mode != 's7_temporal_association'
+                    or not bool(stored_s7.get(
+                        'temporal_quality_head', False))
+                    or not bool((payload.get('training_protocol') or {}).get(
+                        's7_temporal_association', {}).get(
+                            'relative_quality', False))):
+                raise RuntimeError(
+                    'Temporal student requires the complete phase-2 '
+                    'relative-quality checkpoint')
+            base_gate = source_selected_checkpoint_gate(payload)
+            if not base_gate['passed']:
+                failed = sorted(name for name, passed
+                                in base_gate['checks'].items() if not passed)
+                raise RuntimeError(
+                    'Temporal student base checkpoint failed source gate: '
+                    + ', '.join(failed))
         validate_checkpoint(
             payload, in_channels, args,
             allow_training_mode_mismatch=True,
             allow_s7_base_initialization=(
                 s7_mode and not s7_lane_mode and not s7_quality_mode
-                and not s7_temporal_mode),
+                and not s7_temporal_mode and not s7_student_mode),
             allow_lane_arbitration_initialization=s7_lane_mode,
             allow_quality_suppression_initialization=s7_quality_mode,
             allow_temporal_association_initialization=(
                 s7_temporal_mode and not s7_temporal_relative_mode),
+            allow_temporal_student_initialization=s7_student_mode,
             allow_temporal_policy_mismatch=s7_temporal_relative_mode)
         load_heads_checkpoint_state(
             heads, payload,
             allow_s7_base_initialization=(
                 s7_mode and not s7_lane_mode and not s7_quality_mode
-                and not s7_temporal_mode),
+                and not s7_temporal_mode and not s7_student_mode),
             allow_lane_arbitration_initialization=s7_lane_mode,
             allow_quality_suppression_initialization=s7_quality_mode,
             allow_temporal_association_initialization=(
-                s7_temporal_mode and not s7_temporal_relative_mode))
+                s7_temporal_mode and not s7_temporal_relative_mode),
+            allow_temporal_student_initialization=s7_student_mode)
         if s7_merge_mode:
             component_payload = torch.load(
                 args.s7_component_checkpoint, map_location='cpu')
@@ -5265,7 +5657,7 @@ def train_source_only(dino, heads, train_records, val_records, args,
             source_baseline_summary = summarize_rows(baseline_rows)
             source_baseline_correct_keys = source_correct_frame_keys(
                 baseline_rows)
-            if s7_temporal_mode:
+            if s7_temporal_mode or s7_student_mode:
                 small_keys = {
                     '{}|{}|{}'.format(
                         row.get('split', ''), row.get('seq', ''),
@@ -5301,7 +5693,7 @@ def train_source_only(dino, heads, train_records, val_records, args,
                       best_summary['frame_count'],
                       best_small_summary['top1_hits'],
                       best_small_summary['frame_count']))
-            if s7_temporal_mode:
+            if s7_temporal_mode or s7_student_mode:
                 initial_temporal_rows = evaluate_records(
                     dino, heads, val_records, args, dino_device, head_device,
                     role='source_validation_initial_temporal')
@@ -5323,6 +5715,57 @@ def train_source_only(dino, heads, train_records, val_records, args,
                             'temporal_override_count'],
                         source_initial_temporal_summary[
                             'temporal_reset_count']))
+                if s7_student_mode:
+                    teacher_result = getattr(
+                        args, 's7_student_teacher_result', None)
+                    if teacher_result is None:
+                        raise RuntimeError(
+                            'Stage-3 teacher result was not loaded before '
+                            'the reproduction check')
+                    teacher_source = teacher_result.get('source') or {}
+                    reproduction_gate = stage3_teacher_reproduction_gate(
+                        teacher_source.get('best_validation_summary'),
+                        teacher_source.get('best_small_validation_summary'),
+                        source_initial_temporal_summary,
+                        source_initial_temporal_small_summary)
+                    args.s7_student_teacher_reproduction_gate = (
+                        reproduction_gate)
+                    if not reproduction_gate['passed']:
+                        failed = sorted(
+                            name for name, passed in
+                            reproduction_gate['checks'].items() if not passed)
+                        raise RuntimeError(
+                            'Copied stage-3 student does not exactly reproduce '
+                            'the phase-2 teacher: ' + ', '.join(failed))
+                    initial_retention = source_top1_retention_summary(
+                        source_baseline_correct_keys, initial_temporal_rows)
+                    initial_gate = s7_source_selection_gate(
+                        source_baseline_summary,
+                        source_baseline_small_summary,
+                        source_initial_temporal_summary,
+                        source_initial_temporal_small_summary,
+                        initial_retention, args)
+                    if not initial_gate['passed']:
+                        failed = sorted(
+                            name for name, passed
+                            in initial_gate['checks'].items() if not passed)
+                        raise RuntimeError(
+                            'Copied stage-3 student does not reproduce the '
+                            'source-gated teacher: ' + ', '.join(failed))
+                    best_summary = source_initial_temporal_summary
+                    best_small_summary = (
+                        source_initial_temporal_small_summary)
+                    best_key = roi_cls_selection_key(
+                        best_summary, best_small_summary)
+                    atomic_torch_save(checkpoint_payload(
+                        heads, None, None, 0, 0, best_summary,
+                        in_channels, args, global_step,
+                        best_small_summary, source_sampling,
+                        source_baseline_summary,
+                        source_baseline_small_summary,
+                        source_baseline_correct_keys,
+                        source_selection_gate_passed=True,
+                        source_exact_retention=initial_retention), best_path)
     elif best_summary is not None:
         best_key = source_selection_key(best_summary)
 
@@ -5382,7 +5825,7 @@ def train_source_only(dino, heads, train_records, val_records, args,
                 role='source_validation')
             val_summary = summarize_rows(val_rows)
             if protected_source_mode:
-                if s7_temporal_mode:
+                if s7_temporal_mode or s7_student_mode:
                     small_keys = {
                         '{}|{}|{}'.format(
                             row.get('split', ''), row.get('seq', ''),
@@ -5416,7 +5859,7 @@ def train_source_only(dino, heads, train_records, val_records, args,
                     source_baseline_correct_keys, val_rows)
                 if s7_mode:
                     if (s7_merge_mode or s7_lane_mode or s7_quality_mode
-                            or s7_temporal_mode):
+                            or s7_temporal_mode or s7_student_mode):
                         merge_conflicts = source_merge_conflict_summary(
                             source_baseline_correct_keys, val_rows)
                     protected_gate = s7_source_selection_gate(
@@ -5488,10 +5931,10 @@ def train_source_only(dino, heads, train_records, val_records, args,
             s7_merge_calibration=(
                 s7_calibration_state(heads)
                 if (s7_merge_mode or s7_lane_mode or s7_quality_mode
-                    or s7_temporal_mode) else None),
+                    or s7_temporal_mode or s7_student_mode) else None),
             s7_temporal_cue_weights=(
                 heads.s7_temporal_scorer.state_summary()
-                if s7_temporal_mode else None),
+                if (s7_temporal_mode or s7_student_mode) else None),
             s7_merge_conflicts=merge_conflicts,
             source_selection_gate=protected_gate,
             pairwise_v2_source_gate=(
@@ -5515,7 +5958,7 @@ def train_source_only(dino, heads, train_records, val_records, args,
         if args.train_components in (
                 'roi_cls_pairwise_v2', 's7_rpn', 's7_merge',
                 's7_lane_arbitration', 's7_quality_suppression',
-                's7_temporal_association'):
+                's7_temporal_association', 's7_temporal_student'):
             progress_path, progress_replacements = (
                 write_source_training_progress(
                     args, epoch, best_epoch, best_path, latest_path,
@@ -5557,7 +6000,7 @@ def train_source_only(dino, heads, train_records, val_records, args,
                         source_baseline_small_summary['top1_mcml'],
                         small_val_summary['top1_mcml'],
                         ','.join(failed_checks) if failed_checks else 'none'))
-                if s7_temporal_mode:
+                if s7_temporal_mode or s7_student_mode:
                     print(
                         '[source-temporal-gate] epoch={} dfr={}->{} '
                         'aci={}->{} transitions={}'.format(
@@ -5810,6 +6253,10 @@ def main():
             'TARGET_NOT_READ'
             if (args.train_components == 's7_temporal_association'
                 and int(best_epoch) == 0) else
+            'SOURCE_ONLY_STAGE3_NO_STUDENT_IMPROVEMENT_'
+            'PHASE2_FALLBACK_TARGET_NOT_READ'
+            if (args.train_components == 's7_temporal_student'
+                and int(best_epoch) == 0) else
             'SOURCE_ONLY_TRAINING_COMPLETE_TARGET_NOT_READ')
     else:
         target_rows = evaluate_records(
@@ -5850,6 +6297,9 @@ def main():
         protocol=dict(
             architecture=(
                 'frozen_DINOv2_native_S14_plus_protected_residual_S7_RPN_'
+                'to_source_only_distilled_temporal_candidate_student'
+                if args.train_components == 's7_temporal_student' else
+                'frozen_DINOv2_native_S14_plus_protected_residual_S7_RPN_'
                 'to_source_only_causal_multi_cue_candidate_quality_association'
                 if (args.train_components == 's7_temporal_association'
                     and bool(getattr(
@@ -5878,7 +6328,8 @@ def main():
                 'selection_key_improvement'
                 if args.train_components in (
                     's7_rpn', 's7_merge', 's7_lane_arbitration',
-                    's7_quality_suppression', 's7_temporal_association') else
+                    's7_quality_suppression', 's7_temporal_association',
+                    's7_temporal_student') else
                 'source_validation_only_with_exact_retention_small_top1_'
                 'strict_improvement_and_mcml_nonregression'
                 if args.train_components == 'roi_cls_pairwise_v2' else
@@ -5983,7 +6434,8 @@ def main():
                         gain_replay=False,
                         source_train_only=True)),
                 s7_temporal_association=(
-                    None if args.train_components != 's7_temporal_association'
+                    None if args.train_components not in (
+                        's7_temporal_association', 's7_temporal_student')
                     else dict(
                         base_checkpoint=(
                             None if not args.init_checkpoint else
@@ -5999,7 +6451,10 @@ def main():
                                 args, 's7_temporal_quality_head', False))
                             else temporal.CUE_NAMES),
                         learned_parameter_count=(
-                            len(temporal.QUALITY_CUE_NAMES)
+                            sum(parameter.numel() for parameter in
+                                heads.s7_candidate_student_head.parameters())
+                            if args.train_components == 's7_temporal_student'
+                            else len(temporal.QUALITY_CUE_NAMES)
                             if bool(getattr(
                                 args, 's7_temporal_quality_head', False))
                             else len(temporal.CUE_NAMES)),
@@ -6043,6 +6498,37 @@ def main():
                             'strictly_previous_selected_candidate'),
                         native_fallback=True,
                         target_read=False)),
+                s7_temporal_student=(
+                    None if args.train_components != 's7_temporal_student'
+                    else dict(
+                        base_checkpoint=os.path.abspath(
+                            args.init_checkpoint),
+                        base_epoch=int(args.s7_student_base_epoch),
+                        trainable='student_candidate_quality_head_only',
+                        teacher='frozen_phase2_relative_quality_head',
+                        objectives=[
+                            'source_continuous_max_riou',
+                            'same_frame_relative_quality',
+                            'teacher_bernoulli_distillation'],
+                        quality_loss_weight=float(
+                            args.s7_student_quality_loss_weight),
+                        relative_loss_weight=float(
+                            args.s7_student_relative_loss_weight),
+                        distillation_weight=float(
+                            args.s7_student_distillation_weight),
+                        distillation_temperature=float(
+                            args.s7_student_distillation_temperature),
+                        small_loss_weight=float(
+                            args.s7_student_small_loss_weight),
+                        small_token_threshold=float(
+                            args.s7_student_small_token_thr),
+                        training_only_scale_weight=True,
+                        inference_slice_routing=False,
+                        source_only=True,
+                        target_read=False,
+                        teacher_reproduction_gate=getattr(
+                            args, 's7_student_teacher_reproduction_gate',
+                            None))),
             source_min_top1_rate=float(args.source_min_top1_rate),
             deployment_score_thr=float(args.deployment_score_thr),
             border_margin_ratio=float(args.border_margin_ratio),
@@ -6062,9 +6548,12 @@ def main():
             target_dev_role=('not_read_during_source_only_training'
                              if args.skip_target_eval else 'diagnosis_only'),
             pseudo_label_student_training=False,
+            source_candidate_student_training=(
+                args.train_components == 's7_temporal_student'),
             reason=(
-                'Only the paper labeller component is authorized; no separate '
-                'unlabelled target-train split was supplied.')),
+                'Stage-3 uses only source GT and a frozen source-gated teacher; '
+                'target pseudo-label training remains disabled because no '
+                'separate unlabelled target-train split was supplied.')),
         isolation=dict(
             dino_frozen=True, dino_parameters_unchanged=dino_unchanged,
             read_only_evaluation=bool(
@@ -6108,6 +6597,9 @@ def main():
                 source_initial_temporal_summary),
             initial_temporal_small_validation_summary=(
                 source_initial_temporal_small_summary),
+            initial_teacher_reproduction_gate=(
+                getattr(args, 's7_student_teacher_reproduction_gate', None)
+                if args.train_components == 's7_temporal_student' else None),
             small_sampling=source_sampling,
             current_inference_validation_summary=current_source_summary,
             current_inference_small_validation_summary=(
