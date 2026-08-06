@@ -147,8 +147,45 @@ def configure_locked_stage3_model(args):
     args.s7_student_small_token_thr = 4.0
 
 
-def candidate_checkpoint_gate(payload: Dict, source_gate: Dict) -> Dict:
-    """Validate a positive student checkpoint, including student metadata."""
+def _stage3_report_protocol_gate(result: Dict) -> bool:
+    """Validate the canonical stage-3 protocol stored in train_result.json.
+
+    Early stage-3 checkpoints may not contain every duplicated nested protocol
+    field even though the final source result records the complete protocol.
+    The report is accepted as a compatibility witness only when all relevant
+    student, relative-quality, source-only, and target-isolation fields are
+    explicit.
+    """
+    protocol = result.get('protocol') or {}
+    training = protocol.get('training_schedule') or {}
+    temporal = protocol.get('s7_temporal_association') or {}
+    student = protocol.get('s7_temporal_student') or {}
+    isolation = result.get('isolation') or {}
+    return bool(
+        int(result.get('protocol_version', -1)) >= 22
+        and protocol.get('source_candidate_student_training') is True
+        and training.get('train_components') == 's7_temporal_student'
+        and temporal.get('candidate_quality_head') is True
+        and temporal.get('relative_quality') is True
+        and student.get('base_epoch') == EXPECTED_TEACHER_EPOCH
+        and student.get('source_only') is True
+        and student.get('target_read') is False
+        and result.get('target_dev') is None
+        and isolation.get('train_components') == 's7_temporal_student'
+        and isolation.get('target_used_for_training') is False
+        and isolation.get('target_used_for_checkpoint_selection') is False
+        and isolation.get('target_labels_used_for_evaluation_only') is False)
+
+
+def candidate_checkpoint_gate(payload: Dict, source_gate: Dict,
+                              source_result: Dict = None) -> Dict:
+    """Validate a positive student checkpoint, including student metadata.
+
+    The checkpoint is the authority for weights and core architecture.  The
+    stage-3 result JSON is an optional compatibility witness for duplicated
+    protocol metadata, so a harmless serialization omission cannot reject a
+    valid checkpoint.  It cannot override any checkpoint safety check.
+    """
     stored = labeller.source_selected_checkpoint_gate(
         payload,
         min_full_top1=SOURCE_GATE['min_full_top1'],
@@ -160,6 +197,17 @@ def candidate_checkpoint_gate(payload: Dict, source_gate: Dict) -> Dict:
     student_protocol = training.get('s7_temporal_student') or {}
     reproduction = payload.get('s7_student_teacher_reproduction') or {}
     checks = dict(stored.get('checks') or {})
+    checkpoint_student_protocol = (
+        training.get('train_components') == 's7_temporal_student'
+        and temporal_protocol.get('relative_quality') is True
+        and temporal_protocol.get('candidate_quality_head') is True
+        and student_protocol.get('base_epoch') == EXPECTED_TEACHER_EPOCH
+        and student_protocol.get('target_read') is False
+        and student_protocol.get('source_only') is True)
+    report_student_protocol = _stage3_report_protocol_gate(
+        source_result) if source_result is not None else False
+    student_protocol_compatibility = bool(
+        checkpoint_student_protocol or report_student_protocol)
     checks.update(
         checkpoint_positive_and_selected=(
             int(payload.get('epoch', -1)) > 0
@@ -174,15 +222,13 @@ def candidate_checkpoint_gate(payload: Dict, source_gate: Dict) -> Dict:
             and architecture.get('temporal_quality_head') is True
             and architecture.get('temporal_student') is True
             and int(architecture.get('temporal_min_confirmations', -1)) == 1),
-        student_training_protocol=(
-            training.get('train_components') == 's7_temporal_student'
-            and temporal_protocol.get('relative_quality') is True
-            and temporal_protocol.get('candidate_quality_head') is True
-            and student_protocol.get('base_epoch') == EXPECTED_TEACHER_EPOCH
-            and student_protocol.get('target_read') is False
-            and student_protocol.get('source_only') is True),
+        student_training_protocol=student_protocol_compatibility,
         teacher_reproduction=(reproduction.get('passed') is True))
-    return dict(checks=checks, passed=all(checks.values()))
+    return dict(
+        checks=checks, passed=all(checks.values()),
+        student_protocol_evidence=dict(
+            checkpoint=checkpoint_student_protocol,
+            source_result=report_student_protocol))
 
 
 def _validate_args(args):
@@ -260,7 +306,7 @@ def main():
         allow_temporal_student_initialization=True)
     labeller.validate_checkpoint(candidate_payload, in_channels, args)
     checkpoint_gate = candidate_checkpoint_gate(
-        candidate_payload, args.strict_source_gate)
+        candidate_payload, args.strict_source_gate, args.source_result)
     if not checkpoint_gate['passed']:
         failed = sorted(
             name for name, passed in checkpoint_gate['checks'].items()

@@ -117,6 +117,41 @@ def test_candidate_student_combines_source_quality_relative_and_distillation():
     assert losses['s7_student_supervised_frame_weight'] == pytest.approx(2.0)
 
 
+def test_static_candidate_ranker_uses_native_retention_and_s7_gain_pairs():
+    head = temporal.S7CandidateQualityHead(embedding_channels=4, hidden=8)
+    detections = torch.tensor([
+        [10.0, 10.0, 8.0, 4.0, 0.0, 0.90],
+        [11.0, 10.0, 8.0, 4.0, 0.1, 0.80],
+        [12.0, 10.0, 7.0, 5.0, 0.2, 0.70]])
+    embeddings = torch.randn(3, 4)
+    losses = temporal.static_candidate_rank_losses(
+        head, embeddings, detections, torch.tensor([0, 1, 1]),
+        gt_overlap=torch.tensor([0.8, 0.6, 0.0]), riou_threshold=0.5,
+        relative_margin=0.25, relative_min_gap=0.1, relative_max_pairs=8)
+    assert losses['s7_static_retention_pair_count'] == 1
+    assert losses['s7_static_gain_pair_count'] == 0
+    assert losses['s7_static_hard_negative_count'] == 1
+    total = sum(losses[name] for name in (
+        'loss_s7_static_quality', 'loss_s7_static_relative',
+        'loss_s7_static_retention', 'loss_s7_static_gain',
+        'loss_s7_static_prior'))
+    total.backward()
+    assert head.output.weight.grad is not None
+    assert torch.isfinite(head.output.weight.grad).all()
+
+
+def test_static_candidate_ranker_can_train_usable_s7_gain_when_native_is_wrong():
+    head = temporal.S7CandidateQualityHead(embedding_channels=4, hidden=8)
+    detections = torch.tensor([
+        [10.0, 10.0, 8.0, 4.0, 0.0, 0.90],
+        [11.0, 10.0, 8.0, 4.0, 0.1, 0.80]])
+    losses = temporal.static_candidate_rank_losses(
+        head, torch.randn(2, 4), detections, torch.tensor([0, 1]),
+        gt_overlap=torch.tensor([0.0, 0.7]), riou_threshold=0.5)
+    assert losses['s7_static_retention_pair_count'] == 0
+    assert losses['s7_static_gain_pair_count'] == 1
+
+
 def test_temporal_pair_loss_updates_only_relative_association_weights():
     scorer = temporal.S7TemporalAssociationScorer()
     cues = torch.tensor([

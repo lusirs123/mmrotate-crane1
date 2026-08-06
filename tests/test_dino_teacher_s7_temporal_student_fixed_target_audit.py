@@ -86,3 +86,33 @@ def test_stage3_checkpoint_gate_requires_student_mode_and_reproduction():
         's7_temporal_association')
     assert audit.candidate_checkpoint_gate(
         broken, dict(best_epoch=1))['passed'] is False
+
+
+def test_stage3_checkpoint_gate_uses_report_for_legacy_protocol_metadata():
+    payload = dict(
+        best_epoch=1, epoch=1, s7_inference_enabled=True,
+        best_source_val_summary=_summary(738, 691, 3, 738),
+        best_source_small_val_summary=_summary(350, 312, 3, 350),
+        source_selection_gate_passed=True,
+        source_exact_retention=dict(
+            baseline_correct_count=677, retained_correct_count=677,
+            lost_correct_count=0),
+        s7_architecture=dict(
+            temporal_association=True, temporal_quality_head=True,
+            temporal_student=True, temporal_min_confirmations=1),
+        training_protocol=dict(
+            train_components='s7_temporal_student'),
+        s7_student_teacher_reproduction=dict(passed=True))
+    result = _stage3_result()
+    result['protocol']['training_schedule'] = dict(
+        train_components='s7_temporal_student')
+    result['protocol']['s7_temporal_association'].update(
+        relative_quality=True, candidate_quality_head=True)
+    result['protocol']['s7_temporal_student'].update(
+        base_epoch=4, source_only=True, target_read=False)
+    gate = audit.candidate_checkpoint_gate(
+        payload, dict(best_epoch=1), result)
+    assert gate['passed'] is True
+    assert gate['checks']['student_training_protocol'] is True
+    assert gate['student_protocol_evidence'] == dict(
+        checkpoint=False, source_result=True)

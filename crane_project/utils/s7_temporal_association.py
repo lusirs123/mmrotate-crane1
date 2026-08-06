@@ -312,6 +312,117 @@ def candidate_student_losses(
     return losses
 
 
+def static_candidate_rank_losses(
+        quality_head: S7CandidateQualityHead, embedding: torch.Tensor,
+        detections: torch.Tensor, source_ids: torch.Tensor,
+        gt_overlap: torch.Tensor, riou_threshold: float,
+        quality_weight: float = 1.0, relative_weight: float = 0.5,
+        relative_margin: float = 0.25, relative_min_gap: float = 0.10,
+        relative_max_pairs: int = 128, score_weight: float = 1.0,
+        rank_margin: float = 0.25, retention_weight: float = 2.0,
+        gain_weight: float = 1.0, prior_weight: float = 0.01) -> Dict:
+    """Train a non-temporal source-only ranker on the merged candidate pool.
+
+    The base detector score remains the reference ordering.  The learned
+    quality logit is only a bounded additive residual in score-logit space,
+    so the head starts as an exact no-op and is trained with two explicit
+    protections: keep a correct native top-1 above hard negatives, and lift a
+    usable S7 candidate when native top-1 is wrong.  All targets come from
+    the current source frame; no sequence identity, target frame, or future
+    state is used.
+    """
+    positive = (quality_weight, relative_weight, score_weight, rank_margin,
+                retention_weight, gain_weight, prior_weight)
+    if any(float(value) <= 0.0 for value in positive):
+        raise ValueError('Static ranker weights and margin must be positive')
+    if gt_overlap.ndim != 1 or source_ids.ndim != 1:
+        raise ValueError('Static ranker overlaps and source ids must be vectors')
+    if (gt_overlap.shape != source_ids.shape
+            or gt_overlap.shape[0] != detections.shape[0]):
+        raise ValueError('Static ranker inputs have mismatched counts')
+
+    quality = candidate_quality_losses(
+        quality_head, embedding, detections, source_ids, gt_overlap,
+        riou_threshold=riou_threshold, relative_margin=float(relative_margin),
+        relative_min_gap=float(relative_min_gap),
+        relative_max_pairs=int(relative_max_pairs))
+    logits = quality_head(embedding, detections, source_ids)
+    zero = logits.sum() * 0.0
+    if logits.numel() == 0:
+        return dict(
+            loss_s7_static_quality=zero,
+            loss_s7_static_relative=zero,
+            loss_s7_static_retention=zero,
+            loss_s7_static_gain=zero,
+            loss_s7_static_prior=zero,
+            s7_static_retention_pair_count=0,
+            s7_static_gain_pair_count=0,
+            s7_static_native_top1_correct=0,
+            s7_static_usable_candidate_count=0,
+            s7_static_candidate_count=0,
+            s7_static_hard_negative_count=0)
+
+    base_scores = detections[:, 5].clamp(1e-6, 1.0 - 1e-6)
+    base_logits = torch.log(base_scores) - torch.log1p(-base_scores)
+    fused = base_logits + float(score_weight) * logits
+    native = torch.nonzero(source_ids == 0, as_tuple=False).flatten()
+    usable = torch.nonzero(
+        gt_overlap >= float(riou_threshold), as_tuple=False).flatten()
+    wrong = torch.nonzero(
+        gt_overlap < float(riou_threshold), as_tuple=False).flatten()
+    native_top = (native[torch.argmax(base_scores[native].detach())]
+                  if native.numel() else None)
+    native_top_correct = bool(
+        native_top is not None
+        and gt_overlap[native_top] >= float(riou_threshold))
+    best_usable = (usable[torch.argmax(gt_overlap[usable].detach())]
+                   if usable.numel() else None)
+    retention = zero
+    gain = zero
+    retention_pair_count = 0
+    gain_pair_count = 0
+    hard_negative_count = 0
+    if native_top_correct and wrong.numel():
+        competitor = wrong[torch.argmax(fused[wrong].detach())]
+        retention = torch.relu(
+            float(rank_margin) + fused[competitor] - fused[native_top])
+        retention_pair_count = 1
+        hard_negative_count = 1
+    elif native_top is not None and best_usable is not None:
+        competitors = wrong[wrong != best_usable]
+        if competitors.numel():
+            competitor = competitors[torch.argmax(fused[competitors].detach())]
+            gain = torch.relu(
+                float(rank_margin) + fused[competitor] - fused[best_usable])
+            hard_negative_count = 1
+        else:
+            gain = torch.relu(
+                float(rank_margin) + fused[native_top] - fused[best_usable])
+        gain_pair_count = 1
+
+    relative = quality.get(
+        'loss_s7_candidate_quality_relative', zero)
+    return dict(
+        loss_s7_static_quality=(quality['loss_s7_candidate_quality']
+                                * float(quality_weight)),
+        loss_s7_static_relative=relative * float(relative_weight),
+        loss_s7_static_retention=retention * float(retention_weight),
+        loss_s7_static_gain=gain * float(gain_weight),
+        loss_s7_static_prior=logits.square().mean() * float(prior_weight),
+        s7_static_retention_pair_count=retention_pair_count,
+        s7_static_gain_pair_count=gain_pair_count,
+        s7_static_native_top1_correct=int(native_top_correct),
+        s7_static_usable_candidate_count=int(usable.numel()),
+        s7_static_candidate_count=int(logits.numel()),
+        s7_static_hard_negative_count=hard_negative_count,
+        s7_static_quality_mean_target=quality.get(
+            's7_candidate_quality_mean_target', 0.0),
+        s7_static_quality_mean_prediction=quality.get(
+            's7_candidate_quality_mean_prediction', 0.0),
+        s7_static_relative_pair_count=quality.get(
+            's7_candidate_quality_relative_pair_count', 0))
+
+
 def _default_rotated_iou(current: torch.Tensor,
                          previous: torch.Tensor) -> torch.Tensor:
     from mmcv.ops import box_iou_rotated
