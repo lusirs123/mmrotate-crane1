@@ -880,12 +880,18 @@ def validate_args(args):
             raise ValueError(
                 'Selective promotion must initialize from phase-2 '
                 's7_temporal_association training')
-        selected = teacher_result.get('source_selected_checkpoint')
-        if (not selected or os.path.realpath(selected) != os.path.realpath(
-                args.init_checkpoint)):
+        provenance = phase2_selected_checkpoint_provenance_gate(
+            teacher_result, args.init_checkpoint,
+            expected_epoch=int(args.s7_selective_base_epoch),
+            min_full_top1=int(args.s7_source_min_full_top1),
+            min_small_top1=int(args.s7_source_min_small_top1),
+            max_mcml=int(args.s7_source_max_mcml))
+        if not provenance['passed']:
+            failed = sorted(name for name, passed
+                            in provenance['checks'].items() if not passed)
             raise ValueError(
-                'Selective promotion phase-2 result must select '
-                '--init-checkpoint')
+                'Selective promotion phase-2 checkpoint provenance gate '
+                'failed: ' + ', '.join(failed))
         if not teacher_source.get('best_validation_summary') or not (
                 teacher_source.get('best_small_validation_summary')):
             raise ValueError(
@@ -5840,6 +5846,173 @@ def source_selected_checkpoint_gate(
             int(best_small.get('top1_mcml', max_mcml + 1))
             <= int(max_mcml)))
     return dict(checks=checks, passed=all(checks.values()))
+
+
+def _checkpoint_summary_signature(summary: Dict) -> Dict:
+    """Return stable source-evidence fields for checkpoint identity checks."""
+    summary = summary or {}
+    return {
+        key: summary.get(key) for key in (
+            'frame_count', 'top1_hits', 'top1_mcml', 'recall_at_20',
+            'recall_at_100', 'top1_dfr_fraction_per_frame', 'top1_aci')}
+
+
+def _checkpoint_state_equal(left: Dict, right: Dict) -> bool:
+    """Compare serialized head tensors without relying on checkpoint paths."""
+    left_state = left.get('heads_state_dict') or {}
+    right_state = right.get('heads_state_dict') or {}
+    if set(left_state) != set(right_state):
+        return False
+    for name in left_state:
+        left_value = left_state[name]
+        right_value = right_state[name]
+        if not isinstance(left_value, torch.Tensor) or not isinstance(
+                right_value, torch.Tensor):
+            if left_value != right_value:
+                return False
+        elif not torch.equal(left_value.cpu(), right_value.cpu()):
+            return False
+    return True
+
+
+def phase2_selected_checkpoint_provenance_gate(
+        result: Dict, candidate_path: str, expected_epoch: int = 4,
+        min_full_top1: int = 688, min_small_top1: int = 311,
+        max_mcml: int = 3) -> Dict:
+    """Allow only a safely verified alias of the phase-2 selected file.
+
+    Phase-2 training writes both a stable ``labeller_best_source_only.pth``
+    and an epoch-specific checkpoint.  They can be different paths while
+    representing the same selected epoch.  A different path is accepted only
+    after validating its complete phase-2 provenance and, when the recorded
+    file is available, comparing all serialized head tensors.
+    """
+    source = result.get('source') or {}
+    history = source.get('history') or []
+    best_epoch = int(source.get('best_epoch', -1))
+    selected = result.get('source_selected_checkpoint')
+    candidate_path = os.path.abspath(candidate_path)
+    selected_path = (None if not selected else os.path.abspath(selected))
+    selected_exists = bool(selected_path and os.path.isfile(selected_path))
+    candidate_exists = os.path.isfile(candidate_path)
+    matching_rows = [
+        row for row in history
+        if int(row.get('epoch', -1)) == int(expected_epoch)]
+    row = matching_rows[0] if len(matching_rows) == 1 else {}
+    full = row.get('source_val') or source.get(
+        'best_validation_summary') or {}
+    small = row.get('source_small_val') or source.get(
+        'best_small_validation_summary') or {}
+    retention = row.get('source_exact_retention') or {}
+    protocol = result.get('protocol') or {}
+    temporal_protocol = protocol.get('s7_temporal_association') or {}
+    isolation = result.get('isolation') or {}
+
+    candidate = None
+    candidate_load_error = None
+    if candidate_exists:
+        try:
+            candidate = torch.load(candidate_path, map_location='cpu')
+        except Exception as error:
+            candidate_load_error = '{}: {}'.format(
+                type(error).__name__, error)
+
+    candidate_protocol = (candidate or {}).get('training_protocol') or {}
+    candidate_temporal = candidate_protocol.get(
+        's7_temporal_association') or {}
+    candidate_architecture = (candidate or {}).get('s7_architecture') or {}
+    candidate_retention = (candidate or {}).get(
+        'source_exact_retention') or {}
+    candidate_best = (candidate or {}).get(
+        'best_source_val_summary') or {}
+    candidate_small = (candidate or {}).get(
+        'best_source_small_val_summary') or {}
+    same_path = bool(selected_path and os.path.realpath(selected_path)
+                     == os.path.realpath(candidate_path))
+    state_match = same_path
+    if not same_path and selected_exists and candidate is not None:
+        try:
+            selected_payload = torch.load(selected_path, map_location='cpu')
+            state_match = _checkpoint_state_equal(selected_payload, candidate)
+        except Exception as error:
+            candidate_load_error = '{}: {}'.format(
+                type(error).__name__, error)
+            state_match = False
+
+    checks = dict(
+        phase2_selected_checkpoint_present=bool(selected),
+        phase2_best_epoch=best_epoch == int(expected_epoch),
+        phase2_history_row=len(matching_rows) == 1,
+        phase2_row_selected=(row.get('selected_as_best') is True),
+        phase2_row_checkpoint_saved=(row.get('checkpoint_saved') is True),
+        phase2_source_gate=(
+            row.get('source_selection_gate_passed') is True
+            and (row.get('source_selection_gate') or {}).get('passed') is True
+            and (row.get('s7_source_gate') or {}).get('passed') is True),
+        phase2_exact_retention=(
+            row.get('source_retention_passed') is True
+            and int(retention.get('lost_correct_count', -1)) == 0
+            and int(retention.get('retained_correct_count', -1)) == int(
+                retention.get('baseline_correct_count', -2))),
+        phase2_source_metrics=(
+            int(full.get('top1_hits', -1)) >= int(min_full_top1)
+            and int(small.get('top1_hits', -1)) >= int(min_small_top1)
+            and int(full.get('top1_mcml', max_mcml + 1)) <= int(max_mcml)
+            and int(small.get('top1_mcml', max_mcml + 1)) <= int(max_mcml)),
+        phase2_target_not_read=(
+            result.get('target_dev') is None
+            and temporal_protocol.get('target_read') is False
+            and isolation.get('target_used_for_training') is False
+            and isolation.get('target_used_for_checkpoint_selection') is False
+            and isolation.get('target_labels_used_for_evaluation_only') is False),
+        phase2_training_protocol=(
+            isolation.get('train_components') == 's7_temporal_association'),
+        phase2_relative_quality_protocol=(
+            temporal_protocol.get('candidate_quality_head') is True
+            and temporal_protocol.get('relative_quality') is True
+            and temporal_protocol.get('target_read') is False),
+        candidate_exists=candidate_exists,
+        candidate_loadable=candidate is not None and not candidate_load_error,
+        candidate_source_only=(candidate or {}).get('source_only') is True,
+        candidate_frozen_dinov2=(candidate or {}).get('frozen_dinov2') is True,
+        candidate_s7_enabled=(candidate or {}).get(
+            's7_inference_enabled') is True,
+        candidate_epoch=int((candidate or {}).get('epoch', -1))
+        == int(expected_epoch),
+        candidate_best_epoch=int((candidate or {}).get('best_epoch', -1))
+        == int(expected_epoch),
+        candidate_training_protocol=(
+            candidate_protocol.get('train_components')
+            == 's7_temporal_association'),
+        candidate_relative_quality=(
+            candidate_architecture.get('temporal_association') is True
+            and candidate_architecture.get('temporal_quality_head') is True
+            and candidate_temporal.get('candidate_quality_head') is True
+            and candidate_temporal.get('relative_quality') is True
+            and candidate_temporal.get('target_read') is False),
+        candidate_source_gate=(
+            (candidate or {}).get('source_selection_gate_passed') is True),
+        candidate_exact_retention=(
+            int(candidate_retention.get('lost_correct_count', -1)) == 0
+            and int(candidate_retention.get('retained_correct_count', -1))
+            == int(candidate_retention.get('baseline_correct_count', -2))),
+        candidate_source_metrics=(
+            _checkpoint_summary_signature(candidate_best)
+            == _checkpoint_summary_signature(full)
+            and _checkpoint_summary_signature(candidate_small)
+            == _checkpoint_summary_signature(small)),
+        checkpoint_identity=(
+            state_match or (not selected_exists and not same_path)),
+    )
+    return dict(
+        checks=checks, passed=all(checks.values()),
+        selected_checkpoint=selected, candidate_checkpoint=candidate_path,
+        selected_checkpoint_exists=selected_exists,
+        checkpoint_identity='same_path' if same_path else (
+            'head_state_equal' if state_match else
+            'selected_checkpoint_unavailable' if not selected_exists else
+            'head_state_mismatch'),
+        candidate_load_error=candidate_load_error)
 
 
 def checkpoint_payload(heads, optimizer, scheduler, epoch: int,

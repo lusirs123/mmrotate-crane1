@@ -312,6 +312,53 @@ def test_selective_promotion_can_promote_only_after_confident_advantage():
     assert result['reason'] == 's7_promoted_confident_advantage'
 
 
+def test_selective_promotion_uses_s7_lane_top100_not_global_prefix():
+    head = temporal.S7SelectivePromotionHead(
+        embedding_channels=2, hidden=8, initial_uncertainty=0.5)
+    with torch.no_grad():
+        for layer in (head.embedding_projection, head.scalar_projection):
+            for module in layer:
+                if hasattr(module, 'weight'):
+                    module.weight.zero_()
+                if hasattr(module, 'bias') and module.bias is not None:
+                    module.bias.zero_()
+        head.advantage_output.weight.zero_()
+        head.advantage_output.bias.fill_(1.0)
+        head.uncertainty_output.weight.zero_()
+        head.uncertainty_output.bias.fill_(-10.0)
+    native_count = 101
+    detections = torch.zeros(native_count + 1, 6)
+    detections[:, 2:4] = torch.tensor([8.0, 4.0])
+    detections[:, 5] = 0.10
+    detections[:native_count, 5] = 0.90
+    sources = torch.zeros(native_count + 1, dtype=torch.long)
+    sources[-1] = 1
+    result = temporal.native_protected_selective_promotion(
+        head, torch.zeros(native_count + 1, 2), detections, sources,
+        torch.zeros(native_count + 1), max_candidates=1,
+        promotion_margin=0.10)
+    assert result['candidate_count'] == 1
+    assert result['selected_index'] == native_count
+    assert result['promoted'] is True
+
+
+def test_selective_promotion_losses_uses_s7_lane_top100_not_global_prefix():
+    head = temporal.S7SelectivePromotionHead(
+        embedding_channels=2, hidden=8, initial_uncertainty=0.5)
+    native_count = 101
+    detections = torch.zeros(native_count + 1, 6)
+    detections[:, 2:4] = torch.tensor([8.0, 4.0])
+    detections[:, 5] = 0.90
+    sources = torch.zeros(native_count + 1, dtype=torch.long)
+    sources[-1] = 1
+    losses = temporal.selective_promotion_losses(
+        head, torch.zeros(native_count + 1, 2), detections, sources,
+        torch.zeros(native_count + 1), torch.tensor(
+            [0.5] * native_count + [0.9]), riou_threshold=0.5,
+        max_candidates=1)
+    assert losses['s7_selective_candidate_count'] == 1
+
+
 @pytest.mark.parametrize(
     'overlap,retention_pairs,gain_pairs', [
         ([0.8, 0.1, 0.0], 2, 0),

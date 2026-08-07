@@ -1219,6 +1219,105 @@ def test_source_selected_checkpoint_gate_requires_exact_retention_and_gate():
     assert result['passed'] is True
 
 
+def test_phase2_checkpoint_provenance_accepts_epoch_alias_with_equal_state(
+        tmp_path):
+    selected_path = tmp_path / 'labeller_best_source_only.pth'
+    alias_path = tmp_path / 'labeller_epoch_04_source_only.pth'
+    summary = dict(
+        frame_count=738, top1_hits=691, top1_mcml=3, recall_at_20=735,
+        recall_at_100=738, top1_dfr_fraction_per_frame=0.08, top1_aci=0.83)
+    small_summary = dict(
+        frame_count=350, top1_hits=312, top1_mcml=3, recall_at_20=350,
+        recall_at_100=350, top1_dfr_fraction_per_frame=0.08, top1_aci=0.80)
+    retention = dict(
+        baseline_correct_count=677, retained_correct_count=677,
+        lost_correct_count=0)
+    row = dict(
+        epoch=4, source_val=summary, source_small_val=small_summary,
+        source_exact_retention=retention, selected_as_best=True,
+        checkpoint_saved=True, source_selection_gate_passed=True,
+        source_retention_passed=True,
+        source_selection_gate=dict(passed=True),
+        s7_source_gate=dict(passed=True))
+    state = {'head.weight': torch.tensor([1.0, 2.0])}
+    payload = dict(
+        source_only=True, frozen_dinov2=True, epoch=4, best_epoch=4,
+        s7_inference_enabled=True, heads_state_dict=state,
+        best_source_val_summary=summary,
+        best_source_small_val_summary=small_summary,
+        source_selection_gate_passed=True, source_exact_retention=retention,
+        s7_architecture=dict(
+            temporal_association=True, temporal_quality_head=True),
+        training_protocol=dict(
+            train_components='s7_temporal_association',
+            s7_temporal_association=dict(
+                candidate_quality_head=True, relative_quality=True,
+                target_read=False)))
+    torch.save(payload, selected_path)
+    torch.save(payload, alias_path)
+    result = dict(
+        source_selected_checkpoint=str(selected_path),
+        source=dict(best_epoch=4, history=[row]),
+        protocol=dict(s7_temporal_association=dict(
+            candidate_quality_head=True, relative_quality=True,
+            target_read=False)),
+        isolation=dict(
+            train_components='s7_temporal_association',
+            target_used_for_training=False,
+            target_used_for_checkpoint_selection=False,
+            target_labels_used_for_evaluation_only=False))
+    gate = labeller.phase2_selected_checkpoint_provenance_gate(
+        result, str(alias_path))
+    assert gate['passed'] is True
+    assert gate['checkpoint_identity'] == 'head_state_equal'
+
+
+def test_phase2_checkpoint_provenance_rejects_different_epoch_alias(tmp_path):
+    selected_path = tmp_path / 'labeller_best_source_only.pth'
+    alias_path = tmp_path / 'labeller_epoch_03_source_only.pth'
+    summary = dict(frame_count=738, top1_hits=691, top1_mcml=3)
+    small_summary = dict(frame_count=350, top1_hits=312, top1_mcml=3)
+    retention = dict(
+        baseline_correct_count=677, retained_correct_count=677,
+        lost_correct_count=0)
+    row = dict(
+        epoch=4, source_val=summary, source_small_val=small_summary,
+        source_exact_retention=retention, selected_as_best=True,
+        checkpoint_saved=True, source_selection_gate_passed=True,
+        source_retention_passed=True, source_selection_gate=dict(passed=True),
+        s7_source_gate=dict(passed=True))
+    payload = dict(
+        source_only=True, frozen_dinov2=True, epoch=3, best_epoch=3,
+        s7_inference_enabled=True, heads_state_dict={'x': torch.tensor(1)},
+        best_source_val_summary=summary,
+        best_source_small_val_summary=small_summary,
+        source_selection_gate_passed=True, source_exact_retention=retention,
+        s7_architecture=dict(
+            temporal_association=True, temporal_quality_head=True),
+        training_protocol=dict(
+            train_components='s7_temporal_association',
+            s7_temporal_association=dict(
+                candidate_quality_head=True, relative_quality=True,
+                target_read=False)))
+    torch.save(payload, selected_path)
+    torch.save(payload, alias_path)
+    result = dict(
+        source_selected_checkpoint=str(selected_path),
+        source=dict(best_epoch=4, history=[row]),
+        protocol=dict(s7_temporal_association=dict(
+            candidate_quality_head=True, relative_quality=True,
+            target_read=False)),
+        isolation=dict(
+            train_components='s7_temporal_association',
+            target_used_for_training=False,
+            target_used_for_checkpoint_selection=False,
+            target_labels_used_for_evaluation_only=False))
+    gate = labeller.phase2_selected_checkpoint_provenance_gate(
+        result, str(alias_path))
+    assert gate['passed'] is False
+    assert gate['checks']['candidate_epoch'] is False
+
+
 def test_temporal_association_audit_reports_blocking_conditions():
     rows = [
         dict(

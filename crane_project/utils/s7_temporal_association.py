@@ -270,9 +270,12 @@ def native_protected_selective_promotion(
             native_index=None, promoted=False, reason='native_missing',
             best_lower_bound=None, candidate_count=0)
     native_index = native[torch.argmax(detections[native, 5])]
-    active_limit = min(int(max_candidates), count)
-    active = torch.arange(active_limit, device=detections.device)
-    s7 = active[source_ids[:active_limit] == 1]
+    # The limit belongs to the S7 lane, not to the globally merged pool.
+    # Native detections may precede S7 detections in the calibrated global
+    # order; using a global prefix would therefore discard valid S7 lane
+    # candidates before the native-protected selector sees them.
+    s7_ranked = torch.nonzero(source_ids == 1, as_tuple=False).flatten()
+    s7 = s7_ranked[:min(int(max_candidates), int(s7_ranked.numel()))]
     selected = native_index
     promoted = False
     reason = 'native_fallback_no_s7_candidate'
@@ -333,9 +336,11 @@ def selective_promotion_losses(
 
     zero = promotion_head.advantage_output.bias.sum() * 0.0
     native = torch.nonzero(source_ids == 0, as_tuple=False).flatten()
-    active_limit = min(int(max_candidates), int(detections.shape[0]))
-    s7 = torch.nonzero(
-        source_ids[:active_limit] == 1, as_tuple=False).flatten()
+    # Keep training aligned with inference: native top-1 plus the S7 lane's
+    # own top-K candidates.  Filtering first preserves the lane ranking even
+    # when many native detections precede the S7 lane in the merged pool.
+    s7_ranked = torch.nonzero(source_ids == 1, as_tuple=False).flatten()
+    s7 = s7_ranked[:min(int(max_candidates), int(s7_ranked.numel()))]
     if native.numel() == 0 or s7.numel() == 0:
         return dict(
             loss_s7_selective_quality=zero,

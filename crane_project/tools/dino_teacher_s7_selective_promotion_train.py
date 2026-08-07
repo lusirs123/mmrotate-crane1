@@ -69,12 +69,16 @@ def validate_args(args):
                         in source_gate['checks'].items() if not passed)
         raise ValueError('Phase-2 source gate failed: {}'.format(
             ', '.join(failed)))
-    selected = source_gate.get('selected_checkpoint')
-    if not selected or os.path.realpath(selected) != os.path.realpath(
-            args.init_checkpoint):
+    provenance = labeller.phase2_selected_checkpoint_provenance_gate(
+        source_result, args.init_checkpoint,
+        expected_epoch=EXPECTED_BASE_EPOCH,
+        min_full_top1=688, min_small_top1=311, max_mcml=3)
+    if not provenance['passed']:
+        failed = sorted(name for name, passed
+                        in provenance['checks'].items() if not passed)
         raise ValueError(
-            'Selective promotion init checkpoint must equal the phase-2 '
-            'source_selected_checkpoint')
+            'Selective promotion phase-2 checkpoint provenance gate failed: '
+            + ', '.join(failed))
 
 
 def build_locked_labeller_argv(args) -> List[str]:
