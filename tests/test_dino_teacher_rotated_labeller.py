@@ -51,6 +51,19 @@ def _args(tmp_path, **overrides):
         s7_student_small_loss_weight=2.0,
         s7_student_small_token_thr=4.0,
         s7_student_teacher_result_json=None,
+        s7_selective_promotion=False, s7_selective_base_epoch=4,
+        s7_selective_hidden=128, s7_selective_initial_uncertainty=0.5,
+        s7_selective_advantage_gap=0.10,
+        s7_selective_promotion_margin=0.10,
+        s7_selective_uncertainty_multiplier=1.0,
+        s7_selective_quality_loss_weight=1.0,
+        s7_selective_classification_loss_weight=1.0,
+        s7_selective_retention_weight=2.0,
+        s7_selective_gain_weight=1.0, s7_selective_prior_weight=0.01,
+        s7_selective_max_candidates=100,
+        s7_selective_min_gain_sequences=2,
+        s7_selective_aug_prob=0.75, s7_selective_aug_strength=0.15,
+        s7_selective_teacher_result_json=None,
         s7_temporal_margin=0.5, s7_temporal_retention_weight=2.0,
         s7_temporal_gain_weight=1.0, s7_temporal_prior_weight=0.01,
         s7_temporal_max_candidates=100,
@@ -104,6 +117,25 @@ def _record(tmp_path, frame):
 def test_validate_requires_disjoint_head_and_dino_gpus(tmp_path):
     with pytest.raises(ValueError, match='separate'):
         labeller.validate_args(_args(tmp_path, head_gpu=1))
+
+
+def test_source_sequence_gain_requires_more_than_one_source_sequence():
+    def row(seq, frame, hit):
+        return dict(
+            split='val', seq=seq, frame=frame,
+            metrics=dict(top1_hit=hit))
+
+    baseline = [row('a', 1, False), row('b', 1, False)]
+    one_sequence = [row('a', 1, True), row('b', 1, False)]
+    both_sequences = [row('a', 1, True), row('b', 1, True)]
+    failed = labeller.source_sequence_gain_summary(
+        baseline, one_sequence, min_gain_sequences=2)
+    passed = labeller.source_sequence_gain_summary(
+        baseline, both_sequences, min_gain_sequences=2)
+    assert failed['passed'] is False
+    assert failed['gained_sequence_count'] == 1
+    assert passed['passed'] is True
+    assert passed['gained_sequence_count'] == 2
 
 
 def test_validate_rejects_selection_outside_checkpoint_epochs(tmp_path):
@@ -805,6 +837,28 @@ def test_s7_temporal_student_trains_only_separate_student_head():
     assert not heads.native.weight.requires_grad
 
 
+def test_s7_selective_promotion_trains_only_pair_head():
+    class TinyHeads(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.native = torch.nn.Linear(2, 2)
+            self.s7_candidate_quality_head = (
+                labeller.temporal.S7CandidateQualityHead(2, 4))
+            self.s7_selective_promotion_head = (
+                labeller.temporal.S7SelectivePromotionHead(2, 4))
+            self.s7_protected_merge = True
+
+    heads = TinyHeads()
+    names = labeller.configure_trainable_components(
+        heads, 's7_selective_promotion')
+    assert names
+    assert all(name.startswith('s7_selective_promotion_head.')
+               for name in names)
+    assert not any(name.startswith('s7_candidate_quality_head.')
+                   for name in names)
+    assert not heads.native.weight.requires_grad
+
+
 def test_s7_lane_architecture_records_bounded_arbitration(tmp_path):
     args = _args(
         tmp_path, s7_residual=True,
@@ -1016,6 +1070,41 @@ def test_s7_student_initialization_copies_frozen_teacher_exactly():
     assert teacher.keys() == student.keys()
     assert all(torch.equal(teacher[name], student[name]) for name in teacher)
     assert heads.enabled is False
+
+
+def test_s7_selective_initialization_keeps_teacher_and_adds_only_pair_head():
+    class TinyHeads(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.native = torch.nn.Linear(2, 2)
+            self.s7_candidate_quality_head = (
+                labeller.temporal.S7CandidateQualityHead(2, 4))
+            self.s7_selective_promotion_head = (
+                labeller.temporal.S7SelectivePromotionHead(2, 4))
+            self.enabled = True
+
+        def set_s7_inference_enabled(self, enabled):
+            self.enabled = bool(enabled)
+
+    heads = TinyHeads()
+    with torch.no_grad():
+        heads.s7_candidate_quality_head.output.bias.fill_(0.75)
+    temporal_scorer = labeller.temporal.S7TemporalAssociationScorer(
+        cue_names=labeller.temporal.QUALITY_CUE_NAMES)
+    stored_state = {
+        name: tensor.detach().clone()
+        for name, tensor in heads.state_dict().items()
+        if not name.startswith('s7_selective_promotion_head.')}
+    stored_state.update({
+        's7_temporal_scorer.' + name: tensor.detach().clone()
+        for name, tensor in temporal_scorer.state_dict().items()})
+    labeller.load_heads_checkpoint_state(
+        heads, {'heads_state_dict': stored_state},
+        allow_selective_promotion_initialization=True)
+    assert heads.enabled is False
+    assert heads.s7_candidate_quality_head.output.bias.item() == pytest.approx(
+        0.75)
+    assert heads.s7_selective_promotion_head.advantage_output.bias.item() == 0.0
 
 
 def test_frozen_s7_component_loader_does_not_replace_native_or_calibrator(

@@ -240,3 +240,102 @@ def test_causal_selector_resets_on_gap_and_never_reuses_future_state(monkeypatch
     assert after_gap['reason'] == 'native_fallback_after_reset'
     assert after_gap['candidate_index'] is None
     assert after_gap['candidate_override_ok'] is False
+
+
+def test_selective_promotion_is_exact_native_fallback_at_initialization():
+    head = temporal.S7SelectivePromotionHead(
+        embedding_channels=4, hidden=8, initial_uncertainty=0.5)
+    detections = torch.tensor([
+        [10.0, 10.0, 8.0, 4.0, 0.0, 0.60],
+        [11.0, 10.0, 8.0, 4.0, 0.1, 0.95]])
+    result = temporal.native_protected_selective_promotion(
+        head, torch.randn(2, 4), detections, torch.tensor([0, 1]),
+        torch.tensor([0.0, 1.0]), promotion_margin=0.10)
+    assert result['selected_index'] == 0
+    assert result['promoted'] is False
+    assert result['reason'] == 'native_fallback_uncertain_advantage'
+    assert result['best_lower_bound'] < 0.10
+
+
+def test_selective_promotion_preserves_pool_when_native_is_missing():
+    head = temporal.S7SelectivePromotionHead(
+        embedding_channels=4, hidden=8, initial_uncertainty=0.5)
+    detections = torch.tensor([
+        [10.0, 10.0, 8.0, 4.0, 0.0, 0.60],
+        [11.0, 10.0, 8.0, 4.0, 0.1, 0.95],
+        [12.0, 10.0, 7.0, 5.0, 0.2, 0.70]])
+    original_order = torch.arange(detections.shape[0])
+    result = temporal.native_protected_selective_promotion(
+        head, torch.randn(3, 4), detections, torch.tensor([1, 1, 1]),
+        torch.zeros(3), promotion_margin=0.10)
+    assert result['selected_index'] is None
+    assert result['native_index'] is None
+    assert result['promoted'] is False
+    assert result['reason'] == 'native_missing'
+    assert result['order'].tolist() == original_order.tolist()
+    assert result['candidate_count'] == 0
+
+
+def test_selective_promotion_promotes_on_exact_margin_boundary():
+    head = temporal.S7SelectivePromotionHead(
+        embedding_channels=4, hidden=8, initial_uncertainty=0.5)
+    with torch.no_grad():
+        # Choose a bias whose LCB is exactly the configured promotion margin.
+        head.advantage_output.bias.fill_(0.60)
+        head.uncertainty_output.bias.fill_(
+            temporal._inverse_softplus(0.50))
+    detections = torch.tensor([
+        [10.0, 10.0, 8.0, 4.0, 0.0, 0.60],
+        [11.0, 10.0, 8.0, 4.0, 0.1, 0.95]])
+    result = temporal.native_protected_selective_promotion(
+        head, torch.randn(2, 4), detections, torch.tensor([0, 1]),
+        torch.zeros(2), promotion_margin=0.10)
+    assert result['best_lower_bound'] == pytest.approx(0.10, abs=1e-5)
+    assert result['selected_index'] == 1
+    assert result['promoted'] is True
+
+
+def test_selective_promotion_can_promote_only_after_confident_advantage():
+    head = temporal.S7SelectivePromotionHead(
+        embedding_channels=4, hidden=8, initial_uncertainty=0.5)
+    with torch.no_grad():
+        head.advantage_output.bias.fill_(1.0)
+        head.uncertainty_output.bias.fill_(-10.0)
+    detections = torch.tensor([
+        [10.0, 10.0, 8.0, 4.0, 0.0, 0.60],
+        [11.0, 10.0, 8.0, 4.0, 0.1, 0.95]])
+    result = temporal.native_protected_selective_promotion(
+        head, torch.randn(2, 4), detections, torch.tensor([0, 1]),
+        torch.tensor([0.0, 1.0]), promotion_margin=0.10)
+    assert result['selected_index'] == 1
+    assert result['promoted'] is True
+    assert result['reason'] == 's7_promoted_confident_advantage'
+
+
+@pytest.mark.parametrize(
+    'overlap,retention_pairs,gain_pairs', [
+        ([0.8, 0.1, 0.0], 2, 0),
+        ([0.0, 0.8, 0.1], 0, 1),
+    ])
+def test_selective_promotion_loss_trains_retention_and_gain_cases(
+        overlap, retention_pairs, gain_pairs):
+    head = temporal.S7SelectivePromotionHead(
+        embedding_channels=4, hidden=8, initial_uncertainty=0.5)
+    detections = torch.tensor([
+        [10.0, 10.0, 8.0, 4.0, 0.0, 0.90],
+        [11.0, 10.0, 8.0, 4.0, 0.1, 0.80],
+        [12.0, 10.0, 7.0, 5.0, 0.2, 0.70]])
+    losses = temporal.selective_promotion_losses(
+        head, torch.randn(3, 4), detections, torch.tensor([0, 1, 1]),
+        torch.tensor([0.0, 0.5, -0.5]), torch.tensor(overlap),
+        riou_threshold=0.5)
+    assert losses['s7_selective_retention_pair_count'] == retention_pairs
+    assert losses['s7_selective_gain_pair_count'] == gain_pairs
+    total = sum(losses[name] for name in (
+        'loss_s7_selective_quality',
+        'loss_s7_selective_classification',
+        'loss_s7_selective_retention', 'loss_s7_selective_gain',
+        'loss_s7_selective_prior'))
+    total.backward()
+    assert head.advantage_output.weight.grad is not None
+    assert torch.isfinite(head.advantage_output.weight.grad).all()

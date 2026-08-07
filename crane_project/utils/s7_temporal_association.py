@@ -131,6 +131,285 @@ class S7CandidateQualityHead(nn.Module):
         return self.output(hidden).reshape(-1)
 
 
+class S7SelectivePromotionHead(nn.Module):
+    """Predict S7-vs-native quality advantage and calibrated uncertainty.
+
+    The head never assigns an unconditional score to the whole S7 lane.  It
+    compares every eligible S7 candidate with the current native top-1 and
+    returns a quality-advantage mean plus a positive uncertainty.  Zero mean
+    initialization and positive uncertainty make the initial lower confidence
+    bound negative, so an untrained head exactly falls back to native.
+    """
+
+    SCALAR_CHANNELS = 9
+
+    def __init__(self, embedding_channels: int, hidden: int = 128,
+                 initial_uncertainty: float = 0.5):
+        super().__init__()
+        if (int(embedding_channels) <= 0 or int(hidden) <= 0
+                or float(initial_uncertainty) <= 0.0):
+            raise ValueError(
+                'Selective promotion dimensions and uncertainty must be '
+                'positive')
+        self.embedding_projection = nn.Sequential(
+            nn.Linear(int(embedding_channels) * 4, int(hidden)),
+            nn.LayerNorm(int(hidden)), nn.GELU())
+        self.scalar_projection = nn.Sequential(
+            nn.Linear(self.SCALAR_CHANNELS, int(hidden)), nn.GELU())
+        self.advantage_output = nn.Linear(int(hidden) * 2, 1)
+        self.uncertainty_output = nn.Linear(int(hidden) * 2, 1)
+        nn.init.zeros_(self.advantage_output.weight)
+        nn.init.zeros_(self.advantage_output.bias)
+        nn.init.zeros_(self.uncertainty_output.weight)
+        nn.init.constant_(
+            self.uncertainty_output.bias,
+            _inverse_softplus(float(initial_uncertainty)))
+
+    @staticmethod
+    def _pair_scalar_features(
+            native_detection: torch.Tensor, s7_detections: torch.Tensor,
+            native_quality: torch.Tensor,
+            s7_quality: torch.Tensor) -> torch.Tensor:
+        eps = 1e-6
+        native_score = native_detection[5].clamp(eps, 1.0 - eps)
+        s7_scores = s7_detections[:, 5].clamp(eps, 1.0 - eps)
+        native_logit = torch.log(native_score) - torch.log1p(-native_score)
+        s7_logits = torch.log(s7_scores) - torch.log1p(-s7_scores)
+        native_box = native_detection[:5]
+        s7_boxes = s7_detections[:, :5]
+        displacement = torch.linalg.vector_norm(
+            s7_boxes[:, :2] - native_box[:2].reshape(1, 2), dim=1)
+        native_diag = torch.linalg.vector_norm(
+            native_box[2:4].abs().clamp_min(eps), dim=0)
+        s7_diag = torch.linalg.vector_norm(
+            s7_boxes[:, 2:4].abs().clamp_min(eps), dim=1)
+        center_distance = displacement / (
+            0.5 * (native_diag + s7_diag)).clamp_min(1.0)
+        native_log_scale = torch.log(
+            native_box[2:4].abs().clamp_min(eps)).reshape(1, 2)
+        s7_log_scale = torch.log(s7_boxes[:, 2:4].abs().clamp_min(eps))
+        scale_change = (s7_log_scale - native_log_scale).abs().mean(dim=1)
+        angle_similarity = torch.cos(
+            2.0 * (s7_boxes[:, 4] - native_box[4]))
+        native_quality = native_quality.reshape(()).expand_as(s7_quality)
+        return torch.stack((
+            native_logit.expand_as(s7_logits).clamp(-12.0, 12.0),
+            s7_logits.clamp(-12.0, 12.0),
+            (s7_logits - native_logit).clamp(-12.0, 12.0),
+            native_quality.clamp(-12.0, 12.0),
+            s7_quality.clamp(-12.0, 12.0),
+            (s7_quality - native_quality).clamp(-12.0, 12.0),
+            center_distance.clamp(max=20.0),
+            scale_change.clamp(max=12.0),
+            angle_similarity), dim=1)
+
+    def forward(self, native_embedding: torch.Tensor,
+                native_detection: torch.Tensor,
+                native_quality: torch.Tensor,
+                s7_embeddings: torch.Tensor,
+                s7_detections: torch.Tensor,
+                s7_quality: torch.Tensor):
+        if (native_embedding.ndim != 1 or native_detection.shape != (6,)
+                or native_quality.numel() != 1 or s7_embeddings.ndim != 2
+                or s7_detections.ndim != 2
+                or s7_detections.shape[1] != 6
+                or s7_quality.shape != (s7_detections.shape[0],)
+                or s7_embeddings.shape[0] != s7_detections.shape[0]
+                or s7_embeddings.shape[1] != native_embedding.shape[0]):
+            raise ValueError('Selective promotion pair inputs are misaligned')
+        if s7_detections.shape[0] == 0:
+            empty = s7_quality.new_zeros((0,))
+            return empty, empty
+        native = native_embedding.reshape(1, -1).expand_as(s7_embeddings)
+        pair_embedding = torch.cat((
+            native, s7_embeddings, s7_embeddings - native,
+            s7_embeddings * native), dim=1)
+        scalars = self._pair_scalar_features(
+            native_detection, s7_detections, native_quality, s7_quality)
+        hidden = torch.cat((
+            self.embedding_projection(pair_embedding.float()),
+            self.scalar_projection(scalars.float())), dim=1)
+        advantage = self.advantage_output(hidden).reshape(-1)
+        uncertainty = torch.nn.functional.softplus(
+            self.uncertainty_output(hidden).reshape(-1)).clamp(
+                min=1e-4, max=2.0)
+        return advantage, uncertainty
+
+
+def native_protected_selective_promotion(
+        promotion_head: S7SelectivePromotionHead,
+        embeddings: torch.Tensor, detections: torch.Tensor,
+        source_ids: torch.Tensor, quality_logits: torch.Tensor,
+        max_candidates: int = 100, uncertainty_multiplier: float = 1.0,
+        promotion_margin: float = 0.10) -> Dict:
+    """Return a native-first order unless an S7 lower bound is sufficient."""
+    if (embeddings.ndim != 2 or detections.ndim != 2
+            or detections.shape[1] != 6
+            or source_ids.shape != (detections.shape[0],)
+            or quality_logits.shape != (detections.shape[0],)
+            or embeddings.shape[0] != detections.shape[0]):
+        raise ValueError('Selective promotion candidate pool is misaligned')
+    if (int(max_candidates) <= 0 or float(uncertainty_multiplier) <= 0.0
+            or float(promotion_margin) < 0.0):
+        raise ValueError('Selective promotion inference settings are invalid')
+    count = int(detections.shape[0])
+    original_order = torch.arange(count, device=detections.device)
+    native = torch.nonzero(source_ids == 0, as_tuple=False).flatten()
+    if count == 0:
+        return dict(
+            order=original_order, selected_index=None,
+            native_index=None, promoted=False, reason='empty_pool',
+            best_lower_bound=None, candidate_count=0)
+    if native.numel() == 0:
+        return dict(
+            # No native candidate exists, so there is neither a valid native
+            # fallback nor a safe native-protected promotion decision.  Do
+            # not fabricate index 0: callers must be able to distinguish this
+            # state from selecting the first candidate in the pool.
+            order=original_order, selected_index=None,
+            native_index=None, promoted=False, reason='native_missing',
+            best_lower_bound=None, candidate_count=0)
+    native_index = native[torch.argmax(detections[native, 5])]
+    active_limit = min(int(max_candidates), count)
+    active = torch.arange(active_limit, device=detections.device)
+    s7 = active[source_ids[:active_limit] == 1]
+    selected = native_index
+    promoted = False
+    reason = 'native_fallback_no_s7_candidate'
+    best_lower_bound = None
+    best_uncertainty = None
+    best_advantage = None
+    if s7.numel():
+        advantage, uncertainty = promotion_head(
+            embeddings[native_index], detections[native_index],
+            quality_logits[native_index], embeddings[s7], detections[s7],
+            quality_logits[s7])
+        lower_bound = advantage - float(
+            uncertainty_multiplier) * uncertainty
+        best_position = torch.argmax(lower_bound)
+        best_lower_bound_tensor = lower_bound[best_position]
+        best_lower_bound = float(best_lower_bound_tensor.detach().item())
+        best_uncertainty = float(uncertainty[best_position].detach().item())
+        best_advantage = float(advantage[best_position].detach().item())
+        if best_lower_bound >= float(promotion_margin):
+            selected = s7[best_position]
+            promoted = True
+            reason = 's7_promoted_confident_advantage'
+        else:
+            reason = 'native_fallback_uncertain_advantage'
+    remaining = original_order[original_order != selected]
+    order = torch.cat((selected.reshape(1), remaining), dim=0)
+    return dict(
+        order=order, selected_index=int(selected.detach().item()),
+        native_index=int(native_index.detach().item()), promoted=promoted,
+        reason=reason, best_lower_bound=best_lower_bound,
+        best_advantage=best_advantage, best_uncertainty=best_uncertainty,
+        candidate_count=int(s7.numel()))
+
+
+def selective_promotion_losses(
+        promotion_head: S7SelectivePromotionHead,
+        embeddings: torch.Tensor, detections: torch.Tensor,
+        source_ids: torch.Tensor, quality_logits: torch.Tensor,
+        gt_overlap: torch.Tensor, riou_threshold: float,
+        advantage_gap: float = 0.10, promotion_margin: float = 0.10,
+        uncertainty_multiplier: float = 1.0,
+        quality_weight: float = 1.0, classification_weight: float = 1.0,
+        retention_weight: float = 2.0, gain_weight: float = 1.0,
+        prior_weight: float = 0.01, max_candidates: int = 100) -> Dict:
+    """Train source-only pair advantage, uncertainty and native abstention."""
+    positive = (
+        advantage_gap, uncertainty_multiplier, quality_weight,
+        classification_weight, retention_weight, gain_weight, prior_weight,
+        max_candidates)
+    if any(float(value) <= 0.0 for value in positive):
+        raise ValueError('Selective promotion loss settings must be positive')
+    if float(promotion_margin) < 0.0:
+        raise ValueError('Selective promotion margin must be non-negative')
+    if (gt_overlap.ndim != 1 or gt_overlap.shape != source_ids.shape
+            or gt_overlap.shape[0] != detections.shape[0]
+            or quality_logits.shape != gt_overlap.shape):
+        raise ValueError('Selective promotion training inputs are misaligned')
+
+    zero = promotion_head.advantage_output.bias.sum() * 0.0
+    native = torch.nonzero(source_ids == 0, as_tuple=False).flatten()
+    active_limit = min(int(max_candidates), int(detections.shape[0]))
+    s7 = torch.nonzero(
+        source_ids[:active_limit] == 1, as_tuple=False).flatten()
+    if native.numel() == 0 or s7.numel() == 0:
+        return dict(
+            loss_s7_selective_quality=zero,
+            loss_s7_selective_classification=zero,
+            loss_s7_selective_retention=zero,
+            loss_s7_selective_gain=zero,
+            loss_s7_selective_prior=zero,
+            s7_selective_candidate_count=int(s7.numel()),
+            s7_selective_positive_count=0,
+            s7_selective_retention_pair_count=0,
+            s7_selective_gain_pair_count=0,
+            s7_selective_native_top1_correct=0,
+            s7_selective_mean_uncertainty=0.0,
+            s7_selective_mean_advantage_target=0.0)
+
+    native_index = native[torch.argmax(detections[native, 5].detach())]
+    advantage, uncertainty = promotion_head(
+        embeddings[native_index], detections[native_index],
+        quality_logits[native_index], embeddings[s7], detections[s7],
+        quality_logits[s7])
+    target_advantage = (
+        gt_overlap[s7] - gt_overlap[native_index]).detach().clamp(-1.0, 1.0)
+    variance = uncertainty.square().clamp_min(1e-6)
+    quality_nll = (
+        0.5 * (advantage - target_advantage).square() / variance
+        + torch.log(uncertainty)).mean()
+    promote_target = (
+        (target_advantage >= float(advantage_gap))
+        & (gt_overlap[s7] >= float(riou_threshold))).float()
+    positive_count = int(promote_target.sum().item())
+    negative_count = int(promote_target.numel() - positive_count)
+    positive_scale = (
+        min(8.0, float(negative_count) / float(max(1, positive_count)))
+        if positive_count else 1.0)
+    classification = torch.nn.functional.binary_cross_entropy_with_logits(
+        advantage / max(float(advantage_gap), 1e-4), promote_target,
+        pos_weight=advantage.new_tensor(positive_scale))
+    lower_bound = advantage - float(
+        uncertainty_multiplier) * uncertainty
+    native_correct = bool(
+        gt_overlap[native_index] >= float(riou_threshold))
+    risky = gt_overlap[s7] < float(riou_threshold)
+    retention = zero
+    retention_pair_count = int(risky.sum().item()) if native_correct else 0
+    if native_correct and bool(risky.any().item()):
+        retention = torch.relu(
+            lower_bound[risky].max() - float(promotion_margin))
+    gain = zero
+    gain_pair_count = 0
+    if not native_correct and positive_count:
+        eligible = torch.nonzero(
+            promote_target > 0.5, as_tuple=False).flatten()
+        best = eligible[torch.argmax(target_advantage[eligible])]
+        gain = torch.relu(float(promotion_margin) - lower_bound[best])
+        gain_pair_count = 1
+    prior = advantage.square().mean()
+    return dict(
+        loss_s7_selective_quality=quality_nll * float(quality_weight),
+        loss_s7_selective_classification=(
+            classification * float(classification_weight)),
+        loss_s7_selective_retention=retention * float(retention_weight),
+        loss_s7_selective_gain=gain * float(gain_weight),
+        loss_s7_selective_prior=prior * float(prior_weight),
+        s7_selective_candidate_count=int(s7.numel()),
+        s7_selective_positive_count=positive_count,
+        s7_selective_retention_pair_count=retention_pair_count,
+        s7_selective_gain_pair_count=gain_pair_count,
+        s7_selective_native_top1_correct=int(native_correct),
+        s7_selective_mean_uncertainty=float(
+            uncertainty.detach().mean().item()),
+        s7_selective_mean_advantage_target=float(
+            target_advantage.mean().item()))
+
+
 def candidate_quality_relative_ranking_loss(
         quality_logits: torch.Tensor, gt_overlap: torch.Tensor,
         margin: float = 0.25, min_gap: float = 0.10,
