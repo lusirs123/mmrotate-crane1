@@ -9,6 +9,7 @@ read after the source-selected checkpoint has been fixed.
 """
 
 import argparse
+import collections
 import glob
 import hashlib
 import json
@@ -293,6 +294,11 @@ def parse_args():
         help=('Phase-2 source result JSON used only for provenance and '
               'checkpoint integrity; it is never used as target data.'))
     parser.add_argument('--s7-selective-promotion', action='store_true')
+    parser.add_argument(
+        '--s7-selective-two-frame', action='store_true',
+        help=('Use the lightweight V2 scalar-only two-frame constant-velocity '
+              'ranker. The legacy V1 selective head remains unchanged when '
+              'this flag is absent.'))
     parser.add_argument('--s7-selective-base-epoch', type=int, default=4)
     parser.add_argument('--s7-selective-hidden', type=int, default=128)
     parser.add_argument('--s7-selective-initial-uncertainty', type=float,
@@ -577,6 +583,11 @@ def validate_args(args):
         raise ValueError(
             '--s7-selective-promotion and its train-components mode must be '
             'enabled together')
+    selective_two_frame = bool(getattr(
+        args, 's7_selective_two_frame', False))
+    if selective_two_frame and not selective_mode:
+        raise ValueError(
+            '--s7-selective-two-frame requires s7_selective_promotion mode')
     selective_positive = (
         getattr(args, 's7_selective_base_epoch', 4),
         getattr(args, 's7_selective_hidden', 128),
@@ -603,8 +614,15 @@ def validate_args(args):
     if selective_mode and (temporal_enabled or static_mode or relative_quality
                            or bool(getattr(args, 's7_temporal_student', False))):
         raise ValueError(
-            's7_selective_promotion is a non-temporal pair selector and '
-            'cannot be combined with temporal/student/static ranker modes')
+            's7_selective_promotion has its own pair selector and cannot be '
+            'combined with temporal/student/static ranker modes')
+    if selective_two_frame:
+        if int(getattr(args, 's7_selective_hidden', 128)) != 16:
+            raise ValueError(
+                'Two-frame selective promotion requires hidden_dim=16')
+        if int(getattr(args, 's7_selective_max_candidates', 100)) != 20:
+            raise ValueError(
+                'Two-frame selective promotion requires S7 top-20')
     if (bool(getattr(args, 's7_lane_arbitration', False))
             and (args.train_components == 's7_quality_suppression'
                  or bool(getattr(args, 's7_quality_suppression', False)))):
@@ -969,8 +987,12 @@ def validate_args(args):
             raise ValueError(
                 's7_quality_suppression requires '
                 '--s7-source-max-mcml <= 3')
-    if args.train_components in (
-            's7_temporal_association', 's7_temporal_student'):
+    two_frame_selective = bool(
+        args.train_components == 's7_selective_promotion'
+        and getattr(args, 's7_selective_two_frame', False))
+    if (args.train_components in (
+            's7_temporal_association', 's7_temporal_student')
+            or two_frame_selective):
         if args.source_retain_max_top1_drop != 0:
             raise ValueError(
                 's7_temporal_association requires exact source retention')
@@ -2139,6 +2161,16 @@ def formal_source_records(args):
     val_keys = {os.path.realpath(row['image']) for row in val}
     if train_keys & val_keys:
         raise RuntimeError('Formal source train/validation overlap')
+    if bool(getattr(args, 's7_selective_two_frame', False)):
+        train_sequences = {
+            str(row.get('seq', ''))
+            for row in train}
+        val_sequences = {
+            str(row.get('seq', ''))
+            for row in val}
+        if train_sequences & val_sequences:
+            raise RuntimeError(
+                'Two-frame source validation must use held-out sequences')
     train = sorted(
         train, key=lambda row: (row['split'], row['seq'], row['frame']))
     val = sorted(
@@ -2568,11 +2600,16 @@ class FrozenDinoRotatedHeads(nn.Module):
                     int(getattr(args, 's7_static_hidden', 128)))
                 if self.s7_static_domain_ranker else None)
             self.s7_selective_promotion_head = (
-                temporal.S7SelectivePromotionHead(
-                    int(getattr(args, 'roi_fc_channels', 1024)),
-                    int(getattr(args, 's7_selective_hidden', 128)),
+                (temporal.S7SmallTemporalRankerHead(
+                    int(getattr(args, 's7_selective_hidden', 16)),
                     float(getattr(
                         args, 's7_selective_initial_uncertainty', 0.5)))
+                 if bool(getattr(args, 's7_selective_two_frame', False))
+                 else temporal.S7SelectivePromotionHead(
+                     int(getattr(args, 'roi_fc_channels', 1024)),
+                     int(getattr(args, 's7_selective_hidden', 128)),
+                     float(getattr(
+                         args, 's7_selective_initial_uncertainty', 0.5))))
                 if self.s7_selective_promotion else None)
         else:
             self.s7_readout = None
@@ -2782,7 +2819,10 @@ class FrozenDinoRotatedHeads(nn.Module):
                     self._args, 's7_selective_max_candidates', 100)))
             if apply_selective_promotion is None:
                 apply_selective_promotion = not self.training
-            if bool(apply_selective_promotion) and detections.shape[0]:
+            two_frame_selective = bool(getattr(
+                self._args, 's7_selective_two_frame', False))
+            if (bool(apply_selective_promotion) and not two_frame_selective
+                    and detections.shape[0]):
                 selective_selection = (
                     temporal.native_protected_selective_promotion(
                         promotion_head, base_embeddings, base_detections,
@@ -3442,7 +3482,8 @@ class FrozenDinoRotatedHeads(nn.Module):
             uncertainty_multiplier: float, quality_weight: float,
             classification_weight: float, retention_weight: float,
             gain_weight: float, prior_weight: float,
-            max_candidates: int) -> Dict:
+            max_candidates: int,
+            two_frame_state=None) -> Dict:
         """Fit the source-only native-vs-S7 conservative promotion head."""
         from mmcv.ops import box_iou_rotated
 
@@ -3472,6 +3513,28 @@ class FrozenDinoRotatedHeads(nn.Module):
                         dim=1).values
             else:
                 overlap = detections.new_zeros((detections.shape[0],))
+        if bool(getattr(self._args, 's7_selective_two_frame', False)):
+            if two_frame_state is None:
+                raise RuntimeError('Two-frame selective state is missing')
+            losses = temporal.small_temporal_ranker_losses(
+                promotion_head, embeddings, detections, source_ids,
+                quality_logits, overlap, two_frame_state,
+                riou_threshold=riou_thr, advantage_gap=advantage_gap,
+                promotion_margin=promotion_margin,
+                uncertainty_multiplier=uncertainty_multiplier,
+                quality_weight=quality_weight,
+                classification_weight=classification_weight,
+                retention_weight=retention_weight, gain_weight=gain_weight,
+                prior_weight=prior_weight, max_candidates=max_candidates)
+            selected_index = losses.pop(
+                '_s7_small_temporal_selected_index')
+            losses['_s7_small_temporal_selected_box'] = (
+                None if selected_index is None else
+                detections[selected_index, :5].detach())
+            losses['_s7_small_temporal_selected_embedding'] = (
+                None if selected_index is None else
+                embeddings[selected_index].detach())
+            return losses
         return temporal.selective_promotion_losses(
             promotion_head, embeddings, detections, source_ids,
             quality_logits, overlap, riou_threshold=riou_thr,
@@ -3958,8 +4021,29 @@ def static_source_feature_domain_augment(
     return augmented.contiguous(), dict(applied=True, operations=operations)
 
 
+def ordered_source_training_records(
+        records: Sequence[Dict], args, epoch: int) -> List[Dict]:
+    """Preserve causal video order only for modes that consume history."""
+    ordered = list(records)
+    two_frame_selective = bool(
+        args.train_components == 's7_selective_promotion'
+        and getattr(args, 's7_selective_two_frame', False))
+    if (args.train_components in (
+            's7_temporal_association', 's7_temporal_student')
+            or two_frame_selective):
+        return sorted(
+            ordered, key=lambda row: (
+                str(row.get('split', '')), str(row.get('seq', '')),
+                int(row.get('frame', -1))))
+    random.Random(args.seed + epoch).shuffle(ordered)
+    return ordered
+
+
 def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                 global_step: int, args, dino_device, head_device) -> Dict:
+    two_frame_selective = bool(
+        args.train_components == 's7_selective_promotion'
+        and getattr(args, 's7_selective_two_frame', False))
     heads.train()
     if args.train_components in (
             's7_rpn', 's7_merge', 's7_lane_arbitration',
@@ -3998,15 +4082,7 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
         heads.s7_selective_promotion_head.train()
     if head_device.type == 'cuda':
         torch.cuda.reset_peak_memory_stats(head_device)
-    ordered = list(records)
-    if args.train_components in (
-            's7_temporal_association', 's7_temporal_student'):
-        ordered = sorted(
-            ordered, key=lambda row: (
-                str(row.get('split', '')), str(row.get('seq', '')),
-                int(row.get('frame', -1))))
-    else:
-        random.Random(args.seed + epoch).shuffle(ordered)
+    ordered = ordered_source_training_records(records, args, epoch)
     losses = []
     component_sums = {}
     metric_sums = {}
@@ -4016,6 +4092,8 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
     temporal_previous_box = None
     temporal_previous_embedding = None
     temporal_previous_key = None
+    selective_two_frame_state = (
+        temporal.TwoFrameMotionState() if two_frame_selective else None)
     for index, record in enumerate(ordered):
         current_lr = scheduled_lr(args, epoch, global_step)
         for param_group in optimizer.param_groups:
@@ -4040,6 +4118,12 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                     or current_key[2] != temporal_previous_key[2] + 1):
                 temporal_previous_box = None
                 temporal_previous_embedding = None
+        if two_frame_selective:
+            selective_current_key = (
+                '{}|{}'.format(str(record.get('split', '')),
+                               str(record.get('seq', ''))),
+                int(record.get('frame', -1)))
+            selective_two_frame_state.prepare(*selective_current_key)
         if args.train_components == 's7_rpn':
             output = heads.forward_s7_rpn_train(
                 feature, img_meta, gt_boxes)
@@ -4142,7 +4226,8 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                 retention_weight=args.s7_selective_retention_weight,
                 gain_weight=args.s7_selective_gain_weight,
                 prior_weight=args.s7_selective_prior_weight,
-                max_candidates=args.s7_selective_max_candidates)
+                max_candidates=args.s7_selective_max_candidates,
+                two_frame_state=selective_two_frame_state)
             output['s7_selective_augmented'] = int(static_augmented)
         elif args.train_components == 'roi_cls':
             output = heads.forward_roi_cls_hard_train(
@@ -4184,6 +4269,13 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                 temporal_previous_box = None
                 temporal_previous_embedding = None
             temporal_previous_key = current_key
+        if two_frame_selective:
+            selected_box = output.pop('_s7_small_temporal_selected_box')
+            selected_embedding = output.pop(
+                '_s7_small_temporal_selected_embedding')
+            if selected_box is not None and selected_embedding is not None:
+                selective_two_frame_state.update(
+                    selected_box, selected_embedding, *selective_current_key)
         if (args.train_components == 's7_lane_arbitration'
                 and int(output.get('s7_lane_gain_pair_count', 0)) > 0):
             replay_key = (
@@ -4619,6 +4711,7 @@ def evaluate_records(dino, heads, records: Sequence[Dict], args,
     heads.eval()
     rows = []
     temporal_selector = None
+    small_temporal_selector = None
     temporal_scorer = getattr(heads, 's7_temporal_scorer', None)
     if (bool(getattr(heads, 's7_temporal_association', False))
             and temporal_scorer is not None
@@ -4636,6 +4729,20 @@ def evaluate_records(dino, heads, records: Sequence[Dict], args,
                 args, 's7_temporal_min_riou', 0.05)),
             min_appearance_similarity=float(getattr(
                 args, 's7_temporal_min_appearance', 0.20)))
+    if (bool(getattr(args, 's7_selective_two_frame', False))
+            and bool(getattr(heads, 's7_selective_promotion', False))
+            and heads.s7_inference_enabled()):
+        ranker_head = getattr(heads, 's7_selective_promotion_head', None)
+        if ranker_head is None:
+            raise RuntimeError('Two-frame selective ranker head is missing')
+        small_temporal_selector = temporal.CausalSmallTemporalRanker(
+            ranker_head,
+            max_candidates=int(getattr(
+                args, 's7_selective_max_candidates', 20)),
+            uncertainty_multiplier=float(getattr(
+                args, 's7_selective_uncertainty_multiplier', 1.0)),
+            promotion_margin=float(getattr(
+                args, 's7_selective_promotion_margin', 0.10)))
     with torch.no_grad():
         for index, record in enumerate(records):
             feature, img_meta, _gt_boxes, _gt_labels, original, cached = (
@@ -4680,6 +4787,28 @@ def evaluate_records(dino, heads, records: Sequence[Dict], args,
                         temporal_selection, original, args)
                 order = temporal_selection.pop('order').detach().cpu().numpy()
                 raw_detections = raw_detections[order]
+            if small_temporal_selector is not None:
+                selective_pool = getattr(heads, '_last_selective_pool', None)
+                if selective_pool is None:
+                    raise RuntimeError(
+                        'Two-frame selective candidate pool was not produced')
+                pool_detections = selective_pool['detections']
+                if pool_detections.shape[0] != raw_detections.shape[0]:
+                    raise RuntimeError(
+                        'Two-frame selective pool and detections disagree')
+                valid_mask_np = valid_rotated_detection_mask(
+                    raw_detections, img_meta, args.valid_content_tolerance)
+                sequence_key = '{}|{}'.format(
+                    str(record.get('split', '')), str(record['seq']))
+                temporal_selection = small_temporal_selector.select(
+                    pool_detections, selective_pool['embeddings'],
+                    selective_pool['source_ids'],
+                    selective_pool['quality_logits'], sequence_key,
+                    int(record['frame']), valid_mask=torch.as_tensor(
+                        valid_mask_np, dtype=torch.bool,
+                        device=pool_detections.device))
+                order = temporal_selection.pop('order').detach().cpu().numpy()
+                raw_detections = raw_detections[order]
             if candidate_merge is not None:
                 candidate_merge = dict(candidate_merge)
                 source_metrics = {}
@@ -4697,6 +4826,9 @@ def evaluate_records(dino, heads, records: Sequence[Dict], args,
                         top1_score=lane_metrics['top1_score'])
                 candidate_merge['source_top1_metrics'] = source_metrics
                 candidate_merge['temporal_selection'] = temporal_selection
+                if small_temporal_selector is not None:
+                    candidate_merge['s7_selective_promotion'] = (
+                        temporal_selection)
             raw_metrics = ranked_detection_metrics(
                 raw_detections, original, args.riou_thr,
                 args.deployment_score_thr)
@@ -5497,6 +5629,110 @@ def source_sequence_gain_summary(baseline_rows: Sequence[Dict],
         gained_sequences=gain_sequences, sequences=sequence_counts)
 
 
+def selective_promotion_summary(rows: Sequence[Dict]) -> Dict:
+    """Summarize actual V1/V2 S7 takeovers from evaluation rows."""
+    selections = []
+    for row in rows:
+        merge = row.get('candidate_merge') or {}
+        selection = merge.get('s7_selective_promotion')
+        if selection is not None:
+            selections.append(selection)
+    promoted = [selection for selection in selections
+                if bool(selection.get('promoted', False))]
+    history_ready = [selection for selection in selections
+                     if bool(selection.get('history_ready', False))]
+    return dict(
+        evaluated_frame_count=len(rows),
+        selection_frame_count=len(selections),
+        history_ready_frame_count=len(history_ready),
+        promotion_count=len(promoted),
+        nonzero_s7_promotion=bool(promoted),
+        promotion_reasons=dict(collections.Counter(
+            str(selection.get('reason', 'unknown'))
+            for selection in selections)))
+
+
+def selective_promotion_effect_summary(
+        baseline_rows: Sequence[Dict], candidate_rows: Sequence[Dict],
+        small_frame_keys: Sequence[str], min_gain_sequences: int = 2) -> Dict:
+    """Measure gains caused on frames where the V1/V2 selector took over.
+
+    The ordinary S7 source gate compares the complete candidate pipeline with
+    native S14.  For selective-promotion experiments that is insufficient:
+    the frozen affine/quality base may already provide the reported gain even
+    when the newly trained selector contributes nothing.  This audit isolates
+    frames with an actual S7 takeover and requires the selector itself to add
+    source Top-1 evidence, including on the source-small subset.
+    """
+    baseline_by_key = {source_frame_key(row): row for row in baseline_rows}
+    candidate_by_key = {source_frame_key(row): row for row in candidate_rows}
+    same_frames = set(baseline_by_key) == set(candidate_by_key)
+    small_keys = set(str(key) for key in small_frame_keys)
+    sequence_counts = {}
+    promotion_count = 0
+    gained_correct_count = 0
+    lost_correct_count = 0
+    small_promotion_count = 0
+    small_gained_correct_count = 0
+    if same_frames:
+        for key in sorted(candidate_by_key):
+            candidate_row = candidate_by_key[key]
+            selection = ((candidate_row.get('candidate_merge') or {}).get(
+                's7_selective_promotion') or {})
+            if not bool(selection.get('promoted', False)):
+                continue
+            promotion_count += 1
+            baseline_hit = bool(
+                baseline_by_key[key].get('metrics', {}).get(
+                    'top1_hit', False))
+            candidate_hit = bool(
+                candidate_row.get('metrics', {}).get('top1_hit', False))
+            gained = int(candidate_hit and not baseline_hit)
+            lost = int(baseline_hit and not candidate_hit)
+            gained_correct_count += gained
+            lost_correct_count += lost
+            sequence = '{}|{}'.format(
+                candidate_row.get('split', ''), candidate_row.get('seq', ''))
+            counts = sequence_counts.setdefault(
+                sequence, dict(promotion_count=0, gained_correct_count=0,
+                               lost_correct_count=0, net_gain=0))
+            counts['promotion_count'] += 1
+            counts['gained_correct_count'] += gained
+            counts['lost_correct_count'] += lost
+            counts['net_gain'] = (
+                counts['gained_correct_count']
+                - counts['lost_correct_count'])
+            if key in small_keys:
+                small_promotion_count += 1
+                small_gained_correct_count += gained
+    gain_sequences = sorted(
+        sequence for sequence, counts in sequence_counts.items()
+        if int(counts['net_gain']) > 0)
+    required = int(min_gain_sequences)
+    return dict(
+        same_frame_set=bool(same_frames),
+        promotion_count=int(promotion_count),
+        gained_correct_count=int(gained_correct_count),
+        lost_correct_count=int(lost_correct_count),
+        net_gain=int(gained_correct_count - lost_correct_count),
+        small_promotion_count=int(small_promotion_count),
+        small_gained_correct_count=int(small_gained_correct_count),
+        required_gain_sequences=required,
+        gained_sequence_count=len(gain_sequences),
+        gained_sequences=gain_sequences,
+        sequences=sequence_counts,
+        checks=dict(
+            same_frame_set=bool(same_frames),
+            selector_top1_loss_zero=bool(same_frames
+                                         and lost_correct_count == 0),
+            selector_top1_gain_nonzero=bool(same_frames
+                                            and gained_correct_count > 0),
+            selector_small_top1_gain_nonzero=bool(
+                same_frames and small_gained_correct_count > 0),
+            selector_gain_multi_sequence=bool(
+                same_frames and len(gain_sequences) >= required)))
+
+
 STAGE3_TEACHER_EXACT_FIELDS = (
     'frame_count', 'top1_hits', 'top1_mcml', 'recall_at_100',
     'top1_dfr_fraction_per_frame', 'top1_aci')
@@ -5681,6 +5917,13 @@ def s7_architecture(args) -> Dict:
             if static_domain_ranker and enabled and protected_merge else None),
         selective_promotion=(
             selective_promotion if enabled and protected_merge else False),
+        selective_two_frame=(bool(getattr(
+            args, 's7_selective_two_frame', False))
+            if selective_promotion and enabled and protected_merge else False),
+        selective_scalar_channels=(
+            temporal.S7SmallTemporalRankerHead.SCALAR_CHANNELS
+            if bool(getattr(args, 's7_selective_two_frame', False))
+            and selective_promotion and enabled and protected_merge else None),
         selective_hidden=(int(getattr(args, 's7_selective_hidden', 128))
                           if selective_promotion and enabled
                           and protected_merge else None),
@@ -6290,6 +6533,21 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                     base_epoch=int(args.s7_selective_base_epoch),
                     frozen_teacher='phase2_candidate_quality_head',
                     trainable='native_vs_s7_advantage_uncertainty_head_only',
+                    version=('v2_two_frame_constant_velocity'
+                             if bool(getattr(
+                                 args, 's7_selective_two_frame', False))
+                             else 'v1_static_pair'),
+                    two_frame_constant_velocity=bool(getattr(
+                        args, 's7_selective_two_frame', False)),
+                    scalar_channels=(
+                        temporal.S7SmallTemporalRankerHead.SCALAR_CHANNELS
+                        if bool(getattr(
+                            args, 's7_selective_two_frame', False)) else None),
+                    quality_prefilter=(
+                        'one_s7_from_lane_top20'
+                        if bool(getattr(
+                            args, 's7_selective_two_frame', False))
+                        else 'all_s7_lane_candidates'),
                     hidden=int(args.s7_selective_hidden),
                     initial_uncertainty=float(
                         args.s7_selective_initial_uncertainty),
@@ -6315,7 +6573,13 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                         operations=['brightness', 'blur', 'scale']),
                     inference='lower_confidence_bound_selective_promotion',
                     native_fallback=True, positive_promotion=True,
-                    temporal_association=False, inference_slice_routing=False,
+                    temporal_association=bool(getattr(
+                        args, 's7_selective_two_frame', False)),
+                    causal_history_frames=(2 if bool(getattr(
+                        args, 's7_selective_two_frame', False)) else 0),
+                    additional_dino_forward=False,
+                    dense_feature_history=False,
+                    inference_slice_routing=False,
                     sequence_identity_feature=False,
                     source_only=True, target_read=False,
                     frozen_detector=True, exact_source_retention=True)),
@@ -6495,7 +6759,13 @@ def validate_checkpoint(payload: Dict, in_channels: int, args,
                          != requested_s7.get(
                              'selective_uncertainty_multiplier')
                          or stored_s7.get('selective_max_candidates')
-                         != requested_s7.get('selective_max_candidates'))):
+                         != requested_s7.get('selective_max_candidates')
+                         or bool(stored_s7.get('selective_two_frame', False))
+                         != bool(requested_s7.get(
+                             'selective_two_frame', False))
+                         or stored_s7.get('selective_scalar_channels')
+                         != requested_s7.get(
+                             'selective_scalar_channels'))):
                 architecture_mismatch = True
             if architecture_mismatch:
                 raise RuntimeError('S7 checkpoint architecture mismatch')
@@ -6552,6 +6822,10 @@ def train_source_only(dino, heads, train_records, val_records, args,
     source_initial_temporal_small_summary = None
     s7_quality_support_audit = None
     history = []
+    contextual_source_validation = bool(
+        s7_temporal_mode or s7_student_mode
+        or (s7_selective_mode and getattr(
+            args, 's7_selective_two_frame', False)))
     if args.init_checkpoint:
         payload = torch.load(args.init_checkpoint, map_location='cpu')
         if s7_lane_mode and int(payload.get('epoch', -1)) != int(
@@ -6795,7 +7069,7 @@ def train_source_only(dino, heads, train_records, val_records, args,
             source_baseline_summary = summarize_rows(baseline_rows)
             source_baseline_correct_keys = source_correct_frame_keys(
                 baseline_rows)
-            if s7_temporal_mode or s7_student_mode:
+            if contextual_source_validation:
                 small_keys = {
                     '{}|{}|{}'.format(
                         row.get('split', ''), row.get('seq', ''),
@@ -6964,7 +7238,7 @@ def train_source_only(dino, heads, train_records, val_records, args,
                 role='source_validation')
             val_summary = summarize_rows(val_rows)
             if protected_source_mode:
-                if s7_temporal_mode or s7_student_mode:
+                if contextual_source_validation:
                     small_keys = {
                         '{}|{}|{}'.format(
                             row.get('split', ''), row.get('seq', ''),
@@ -7018,6 +7292,28 @@ def train_source_only(dino, heads, train_records, val_records, args,
                         protected_gate['checks'][
                             'multi_sequence_net_gain'] = bool(
                                 sequence_gain['passed'])
+                        promotion_summary = selective_promotion_summary(
+                            val_rows)
+                        protected_gate['checks'][
+                            'nonzero_s7_promotion'] = bool(
+                                promotion_summary['nonzero_s7_promotion'])
+                        protected_gate['selective_promotion'] = (
+                            promotion_summary)
+                        if bool(getattr(
+                                args, 's7_selective_two_frame', False)):
+                            small_keys = {
+                                source_frame_key(row)
+                                for row in small_val_records}
+                            promotion_effect = (
+                                selective_promotion_effect_summary(
+                                    source_baseline_rows, val_rows,
+                                    small_keys,
+                                    args.s7_selective_min_gain_sequences))
+                            protected_gate['checks'].update(
+                                promotion_effect['checks'])
+                            protected_gate[
+                                'selective_promotion_effect'] = (
+                                    promotion_effect)
                         protected_gate['passed'] = all(
                             protected_gate['checks'].values())
                     source_gate_passed = bool(protected_gate['passed'])
@@ -7156,7 +7452,7 @@ def train_source_only(dino, heads, train_records, val_records, args,
                         source_baseline_small_summary['top1_mcml'],
                         small_val_summary['top1_mcml'],
                         ','.join(failed_checks) if failed_checks else 'none'))
-                if s7_temporal_mode or s7_student_mode:
+                if contextual_source_validation:
                     print(
                         '[source-temporal-gate] epoch={} dfr={}->{} '
                         'aci={}->{} transitions={}'.format(
@@ -7747,6 +8043,20 @@ def main():
                         trainable=(
                             'native_vs_s7_advantage_uncertainty_head_only'),
                         frozen_teacher='phase2_candidate_quality_head',
+                        version=('v2_two_frame_constant_velocity'
+                                 if bool(getattr(
+                                     args, 's7_selective_two_frame', False))
+                                 else 'v1_static_pair'),
+                        scalar_channels=(
+                            temporal.S7SmallTemporalRankerHead.SCALAR_CHANNELS
+                            if bool(getattr(
+                                args, 's7_selective_two_frame', False))
+                            else None),
+                        quality_prefilter=(
+                            'one_s7_from_lane_top20'
+                            if bool(getattr(
+                                args, 's7_selective_two_frame', False))
+                            else 'all_s7_lane_candidates'),
                         objectives=[
                             'source_pair_advantage_regression',
                             'source_pair_promotion_classification',
@@ -7768,7 +8078,13 @@ def main():
                             operations=['brightness', 'blur', 'scale']),
                         inference=(
                             'lower_confidence_bound_selective_promotion'),
-                        native_fallback=True, temporal_association=False,
+                        native_fallback=True,
+                        temporal_association=bool(getattr(
+                            args, 's7_selective_two_frame', False)),
+                        causal_history_frames=(2 if bool(getattr(
+                            args, 's7_selective_two_frame', False)) else 0),
+                        additional_dino_forward=False,
+                        dense_feature_history=False,
                         inference_slice_routing=False,
                         sequence_identity_feature=False,
                         source_only=True, target_read=False,
@@ -7800,8 +8116,9 @@ def main():
                 args.train_components == 's7_selective_promotion'),
             reason=(
                 'Selective promotion uses only source GT, a frozen source-gated '
-                'quality teacher, and static feature perturbations; target and '
-                'sequence identity are not read.'
+                'quality teacher, static feature perturbations, and optionally '
+                'a causal two-frame scalar motion state; target and sequence '
+                'identity are not learned features.'
                 if args.train_components == 's7_selective_promotion' else
                 'The static ranker uses only source GT, frozen detector heads, '
                 'and deterministic feature-domain augmentation; target '

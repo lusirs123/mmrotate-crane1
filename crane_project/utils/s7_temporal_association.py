@@ -236,6 +236,380 @@ class S7SelectivePromotionHead(nn.Module):
         return advantage, uncertainty
 
 
+class TwoFrameMotionState:
+    """Minimal causal state for a two-frame constant-velocity prior.
+
+    Only the two most recent selected boxes and ROI embeddings are retained.
+    Sequence names are used solely to reset state at a boundary; they are
+    never exposed to the learned head as input features.
+    """
+
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.previous_box = None
+        self.previous_embedding = None
+        self.last_box = None
+        self.last_embedding = None
+        self.seq = None
+        self.frame = None
+
+    @property
+    def ready(self) -> bool:
+        return bool(self.previous_box is not None and self.last_box is not None)
+
+    def continuous(self, seq: str, frame: int) -> bool:
+        return bool(
+            self.frame is not None and self.seq == str(seq)
+            and int(frame) == int(self.frame) + 1)
+
+    def prepare(self, seq: str, frame: int) -> bool:
+        continuous = self.continuous(seq, frame)
+        if not continuous:
+            self.reset()
+        return continuous
+
+    def update(self, box: torch.Tensor, embedding: torch.Tensor,
+               seq: str, frame: int):
+        if box.numel() != 5 or embedding.ndim != 1:
+            raise ValueError('Two-frame state inputs have invalid shapes')
+        self.previous_box = self.last_box
+        self.previous_embedding = self.last_embedding
+        self.last_box = box.detach().clone()
+        self.last_embedding = embedding.detach().clone()
+        self.seq = str(seq)
+        self.frame = int(frame)
+
+
+def _periodic_angle_delta(current: torch.Tensor,
+                          previous: torch.Tensor) -> torch.Tensor:
+    """Return the shortest le90-compatible angle delta (period pi)."""
+    delta = current - previous
+    return 0.5 * torch.atan2(torch.sin(2.0 * delta),
+                             torch.cos(2.0 * delta))
+
+
+def _two_frame_candidate_motion_features(
+        detections: torch.Tensor, embeddings: torch.Tensor,
+        state: TwoFrameMotionState) -> torch.Tensor:
+    """Return seven constant-velocity residual cues per candidate."""
+    if not state.ready:
+        raise ValueError('Two-frame motion features require two prior frames')
+    if detections.ndim != 2 or detections.shape[1] != 6:
+        raise ValueError('Two-frame detections must have shape [N, 6]')
+    if (embeddings.ndim != 2
+            or embeddings.shape[0] != detections.shape[0]
+            or state.last_embedding.shape[0] != embeddings.shape[1]):
+        raise ValueError('Two-frame embeddings are misaligned')
+    if detections.shape[0] == 0:
+        return detections.new_zeros((0, 7))
+
+    eps = 1e-6
+    previous = state.previous_box.to(
+        device=detections.device, dtype=detections.dtype)
+    last = state.last_box.to(
+        device=detections.device, dtype=detections.dtype)
+    predicted_center = last[:2] + (last[:2] - previous[:2])
+    previous_log_scale = torch.log(previous[2:4].abs().clamp_min(eps))
+    last_log_scale = torch.log(last[2:4].abs().clamp_min(eps))
+    predicted_log_scale = last_log_scale + (
+        last_log_scale - previous_log_scale)
+    predicted_angle = last[4] + _periodic_angle_delta(last[4], previous[4])
+
+    boxes = detections[:, :5]
+    predicted_diag = torch.linalg.vector_norm(
+        torch.exp(predicted_log_scale), dim=0).clamp_min(1.0)
+    center_residual = (boxes[:, :2] - predicted_center.reshape(1, 2)) / (
+        0.5 * (torch.linalg.vector_norm(
+            boxes[:, 2:4].abs().clamp_min(eps), dim=1)
+               + predicted_diag).clamp_min(1.0).reshape(-1, 1))
+    center_norm = torch.linalg.vector_norm(center_residual, dim=1)
+    scale_residual = (
+        torch.log(boxes[:, 2:4].abs().clamp_min(eps))
+        - predicted_log_scale.reshape(1, 2))
+    angle_similarity = torch.cos(2.0 * (boxes[:, 4] - predicted_angle))
+    normalized_embedding = torch.nn.functional.normalize(
+        embeddings.float(), dim=1, eps=eps)
+    normalized_last = torch.nn.functional.normalize(
+        state.last_embedding.to(embeddings.device).float().reshape(1, -1),
+        dim=1, eps=eps)
+    appearance = (normalized_embedding * normalized_last).sum(dim=1)
+    return torch.cat((
+        center_residual.clamp(-20.0, 20.0),
+        center_norm.clamp(max=20.0).reshape(-1, 1),
+        scale_residual.clamp(-12.0, 12.0),
+        angle_similarity.reshape(-1, 1),
+        appearance.clamp(-1.0, 1.0).reshape(-1, 1)), dim=1)
+
+
+class S7SmallTemporalRankerHead(nn.Module):
+    """Tiny scalar-only native/S7 pair head for small-object ordering.
+
+    The 24 inputs contain current score/quality/pair geometry plus two-frame
+    constant-velocity residuals.  No sequence identity, dense feature map,
+    optical flow, or additional backbone output is consumed.
+    """
+
+    SCALAR_CHANNELS = 24
+
+    def __init__(self, hidden: int = 16, initial_uncertainty: float = 0.5):
+        super().__init__()
+        if int(hidden) <= 0 or float(initial_uncertainty) <= 0.0:
+            raise ValueError('Small temporal ranker settings must be positive')
+        self.hidden = nn.Sequential(
+            nn.Linear(self.SCALAR_CHANNELS, int(hidden)), nn.GELU(),
+            nn.Linear(int(hidden), int(hidden)), nn.GELU())
+        self.advantage_output = nn.Linear(int(hidden), 1)
+        self.uncertainty_output = nn.Linear(int(hidden), 1)
+        nn.init.zeros_(self.advantage_output.weight)
+        nn.init.zeros_(self.advantage_output.bias)
+        nn.init.zeros_(self.uncertainty_output.weight)
+        nn.init.constant_(
+            self.uncertainty_output.bias,
+            _inverse_softplus(float(initial_uncertainty)))
+
+    @staticmethod
+    def pair_features(
+            native_embedding: torch.Tensor,
+            native_detection: torch.Tensor, native_quality: torch.Tensor,
+            s7_embedding: torch.Tensor, s7_detection: torch.Tensor,
+            s7_quality: torch.Tensor,
+            state: TwoFrameMotionState) -> torch.Tensor:
+        if (native_embedding.ndim != 1 or s7_embedding.ndim != 1
+                or native_embedding.shape != s7_embedding.shape
+                or native_detection.shape != (6,)
+                or s7_detection.shape != (6,)
+                or native_quality.numel() != 1 or s7_quality.numel() != 1):
+            raise ValueError('Small temporal ranker pair is misaligned')
+        pair_static = S7SelectivePromotionHead._pair_scalar_features(
+            native_detection, s7_detection.reshape(1, 6), native_quality,
+            s7_quality.reshape(1))
+        eps = 1e-6
+        pair_appearance = torch.nn.functional.cosine_similarity(
+            native_embedding.float().reshape(1, -1),
+            s7_embedding.float().reshape(1, -1), dim=1, eps=eps)
+        static = torch.cat((pair_static, pair_appearance.reshape(1, 1)), 1)
+        pair_detections = torch.stack((native_detection, s7_detection), 0)
+        pair_embeddings = torch.stack((native_embedding, s7_embedding), 0)
+        motion = _two_frame_candidate_motion_features(
+            pair_detections, pair_embeddings, state).reshape(1, 14)
+        features = torch.cat((static, motion), dim=1)
+        if features.shape != (1, S7SmallTemporalRankerHead.SCALAR_CHANNELS):
+            raise RuntimeError('Unexpected small temporal feature dimension')
+        return features
+
+    def forward(self, features: torch.Tensor):
+        if (features.ndim != 2
+                or features.shape[1] != self.SCALAR_CHANNELS):
+            raise ValueError('Small temporal features must have shape [N, 24]')
+        hidden = self.hidden(features.float())
+        advantage = self.advantage_output(hidden).reshape(-1)
+        uncertainty = torch.nn.functional.softplus(
+            self.uncertainty_output(hidden).reshape(-1)).clamp(
+                min=1e-4, max=2.0)
+        return advantage, uncertainty
+
+
+def _native_and_quality_selected_s7(
+        detections: torch.Tensor, source_ids: torch.Tensor,
+        quality_logits: torch.Tensor, max_candidates: int,
+        valid_mask: Optional[torch.Tensor] = None):
+    """Choose native top-1 and one quality-ranked S7 from its lane top-K."""
+    if (source_ids.shape != (detections.shape[0],)
+            or quality_logits.shape != source_ids.shape):
+        raise ValueError('Small temporal candidate metadata is misaligned')
+    eligible = torch.ones_like(source_ids, dtype=torch.bool)
+    if valid_mask is not None:
+        if valid_mask.shape != source_ids.shape:
+            raise ValueError('Small temporal valid mask is misaligned')
+        eligible &= valid_mask.to(device=source_ids.device, dtype=torch.bool)
+    native = torch.nonzero(eligible & (source_ids == 0),
+                           as_tuple=False).flatten()
+    s7_ranked = torch.nonzero(eligible & (source_ids == 1),
+                              as_tuple=False).flatten()
+    s7 = s7_ranked[:min(int(max_candidates), int(s7_ranked.numel()))]
+    native_index = None
+    s7_index = None
+    if native.numel():
+        native_index = native[torch.argmax(detections[native, 5])]
+    if s7.numel():
+        # torch.argmax returns the first maximum, preserving lane order for
+        # deterministic ties in the frozen quality teacher.
+        s7_index = s7[torch.argmax(quality_logits[s7])]
+    return native_index, s7_index, int(s7.numel())
+
+
+def small_temporal_ranker_losses(
+        ranker_head: S7SmallTemporalRankerHead,
+        embeddings: torch.Tensor, detections: torch.Tensor,
+        source_ids: torch.Tensor, quality_logits: torch.Tensor,
+        gt_overlap: torch.Tensor, state: TwoFrameMotionState,
+        riou_threshold: float, advantage_gap: float = 0.10,
+        promotion_margin: float = 0.10,
+        uncertainty_multiplier: float = 1.0,
+        quality_weight: float = 1.0, classification_weight: float = 1.0,
+        retention_weight: float = 2.0, gain_weight: float = 1.0,
+        prior_weight: float = 0.01, max_candidates: int = 20) -> Dict:
+    """Train one quality-prefiltered S7/native pair using source GT only."""
+    if gt_overlap.shape != source_ids.shape:
+        raise ValueError('Small temporal overlap targets are misaligned')
+    zero = ranker_head.advantage_output.bias.sum() * 0.0
+    native_index, s7_index, candidate_count = _native_and_quality_selected_s7(
+        detections, source_ids, quality_logits, max_candidates)
+    base = dict(
+        loss_s7_selective_quality=zero,
+        loss_s7_selective_classification=zero,
+        loss_s7_selective_retention=zero,
+        loss_s7_selective_gain=zero,
+        loss_s7_selective_prior=zero,
+        s7_selective_candidate_count=candidate_count,
+        s7_selective_positive_count=0,
+        s7_selective_retention_pair_count=0,
+        s7_selective_gain_pair_count=0,
+        s7_selective_native_top1_correct=0,
+        s7_selective_mean_uncertainty=0.0,
+        s7_selective_mean_advantage_target=0.0,
+        s7_small_temporal_history_ready=int(state.ready),
+        _s7_small_temporal_selected_index=(
+            None if native_index is None else int(native_index)))
+    if native_index is None or s7_index is None or not state.ready:
+        return base
+
+    features = ranker_head.pair_features(
+        embeddings[native_index], detections[native_index],
+        quality_logits[native_index], embeddings[s7_index],
+        detections[s7_index], quality_logits[s7_index], state)
+    advantage, uncertainty = ranker_head(features)
+    target_advantage = (
+        gt_overlap[s7_index] - gt_overlap[native_index]).detach().clamp(-1, 1)
+    variance = uncertainty.square().clamp_min(1e-6)
+    quality_nll = (
+        0.5 * (advantage[0] - target_advantage).square() / variance[0]
+        + torch.log(uncertainty[0]))
+    promote = bool(
+        (target_advantage >= float(advantage_gap)).detach().item()
+        and (gt_overlap[s7_index] >= float(riou_threshold)).detach().item())
+    classification = torch.nn.functional.binary_cross_entropy_with_logits(
+        advantage, advantage.new_tensor([float(promote)]))
+    lower_bound = advantage[0] - float(
+        uncertainty_multiplier) * uncertainty[0]
+    selected_index = native_index
+    if bool((lower_bound >= float(promotion_margin)).detach().item()):
+        selected_index = s7_index
+    native_correct = bool(
+        (gt_overlap[native_index] >= float(riou_threshold)).detach().item())
+    risky = bool(
+        (gt_overlap[s7_index] < float(riou_threshold)).detach().item())
+    retention = (
+        torch.relu(lower_bound - float(promotion_margin))
+        if native_correct and risky else zero)
+    gain = (
+        torch.relu(float(promotion_margin) - lower_bound)
+        if (not native_correct and promote) else zero)
+    base.update(
+        loss_s7_selective_quality=quality_nll * float(quality_weight),
+        loss_s7_selective_classification=(
+            classification * float(classification_weight)),
+        loss_s7_selective_retention=retention * float(retention_weight),
+        loss_s7_selective_gain=gain * float(gain_weight),
+        loss_s7_selective_prior=(
+            advantage.square().mean() * float(prior_weight)),
+        s7_selective_positive_count=int(promote),
+        s7_selective_retention_pair_count=int(native_correct and risky),
+        s7_selective_gain_pair_count=int(not native_correct and promote),
+        s7_selective_native_top1_correct=int(native_correct),
+        s7_selective_mean_uncertainty=float(uncertainty.detach().item()),
+        s7_selective_mean_advantage_target=float(target_advantage.item()),
+        _s7_small_temporal_selected_index=int(selected_index))
+    return base
+
+
+class CausalSmallTemporalRanker:
+    """Native-protected two-frame inference with explicit abstention."""
+
+    def __init__(self, ranker_head: S7SmallTemporalRankerHead,
+                 max_candidates: int = 20,
+                 uncertainty_multiplier: float = 1.0,
+                 promotion_margin: float = 0.10):
+        if (int(max_candidates) <= 0
+                or float(uncertainty_multiplier) <= 0.0
+                or float(promotion_margin) < 0.0):
+            raise ValueError('Small temporal inference settings are invalid')
+        self.ranker_head = ranker_head
+        self.max_candidates = int(max_candidates)
+        self.uncertainty_multiplier = float(uncertainty_multiplier)
+        self.promotion_margin = float(promotion_margin)
+        self.state = TwoFrameMotionState()
+
+    def select(self, detections: torch.Tensor, embeddings: torch.Tensor,
+               source_ids: torch.Tensor, quality_logits: torch.Tensor,
+               seq: str, frame: int,
+               valid_mask: Optional[torch.Tensor] = None) -> Dict:
+        original_order = torch.arange(
+            detections.shape[0], device=detections.device)
+        continuous = self.state.prepare(seq, frame)
+        native_index, s7_index, candidate_count = (
+            _native_and_quality_selected_s7(
+                detections, source_ids, quality_logits,
+                self.max_candidates, valid_mask=valid_mask))
+        if native_index is None:
+            self.state.reset()
+            return dict(
+                order=original_order, selected_index=None, native_index=None,
+                promoted=False, override=False, reset=not continuous,
+                reason='native_missing', best_lower_bound=None,
+                best_advantage=None, best_uncertainty=None,
+                candidate_index=(None if s7_index is None else int(s7_index)),
+                candidate_count=candidate_count, history_ready=False)
+
+        selected = native_index
+        reason = 'native_fallback_history_warmup'
+        advantage_value = None
+        uncertainty_value = None
+        lower_bound_value = None
+        history_ready = self.state.ready
+        if history_ready and s7_index is not None:
+            features = self.ranker_head.pair_features(
+                embeddings[native_index], detections[native_index],
+                quality_logits[native_index], embeddings[s7_index],
+                detections[s7_index], quality_logits[s7_index], self.state)
+            advantage, uncertainty = self.ranker_head(features)
+            lower_bound = advantage[0] - (
+                self.uncertainty_multiplier * uncertainty[0])
+            advantage_value = float(advantage[0].detach().item())
+            uncertainty_value = float(uncertainty[0].detach().item())
+            lower_bound_value = float(lower_bound.detach().item())
+            if bool((lower_bound >= self.promotion_margin).detach().item()):
+                selected = s7_index
+                reason = 's7_promoted_confident_two_frame_advantage'
+            else:
+                reason = 'native_fallback_uncertain_two_frame_advantage'
+        elif history_ready:
+            reason = 'native_fallback_no_s7_candidate'
+
+        self.state.update(
+            detections[selected, :5], embeddings[selected], seq, frame)
+        remaining = original_order[original_order != selected]
+        order = torch.cat((selected.reshape(1), remaining), 0)
+        selected_value = int(selected.detach().item())
+        native_value = int(native_index.detach().item())
+        candidate_value = (None if s7_index is None
+                           else int(s7_index.detach().item()))
+        promoted = bool(selected_value != native_value)
+        return dict(
+            order=order, selected_index=selected_value,
+            native_index=native_value, promoted=promoted,
+            override=promoted, reset=not continuous, reason=reason,
+            best_lower_bound=lower_bound_value,
+            best_advantage=advantage_value,
+            best_uncertainty=uncertainty_value,
+            candidate_index=candidate_value,
+            candidate_count=candidate_count,
+            history_ready=bool(history_ready),
+            selected_source=('supplement_s7' if promoted else 'native_s14'))
+
+
 def native_protected_selective_promotion(
         promotion_head: S7SelectivePromotionHead,
         embeddings: torch.Tensor, detections: torch.Tensor,

@@ -52,6 +52,7 @@ def _args(tmp_path, **overrides):
         s7_student_small_token_thr=4.0,
         s7_student_teacher_result_json=None,
         s7_selective_promotion=False, s7_selective_base_epoch=4,
+        s7_selective_two_frame=False,
         s7_selective_hidden=128, s7_selective_initial_uncertainty=0.5,
         s7_selective_advantage_gap=0.10,
         s7_selective_promotion_margin=0.10,
@@ -136,6 +137,77 @@ def test_source_sequence_gain_requires_more_than_one_source_sequence():
     assert failed['gained_sequence_count'] == 1
     assert passed['passed'] is True
     assert passed['gained_sequence_count'] == 2
+
+
+def test_two_frame_formal_source_requires_held_out_sequence_names(
+        tmp_path, monkeypatch):
+    train_image = tmp_path / 'train.jpg'
+    val_image = tmp_path / 'val.jpg'
+    train_image.write_bytes(b'train')
+    val_image.write_bytes(b'val')
+
+    def discover(_root, annotation_split, _image_split):
+        image = train_image if annotation_split == 'train' else val_image
+        return [dict(
+            split=annotation_split, seq='shared_sequence', frame=1,
+            image=str(image), annotation='unused')]
+
+    monkeypatch.setattr(
+        labeller, 'discover_labeled_records_with_image_split', discover)
+    args = _args(
+        tmp_path, data_root=str(tmp_path),
+        source_train_datasets=['train:train'],
+        source_val_datasets=['val:val'], s7_selective_two_frame=True)
+    with pytest.raises(RuntimeError, match='held-out sequences'):
+        labeller.formal_source_records(args)
+
+
+def test_two_frame_source_training_order_is_causal():
+    records = [
+        dict(split='train', seq='b', frame=2),
+        dict(split='train', seq='a', frame=3),
+        dict(split='train', seq='a', frame=1),
+        dict(split='train', seq='b', frame=1),
+    ]
+    args = argparse.Namespace(
+        train_components='s7_selective_promotion',
+        s7_selective_two_frame=True, seed=0)
+    ordered = labeller.ordered_source_training_records(records, args, 1)
+    assert [(row['seq'], row['frame']) for row in ordered] == [
+        ('a', 1), ('a', 3), ('b', 1), ('b', 2)]
+
+
+def test_two_frame_selector_effect_audit_is_selector_specific():
+    def row(seq, frame, hit, promoted=False):
+        return dict(
+            split='val', seq=seq, frame=frame,
+            metrics=dict(top1_hit=hit),
+            candidate_merge=dict(s7_selective_promotion=dict(
+                promoted=promoted)))
+
+    baseline = [
+        row('a', 1, False), row('b', 1, False), row('c', 1, True)]
+    candidate = [
+        row('a', 1, True, True), row('b', 1, True, True),
+        row('c', 1, True, False)]
+    small_keys = [labeller.source_frame_key(candidate[0])]
+    passed = labeller.selective_promotion_effect_summary(
+        baseline, candidate, small_keys, min_gain_sequences=2)
+    assert passed['promotion_count'] == 2
+    assert passed['gained_correct_count'] == 2
+    assert passed['small_gained_correct_count'] == 1
+    assert passed['checks'] == dict(
+        same_frame_set=True, selector_top1_loss_zero=True,
+        selector_top1_gain_nonzero=True,
+        selector_small_top1_gain_nonzero=True,
+        selector_gain_multi_sequence=True)
+
+    lossy = list(candidate)
+    lossy[2] = row('c', 1, False, True)
+    failed = labeller.selective_promotion_effect_summary(
+        baseline, lossy, small_keys, min_gain_sequences=2)
+    assert failed['lost_correct_count'] == 1
+    assert failed['checks']['selector_top1_loss_zero'] is False
 
 
 def test_validate_rejects_selection_outside_checkpoint_epochs(tmp_path):
@@ -854,6 +926,30 @@ def test_s7_selective_promotion_trains_only_pair_head():
     assert names
     assert all(name.startswith('s7_selective_promotion_head.')
                for name in names)
+    assert not any(name.startswith('s7_candidate_quality_head.')
+                   for name in names)
+    assert not heads.native.weight.requires_grad
+
+
+def test_s7_two_frame_selective_trains_only_tiny_scalar_head():
+    class TinyHeads(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.native = torch.nn.Linear(2, 2)
+            self.s7_candidate_quality_head = (
+                labeller.temporal.S7CandidateQualityHead(2, 4))
+            self.s7_selective_promotion_head = (
+                labeller.temporal.S7SmallTemporalRankerHead(hidden=16))
+            self.s7_protected_merge = True
+
+    heads = TinyHeads()
+    names = labeller.configure_trainable_components(
+        heads, 's7_selective_promotion')
+    assert names
+    assert all(name.startswith('s7_selective_promotion_head.')
+               for name in names)
+    assert sum(parameter.numel() for parameter in
+               heads.s7_selective_promotion_head.parameters()) < 1000
     assert not any(name.startswith('s7_candidate_quality_head.')
                    for name in names)
     assert not heads.native.weight.requires_grad

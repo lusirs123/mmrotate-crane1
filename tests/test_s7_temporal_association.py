@@ -386,3 +386,107 @@ def test_selective_promotion_loss_trains_retention_and_gain_cases(
     total.backward()
     assert head.advantage_output.weight.grad is not None
     assert torch.isfinite(head.advantage_output.weight.grad).all()
+
+
+def _two_frame_state():
+    state = temporal.TwoFrameMotionState()
+    state.update(torch.tensor([10.0, 10.0, 8.0, 4.0, 1.50]),
+                 torch.tensor([1.0, 0.0]), 'seq', 1)
+    state.update(torch.tensor([12.0, 11.0, 8.0, 4.0, -1.50]),
+                 torch.tensor([1.0, 0.0]), 'seq', 2)
+    return state
+
+
+def test_two_frame_motion_uses_constant_velocity_and_periodic_angle():
+    state = _two_frame_state()
+    predicted_angle = -1.50 + temporal._periodic_angle_delta(
+        torch.tensor(-1.50), torch.tensor(1.50))
+    detections = torch.tensor([[14.0, 12.0, 8.0, 4.0,
+                                float(predicted_angle), 0.9]])
+    cues = temporal._two_frame_candidate_motion_features(
+        detections, torch.tensor([[1.0, 0.0]]), state)
+    assert cues.shape == (1, 7)
+    assert cues[0, :5].tolist() == pytest.approx(
+        [0.0, 0.0, 0.0, 0.0, 0.0], abs=1e-5)
+    assert cues[0, 5].item() == pytest.approx(1.0, abs=1e-5)
+    assert cues[0, 6].item() == pytest.approx(1.0, abs=1e-5)
+
+
+def test_small_temporal_ranker_is_fixed_24_scalar_and_lightweight():
+    head = temporal.S7SmallTemporalRankerHead(hidden=16)
+    detections = torch.tensor([
+        [14.0, 12.0, 8.0, 4.0, 0.0, 0.8],
+        [14.5, 12.0, 7.0, 4.0, 0.1, 0.7]])
+    embeddings = torch.tensor([[1.0, 0.0], [0.9, 0.1]])
+    features = head.pair_features(
+        embeddings[0], detections[0], torch.tensor(0.2),
+        embeddings[1], detections[1], torch.tensor(0.8),
+        _two_frame_state())
+    assert features.shape == (1, 24)
+    assert sum(parameter.numel() for parameter in head.parameters()) < 1000
+
+
+def test_small_temporal_ranker_warms_up_then_promotes_only_on_confident_lcb():
+    head = temporal.S7SmallTemporalRankerHead(hidden=16)
+    with torch.no_grad():
+        head.advantage_output.bias.fill_(1.0)
+        head.uncertainty_output.bias.fill_(-10.0)
+    selector = temporal.CausalSmallTemporalRanker(
+        head, max_candidates=20, promotion_margin=0.1)
+    detections = torch.tensor([
+        [10.0, 10.0, 8.0, 4.0, 0.0, 0.8],
+        [11.0, 10.0, 7.0, 4.0, 0.0, 0.7]])
+    embeddings = torch.tensor([[1.0, 0.0], [1.0, 0.0]])
+    sources = torch.tensor([0, 1])
+    quality = torch.tensor([0.0, 1.0])
+    first = selector.select(
+        detections, embeddings, sources, quality, 'seq', 1)
+    second = selector.select(
+        detections, embeddings, sources, quality, 'seq', 2)
+    third = selector.select(
+        detections, embeddings, sources, quality, 'seq', 3)
+    assert first['promoted'] is False and first['history_ready'] is False
+    assert second['promoted'] is False and second['history_ready'] is False
+    assert third['promoted'] is True and third['history_ready'] is True
+    assert third['selected_index'] == 1
+
+
+def test_small_temporal_ranker_resets_on_frame_gap_and_quality_prefilters_top20():
+    head = temporal.S7SmallTemporalRankerHead(hidden=16)
+    selector = temporal.CausalSmallTemporalRanker(head, max_candidates=20)
+    detections = torch.zeros(23, 6)
+    detections[:, 2:4] = torch.tensor([8.0, 4.0])
+    detections[:, 5] = torch.linspace(0.99, 0.10, 23)
+    sources = torch.ones(23, dtype=torch.long)
+    sources[0] = 0
+    quality = torch.zeros(23)
+    quality[5] = 2.0
+    quality[22] = 10.0
+    native, s7, count = temporal._native_and_quality_selected_s7(
+        detections, sources, quality, max_candidates=20)
+    assert native.item() == 0
+    assert s7.item() == 5
+    assert count == 20
+    embeddings = torch.randn(23, 2)
+    selector.select(detections, embeddings, sources, quality, 'seq', 1)
+    result = selector.select(
+        detections, embeddings, sources, quality, 'seq', 3)
+    assert result['reset'] is True
+    assert result['history_ready'] is False
+
+
+def test_small_temporal_training_state_follows_current_lcb_selection():
+    head = temporal.S7SmallTemporalRankerHead(hidden=16)
+    with torch.no_grad():
+        head.advantage_output.bias.fill_(1.0)
+        head.uncertainty_output.bias.fill_(-10.0)
+    detections = torch.tensor([
+        [14.0, 12.0, 8.0, 4.0, 0.0, 0.8],
+        [14.5, 12.0, 7.0, 4.0, 0.1, 0.7]])
+    embeddings = torch.tensor([[1.0, 0.0], [0.9, 0.1]])
+    losses = temporal.small_temporal_ranker_losses(
+        head, embeddings, detections, torch.tensor([0, 1]),
+        torch.tensor([0.0, 1.0]), torch.tensor([0.1, 0.9]),
+        _two_frame_state(), riou_threshold=0.5,
+        promotion_margin=0.1, max_candidates=20)
+    assert losses['_s7_small_temporal_selected_index'] == 1
