@@ -5329,8 +5329,8 @@ def evaluate_records(dino, heads, records: Sequence[Dict], args,
 def _highres_margin_audit_row(
         record: Dict, original: Dict, img_meta: Dict,
         raw_detections: np.ndarray, candidate_merge: Optional[Dict],
-        args, cached: bool) -> Dict:
-    """Build one ordinary source row from a shared-forward margin decision."""
+        args, cached: bool, role: str = 'source_validation') -> Dict:
+    """Build one read-only row from a shared-forward margin decision."""
     raw_detections = np.asarray(
         raw_detections, dtype=np.float32).reshape((-1, 6))
     raw_metrics = ranked_detection_metrics(
@@ -5357,7 +5357,7 @@ def _highres_margin_audit_row(
         original, img_meta, args.border_margin_ratio,
         args.valid_content_tolerance))
     return dict(
-        role='source_validation', split=record['split'], seq=record['seq'],
+        role=role, split=record['split'], seq=record['seq'],
         frame=int(record['frame']), feature_cache_hit=bool(cached),
         candidate_merge=candidate_merge, temporal_selection=None,
         temporal_attribution=None, metrics=metrics,
@@ -5367,8 +5367,9 @@ def _highres_margin_audit_row(
 
 def evaluate_highres_margin_grid_records(
         dino, heads, records: Sequence[Dict], args,
-        dino_device, head_device, margins: Sequence[float]) -> Dict:
-    """Evaluate several margins from one frozen forward per source frame."""
+        dino_device, head_device, margins: Sequence[float],
+        role: str = 'source_validation') -> Dict:
+    """Evaluate several margins from one frozen forward per labeled frame."""
     margins = sorted(set(float(value) for value in margins))
     if not margins or any(value < 0.0 for value in margins):
         raise ValueError('Margin grid must be non-empty and non-negative')
@@ -5401,7 +5402,7 @@ def evaluate_highres_margin_grid_records(
                 candidate_count=int(pool['detections'].shape[0] - 1))
             baseline_rows.append(_highres_margin_audit_row(
                 record, original, img_meta, native, baseline_merge,
-                args, cached))
+                args, cached, role=role))
             for margin in margins:
                 selection = (
                     temporal.native_protected_highres_promotion_from_logits(
@@ -5441,7 +5442,7 @@ def evaluate_highres_margin_grid_records(
                 rows_by_margin[margin].append(_highres_margin_audit_row(
                     record, original, img_meta,
                     candidate.detach().cpu().numpy(), margin_merge,
-                    args, cached))
+                    args, cached, role=role))
             if ((index + 1) % 25 == 0 or index + 1 == len(records)):
                 counts = ','.join(
                     '{}:{}'.format(
@@ -5449,8 +5450,8 @@ def evaluate_highres_margin_grid_records(
                         sum(row['metrics']['top1_hit']
                             for row in rows_by_margin[margin]))
                     for margin in margins)
-                print('[source-highres-margin] {}/{} top1={}'.format(
-                    index + 1, len(records), counts))
+                print('[highres-margin:{}] {}/{} top1={}'.format(
+                    role, index + 1, len(records), counts))
             del feature, _gt_boxes, _gt_labels
     return dict(
         baseline_rows=baseline_rows, rows_by_margin=rows_by_margin,
