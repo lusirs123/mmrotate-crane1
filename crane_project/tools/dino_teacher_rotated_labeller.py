@@ -354,6 +354,17 @@ def parse_args():
         '--s7-highres-teacher-result-json', default=None,
         help=('Phase-2 source result JSON used only for provenance and '
               'checkpoint integrity.'))
+    parser.add_argument(
+        '--source-highres-margin-audit', action='store_true',
+        help=('Run one read-only source-validation pass and apply multiple '
+              'promotion margins to the same frozen high-resolution logits.'))
+    parser.add_argument(
+        '--source-highres-margin-source-result-json', default=None,
+        help=('Completed high-resolution training result used to lock the '
+              'near-pass epoch checkpoint and source baselines.'))
+    parser.add_argument(
+        '--source-highres-margin-values', type=float, nargs='+', default=None)
+    parser.add_argument('--source-highres-margin-epoch', type=int, default=3)
     parser.add_argument('--s7-temporal-base-epoch', type=int, default=1)
     parser.add_argument('--s7-temporal-margin', type=float, default=0.5)
     parser.add_argument(
@@ -651,10 +662,27 @@ def validate_args(args):
             raise ValueError(
                 'Two-frame selective promotion requires S7 top-20')
     highres_mode = args.train_components == 's7_highres_roi_ranker'
+    highres_margin_audit = bool(getattr(
+        args, 'source_highres_margin_audit', False))
     if bool(getattr(args, 's7_highres_roi_ranker', False)) != highres_mode:
         raise ValueError(
             '--s7-highres-roi-ranker and its train-components mode must be '
             'enabled together')
+    if highres_margin_audit and not highres_mode:
+        raise ValueError(
+            'High-resolution margin audit requires s7_highres_roi_ranker')
+    margin_values = getattr(args, 'source_highres_margin_values', None)
+    if highres_margin_audit:
+        if not margin_values:
+            raise ValueError(
+                'High-resolution margin audit requires margin values')
+        margin_values = sorted(set(float(value) for value in margin_values))
+        if any(value < 0.0 for value in margin_values):
+            raise ValueError('High-resolution audit margins must be non-negative')
+        if 0.25 not in margin_values:
+            raise ValueError(
+                'High-resolution audit must include the trained 0.25 margin')
+        args.source_highres_margin_values = margin_values
     highres_positive = (
         getattr(args, 's7_highres_base_epoch', 4),
         getattr(args, 's7_highres_hidden', 32),
@@ -844,6 +872,30 @@ def validate_args(args):
         if int(getattr(args, 'source_temporal_attribution_epoch', 4)) <= 0:
             raise ValueError(
                 '--source-temporal-attribution-epoch must be positive')
+    if highres_margin_audit:
+        if conflict_json or readonly_temporal_audit:
+            raise ValueError(
+                'High-resolution margin audit cannot be combined with other '
+                'source audits')
+        if (not args.eval_only_checkpoint or args.init_checkpoint
+                or args.resume_checkpoint or not args.skip_target_eval):
+            raise ValueError(
+                'High-resolution margin audit requires one eval-only '
+                'checkpoint, source-only evaluation, and no init/resume')
+        if not os.path.isfile(args.eval_only_checkpoint):
+            raise ValueError(
+                'High-resolution audit checkpoint does not exist: {}'.format(
+                    args.eval_only_checkpoint))
+        result_json = getattr(
+            args, 'source_highres_margin_source_result_json', None)
+        if not result_json or not os.path.isfile(result_json):
+            raise ValueError(
+                'High-resolution margin audit requires its completed source '
+                'training result JSON')
+        args.source_highres_margin_audit_spec = (
+            load_highres_margin_audit_spec(
+                result_json, args.eval_only_checkpoint,
+                int(args.source_highres_margin_epoch)))
     if args.init_checkpoint and not os.path.isfile(args.init_checkpoint):
         raise ValueError('Init checkpoint does not exist: {}'.format(
             args.init_checkpoint))
@@ -971,7 +1023,7 @@ def validate_args(args):
             raise ValueError(
                 'Selective promotion phase-2 result lacks source summaries')
         args.s7_selective_teacher_result = teacher_result
-    if highres_mode:
+    if highres_mode and not highres_margin_audit:
         teacher_result_json = getattr(
             args, 's7_highres_teacher_result_json', None)
         if not teacher_result_json or not os.path.isfile(teacher_result_json):
@@ -1181,8 +1233,9 @@ def validate_args(args):
                 's7_static_domain_ranker requires '
                 '--s7-source-max-mcml <= 3')
     if highres_mode:
-        if (not args.init_checkpoint or args.resume_checkpoint
-                or args.eval_only_checkpoint):
+        if (not highres_margin_audit
+                and (not args.init_checkpoint or args.resume_checkpoint
+                     or args.eval_only_checkpoint)):
             raise ValueError(
                 's7_highres_roi_ranker requires a fresh phase-2 init '
                 'checkpoint and cannot resume or run eval-only')
@@ -5273,6 +5326,262 @@ def evaluate_records(dino, heads, records: Sequence[Dict], args,
     return rows
 
 
+def _highres_margin_audit_row(
+        record: Dict, original: Dict, img_meta: Dict,
+        raw_detections: np.ndarray, candidate_merge: Optional[Dict],
+        args, cached: bool) -> Dict:
+    """Build one ordinary source row from a shared-forward margin decision."""
+    raw_detections = np.asarray(
+        raw_detections, dtype=np.float32).reshape((-1, 6))
+    raw_metrics = ranked_detection_metrics(
+        raw_detections, original, args.riou_thr,
+        args.deployment_score_thr)
+    detections, filter_stats = filter_valid_rotated_detections(
+        raw_detections, img_meta, args.valid_content_tolerance)
+    metrics = ranked_detection_metrics(
+        detections, original, args.riou_thr,
+        args.deployment_score_thr)
+    metrics.update(filter_stats)
+    metrics['raw_unfiltered'] = raw_metrics
+    metrics['filter_effect'] = dict(
+        removed_usable_geometry=bool(
+            raw_metrics['best_usable_rank'] is not None
+            and metrics['best_usable_rank'] is None),
+        promoted_to_top1=bool(
+            not raw_metrics['top1_hit'] and metrics['top1_hit']),
+        demoted_from_top1=bool(
+            raw_metrics['top1_hit'] and not metrics['top1_hit']),
+        raw_best_usable_rank=raw_metrics['best_usable_rank'],
+        filtered_best_usable_rank=metrics['best_usable_rank'])
+    metrics.update(gt_border_metrics(
+        original, img_meta, args.border_margin_ratio,
+        args.valid_content_tolerance))
+    return dict(
+        role='source_validation', split=record['split'], seq=record['seq'],
+        frame=int(record['frame']), feature_cache_hit=bool(cached),
+        candidate_merge=candidate_merge, temporal_selection=None,
+        temporal_attribution=None, metrics=metrics,
+        detections=[[float(value) for value in detection]
+                    for detection in detections.tolist()])
+
+
+def evaluate_highres_margin_grid_records(
+        dino, heads, records: Sequence[Dict], args,
+        dino_device, head_device, margins: Sequence[float]) -> Dict:
+    """Evaluate several margins from one frozen forward per source frame."""
+    margins = sorted(set(float(value) for value in margins))
+    if not margins or any(value < 0.0 for value in margins):
+        raise ValueError('Margin grid must be non-empty and non-negative')
+    heads.eval()
+    baseline_rows = []
+    rows_by_margin = {value: [] for value in margins}
+    with torch.no_grad():
+        for index, record in enumerate(records):
+            feature, img_meta, _gt_boxes, _gt_labels, original, cached = (
+                prepare_record(
+                    dino, record, args, dino_device, head_device))
+            base = heads._protected_merge_detections(
+                feature, img_meta, rescale=True,
+                apply_highres_ranker=False)
+            pool = getattr(heads, '_last_highres_pool', None)
+            merge = getattr(heads, '_last_candidate_merge', None)
+            if pool is None or merge is None:
+                raise RuntimeError(
+                    'High-resolution margin audit produced no shared pool')
+            native_detection = (merge.get('source_top1_detections') or {}).get(
+                'native_s14')
+            native = np.asarray(
+                [] if native_detection is None else [native_detection],
+                dtype=np.float32).reshape((-1, 6))
+            baseline_merge = dict(merge)
+            baseline_merge['raw_top1_source'] = (
+                None if native.shape[0] == 0 else 'native_s14')
+            baseline_merge['s7_highres_roi_ranker'] = dict(
+                promoted=False, reason='native_reference',
+                candidate_count=int(pool['detections'].shape[0] - 1))
+            baseline_rows.append(_highres_margin_audit_row(
+                record, original, img_meta, native, baseline_merge,
+                args, cached))
+            for margin in margins:
+                selection = (
+                    temporal.native_protected_highres_promotion_from_logits(
+                        pool['quality_logits'], pool['detections'],
+                        pool['source_ids'], max_candidates=int(getattr(
+                            args, 's7_highres_max_candidates', 32)),
+                        score_weight=float(getattr(
+                            args, 's7_highres_score_weight', 1.0)),
+                        promotion_margin=margin))
+                selected_local = selection.get('selected_index')
+                selected_source = None
+                candidate = base
+                if selected_local is not None and base.shape[0]:
+                    selected_local = int(selected_local)
+                    selected_base = int(
+                        pool['base_indices'][selected_local].item())
+                    remaining = torch.arange(
+                        base.shape[0], device=base.device)
+                    remaining = remaining[remaining != selected_base]
+                    order = torch.cat((
+                        remaining.new_tensor([selected_base]), remaining), 0)
+                    candidate = base[order]
+                    selected_source = (
+                        'native_s14'
+                        if int(pool['source_ids'][selected_local].item()) == 0
+                        else 'supplement_s7')
+                margin_merge = dict(merge)
+                margin_merge['raw_top1_source'] = selected_source
+                margin_merge['s7_highres_roi_ranker'] = dict(
+                    selected_index=selection.get('selected_index'),
+                    native_index=selection.get('native_index'),
+                    promoted=bool(selection.get('promoted', False)),
+                    reason=str(selection.get('reason', '')),
+                    candidate_count=int(selection.get('candidate_count', 0)),
+                    best_margin=selection.get('best_margin'),
+                    audited_promotion_margin=float(margin))
+                rows_by_margin[margin].append(_highres_margin_audit_row(
+                    record, original, img_meta,
+                    candidate.detach().cpu().numpy(), margin_merge,
+                    args, cached))
+            if ((index + 1) % 25 == 0 or index + 1 == len(records)):
+                counts = ','.join(
+                    '{}:{}'.format(
+                        margin,
+                        sum(row['metrics']['top1_hit']
+                            for row in rows_by_margin[margin]))
+                    for margin in margins)
+                print('[source-highres-margin] {}/{} top1={}'.format(
+                    index + 1, len(records), counts))
+            del feature, _gt_boxes, _gt_labels
+    return dict(
+        baseline_rows=baseline_rows, rows_by_margin=rows_by_margin,
+        shared_model_forward_count=len(records),
+        margin_decision_count=len(records) * len(margins))
+
+
+def build_highres_margin_source_audit(
+        dino, heads, records: Sequence[Dict], args,
+        dino_device, head_device, spec: Dict) -> Dict:
+    """Run and gate the one frozen source-only margin calibration audit."""
+    margins = list(args.source_highres_margin_values)
+    evaluated = evaluate_highres_margin_grid_records(
+        dino, heads, records, args, dino_device, head_device, margins)
+    baseline_rows = evaluated['baseline_rows']
+    native_reproduction_summary = summarize_rows(baseline_rows)
+    threshold = float(spec['small_sampling']['short_token_threshold'])
+    small_keys = {
+        (record['split'], record['seq'], int(record['frame']))
+        for record in source_small_records(records, args, threshold)}
+    baseline_small_rows = [
+        row for row in baseline_rows
+        if (row['split'], row['seq'], int(row['frame'])) in small_keys]
+    native_small_reproduction_summary = summarize_rows(baseline_small_rows)
+    stored_baseline = spec['baseline_summary']
+    stored_baseline_small = spec['baseline_small_summary']
+    if (int(native_reproduction_summary['top1_hits'])
+            != int(stored_baseline['top1_hits'])
+            or int(native_small_reproduction_summary['top1_hits'])
+            != int(stored_baseline_small['top1_hits'])
+            or int(native_reproduction_summary['top1_mcml'])
+            != int(stored_baseline['top1_mcml'])
+            or int(native_small_reproduction_summary['top1_mcml'])
+            != int(stored_baseline_small['top1_mcml'])):
+        raise RuntimeError(
+            'Frozen native source baseline did not reproduce 677/303')
+    # The one-box native rows establish exact frame-level retention and
+    # temporal metrics. Keep the original stored baseline summary so its
+    # proposal-recall fields remain the formal native values rather than the
+    # recall of the one-box audit representation.
+    baseline_summary = dict(stored_baseline)
+    baseline_small_summary = dict(stored_baseline_small)
+    baseline_correct = source_correct_frame_keys(baseline_rows)
+    margin_results = []
+    reference = spec['history_row']
+    for margin in margins:
+        rows = evaluated['rows_by_margin'][margin]
+        small_rows = [
+            row for row in rows
+            if (row['split'], row['seq'], int(row['frame'])) in small_keys]
+        summary = summarize_rows(rows)
+        small_summary = summarize_rows(small_rows)
+        retention = source_top1_retention_summary(baseline_correct, rows)
+        gate = s7_source_selection_gate(
+            baseline_summary, baseline_small_summary,
+            summary, small_summary, retention, args)
+        promotions = sum(bool(
+            ((row.get('candidate_merge') or {}).get(
+                's7_highres_roi_ranker') or {}).get('promoted', False))
+                         for row in rows)
+        reference_reproduced = None
+        if abs(float(margin) - 0.25) <= 1e-12:
+            reference_reproduced = bool(
+                int(summary['top1_hits']) == int(
+                    reference['source_val']['top1_hits'])
+                and int(summary['top1_mcml']) == int(
+                    reference['source_val']['top1_mcml'])
+                and int(small_summary['top1_hits']) == int(
+                    reference['source_small_val']['top1_hits'])
+                and int(small_summary['top1_mcml']) == int(
+                    reference['source_small_val']['top1_mcml'])
+                and int(retention['lost_correct_count']) == int(
+                    reference['source_exact_retention'][
+                        'lost_correct_count'])
+                and int(retention['gained_correct_count']) == int(
+                    reference['source_exact_retention'][
+                        'gained_correct_count'])
+                and retention['lost_frame_keys'] == sorted(
+                    reference['source_exact_retention'].get(
+                        'lost_frame_keys', []))
+                and retention['gained_frame_keys'] == sorted(
+                    reference['source_exact_retention'].get(
+                        'gained_frame_keys', []))
+                and math.isclose(
+                    float(summary['top1_dfr_fraction_per_frame']),
+                    float(reference['source_val'][
+                        'top1_dfr_fraction_per_frame']),
+                    rel_tol=0.0, abs_tol=1e-12)
+                and math.isclose(
+                    float(summary['top1_aci']),
+                    float(reference['source_val']['top1_aci']),
+                    rel_tol=0.0, abs_tol=1e-12))
+            if not reference_reproduced:
+                raise RuntimeError(
+                    'Frozen 0.25 margin did not reproduce epoch 3')
+        margin_results.append(dict(
+            promotion_margin=float(margin), full_summary=summary,
+            small_summary=small_summary, source_exact_retention=retention,
+            source_gate=gate, gate_passed=bool(gate['passed']),
+            promotion_count=int(promotions),
+            epoch3_reference_reproduced=reference_reproduced))
+    passed = [row for row in margin_results if row['gate_passed']]
+    selected = (max(passed, key=lambda row: row['promotion_margin'])
+                if passed else None)
+    return dict(
+        mode='frozen_epoch3_shared_forward_source_margin_audit',
+        source_result_json=spec['source_result_json'],
+        checkpoint=spec['checkpoint'], checkpoint_epoch=int(spec['epoch']),
+        margins=[float(value) for value in margins],
+        selection_rule='highest_margin_among_formal_source_gate_passers',
+        shared_model_forward=True,
+        shared_model_forward_count=int(
+            evaluated['shared_model_forward_count']),
+        margin_decision_count=int(evaluated['margin_decision_count']),
+        baseline_summary=baseline_summary,
+        baseline_small_summary=baseline_small_summary,
+        native_frame_reproduction_summary=native_reproduction_summary,
+        native_small_frame_reproduction_summary=(
+            native_small_reproduction_summary),
+        results=margin_results, formal_gate_passed=bool(selected is not None),
+        selected_margin=(None if selected is None else float(
+            selected['promotion_margin'])),
+        selected_full_summary=(None if selected is None else
+                               selected['full_summary']),
+        selected_small_summary=(None if selected is None else
+                                selected['small_summary']),
+        selected_exact_retention=(None if selected is None else
+                                  selected['source_exact_retention']),
+        target_read=False)
+
+
 def longest_miss(rows: Sequence[Dict], hit_key: str) -> int:
     longest = 0
     current = 0
@@ -5822,6 +6131,83 @@ def load_source_conflict_spec(path: str, epoch: int) -> Dict:
         result_json=os.path.abspath(path), epoch=int(epoch),
         lost_frame_keys=sorted(lost), gained_frame_keys=sorted(gained),
         frame_keys=keys)
+
+
+def load_highres_margin_audit_spec(
+        path: str, checkpoint: str, epoch: int) -> Dict:
+    """Lock the one permitted margin audit to the source-safe near-pass."""
+    with open(path, 'r') as handle:
+        payload = json.load(handle)
+    source = payload.get('source') or {}
+    isolation = payload.get('isolation') or {}
+    protocol = payload.get('protocol') or {}
+    highres = protocol.get('s7_highres_roi_ranker') or {}
+    if int(payload.get('protocol_version', -1)) != 23:
+        raise ValueError('High-resolution margin audit requires protocol 23')
+    if payload.get('target_dev') is not None or highres.get('target_read') is not False:
+        raise ValueError('High-resolution source result must not read target')
+    if (payload.get('decision') !=
+            'SOURCE_ONLY_HIGHRES_ROI_RANKER_FALLBACK_TARGET_NOT_READ'):
+        raise ValueError('High-resolution source result has an invalid decision')
+    if (isolation.get('train_components') != 's7_highres_roi_ranker'
+            or isolation.get('dino_parameters_unchanged') is not True
+            or isolation.get('frozen_head_parameters_unchanged') is not True
+            or isolation.get('target_used_for_training') is not False
+            or isolation.get('target_used_for_checkpoint_selection') is not False):
+        raise ValueError('High-resolution source isolation audit failed')
+    if (highres.get('source_only') is not True
+            or highres.get('exact_source_retention') is not True
+            or float(highres.get('promotion_margin', -1.0)) != 0.25):
+        raise ValueError('High-resolution source protocol mismatch')
+    matches = [row for row in source.get('history', [])
+               if int(row.get('epoch', -1)) == int(epoch)]
+    if len(matches) != 1:
+        raise ValueError(
+            'Expected one high-resolution history row for epoch {}'.format(
+                epoch))
+    row = matches[0]
+    full = row.get('source_val') or {}
+    small = row.get('source_small_val') or {}
+    retention = row.get('source_exact_retention') or {}
+    checks = (row.get('source_selection_gate') or {}).get('checks') or {}
+    failed_checks = sorted(name for name, passed in checks.items()
+                           if passed is not True)
+    if (int(epoch) != 3 or row.get('checkpoint_saved') is not True
+            or row.get('selection_eligible') is not True
+            or row.get('source_selection_gate_passed') is not False
+            or int(full.get('top1_hits', -1)) != 687
+            or int(small.get('top1_hits', -1)) != 310
+            or int(full.get('top1_mcml', -1)) != 3
+            or int(small.get('top1_mcml', -1)) != 3
+            or int(retention.get('baseline_correct_count', -1)) != 677
+            or int(retention.get('lost_correct_count', -1)) != 0
+            or int(retention.get('gained_correct_count', -1)) != 10
+            or failed_checks != [
+                'full_top1_absolute', 'small_top1_absolute']):
+        raise ValueError(
+            'High-resolution epoch 3 is not the locked 687/310 near-pass')
+    baseline = source.get('baseline_validation_summary') or {}
+    baseline_small = source.get('baseline_small_validation_summary') or {}
+    sampling = source.get('small_sampling') or {}
+    if (int(baseline.get('top1_hits', -1)) != 677
+            or int(baseline_small.get('top1_hits', -1)) != 303
+            or sampling.get('short_token_threshold') is None):
+        raise ValueError('High-resolution result lacks the locked baselines')
+    selected = payload.get('source_selected_checkpoint')
+    if not selected:
+        raise ValueError('High-resolution result has no fallback checkpoint')
+    expected_checkpoint = os.path.join(
+        os.path.dirname(selected),
+        'labeller_epoch_{:02d}_source_only.pth'.format(int(epoch)))
+    if os.path.realpath(expected_checkpoint) != os.path.realpath(checkpoint):
+        raise ValueError(
+            'Margin audit checkpoint must be {}'.format(expected_checkpoint))
+    return dict(
+        source_result_json=os.path.abspath(path), epoch=int(epoch),
+        checkpoint=os.path.abspath(checkpoint), training_result=payload,
+        history_row=row, baseline_summary=baseline,
+        baseline_small_summary=baseline_small,
+        small_sampling=sampling)
 
 
 def source_top1_retention_summary(
@@ -8062,6 +8448,81 @@ def main():
     heads = FrozenDinoRotatedHeads(in_channels, args).to(head_device)
     trainable_names = configure_trainable_components(
         heads, args.train_components)
+    if bool(getattr(args, 'source_highres_margin_audit', False)):
+        spec = args.source_highres_margin_audit_spec
+        checkpoint_payload = torch.load(
+            args.eval_only_checkpoint, map_location='cpu')
+        validate_checkpoint(checkpoint_payload, in_channels, args)
+        if int(checkpoint_payload.get('epoch', -1)) != int(spec['epoch']):
+            raise RuntimeError(
+                'High-resolution margin checkpoint epoch mismatch')
+        load_heads_checkpoint_state(heads, checkpoint_payload)
+        for parameter in heads.parameters():
+            parameter.requires_grad = False
+        trainable_names = []
+        head_versions = common.module_parameter_versions(heads)
+        audit = build_highres_margin_source_audit(
+            dino, heads, source_val, args,
+            dino_device, head_device, spec)
+        dino_unchanged = (
+            dino_versions == common.module_parameter_versions(dino))
+        heads_unchanged = (
+            head_versions == common.module_parameter_versions(heads))
+        if not dino_unchanged or not heads_unchanged:
+            raise RuntimeError(
+                'Read-only high-resolution margin audit changed parameters')
+        decision = (
+            'SOURCE_ONLY_HIGHRES_MARGIN_AUDIT_GATE_PASSED_TARGET_NOT_READ'
+            if audit['formal_gate_passed'] else
+            'SOURCE_ONLY_HIGHRES_MARGIN_AUDIT_GATE_FAILED_TARGET_NOT_READ')
+        result = dict(
+            protocol_version=24,
+            protocol=dict(
+                architecture=(
+                    'frozen_highres_epoch3_shared_forward_margin_audit'),
+                source_data=source_protocol,
+                checkpoint_selection=(
+                    'highest_promotion_margin_among_formal_source_gate_'
+                    'passers'),
+                fixed_margins=list(audit['margins']),
+                shared_model_forward=True,
+                parameter_update=False, source_only=True,
+                target_read=False,
+                source_gate=dict(
+                    exact_retention=True, min_full_top1=int(
+                        args.s7_source_min_full_top1),
+                    min_small_top1=int(args.s7_source_min_small_top1),
+                    max_mcml=int(args.s7_source_max_mcml),
+                    dfr_aci_nonregression=True)),
+            isolation=dict(
+                dino_frozen=True,
+                dino_parameters_unchanged=bool(dino_unchanged),
+                detector_parameters_unchanged=bool(heads_unchanged),
+                read_only_evaluation=True,
+                parameter_updates_performed=False,
+                trainable_parameter_names=trainable_names,
+                trainable_parameter_count=0,
+                target_used_for_training=False,
+                target_used_for_checkpoint_selection=False,
+                target_labels_used_for_evaluation_only=False),
+            architecture=dict(
+                in_channels=in_channels, patch_size=int(args.patch_size),
+                rpn=rpn_config(in_channels, args),
+                roi=roi_config(in_channels, args),
+                s7=s7_architecture(args),
+                s7_rpn=s7_rpn_config(
+                    int(getattr(args, 's7_channels', 128)), args)),
+            source_highres_margin_audit=audit,
+            source_selected_checkpoint=(
+                audit['checkpoint'] if audit['formal_gate_passed'] else None),
+            selected_promotion_margin=audit['selected_margin'],
+            target_dev=None, decision=decision)
+        replacements = common.write_json_atomic(args.out_json, result)
+        print('[dino-labeller] {}'.format(decision))
+        print('[source-highres-margin] selected={}'.format(
+            audit['selected_margin']))
+        print('[json] nonfinite_replacements={}'.format(replacements))
+        return
     source_val_rows = None
     s7_quality_support_audit = None
     source_initial_temporal_summary = None
@@ -8179,6 +8640,7 @@ def main():
         validate_checkpoint(payload, in_channels, args)
         load_heads_checkpoint_state(heads, payload)
         current_source_summary = best_source_summary
+        current_source_small_summary = best_source_small_summary
 
     source_val_results_path = None
     if args.source_val_results_out:

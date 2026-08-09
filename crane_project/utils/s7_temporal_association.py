@@ -1238,19 +1238,21 @@ def highres_candidate_rank_losses(
         s7_highres_quality_mean_prediction=float(prediction.mean().item()))
 
 
-def native_protected_highres_promotion(
-        quality_head: S7HighResCandidateQualityHead,
-        embedding: torch.Tensor, highres_embedding: torch.Tensor,
-        detections: torch.Tensor, source_ids: torch.Tensor,
-        max_candidates: int = 32, score_weight: float = 1.0,
+def native_protected_highres_promotion_from_logits(
+        quality_logits: torch.Tensor, detections: torch.Tensor,
+        source_ids: torch.Tensor, max_candidates: int = 32,
+        score_weight: float = 1.0,
         promotion_margin: float = 0.25) -> Dict:
-    """Reorder one frame while retaining native-first abstention semantics."""
+    """Apply one native-protected margin without recomputing ROI features."""
     if detections.ndim != 2 or detections.shape[1] != 6:
         raise ValueError('High-resolution promotion expects [N, 6] detections')
-    if (embedding.shape[0] != detections.shape[0]
-            or highres_embedding.shape[0] != detections.shape[0]
+    if (quality_logits.shape != (detections.shape[0],)
             or source_ids.shape != (detections.shape[0],)):
         raise ValueError('High-resolution promotion inputs are misaligned')
+    if int(max_candidates) <= 0 or float(score_weight) <= 0.0:
+        raise ValueError('High-resolution promotion settings must be positive')
+    if float(promotion_margin) < 0.0:
+        raise ValueError('High-resolution promotion margin must be non-negative')
     original = torch.arange(detections.shape[0], device=detections.device)
     native = torch.nonzero(source_ids == 0, as_tuple=False).flatten()
     s7_ranked = torch.nonzero(source_ids == 1, as_tuple=False).flatten()
@@ -1264,9 +1266,7 @@ def native_protected_highres_promotion(
                     native_index=int(native_index.item()), promoted=False,
                     reason='native_fallback_no_s7_candidate', candidate_count=0)
     active = torch.cat((native_index.reshape(1), s7), dim=0)
-    quality = quality_head(
-        embedding[active], highres_embedding[active], detections[active],
-        source_ids[active])
+    quality = quality_logits[active]
     scores = detections[active, 5].clamp(1e-6, 1.0 - 1e-6)
     fused = torch.log(scores) - torch.log1p(-scores) + float(score_weight) * quality
     # A zero-initialized head is an exact no-op, which makes epoch-0 a true
@@ -1293,6 +1293,24 @@ def native_protected_highres_promotion(
         candidate_count=int(s7.numel()),
         best_quality=float(quality[best_position].detach().item()),
         best_margin=float((fused[best_position] - fused[0]).detach().item()))
+
+
+def native_protected_highres_promotion(
+        quality_head: S7HighResCandidateQualityHead,
+        embedding: torch.Tensor, highres_embedding: torch.Tensor,
+        detections: torch.Tensor, source_ids: torch.Tensor,
+        max_candidates: int = 32, score_weight: float = 1.0,
+        promotion_margin: float = 0.25) -> Dict:
+    """Reorder one frame while retaining native-first abstention semantics."""
+    if (embedding.shape[0] != detections.shape[0]
+            or highres_embedding.shape[0] != detections.shape[0]):
+        raise ValueError('High-resolution promotion inputs are misaligned')
+    quality_logits = quality_head(
+        embedding, highres_embedding, detections, source_ids)
+    return native_protected_highres_promotion_from_logits(
+        quality_logits, detections, source_ids,
+        max_candidates=max_candidates, score_weight=score_weight,
+        promotion_margin=promotion_margin)
 
 
 def _default_rotated_iou(current: torch.Tensor,

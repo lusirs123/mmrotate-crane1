@@ -99,6 +99,26 @@ def test_highres_promotion_is_native_noop_before_training():
     assert result['order'].tolist() == [0, 1]
 
 
+def test_highres_margin_grid_reuses_logits_and_changes_only_policy():
+    detections = torch.tensor([
+        [10.0, 10.0, 8.0, 4.0, 0.0, 0.50],
+        [11.0, 10.0, 8.0, 4.0, 0.0, 0.50]])
+    quality = torch.tensor([0.0, 0.23])
+    source_ids = torch.tensor([0, 1])
+    permissive = temporal.native_protected_highres_promotion_from_logits(
+        quality, detections, source_ids, max_candidates=1,
+        promotion_margin=0.20)
+    conservative = temporal.native_protected_highres_promotion_from_logits(
+        quality, detections, source_ids, max_candidates=1,
+        promotion_margin=0.25)
+    assert permissive['promoted'] is True
+    assert permissive['order'].tolist() == [1, 0]
+    assert conservative['promoted'] is False
+    assert conservative['order'].tolist() == [0, 1]
+    assert permissive['best_margin'] == pytest.approx(0.23)
+    assert conservative['best_margin'] == pytest.approx(0.23)
+
+
 def test_candidate_quality_relative_ranking_builds_deterministic_pairs():
     logits = torch.zeros(3, requires_grad=True)
     result = temporal.candidate_quality_relative_ranking_loss(
