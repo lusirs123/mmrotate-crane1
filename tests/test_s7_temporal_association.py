@@ -61,6 +61,44 @@ def test_candidate_quality_head_is_constant_before_training_and_has_dense_gradie
     assert torch.isfinite(head.output.weight.grad).all()
 
 
+def test_highres_quality_head_and_rank_loss_use_two_roi_resolutions():
+    head = temporal.S7HighResCandidateQualityHead(
+        embedding_channels=4, highres_channels=3, hidden=8)
+    detections = torch.tensor([
+        [10.0, 10.0, 8.0, 4.0, 0.0, 0.90],
+        [11.0, 10.0, 8.0, 4.0, 0.1, 0.80]])
+    embedding = torch.randn(2, 4)
+    highres = torch.randn(2, 3)
+    source_ids = torch.tensor([0, 1])
+    logits = head(embedding, highres, detections, source_ids)
+    assert logits.tolist() == pytest.approx([0.0, 0.0])
+    losses = temporal.highres_candidate_rank_losses(
+        head, embedding, highres, detections, source_ids,
+        gt_overlap=torch.tensor([0.0, 0.7]), riou_threshold=0.5)
+    assert losses['s7_highres_gain_pair_count'] == 1
+    total = sum(losses[name] for name in (
+        'loss_s7_highres_quality', 'loss_s7_highres_relative',
+        'loss_s7_highres_retention', 'loss_s7_highres_gain',
+        'loss_s7_highres_prior'))
+    total.backward()
+    assert head.output.weight.grad is not None
+    assert torch.isfinite(head.output.weight.grad).all()
+
+
+def test_highres_promotion_is_native_noop_before_training():
+    head = temporal.S7HighResCandidateQualityHead(
+        embedding_channels=4, highres_channels=3, hidden=8)
+    detections = torch.tensor([
+        [10.0, 10.0, 8.0, 4.0, 0.0, 0.40],
+        [11.0, 10.0, 8.0, 4.0, 0.0, 0.90]])
+    result = temporal.native_protected_highres_promotion(
+        head, torch.randn(2, 4), torch.randn(2, 3), detections,
+        torch.tensor([0, 1]), max_candidates=1)
+    assert result['reason'] == 'native_fallback_zero_residual'
+    assert result['promoted'] is False
+    assert result['order'].tolist() == [0, 1]
+
+
 def test_candidate_quality_relative_ranking_builds_deterministic_pairs():
     logits = torch.zeros(3, requires_grad=True)
     result = temporal.candidate_quality_relative_ranking_loss(

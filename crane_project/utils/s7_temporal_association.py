@@ -131,6 +131,54 @@ class S7CandidateQualityHead(nn.Module):
         return self.output(hidden).reshape(-1)
 
 
+class S7HighResCandidateQualityHead(nn.Module):
+    """Fuse frozen semantic ROI evidence with a lightweight S7 ROI readout.
+
+    The high-resolution branch is deliberately a quality readout, not a
+    second detector.  Its output is initialized to zero so the phase-2
+    native/S7 ordering is unchanged before source-only training.
+    """
+
+    SCALAR_CHANNELS = 6
+
+    def __init__(self, embedding_channels: int, highres_channels: int,
+                 hidden: int = 32):
+        super().__init__()
+        if (int(embedding_channels) <= 0 or int(highres_channels) <= 0
+                or int(hidden) <= 0):
+            raise ValueError('High-resolution quality dimensions must be positive')
+        self.semantic_projection = nn.Sequential(
+            nn.Linear(int(embedding_channels), int(hidden)),
+            nn.LayerNorm(int(hidden)), nn.GELU())
+        self.highres_projection = nn.Sequential(
+            nn.Linear(int(highres_channels), int(hidden)),
+            nn.LayerNorm(int(hidden)), nn.GELU())
+        self.scalar_projection = nn.Sequential(
+            nn.Linear(self.SCALAR_CHANNELS, int(hidden)), nn.GELU())
+        self.output = nn.Linear(int(hidden) * 3, 1)
+        nn.init.zeros_(self.output.weight)
+        nn.init.zeros_(self.output.bias)
+
+    def forward(self, embedding: torch.Tensor, highres_embedding: torch.Tensor,
+                detections: torch.Tensor,
+                source_ids: torch.Tensor) -> torch.Tensor:
+        if (embedding.ndim != 2 or highres_embedding.ndim != 2
+                or detections.ndim != 2 or detections.shape[1] != 6
+                or embedding.shape[0] != detections.shape[0]
+                or highres_embedding.shape[0] != detections.shape[0]
+                or source_ids.shape != (detections.shape[0],)):
+            raise ValueError('High-resolution quality inputs are misaligned')
+        if detections.shape[0] == 0:
+            return detections.new_zeros((0,))
+        scalars = S7CandidateQualityHead._scalar_features(
+            detections, source_ids)
+        hidden = torch.cat((
+            self.semantic_projection(embedding.float()),
+            self.highres_projection(highres_embedding.float()),
+            self.scalar_projection(scalars.float())), dim=1)
+        return self.output(hidden).reshape(-1)
+
+
 class S7SelectivePromotionHead(nn.Module):
     """Predict S7-vs-native quality advantage and calibrated uncertainty.
 
@@ -1079,6 +1127,172 @@ def static_candidate_rank_losses(
             's7_candidate_quality_mean_prediction', 0.0),
         s7_static_relative_pair_count=quality.get(
             's7_candidate_quality_relative_pair_count', 0))
+
+
+def highres_candidate_rank_losses(
+        quality_head: S7HighResCandidateQualityHead,
+        embedding: torch.Tensor, highres_embedding: torch.Tensor,
+        detections: torch.Tensor, source_ids: torch.Tensor,
+        gt_overlap: torch.Tensor, riou_threshold: float,
+        quality_weight: float = 1.0, relative_weight: float = 0.5,
+        relative_margin: float = 0.25, relative_min_gap: float = 0.10,
+        relative_max_pairs: int = 128, score_weight: float = 1.0,
+        rank_margin: float = 0.25, retention_weight: float = 2.0,
+        gain_weight: float = 1.0, prior_weight: float = 0.01) -> Dict:
+    """Train the first high-resolution ROI quality/ranking experiment.
+
+    This is same-frame, source-only supervision.  The detector and proposal
+    lanes are frozen; the learned residual is zero-initialized and the
+    native candidate remains protected at inference unless a high-resolution
+    S7 candidate clears the explicit margin.
+    """
+    positive = (quality_weight, relative_weight, score_weight, rank_margin,
+                retention_weight, gain_weight, prior_weight)
+    if any(float(value) <= 0.0 for value in positive):
+        raise ValueError('High-resolution ranker settings must be positive')
+    if (gt_overlap.ndim != 1 or source_ids.ndim != 1
+            or gt_overlap.shape != source_ids.shape
+            or gt_overlap.shape[0] != detections.shape[0]):
+        raise ValueError('High-resolution ranker targets are misaligned')
+
+    logits = quality_head(
+        embedding, highres_embedding, detections, source_ids)
+    zero = quality_head.output.bias.sum() * 0.0
+    if logits.numel() == 0:
+        return dict(
+            loss_s7_highres_quality=zero,
+            loss_s7_highres_relative=zero,
+            loss_s7_highres_retention=zero,
+            loss_s7_highres_gain=zero,
+            loss_s7_highres_prior=zero,
+            s7_highres_retention_pair_count=0,
+            s7_highres_gain_pair_count=0,
+            s7_highres_native_top1_correct=0,
+            s7_highres_usable_candidate_count=0,
+            s7_highres_candidate_count=0)
+
+    target = gt_overlap.detach().float().clamp(0.0, 1.0)
+    prediction = torch.sigmoid(logits)
+    weights = (1.0 + 3.0 * target).detach()
+    quality = (torch.nn.functional.smooth_l1_loss(
+        prediction, target, reduction='none') * weights).sum() / (
+            weights.sum().clamp_min(1e-6))
+    relative_result = candidate_quality_relative_ranking_loss(
+        logits, target, margin=float(relative_margin),
+        min_gap=float(relative_min_gap), max_pairs=int(relative_max_pairs))
+
+    scores = detections[:, 5].clamp(1e-6, 1.0 - 1e-6)
+    score_logits = torch.log(scores) - torch.log1p(-scores)
+    fused = score_logits + float(score_weight) * logits
+    native = torch.nonzero(source_ids == 0, as_tuple=False).flatten()
+    s7 = torch.nonzero(source_ids == 1, as_tuple=False).flatten()
+    usable = torch.nonzero(target >= float(riou_threshold),
+                           as_tuple=False).flatten()
+    native_top = (native[torch.argmax(scores[native].detach())]
+                  if native.numel() else None)
+    native_correct = bool(native_top is not None and target[native_top]
+                           >= float(riou_threshold))
+    best_usable = (usable[torch.argmax(target[usable].detach())]
+                   if usable.numel() else None)
+    retention = zero
+    gain = zero
+    retention_count = 0
+    gain_count = 0
+    if native_correct:
+        wrong = torch.nonzero(target < float(riou_threshold),
+                              as_tuple=False).flatten()
+        if wrong.numel():
+            competitor = wrong[torch.argmax(fused[wrong].detach())]
+            retention = torch.relu(
+                float(rank_margin) + fused[competitor] - fused[native_top])
+            retention_count = 1
+    elif native_top is not None and best_usable is not None:
+        competitors = torch.nonzero(target < float(riou_threshold),
+                                    as_tuple=False).flatten()
+        competitors = competitors[competitors != best_usable]
+        if competitors.numel():
+            competitor = competitors[torch.argmax(fused[competitors].detach())]
+            gain = torch.relu(
+                float(rank_margin) + fused[competitor] - fused[best_usable])
+        else:
+            gain = torch.relu(
+                float(rank_margin) + fused[native_top] - fused[best_usable])
+        gain_count = 1
+
+    return dict(
+        loss_s7_highres_quality=quality * float(quality_weight),
+        loss_s7_highres_relative=(
+            relative_result['loss_s7_candidate_quality_relative']
+            * float(relative_weight)),
+        loss_s7_highres_retention=retention * float(retention_weight),
+        loss_s7_highres_gain=gain * float(gain_weight),
+        loss_s7_highres_prior=logits.square().mean() * float(prior_weight),
+        s7_highres_retention_pair_count=retention_count,
+        s7_highres_gain_pair_count=gain_count,
+        s7_highres_native_top1_correct=int(native_correct),
+        s7_highres_usable_candidate_count=int(usable.numel()),
+        s7_highres_candidate_count=int(logits.numel()),
+        s7_highres_relative_pair_count=int(relative_result.get(
+            's7_candidate_quality_relative_pair_count', 0)),
+        s7_highres_quality_mean_target=float(target.mean().item()),
+        s7_highres_quality_mean_prediction=float(prediction.mean().item()))
+
+
+def native_protected_highres_promotion(
+        quality_head: S7HighResCandidateQualityHead,
+        embedding: torch.Tensor, highres_embedding: torch.Tensor,
+        detections: torch.Tensor, source_ids: torch.Tensor,
+        max_candidates: int = 32, score_weight: float = 1.0,
+        promotion_margin: float = 0.25) -> Dict:
+    """Reorder one frame while retaining native-first abstention semantics."""
+    if detections.ndim != 2 or detections.shape[1] != 6:
+        raise ValueError('High-resolution promotion expects [N, 6] detections')
+    if (embedding.shape[0] != detections.shape[0]
+            or highres_embedding.shape[0] != detections.shape[0]
+            or source_ids.shape != (detections.shape[0],)):
+        raise ValueError('High-resolution promotion inputs are misaligned')
+    original = torch.arange(detections.shape[0], device=detections.device)
+    native = torch.nonzero(source_ids == 0, as_tuple=False).flatten()
+    s7_ranked = torch.nonzero(source_ids == 1, as_tuple=False).flatten()
+    if not native.numel():
+        return dict(order=original, selected_index=None, native_index=None,
+                    promoted=False, reason='native_missing', candidate_count=0)
+    native_index = native[torch.argmax(detections[native, 5])]
+    s7 = s7_ranked[:min(int(max_candidates), int(s7_ranked.numel()))]
+    if not s7.numel():
+        return dict(order=original, selected_index=int(native_index.item()),
+                    native_index=int(native_index.item()), promoted=False,
+                    reason='native_fallback_no_s7_candidate', candidate_count=0)
+    active = torch.cat((native_index.reshape(1), s7), dim=0)
+    quality = quality_head(
+        embedding[active], highres_embedding[active], detections[active],
+        source_ids[active])
+    scores = detections[active, 5].clamp(1e-6, 1.0 - 1e-6)
+    fused = torch.log(scores) - torch.log1p(-scores) + float(score_weight) * quality
+    # A zero-initialized head is an exact no-op, which makes epoch-0 a true
+    # phase-2 reference rather than a re-sorted copy of the same candidates.
+    if not bool((quality.detach().abs() > 1e-7).any().item()):
+        return dict(order=original, selected_index=int(native_index.item()),
+                    native_index=int(native_index.item()), promoted=False,
+                    reason='native_fallback_zero_residual',
+                    candidate_count=int(s7.numel()))
+    best_position = 1 + torch.argmax(fused[1:])
+    best_index = active[best_position]
+    promoted = bool(
+        best_index != native_index
+        and float((fused[best_position] - fused[0]).detach().item())
+        >= float(promotion_margin))
+    selected = best_index if promoted else native_index
+    remaining = original[original != selected]
+    order = torch.cat((selected.reshape(1), remaining), dim=0)
+    return dict(
+        order=order, selected_index=int(selected.item()),
+        native_index=int(native_index.item()), promoted=promoted,
+        reason=('s7_promoted_highres_quality' if promoted
+                else 'native_fallback_highres_margin'),
+        candidate_count=int(s7.numel()),
+        best_quality=float(quality[best_position].detach().item()),
+        best_margin=float((fused[best_position] - fused[0]).detach().item()))
 
 
 def _default_rotated_iou(current: torch.Tensor,

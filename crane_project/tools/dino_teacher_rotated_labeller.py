@@ -146,7 +146,8 @@ def parse_args():
                  'roi_cls_pairwise_v2', 's7_rpn', 's7_merge',
                  's7_lane_arbitration', 's7_quality_suppression',
                  's7_temporal_association', 's7_temporal_student',
-                 's7_static_domain_ranker', 's7_selective_promotion'],
+                 's7_static_domain_ranker', 's7_selective_promotion',
+                 's7_highres_roi_ranker'],
         default='all',
         help=('Train all RPN/ROI heads, or only the final ROI classifier '
               'fc_cls while keeping RPN, shared ROI FCs, and bbox regression '
@@ -173,7 +174,10 @@ def parse_args():
               'one non-temporal source-only quality residual with static '
               'feature-domain augmentation. s7_selective_promotion freezes '
               'the phase-2 quality teacher and trains a native-vs-S7 pair '
-              'head with uncertainty-aware abstention.'))
+              'head with uncertainty-aware abstention. '
+              's7_highres_roi_ranker adds one lightweight stride-7 ROI '
+              'quality readout and trains same-frame listwise ranking with '
+              'native protection.'))
     parser.add_argument(
         '--source-small-repeat', type=int, default=1,
         help='Repeat source-train frames in the lower short-token tertile.')
@@ -327,6 +331,29 @@ def parse_args():
         '--s7-selective-teacher-result-json', default=None,
         help=('Phase-2 source result used only to verify the frozen quality '
               'teacher and initialization checkpoint.'))
+    parser.add_argument(
+        '--s7-highres-roi-ranker', action='store_true',
+        help=('Train the first static high-resolution ROI quality readout. '
+              'It uses the frozen S7 feature map, no extra DINO forward, and '
+              'does not read target data.'))
+    parser.add_argument('--s7-highres-base-epoch', type=int, default=4)
+    parser.add_argument('--s7-highres-hidden', type=int, default=32)
+    parser.add_argument('--s7-highres-channels', type=int, default=32)
+    parser.add_argument('--s7-highres-max-candidates', type=int, default=32)
+    parser.add_argument('--s7-highres-score-weight', type=float, default=1.0)
+    parser.add_argument('--s7-highres-rank-margin', type=float, default=0.25)
+    parser.add_argument('--s7-highres-promotion-margin', type=float, default=0.25)
+    parser.add_argument('--s7-highres-quality-loss-weight', type=float, default=1.0)
+    parser.add_argument('--s7-highres-relative-loss-weight', type=float, default=0.5)
+    parser.add_argument('--s7-highres-relative-min-gap', type=float, default=0.10)
+    parser.add_argument('--s7-highres-relative-max-pairs', type=int, default=128)
+    parser.add_argument('--s7-highres-retention-weight', type=float, default=2.0)
+    parser.add_argument('--s7-highres-gain-weight', type=float, default=1.0)
+    parser.add_argument('--s7-highres-prior-weight', type=float, default=0.01)
+    parser.add_argument(
+        '--s7-highres-teacher-result-json', default=None,
+        help=('Phase-2 source result JSON used only for provenance and '
+              'checkpoint integrity.'))
     parser.add_argument('--s7-temporal-base-epoch', type=int, default=1)
     parser.add_argument('--s7-temporal-margin', type=float, default=0.5)
     parser.add_argument(
@@ -426,7 +453,7 @@ def validate_args(args):
         's7_rpn', 's7_merge', 's7_lane_arbitration',
         's7_quality_suppression', 's7_temporal_association',
         's7_temporal_student', 's7_static_domain_ranker',
-        's7_selective_promotion')
+        's7_selective_promotion', 's7_highres_roi_ranker')
     if s7_enabled != s7_training_mode:
         raise ValueError(
             '--s7-residual and an S7 train-components mode must be enabled '
@@ -623,6 +650,34 @@ def validate_args(args):
         if int(getattr(args, 's7_selective_max_candidates', 100)) != 20:
             raise ValueError(
                 'Two-frame selective promotion requires S7 top-20')
+    highres_mode = args.train_components == 's7_highres_roi_ranker'
+    if bool(getattr(args, 's7_highres_roi_ranker', False)) != highres_mode:
+        raise ValueError(
+            '--s7-highres-roi-ranker and its train-components mode must be '
+            'enabled together')
+    highres_positive = (
+        getattr(args, 's7_highres_base_epoch', 4),
+        getattr(args, 's7_highres_hidden', 32),
+        getattr(args, 's7_highres_channels', 32),
+        getattr(args, 's7_highres_max_candidates', 32),
+        getattr(args, 's7_highres_score_weight', 1.0),
+        getattr(args, 's7_highres_rank_margin', 0.25),
+        getattr(args, 's7_highres_promotion_margin', 0.25),
+        getattr(args, 's7_highres_quality_loss_weight', 1.0),
+        getattr(args, 's7_highres_relative_loss_weight', 0.5),
+        getattr(args, 's7_highres_relative_min_gap', 0.10),
+        getattr(args, 's7_highres_relative_max_pairs', 128),
+        getattr(args, 's7_highres_retention_weight', 2.0),
+        getattr(args, 's7_highres_gain_weight', 1.0),
+        getattr(args, 's7_highres_prior_weight', 0.01))
+    if highres_mode and any(float(value) <= 0.0 for value in highres_positive):
+        raise ValueError('High-resolution ROI ranker settings must be positive')
+    if highres_mode and (temporal_enabled or static_mode or selective_mode
+                         or relative_quality
+                         or bool(getattr(args, 's7_temporal_student', False))):
+        raise ValueError(
+            'High-resolution ROI ranker is a standalone same-frame source '
+            'stage and cannot be combined with temporal/static/selective modes')
     if (bool(getattr(args, 's7_lane_arbitration', False))
             and (args.train_components == 's7_quality_suppression'
                  or bool(getattr(args, 's7_quality_suppression', False)))):
@@ -684,7 +739,8 @@ def validate_args(args):
                 'roi_cls_pairwise_v2', 's7_rpn', 's7_merge',
                 's7_lane_arbitration', 's7_quality_suppression',
                 's7_temporal_association', 's7_temporal_student',
-                's7_static_domain_ranker', 's7_selective_promotion')
+                's7_static_domain_ranker', 's7_selective_promotion',
+                's7_highres_roi_ranker')
             else [5, 7])
     lr_steps = sorted(set(int(value) for value in args.lr_steps))
     if any(value <= 0 or value >= args.epochs for value in lr_steps):
@@ -915,6 +971,49 @@ def validate_args(args):
             raise ValueError(
                 'Selective promotion phase-2 result lacks source summaries')
         args.s7_selective_teacher_result = teacher_result
+    if highres_mode:
+        teacher_result_json = getattr(
+            args, 's7_highres_teacher_result_json', None)
+        if not teacher_result_json or not os.path.isfile(teacher_result_json):
+            raise ValueError(
+                's7_highres_roi_ranker requires the phase-2 source result '
+                'JSON')
+        with open(teacher_result_json, 'r') as handle:
+            teacher_result = json.load(handle)
+        if teacher_result.get('target_dev') is not None:
+            raise ValueError(
+                'High-resolution phase-2 result must not contain target-dev '
+                'output')
+        if int((teacher_result.get('source') or {}).get('best_epoch', -1)) != int(
+                args.s7_highres_base_epoch):
+            raise ValueError(
+                'High-resolution ranker phase-2 result must select epoch {}; '
+                'found {}'.format(
+                    args.s7_highres_base_epoch,
+                    (teacher_result.get('source') or {}).get('best_epoch')))
+        if (teacher_result.get('isolation') or {}).get('train_components') != (
+                's7_temporal_association'):
+            raise ValueError(
+                'High-resolution ranker must initialize from phase-2 '
+                's7_temporal_association training')
+        provenance = phase2_selected_checkpoint_provenance_gate(
+            teacher_result, args.init_checkpoint,
+            expected_epoch=int(args.s7_highres_base_epoch),
+            min_full_top1=int(args.s7_source_min_full_top1),
+            min_small_top1=int(args.s7_source_min_small_top1),
+            max_mcml=int(args.s7_source_max_mcml))
+        if not provenance['passed']:
+            failed = sorted(name for name, passed in provenance['checks'].items()
+                            if not passed)
+            raise ValueError(
+                'High-resolution phase-2 checkpoint provenance gate failed: '
+                + ', '.join(failed))
+        source = teacher_result.get('source') or {}
+        if not source.get('best_validation_summary') or not source.get(
+                'best_small_validation_summary'):
+            raise ValueError(
+                'High-resolution ranker phase-2 result lacks source summaries')
+        args.s7_highres_teacher_result = teacher_result
     roi_cls_modes = ('roi_cls', 'roi_cls_pairwise',
                      'roi_cls_pairwise_v2')
     if (args.train_components in roi_cls_modes
@@ -928,7 +1027,7 @@ def validate_args(args):
             's7_rpn', 's7_merge', 's7_lane_arbitration',
             's7_quality_suppression', 's7_temporal_association',
             's7_temporal_student', 's7_static_domain_ranker',
-            's7_selective_promotion')
+            's7_selective_promotion', 's7_highres_roi_ranker')
             and not (args.init_checkpoint or args.resume_checkpoint
                      or args.eval_only_checkpoint)):
         raise ValueError(
@@ -1081,6 +1180,42 @@ def validate_args(args):
             raise ValueError(
                 's7_static_domain_ranker requires '
                 '--s7-source-max-mcml <= 3')
+    if highres_mode:
+        if (not args.init_checkpoint or args.resume_checkpoint
+                or args.eval_only_checkpoint):
+            raise ValueError(
+                's7_highres_roi_ranker requires a fresh phase-2 init '
+                'checkpoint and cannot resume or run eval-only')
+        if args.source_retain_max_top1_drop != 0:
+            raise ValueError(
+                's7_highres_roi_ranker requires exact source retention')
+        if args.s7_component_checkpoint:
+            raise ValueError(
+                's7_highres_roi_ranker initializes from the complete '
+                'phase-2 checkpoint; do not pass --s7-component-checkpoint')
+        if not getattr(args, 'skip_target_eval', False):
+            raise ValueError(
+                's7_highres_roi_ranker is source-only; pass '
+                '--skip-target-eval until the source gate passes')
+        if not args.source_train_datasets or not args.source_val_datasets:
+            raise ValueError(
+                's7_highres_roi_ranker requires formal source train/val '
+                'datasets')
+        if int(args.source_small_repeat) != 1:
+            raise ValueError(
+                's7_highres_roi_ranker forbids source frame repetition')
+        if int(getattr(args, 's7_source_min_full_top1', 677)) < 688:
+            raise ValueError(
+                's7_highres_roi_ranker requires '
+                '--s7-source-min-full-top1 >= 688')
+        if int(getattr(args, 's7_source_min_small_top1', 303)) < 311:
+            raise ValueError(
+                's7_highres_roi_ranker requires '
+                '--s7-source-min-small-top1 >= 311')
+        if int(getattr(args, 's7_source_max_mcml', 3)) > 3:
+            raise ValueError(
+                's7_highres_roi_ranker requires '
+                '--s7-source-max-mcml <= 3')
     if selective_mode:
         if args.source_retain_max_top1_drop != 0:
             raise ValueError(
@@ -1116,7 +1251,7 @@ def validate_args(args):
             's7_rpn', 's7_merge', 's7_lane_arbitration',
             's7_quality_suppression', 's7_temporal_association',
             's7_temporal_student', 's7_static_domain_ranker',
-            's7_selective_promotion') and args.epochs > 4:
+            's7_selective_promotion', 's7_highres_roi_ranker') and args.epochs > 4:
         raise ValueError(
             'S7 source-only stages are limited to 4 epochs; extend only after '
             'source validation shows the selected component is improving')
@@ -1233,6 +1368,19 @@ def configure_trainable_components(heads, train_components: str) -> List[str]:
                 'teacher and a separate pairwise promotion head')
         for parameter in heads.s7_selective_promotion_head.parameters():
             parameter.requires_grad_(True)
+    elif train_components == 's7_highres_roi_ranker':
+        if (not getattr(heads, 's7_protected_merge', False)
+                or getattr(heads, 's7_highres_spatial_projection', None)
+                is None
+                or getattr(heads, 's7_highres_candidate_quality_head', None)
+                is None):
+            raise RuntimeError(
+                'High-resolution ranker requires the protected S7 pool and '
+                'its spatial/quality readout')
+        for module in (heads.s7_highres_spatial_projection,
+                       heads.s7_highres_candidate_quality_head):
+            for parameter in module.parameters():
+                parameter.requires_grad_(True)
     else:
         raise ValueError('Unsupported train-components: {}'.format(
             train_components))
@@ -1330,6 +1478,17 @@ def optimization_loss_total(losses: Dict, train_components: str):
                 'S7 selective promotion losses missing: {}'.format(
                     ', '.join(missing)))
         return loss_total({name: losses[name] for name in required})
+    if train_components == 's7_highres_roi_ranker':
+        required = (
+            'loss_s7_highres_quality', 'loss_s7_highres_relative',
+            'loss_s7_highres_retention', 'loss_s7_highres_gain',
+            'loss_s7_highres_prior')
+        missing = [name for name in required if name not in losses]
+        if missing:
+            raise RuntimeError(
+                'High-resolution ranker losses missing: {}'.format(
+                    ', '.join(missing)))
+        return loss_total({name: losses[name] for name in required})
     if train_components in ('roi_cls_pairwise', 'roi_cls_pairwise_v2'):
         required = ('loss_cls', 'loss_roi_pairwise', 'loss_roi_retention')
         missing = [name for name in required if name not in losses]
@@ -1385,6 +1544,11 @@ def optimization_loss_component_names(
             'loss_s7_selective_classification',
             'loss_s7_selective_retention', 'loss_s7_selective_gain',
             'loss_s7_selective_prior']
+    if train_components == 's7_highres_roi_ranker':
+        return [
+            'loss_s7_highres_quality', 'loss_s7_highres_relative',
+            'loss_s7_highres_retention', 'loss_s7_highres_gain',
+            'loss_s7_highres_prior']
     if train_components in ('roi_cls_pairwise', 'roi_cls_pairwise_v2'):
         return ['loss_cls', 'loss_roi_pairwise', 'loss_roi_retention']
     if train_components == 'roi_cls':
@@ -2501,7 +2665,7 @@ class FrozenDinoRotatedHeads(nn.Module):
     def __init__(self, in_channels: int, args):
         super().__init__()
         from mmcv import ConfigDict
-        from mmrotate.models.builder import build_head
+        from mmrotate.models.builder import build_head, build_roi_extractor
 
         self.in_channels = int(in_channels)
         self._args = args
@@ -2517,7 +2681,7 @@ class FrozenDinoRotatedHeads(nn.Module):
                     's7_merge', 's7_lane_arbitration',
                     's7_quality_suppression', 's7_temporal_association',
                     's7_temporal_student', 's7_static_domain_ranker',
-                    's7_selective_promotion'))
+                    's7_selective_promotion', 's7_highres_roi_ranker'))
         self.s7_lane_arbitration = bool(getattr(
             args, 's7_lane_arbitration', False) or getattr(
                 args, 'train_components', '') == 's7_lane_arbitration')
@@ -2537,6 +2701,9 @@ class FrozenDinoRotatedHeads(nn.Module):
         self.s7_selective_promotion = bool(getattr(
             args, 's7_selective_promotion', False) or getattr(
                 args, 'train_components', '') == 's7_selective_promotion')
+        self.s7_highres_roi_ranker = bool(getattr(
+            args, 's7_highres_roi_ranker', False) or getattr(
+                args, 'train_components', '') == 's7_highres_roi_ranker')
         self.s7_temporal_quality_head_enabled = bool(getattr(
             args, 's7_temporal_quality_head', False)
             or self.s7_selective_promotion)
@@ -2550,6 +2717,9 @@ class FrozenDinoRotatedHeads(nn.Module):
         self._last_temporal_pool = None
         self._last_static_pool = None
         self._last_selective_pool = None
+        self._last_highres_pool = None
+        self._last_highres_pool = None
+        self._last_s7_feature = None
         self._s7_inference_enabled = self.s7_enabled
         if self.s7_enabled:
             s7_channels = int(getattr(args, 's7_channels', 128))
@@ -2611,6 +2781,33 @@ class FrozenDinoRotatedHeads(nn.Module):
                      float(getattr(
                          args, 's7_selective_initial_uncertainty', 0.5))))
                 if self.s7_selective_promotion else None)
+            if self.s7_highres_roi_ranker:
+                highres_channels = int(getattr(
+                    args, 's7_highres_channels', 32))
+                highres_stride = int(args.patch_size) // 2
+                self.s7_highres_roi_extractor = build_roi_extractor(
+                    ConfigDict(dict(
+                        type='RotatedSingleRoIExtractor',
+                        roi_layer=dict(
+                            type='RoIAlignRotated', out_size=3,
+                            sample_num=2, clockwise=True),
+                        out_channels=highres_channels,
+                        featmap_strides=[highres_stride])))
+                groups = min(8, highres_channels)
+                while highres_channels % groups != 0:
+                    groups -= 1
+                self.s7_highres_spatial_projection = nn.Sequential(
+                    nn.Conv2d(s7_channels, highres_channels, 1, bias=False),
+                    nn.GroupNorm(groups, highres_channels), nn.GELU())
+                self.s7_highres_candidate_quality_head = (
+                    temporal.S7HighResCandidateQualityHead(
+                        int(getattr(args, 'roi_fc_channels', 1024)),
+                        highres_channels,
+                        int(getattr(args, 's7_highres_hidden', 32))))
+            else:
+                self.s7_highres_roi_extractor = None
+                self.s7_highres_spatial_projection = None
+                self.s7_highres_candidate_quality_head = None
         else:
             self.s7_readout = None
             self.s7_rpn_head = None
@@ -2623,6 +2820,9 @@ class FrozenDinoRotatedHeads(nn.Module):
             self.s7_candidate_student_head = None
             self.s7_candidate_static_head = None
             self.s7_selective_promotion_head = None
+            self.s7_highres_roi_extractor = None
+            self.s7_highres_spatial_projection = None
+            self.s7_highres_candidate_quality_head = None
         self._roi_cls_teacher_weight = None
         self._roi_cls_teacher_bias = None
 
@@ -2641,12 +2841,14 @@ class FrozenDinoRotatedHeads(nn.Module):
 
     def proposal_sources(self, feature: torch.Tensor, img_meta: Dict):
         """Return native and supplement proposals without losing provenance."""
+        self._last_s7_feature = None
         native_features = self.feature_levels(feature)
         native = self.rpn_head.simple_test_rpn(
             native_features, [img_meta])[0]
         if not self.s7_inference_enabled():
             return native_features, dict(native_s14=native)
         s7 = self.s7_feature(feature)
+        self._last_s7_feature = s7
         supplement = self.s7_rpn_head.simple_test_rpn(
             [s7], [img_meta])[0]
         return native_features, dict(
@@ -2695,10 +2897,51 @@ class FrozenDinoRotatedHeads(nn.Module):
         limit = int(self._args.max_detections)
         return detections[:limit], keep[:limit]
 
+    def _highres_roi_embeddings(self, feature: torch.Tensor,
+                                img_meta: Dict, detections: torch.Tensor,
+                                rescale: bool) -> torch.Tensor:
+        """Read stride-7 spatial evidence for a bounded candidate subset."""
+        from mmrotate.core import rbbox2roi
+
+        extractor = getattr(self, 's7_highres_roi_extractor', None)
+        projection = getattr(self, 's7_highres_spatial_projection', None)
+        if extractor is None or projection is None:
+            raise RuntimeError('High-resolution ROI readout is not configured')
+        if detections.shape[0] == 0:
+            channels = int(getattr(self._args, 's7_highres_channels', 32))
+            return detections.new_zeros((0, channels))
+        s7 = getattr(self, '_last_s7_feature', None)
+        if s7 is None:
+            s7 = self.s7_feature(feature)
+        boxes = detections[:, :5].clone()
+        if rescale:
+            scale = torch.as_tensor(
+                img_meta['scale_factor'][:4], device=boxes.device,
+                dtype=boxes.dtype)
+            boxes[:, :4] = boxes[:, :4] * scale.reshape(1, 4)
+        rois = rbbox2roi([boxes])
+        spatial = projection(s7)
+        pooled = extractor([spatial], rois)
+        return pooled.mean(dim=(2, 3))
+
+    def _highres_active_indices(self, detections: torch.Tensor,
+                                source_ids: torch.Tensor) -> torch.Tensor:
+        native = torch.nonzero(source_ids == 0, as_tuple=False).flatten()
+        s7 = torch.nonzero(source_ids == 1, as_tuple=False).flatten()
+        if not native.numel():
+            return s7[:int(getattr(
+                self._args, 's7_highres_max_candidates', 32))]
+        native_top = native[torch.argmax(detections[native, 5])]
+        s7 = s7[:min(int(getattr(
+            self._args, 's7_highres_max_candidates', 32)), int(s7.numel()))]
+        return torch.cat((native_top.reshape(1), s7), dim=0)
+
     def _protected_merge_detections(self, feature: torch.Tensor,
                                     img_meta: Dict, rescale: bool = True,
                                     apply_static_ranker: Optional[bool] = None,
                                     apply_selective_promotion: Optional[
+                                        bool] = None,
+                                    apply_highres_ranker: Optional[
                                         bool] = None):
         """Decode, calibrate, and merge two independently NMSed ROI lanes."""
         if self.s7_score_calibrator is None:
@@ -2764,6 +3007,60 @@ class FrozenDinoRotatedHeads(nn.Module):
         base_detections = detections
         base_embeddings = embeddings
         base_source_ids = source_ids
+        highres_selection = None
+        self._last_highres_pool = None
+        if bool(getattr(self, 's7_highres_roi_ranker', False)):
+            highres_head = getattr(
+                self, 's7_highres_candidate_quality_head', None)
+            if highres_head is None:
+                raise RuntimeError('High-resolution quality head is missing')
+            active_indices = self._highres_active_indices(
+                base_detections, base_source_ids)
+            active_detections = base_detections[active_indices]
+            active_embeddings = base_embeddings[active_indices]
+            active_sources = base_source_ids[active_indices]
+            highres_embeddings = self._highres_roi_embeddings(
+                feature, img_meta, active_detections, rescale=rescale)
+            highres_quality_logits = highres_head(
+                active_embeddings, highres_embeddings, active_detections,
+                active_sources)
+            self._last_highres_pool = dict(
+                detections=active_detections.detach(),
+                embeddings=active_embeddings.detach(),
+                highres_embeddings=highres_embeddings.detach(),
+                source_ids=active_sources.detach(),
+                base_indices=active_indices.detach(),
+                quality_logits=highres_quality_logits.detach(),
+                candidate_limit=int(getattr(
+                    self._args, 's7_highres_max_candidates', 32)))
+            if apply_highres_ranker is None:
+                apply_highres_ranker = not self.training
+            if bool(apply_highres_ranker) and active_detections.shape[0]:
+                highres_selection = temporal.native_protected_highres_promotion(
+                    highres_head, active_embeddings, highres_embeddings,
+                    active_detections, active_sources,
+                    max_candidates=int(getattr(
+                        self._args, 's7_highres_max_candidates', 32)),
+                    score_weight=float(getattr(
+                        self._args, 's7_highres_score_weight', 1.0)),
+                    promotion_margin=float(getattr(
+                        self._args, 's7_highres_promotion_margin', 0.25)))
+                if highres_selection.get('reason') != (
+                        'native_fallback_zero_residual'):
+                    selected = active_indices[highres_selection['order']]
+                    selected_first = selected[:1]
+                    remaining = torch.arange(
+                        base_detections.shape[0],
+                        device=base_detections.device)
+                    keep_remaining = torch.ones(
+                        base_detections.shape[0], dtype=torch.bool,
+                        device=base_detections.device)
+                    keep_remaining[selected_first] = False
+                    remaining = remaining[keep_remaining]
+                    order = torch.cat((selected_first, remaining), dim=0)
+                    detections = base_detections[order]
+                    embeddings = base_embeddings[order]
+                    source_ids = base_source_ids[order]
         static_quality_logits = None
         if bool(getattr(self, 's7_static_domain_ranker', False)):
             static_head = getattr(self, 's7_candidate_static_head', None)
@@ -2927,7 +3224,15 @@ class FrozenDinoRotatedHeads(nn.Module):
                     best_advantage=selective_selection['best_advantage'],
                     best_uncertainty=selective_selection['best_uncertainty'],
                     candidate_count=int(
-                        selective_selection['candidate_count']))))
+                        selective_selection['candidate_count']))),
+            s7_highres_roi_ranker=(
+                None if highres_selection is None else dict(
+                    selected_index=highres_selection.get('selected_index'),
+                    native_index=highres_selection.get('native_index'),
+                    promoted=bool(highres_selection.get('promoted', False)),
+                    reason=str(highres_selection.get('reason', '')),
+                    candidate_count=int(highres_selection.get(
+                        'candidate_count', 0)))))
         return detections
 
     def feature_levels(self, feature: torch.Tensor):
@@ -3546,6 +3851,52 @@ class FrozenDinoRotatedHeads(nn.Module):
             retention_weight=retention_weight, gain_weight=gain_weight,
             prior_weight=prior_weight, max_candidates=max_candidates)
 
+    def forward_s7_highres_roi_ranker_train(
+            self, feature: torch.Tensor, img_meta: Dict,
+            gt_boxes: torch.Tensor, riou_thr: float,
+            quality_weight: float, relative_weight: float,
+            relative_margin: float, relative_min_gap: float,
+            relative_max_pairs: int, score_weight: float,
+            rank_margin: float, retention_weight: float,
+            gain_weight: float, prior_weight: float,
+            max_candidates: int) -> Dict:
+        """Fit the lightweight stride-7 ROI quality readout on source GT."""
+        from mmcv.ops import box_iou_rotated
+
+        head = getattr(self, 's7_highres_candidate_quality_head', None)
+        if (not self.s7_highres_roi_ranker
+                or not self.s7_protected_merge
+                or self.s7_score_calibrator is None or head is None):
+            raise RuntimeError(
+                'High-resolution ranker requires the protected S7 candidate '
+                'pool and trainable quality readout')
+        with torch.no_grad():
+            self._protected_merge_detections(
+                feature, img_meta, rescale=False,
+                apply_highres_ranker=False)
+            pool = self._last_highres_pool
+            if pool is None:
+                raise RuntimeError(
+                    'High-resolution candidate pool was not produced')
+            detections = pool['detections']
+            embeddings = pool['embeddings']
+            source_ids = pool['source_ids']
+        highres_embeddings = self._highres_roi_embeddings(
+            feature, img_meta, detections, rescale=False)
+        if gt_boxes.shape[0] and detections.shape[0]:
+            overlap = box_iou_rotated(
+                detections[:, :5].float(), gt_boxes.float()).max(dim=1).values
+        else:
+            overlap = detections.new_zeros((detections.shape[0],))
+        return temporal.highres_candidate_rank_losses(
+            head, embeddings, highres_embeddings, detections, source_ids,
+            overlap, riou_threshold=riou_thr,
+            quality_weight=quality_weight, relative_weight=relative_weight,
+            relative_margin=relative_margin, relative_min_gap=relative_min_gap,
+            relative_max_pairs=relative_max_pairs, score_weight=score_weight,
+            rank_margin=rank_margin, retention_weight=retention_weight,
+            gain_weight=gain_weight, prior_weight=prior_weight)
+
     def forward_roi_cls_hard_train(
             self, feature: torch.Tensor, img_meta: Dict,
             gt_boxes: torch.Tensor, max_samples: int,
@@ -4049,13 +4400,14 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
             's7_rpn', 's7_merge', 's7_lane_arbitration',
             's7_quality_suppression', 's7_temporal_association',
             's7_temporal_student', 's7_static_domain_ranker',
-            's7_selective_promotion'):
+            's7_selective_promotion', 's7_highres_roi_ranker'):
         heads.rpn_head.eval()
         heads.roi_head.eval()
     if args.train_components in (
             's7_merge', 's7_lane_arbitration', 's7_quality_suppression',
             's7_temporal_association', 's7_temporal_student',
-            's7_static_domain_ranker', 's7_selective_promotion'):
+            's7_static_domain_ranker', 's7_selective_promotion',
+            's7_highres_roi_ranker'):
         heads.s7_readout.eval()
         heads.s7_rpn_head.eval()
         heads.s7_score_calibrator.eval()
@@ -4080,6 +4432,9 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
     elif args.train_components == 's7_selective_promotion':
         heads.s7_candidate_quality_head.eval()
         heads.s7_selective_promotion_head.train()
+    elif args.train_components == 's7_highres_roi_ranker':
+        heads.s7_highres_spatial_projection.train()
+        heads.s7_highres_candidate_quality_head.train()
     if head_device.type == 'cuda':
         torch.cuda.reset_peak_memory_stats(head_device)
     ordered = ordered_source_training_records(records, args, epoch)
@@ -4229,6 +4584,21 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                 max_candidates=args.s7_selective_max_candidates,
                 two_frame_state=selective_two_frame_state)
             output['s7_selective_augmented'] = int(static_augmented)
+        elif args.train_components == 's7_highres_roi_ranker':
+            output = heads.forward_s7_highres_roi_ranker_train(
+                feature, img_meta, gt_boxes,
+                riou_thr=args.riou_thr,
+                quality_weight=args.s7_highres_quality_loss_weight,
+                relative_weight=args.s7_highres_relative_loss_weight,
+                relative_margin=args.s7_highres_rank_margin,
+                relative_min_gap=args.s7_highres_relative_min_gap,
+                relative_max_pairs=args.s7_highres_relative_max_pairs,
+                score_weight=args.s7_highres_score_weight,
+                rank_margin=args.s7_highres_rank_margin,
+                retention_weight=args.s7_highres_retention_weight,
+                gain_weight=args.s7_highres_gain_weight,
+                prior_weight=args.s7_highres_prior_weight,
+                max_candidates=args.s7_highres_max_candidates)
         elif args.train_components == 'roi_cls':
             output = heads.forward_roi_cls_hard_train(
                 feature, img_meta, gt_boxes, args.roi_samples,
@@ -4426,6 +4796,21 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                     / float(max(1, index + 1)),
                     float(metric_sums.get('s7_selective_augmented', 0.0))
                     / float(max(1, index + 1)))
+            elif args.train_components == 's7_highres_roi_ranker':
+                message += (
+                    'candidate_count={} usable_total={} '
+                    'retain_pairs_total={} gain_pairs_total={} '
+                    'relative_pairs_total={}').format(
+                    int(round(metric_sums.get(
+                        's7_highres_candidate_count', 0.0))),
+                    int(round(metric_sums.get(
+                        's7_highres_usable_candidate_count', 0.0))),
+                    int(round(metric_sums.get(
+                        's7_highres_retention_pair_count', 0.0))),
+                    int(round(metric_sums.get(
+                        's7_highres_gain_pair_count', 0.0))),
+                    int(round(metric_sums.get(
+                        's7_highres_relative_pair_count', 0.0))))
             print(message)
         del feature, gt_boxes, gt_labels, total
     optimized_components = optimization_loss_component_names(
@@ -5569,7 +5954,7 @@ def s7_source_selection_gate(
             <= int(getattr(args, 's7_source_max_mcml', 3))))
     if getattr(args, 'train_components', '') in (
             's7_temporal_association', 's7_temporal_student',
-            's7_selective_promotion'):
+            's7_selective_promotion', 's7_highres_roi_ranker'):
         baseline_dfr = baseline_full.get('top1_dfr_fraction_per_frame')
         candidate_dfr = candidate_full.get('top1_dfr_fraction_per_frame')
         baseline_aci = baseline_full.get('top1_aci')
@@ -5817,7 +6202,7 @@ def s7_architecture(args) -> Dict:
                 's7_merge', 's7_lane_arbitration',
                 's7_quality_suppression', 's7_temporal_association',
                 's7_temporal_student', 's7_static_domain_ranker',
-                's7_selective_promotion'))
+                's7_selective_promotion', 's7_highres_roi_ranker'))
     lane_arbitration = bool(getattr(
         args, 's7_lane_arbitration', False) or getattr(
             args, 'train_components', '') == 's7_lane_arbitration')
@@ -5839,6 +6224,9 @@ def s7_architecture(args) -> Dict:
     selective_promotion = bool(getattr(
         args, 's7_selective_promotion', False) or getattr(
             args, 'train_components', '') == 's7_selective_promotion')
+    highres_roi_ranker = bool(getattr(
+        args, 's7_highres_roi_ranker', False) or getattr(
+            args, 'train_components', '') == 's7_highres_roi_ranker')
     return dict(
         enabled=enabled,
         protected_merge=(protected_merge if enabled else False),
@@ -5938,7 +6326,24 @@ def s7_architecture(args) -> Dict:
             if selective_promotion and enabled and protected_merge else None),
         selective_max_candidates=(int(getattr(
             args, 's7_selective_max_candidates', 100))
-            if selective_promotion and enabled and protected_merge else None))
+            if selective_promotion and enabled and protected_merge else None),
+        highres_roi_ranker=(highres_roi_ranker if enabled and protected_merge
+                            else False),
+        highres_channels=(int(getattr(args, 's7_highres_channels', 32))
+                          if highres_roi_ranker and enabled and protected_merge
+                          else None),
+        highres_hidden=(int(getattr(args, 's7_highres_hidden', 32))
+                        if highres_roi_ranker and enabled and protected_merge
+                        else None),
+        highres_max_candidates=(int(getattr(
+            args, 's7_highres_max_candidates', 32))
+            if highres_roi_ranker and enabled and protected_merge else None),
+        highres_score_weight=(float(getattr(
+            args, 's7_highres_score_weight', 1.0))
+            if highres_roi_ranker and enabled and protected_merge else None),
+        highres_promotion_margin=(float(getattr(
+            args, 's7_highres_promotion_margin', 0.25))
+            if highres_roi_ranker and enabled and protected_merge else None))
 
 
 
@@ -5949,7 +6354,8 @@ def load_heads_checkpoint_state(heads, payload: Dict,
                                 allow_temporal_association_initialization: bool = False,
                                 allow_temporal_student_initialization: bool = False,
                                 allow_static_domain_initialization: bool = False,
-                                allow_selective_promotion_initialization: bool = False):
+                                allow_selective_promotion_initialization: bool = False,
+                                allow_highres_roi_initialization: bool = False):
     """Load a checkpoint while allowing only explicitly new branch keys."""
     if (allow_s7_base_initialization
             or allow_lane_arbitration_initialization
@@ -5957,7 +6363,8 @@ def load_heads_checkpoint_state(heads, payload: Dict,
             or allow_temporal_association_initialization
             or allow_temporal_student_initialization
             or allow_static_domain_initialization
-            or allow_selective_promotion_initialization):
+            or allow_selective_promotion_initialization
+            or allow_highres_roi_initialization):
         incompatible = heads.load_state_dict(
             payload['heads_state_dict'], strict=False)
         allowed_prefixes = []
@@ -5977,6 +6384,10 @@ def load_heads_checkpoint_state(heads, payload: Dict,
             allowed_prefixes.append('s7_candidate_static_head.')
         if allow_selective_promotion_initialization:
             allowed_prefixes.append('s7_selective_promotion_head.')
+        if allow_highres_roi_initialization:
+            allowed_prefixes.extend((
+                's7_highres_spatial_projection.',
+                's7_highres_candidate_quality_head.'))
         disallowed_missing = [
             name for name in incompatible.missing_keys
             if not any(name.startswith(prefix) for prefix in allowed_prefixes)]
@@ -5990,6 +6401,11 @@ def load_heads_checkpoint_state(heads, payload: Dict,
             # Keep the phase-2 candidate-quality teacher but drop its temporal
             # scorer; selection is static, pairwise, and native protected.
             allowed_unexpected_prefixes.append('s7_temporal_scorer.')
+        if allow_highres_roi_initialization:
+            # The phase-2 relative-quality checkpoint contains its temporal
+            # teacher; the high-resolution stage starts a separate readout.
+            allowed_unexpected_prefixes.extend((
+                's7_temporal_scorer.', 's7_candidate_quality_head.'))
         disallowed_unexpected = [
             name for name in incompatible.unexpected_keys
             if not any(name.startswith(prefix)
@@ -6072,7 +6488,8 @@ def source_selected_checkpoint_gate(
         temporal_training_protocol=(
             (payload.get('training_protocol') or {}).get('train_components')
             in ('s7_temporal_association', 's7_temporal_student',
-                's7_static_domain_ranker', 's7_selective_promotion')),
+                's7_static_domain_ranker', 's7_selective_promotion',
+                's7_highres_roi_ranker')),
         stored_source_selection_gate=(
             payload.get('source_selection_gate_passed') is True),
         exact_old_correct_retention=(
@@ -6344,7 +6761,7 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                     's7_rpn', 's7_merge', 's7_lane_arbitration',
                     's7_quality_suppression', 's7_temporal_association',
                     's7_temporal_student', 's7_static_domain_ranker',
-                    's7_selective_promotion')
+                    's7_selective_promotion', 's7_highres_roi_ranker')
                 else dict(
                     min_full_top1=int(getattr(
                         args, 's7_source_min_full_top1', 677)),
@@ -6583,6 +7000,44 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                     sequence_identity_feature=False,
                     source_only=True, target_read=False,
                     frozen_detector=True, exact_source_retention=True)),
+            s7_highres_roi_ranker=(
+                None if args.train_components != 's7_highres_roi_ranker'
+                else dict(
+                    base_checkpoint=os.path.abspath(args.init_checkpoint),
+                    teacher_result_json=os.path.abspath(
+                        args.s7_highres_teacher_result_json),
+                    base_epoch=int(args.s7_highres_base_epoch),
+                    trainable=[
+                        's7_highres_spatial_projection',
+                        's7_highres_candidate_quality_head'],
+                    frozen_detector=True,
+                    highres_channels=int(args.s7_highres_channels),
+                    hidden=int(args.s7_highres_hidden),
+                    max_candidates=int(args.s7_highres_max_candidates),
+                    score_weight=float(args.s7_highres_score_weight),
+                    rank_margin=float(args.s7_highres_rank_margin),
+                    promotion_margin=float(args.s7_highres_promotion_margin),
+                    quality_loss_weight=float(
+                        args.s7_highres_quality_loss_weight),
+                    relative_loss_weight=float(
+                        args.s7_highres_relative_loss_weight),
+                    relative_min_gap=float(args.s7_highres_relative_min_gap),
+                    relative_max_pairs=int(
+                        args.s7_highres_relative_max_pairs),
+                    retention_weight=float(args.s7_highres_retention_weight),
+                    gain_weight=float(args.s7_highres_gain_weight),
+                    prior_weight=float(args.s7_highres_prior_weight),
+                    readout='frozen_s7_feature_stride7_roi_align',
+                    candidate_pool='native_top1_plus_s7_lane_topk',
+                    inference='native_protected_quality_margin',
+                    additional_dino_forward=False,
+                    dense_feature_history=False,
+                    foreground_branch=False,
+                    temporal_association=False,
+                    inference_slice_routing=False,
+                    sequence_identity_feature=False,
+                    source_only=True, target_read=False,
+                    exact_source_retention=True)),
         in_channels=int(in_channels), patch_size=int(args.patch_size),
         rpn_feat_channels=int(args.rpn_feat_channels),
         roi_fc_channels=int(args.roi_fc_channels),
@@ -6605,6 +7060,7 @@ def validate_checkpoint(payload: Dict, in_channels: int, args,
                         allow_temporal_student_initialization: bool = False,
                         allow_static_domain_initialization: bool = False,
                         allow_selective_promotion_initialization: bool = False,
+                        allow_highres_roi_initialization: bool = False,
                         allow_temporal_policy_mismatch: bool = False):
     required = (
         'source_only', 'frozen_dinov2', 'in_channels', 'patch_size',
@@ -6685,7 +7141,8 @@ def validate_checkpoint(payload: Dict, in_channels: int, args,
             if (stored_temporal != requested_temporal
                     and not (allow_temporal_association_initialization
                              or allow_static_domain_initialization
-                             or allow_selective_promotion_initialization)):
+                             or allow_selective_promotion_initialization
+                             or allow_highres_roi_initialization)):
                 architecture_mismatch = True
             if (stored_temporal and requested_temporal
                     and (stored_s7.get('temporal_cues')
@@ -6704,7 +7161,8 @@ def validate_checkpoint(payload: Dict, in_channels: int, args,
             if (stored_temporal_quality != requested_temporal_quality
                     and not (allow_temporal_association_initialization
                              or allow_static_domain_initialization
-                             or allow_selective_promotion_initialization)):
+                             or allow_selective_promotion_initialization
+                             or allow_highres_roi_initialization)):
                 architecture_mismatch = True
             if (stored_temporal_quality and requested_temporal_quality
                     and stored_s7.get('temporal_quality_hidden')
@@ -6717,7 +7175,8 @@ def validate_checkpoint(payload: Dict, in_channels: int, args,
             if (stored_student != requested_student
                     and not (allow_temporal_student_initialization
                              or allow_static_domain_initialization
-                             or allow_selective_promotion_initialization)):
+                             or allow_selective_promotion_initialization
+                             or allow_highres_roi_initialization)):
                 architecture_mismatch = True
             if (stored_student and requested_student
                     and stored_s7.get('temporal_student_hidden')
@@ -6729,7 +7188,8 @@ def validate_checkpoint(payload: Dict, in_channels: int, args,
                 'static_domain_ranker', False))
             if (stored_static != requested_static
                     and not (allow_static_domain_initialization
-                             or allow_selective_promotion_initialization)):
+                             or allow_selective_promotion_initialization
+                             or allow_highres_roi_initialization)):
                 architecture_mismatch = True
             if (stored_static and requested_static
                     and (stored_s7.get('static_hidden')
@@ -6767,6 +7227,25 @@ def validate_checkpoint(payload: Dict, in_channels: int, args,
                          != requested_s7.get(
                              'selective_scalar_channels'))):
                 architecture_mismatch = True
+            stored_highres = bool(stored_s7.get(
+                'highres_roi_ranker', False))
+            requested_highres = bool(requested_s7.get(
+                'highres_roi_ranker', False))
+            if (stored_highres != requested_highres
+                    and not allow_highres_roi_initialization):
+                architecture_mismatch = True
+            if (stored_highres and requested_highres
+                    and (stored_s7.get('highres_channels')
+                         != requested_s7.get('highres_channels')
+                         or stored_s7.get('highres_hidden')
+                         != requested_s7.get('highres_hidden')
+                         or stored_s7.get('highres_max_candidates')
+                         != requested_s7.get('highres_max_candidates')
+                         or stored_s7.get('highres_score_weight')
+                         != requested_s7.get('highres_score_weight')
+                         or stored_s7.get('highres_promotion_margin')
+                         != requested_s7.get('highres_promotion_margin'))):
+                architecture_mismatch = True
             if architecture_mismatch:
                 raise RuntimeError('S7 checkpoint architecture mismatch')
     elif bool(stored_s7.get('enabled', False)):
@@ -6786,12 +7265,13 @@ def train_source_only(dino, heads, train_records, val_records, args,
     s7_student_mode = args.train_components == 's7_temporal_student'
     s7_static_mode = args.train_components == 's7_static_domain_ranker'
     s7_selective_mode = args.train_components == 's7_selective_promotion'
+    s7_highres_mode = args.train_components == 's7_highres_roi_ranker'
     s7_temporal_relative_mode = bool(getattr(
         args, 's7_temporal_relative_quality', False))
     s7_mode = bool(
         s7_rpn_mode or s7_merge_mode or s7_lane_mode or s7_quality_mode
         or s7_temporal_mode or s7_student_mode or s7_static_mode
-        or s7_selective_mode)
+        or s7_selective_mode or s7_highres_mode)
     protected_source_mode = bool(roi_cls_mode or s7_mode)
     args.s7_student_teacher_reproduction_gate = None
     trainable_names = configure_trainable_components(
@@ -6959,6 +7439,31 @@ def train_source_only(dino, heads, train_records, val_records, args,
                 raise RuntimeError(
                     'Selective promotion base checkpoint failed source gate: '
                     + ', '.join(failed))
+        if s7_highres_mode:
+            if int(payload.get('epoch', -1)) != int(
+                    args.s7_highres_base_epoch):
+                raise RuntimeError(
+                    'High-resolution ranker must initialize from phase-2 '
+                    'epoch {}; found epoch {}'.format(
+                        args.s7_highres_base_epoch, payload.get('epoch')))
+            stored_protocol = payload.get('training_protocol') or {}
+            stored_s7 = payload.get('s7_architecture', {})
+            if (stored_protocol.get('train_components')
+                    != 's7_temporal_association'
+                    or not bool(stored_s7.get('temporal_quality_head', False))
+                    or not bool((stored_protocol.get(
+                        's7_temporal_association') or {}).get(
+                        'relative_quality', False))):
+                raise RuntimeError(
+                    'High-resolution ranker requires the complete phase-2 '
+                    'relative-quality checkpoint')
+            base_gate = source_selected_checkpoint_gate(payload)
+            if not base_gate['passed']:
+                failed = sorted(name for name, passed in
+                                base_gate['checks'].items() if not passed)
+                raise RuntimeError(
+                    'High-resolution ranker base checkpoint failed source '
+                    'gate: ' + ', '.join(failed))
         validate_checkpoint(
             payload, in_channels, args,
             allow_training_mode_mismatch=True,
@@ -6973,6 +7478,7 @@ def train_source_only(dino, heads, train_records, val_records, args,
             allow_temporal_student_initialization=s7_student_mode,
             allow_static_domain_initialization=s7_static_mode,
             allow_selective_promotion_initialization=s7_selective_mode,
+            allow_highres_roi_initialization=s7_highres_mode,
             allow_temporal_policy_mismatch=s7_temporal_relative_mode)
         load_heads_checkpoint_state(
             heads, payload,
@@ -6986,7 +7492,8 @@ def train_source_only(dino, heads, train_records, val_records, args,
                 s7_temporal_mode and not s7_temporal_relative_mode),
             allow_temporal_student_initialization=s7_student_mode,
             allow_static_domain_initialization=s7_static_mode,
-            allow_selective_promotion_initialization=s7_selective_mode)
+            allow_selective_promotion_initialization=s7_selective_mode,
+            allow_highres_roi_initialization=s7_highres_mode)
         if s7_merge_mode:
             component_payload = torch.load(
                 args.s7_component_checkpoint, map_location='cpu')
@@ -7410,7 +7917,8 @@ def train_source_only(dino, heads, train_records, val_records, args,
                 'roi_cls_pairwise_v2', 's7_rpn', 's7_merge',
                 's7_lane_arbitration', 's7_quality_suppression',
                 's7_temporal_association', 's7_temporal_student',
-                's7_static_domain_ranker', 's7_selective_promotion'):
+                's7_static_domain_ranker', 's7_selective_promotion',
+                's7_highres_roi_ranker'):
             progress_path, progress_replacements = (
                 write_source_training_progress(
                     args, epoch, best_epoch, best_path, latest_path,
@@ -7717,6 +8225,10 @@ def main():
             'TARGET_NOT_READ'
             if (args.train_components == 's7_selective_promotion'
                 and int(best_epoch) == 0) else
+            'SOURCE_ONLY_HIGHRES_ROI_RANKER_FALLBACK_'
+            'TARGET_NOT_READ'
+            if (args.train_components == 's7_highres_roi_ranker'
+                and int(best_epoch) == 0) else
             'SOURCE_ONLY_TRAINING_COMPLETE_TARGET_NOT_READ')
     else:
         target_rows = evaluate_records(
@@ -7766,6 +8278,9 @@ def main():
                 'to_native_protected_uncertainty_aware_selective_promotion'
                 if args.train_components == 's7_selective_promotion' else
                 'frozen_DINOv2_native_S14_plus_protected_residual_S7_RPN_'
+                'to_lightweight_stride7_ROI_quality_ranker'
+                if args.train_components == 's7_highres_roi_ranker' else
+                'frozen_DINOv2_native_S14_plus_protected_residual_S7_RPN_'
                 'to_source_only_causal_multi_cue_candidate_quality_association'
                 if (args.train_components == 's7_temporal_association'
                     and bool(getattr(
@@ -7796,7 +8311,7 @@ def main():
                     's7_rpn', 's7_merge', 's7_lane_arbitration',
                     's7_quality_suppression', 's7_temporal_association',
                     's7_temporal_student', 's7_static_domain_ranker',
-                    's7_selective_promotion') else
+                    's7_selective_promotion', 's7_highres_roi_ranker') else
                 'source_validation_only_with_exact_retention_small_top1_'
                 'strict_improvement_and_mcml_nonregression'
                 if args.train_components == 'roi_cls_pairwise_v2' else
@@ -8089,6 +8604,46 @@ def main():
                         sequence_identity_feature=False,
                         source_only=True, target_read=False,
                         exact_source_retention=True)),
+                s7_highres_roi_ranker=(
+                    None if args.train_components != 's7_highres_roi_ranker'
+                    else dict(
+                        base_checkpoint=os.path.abspath(args.init_checkpoint),
+                        teacher_result_json=os.path.abspath(
+                            args.s7_highres_teacher_result_json),
+                        base_epoch=int(args.s7_highres_base_epoch),
+                        trainable=[
+                            's7_highres_spatial_projection',
+                            's7_highres_candidate_quality_head'],
+                        highres_channels=int(args.s7_highres_channels),
+                        hidden=int(args.s7_highres_hidden),
+                        max_candidates=int(args.s7_highres_max_candidates),
+                        score_weight=float(args.s7_highres_score_weight),
+                        rank_margin=float(args.s7_highres_rank_margin),
+                        promotion_margin=float(
+                            args.s7_highres_promotion_margin),
+                        quality_loss_weight=float(
+                            args.s7_highres_quality_loss_weight),
+                        relative_loss_weight=float(
+                            args.s7_highres_relative_loss_weight),
+                        relative_min_gap=float(
+                            args.s7_highres_relative_min_gap),
+                        relative_max_pairs=int(
+                            args.s7_highres_relative_max_pairs),
+                        retention_weight=float(
+                            args.s7_highres_retention_weight),
+                        gain_weight=float(args.s7_highres_gain_weight),
+                        prior_weight=float(args.s7_highres_prior_weight),
+                        readout='frozen_s7_feature_stride7_roi_align',
+                        candidate_pool='native_top1_plus_s7_lane_topk',
+                        inference='native_protected_quality_margin',
+                        additional_dino_forward=False,
+                        dense_feature_history=False,
+                        foreground_branch=False,
+                        temporal_association=False,
+                        inference_slice_routing=False,
+                        sequence_identity_feature=False,
+                        source_only=True, target_read=False,
+                        exact_source_retention=True)),
             source_min_top1_rate=float(args.source_min_top1_rate),
             deployment_score_thr=float(args.deployment_score_thr),
             border_margin_ratio=float(args.border_margin_ratio),
@@ -8114,7 +8669,15 @@ def main():
                 args.train_components == 's7_static_domain_ranker'),
             source_selective_promotion_training=(
                 args.train_components == 's7_selective_promotion'),
+            source_highres_roi_ranker_training=(
+                args.train_components == 's7_highres_roi_ranker'),
             reason=(
+                'The high-resolution ROI ranker uses only source GT, the '
+                'frozen S7 feature map, a bounded stride-7 ROI readout, and '
+                'native-protected same-frame candidate ranking; no extra DINO '
+                'forward, target data, foreground branch, or temporal state '
+                'is used.'
+                if args.train_components == 's7_highres_roi_ranker' else
                 'Selective promotion uses only source GT, a frozen source-gated '
                 'quality teacher, static feature perturbations, and optionally '
                 'a causal two-frame scalar motion state; target and sequence '
