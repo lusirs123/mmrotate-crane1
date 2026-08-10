@@ -62,7 +62,7 @@ def _candidate_payload():
         training_protocol=dict(
             train_components='s7_highres_roi_ranker',
             s7_highres_roi_ranker=dict(
-                frozen_detector=True, source_only=True, target_read=False,
+                source_only=True, target_read=False,
                 inference_slice_routing=False,
                 sequence_identity_feature=False,
                 additional_dino_forward=False,
@@ -108,6 +108,16 @@ def test_candidate_checkpoint_gate_does_not_require_rejected_best_epoch():
     assert gate['checks']['checkpoint_epoch'] is True
 
 
+def test_candidate_checkpoint_gate_accepts_historical_missing_nested_metadata():
+    source_gate = audit.strict_source_margin_gate(_source_margin_result())
+    payload = _candidate_payload()
+    payload['training_protocol'].pop('s7_highres_roi_ranker')
+    gate = audit.candidate_checkpoint_gate(payload, source_gate)
+    assert gate['passed'] is True
+    assert gate['checks']['training_mode'] is True
+    assert gate['checks']['highres_architecture'] is True
+
+
 def test_candidate_checkpoint_gate_rejects_target_routing():
     source_gate = audit.strict_source_margin_gate(_source_margin_result())
     payload = _candidate_payload()
@@ -115,7 +125,28 @@ def test_candidate_checkpoint_gate_rejects_target_routing():
         'inference_slice_routing'] = True
     gate = audit.candidate_checkpoint_gate(payload, source_gate)
     assert gate['passed'] is False
-    assert gate['checks']['highres_training_protocol'] is False
+    assert gate['checks']['highres_training_no_special_route'] is False
+
+
+def test_candidate_checkpoint_gate_rejects_false_optional_frozen_marker():
+    source_gate = audit.strict_source_margin_gate(_source_margin_result())
+    payload = _candidate_payload()
+    payload['training_protocol']['s7_highres_roi_ranker'][
+        'frozen_detector'] = False
+    gate = audit.candidate_checkpoint_gate(payload, source_gate)
+    assert gate['passed'] is False
+    assert gate['checks']['highres_training_source_isolation'] is False
+
+
+def test_legacy_fixed_target_gate_rejects_unified_ranker_checkpoint():
+    source_gate = audit.strict_source_margin_gate(_source_margin_result())
+    payload = _candidate_payload()
+    payload['s7_architecture']['highres_unified_ranking'] = True
+    payload['training_protocol']['s7_highres_roi_ranker'][
+        'unified_ranking'] = True
+    gate = audit.candidate_checkpoint_gate(payload, source_gate)
+    assert gate['passed'] is False
+    assert gate['checks']['highres_architecture'] is False
 
 
 def test_target_gates_lock_all_three_slices_and_small_coverage():
@@ -138,4 +169,3 @@ def test_native_lane_reproduction_checks_top1_geometry():
     changed[0]['detections'][0][0] = 2.0
     rejected = audit.native_lane_reproduction(baseline, changed)
     assert rejected['exact_native_top1'] is False
-

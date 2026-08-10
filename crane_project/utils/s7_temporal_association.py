@@ -1238,6 +1238,237 @@ def highres_candidate_rank_losses(
         s7_highres_quality_mean_prediction=float(prediction.mean().item()))
 
 
+def unified_highres_candidate_rank_losses(
+        quality_head: S7HighResCandidateQualityHead,
+        embedding: torch.Tensor, highres_embedding: torch.Tensor,
+        detections: torch.Tensor, source_ids: torch.Tensor,
+        gt_overlap: torch.Tensor, riou_threshold: float,
+        quality_weight: float = 1.0, relative_weight: float = 0.5,
+        relative_margin: float = 0.25, relative_min_gap: float = 0.10,
+        relative_max_pairs: int = 128, score_weight: float = 1.0,
+        rank_margin: float = 0.25, retention_weight: float = 2.0,
+        gain_weight: float = 1.0, prior_weight: float = 0.01,
+        hard_pair_count: int = 8) -> Dict:
+    """Train one source-only ranker over the unified native/S7 pool.
+
+    The original high-resolution stage protects the native winner and mines
+    one lane-level gain or retention pair.  This stage keeps the same frozen
+    detector and ROI evidence, but mines hard pairs from the *whole* active
+    pool.  Each source-GT quality level is paired with the highest current
+    fused-score candidate at a lower quality level.  Native retention and S7
+    gain pairs remain explicit, so the broader listwise signal cannot turn
+    the ranker into an unconditional S7 promoter.
+    """
+    positive = (quality_weight, relative_weight, score_weight, rank_margin,
+                retention_weight, gain_weight, prior_weight,
+                hard_pair_count)
+    if any(float(value) <= 0.0 for value in positive):
+        raise ValueError('Unified high-resolution ranker settings must be positive')
+    if (gt_overlap.ndim != 1 or source_ids.ndim != 1
+            or gt_overlap.shape != source_ids.shape
+            or gt_overlap.shape[0] != detections.shape[0]):
+        raise ValueError('Unified high-resolution targets are misaligned')
+
+    logits = quality_head(
+        embedding, highres_embedding, detections, source_ids)
+    zero = quality_head.output.bias.sum() * 0.0
+    if logits.numel() == 0:
+        return dict(
+            loss_s7_highres_quality=zero,
+            loss_s7_highres_relative=zero,
+            loss_s7_highres_retention=zero,
+            loss_s7_highres_gain=zero,
+            loss_s7_highres_unified=zero,
+            loss_s7_highres_prior=zero,
+            s7_highres_retention_pair_count=0,
+            s7_highres_gain_pair_count=0,
+            s7_highres_unified_pair_count=0,
+            s7_highres_unified_active_count=0,
+            s7_highres_native_top1_correct=0,
+            s7_highres_usable_candidate_count=0,
+            s7_highres_candidate_count=0)
+
+    target = gt_overlap.detach().float().clamp(0.0, 1.0)
+    prediction = torch.sigmoid(logits)
+    weights = (1.0 + 3.0 * target).detach()
+    quality = (torch.nn.functional.smooth_l1_loss(
+        prediction, target, reduction='none') * weights).sum() / (
+            weights.sum().clamp_min(1e-6))
+    relative_result = candidate_quality_relative_ranking_loss(
+        logits, target, margin=float(relative_margin),
+        min_gap=float(relative_min_gap), max_pairs=int(relative_max_pairs))
+
+    scores = detections[:, 5].clamp(1e-6, 1.0 - 1e-6)
+    score_logits = torch.log(scores) - torch.log1p(-scores)
+    fused = score_logits + float(score_weight) * logits
+    order = torch.argsort(target, descending=True).detach().cpu().tolist()
+    target_cpu = target.detach().cpu().tolist()
+    pairs = []
+
+    def add_pair(positive_index, negative_index):
+        pair = (int(positive_index), int(negative_index))
+        if pair[0] != pair[1] and pair not in pairs:
+            pairs.append(pair)
+
+    # Hard-pair mine every distinct source-quality level against the current
+    # fused-score leader among lower-quality candidates.  This directly
+    # targets the observed rank-2/rank-3 failures instead of only comparing
+    # the S7 lane winner with native top-1.
+    for position, positive_index in enumerate(order):
+        lower = [index for index in order[position + 1:]
+                 if float(target_cpu[positive_index] - target_cpu[index])
+                 >= float(relative_min_gap)]
+        if not lower:
+            continue
+        negative = max(
+            lower, key=lambda index: float(fused[index].detach().item()))
+        add_pair(positive_index, negative)
+        if len(pairs) >= int(hard_pair_count):
+            break
+
+    native = torch.nonzero(source_ids == 0, as_tuple=False).flatten()
+    wrong = torch.nonzero(target < float(riou_threshold),
+                          as_tuple=False).flatten()
+    usable = torch.nonzero(target >= float(riou_threshold),
+                           as_tuple=False).flatten()
+    native_top = (native[torch.argmax(scores[native].detach())]
+                  if native.numel() else None)
+    native_correct = bool(native_top is not None and target[native_top]
+                           >= float(riou_threshold))
+    best_usable = (usable[torch.argmax(target[usable].detach())]
+                   if usable.numel() else None)
+    retention_count = 0
+    gain_count = 0
+    retention_pair = None
+    gain_pair = None
+    if native_correct and wrong.numel():
+        competitor = wrong[torch.argmax(fused[wrong].detach())]
+        retention_pair = (int(native_top.item()), int(competitor.item()))
+        add_pair(native_top, competitor)
+        retention_count = 1
+    elif native_top is not None and best_usable is not None:
+        competitors = wrong[wrong != best_usable]
+        if competitors.numel():
+            competitor = competitors[torch.argmax(fused[competitors].detach())]
+            gain_pair = (int(best_usable.item()), int(competitor.item()))
+            add_pair(best_usable, competitor)
+        else:
+            gain_pair = (int(best_usable.item()), int(native_top.item()))
+            add_pair(best_usable, native_top)
+        gain_count = 1
+
+    if pairs:
+        positive_indices = torch.tensor(
+            [pair[0] for pair in pairs], dtype=torch.long,
+            device=logits.device)
+        negative_indices = torch.tensor(
+            [pair[1] for pair in pairs], dtype=torch.long,
+            device=logits.device)
+        pair_gaps = fused[positive_indices] - fused[negative_indices]
+        unified = torch.relu(
+            float(rank_margin) - pair_gaps).mean()
+        active = int((pair_gaps < float(rank_margin)).sum().item())
+
+        def pair_hinge(pair):
+            if pair is None:
+                return zero
+            positive_index, negative_index = pair
+            return torch.relu(
+                float(rank_margin) + fused[negative_index]
+                - fused[positive_index])
+
+        retention = pair_hinge(retention_pair)
+        gain = pair_hinge(gain_pair)
+    else:
+        unified = zero
+        retention = zero
+        gain = zero
+        active = 0
+
+    return dict(
+        loss_s7_highres_quality=quality * float(quality_weight),
+        loss_s7_highres_relative=(
+            relative_result['loss_s7_candidate_quality_relative']
+            * float(relative_weight)),
+        loss_s7_highres_retention=retention * float(retention_weight),
+        loss_s7_highres_gain=gain * float(gain_weight),
+        loss_s7_highres_unified=unified,
+        loss_s7_highres_prior=logits.square().mean() * float(prior_weight),
+        s7_highres_retention_pair_count=retention_count,
+        s7_highres_gain_pair_count=gain_count,
+        s7_highres_unified_pair_count=len(pairs),
+        s7_highres_unified_active_count=active,
+        s7_highres_native_top1_correct=int(native_correct),
+        s7_highres_usable_candidate_count=int(usable.numel()),
+        s7_highres_candidate_count=int(logits.numel()),
+        s7_highres_relative_pair_count=int(relative_result.get(
+            's7_candidate_quality_relative_pair_count', 0)),
+        s7_highres_quality_mean_target=float(target.mean().item()),
+        s7_highres_quality_mean_prediction=float(prediction.mean().item()))
+
+
+def native_protected_unified_highres_ranking_from_logits(
+        quality_logits: torch.Tensor, detections: torch.Tensor,
+        source_ids: torch.Tensor, max_candidates: int = 32,
+        score_weight: float = 1.0, promotion_margin: float = 0.25) -> Dict:
+    """Select from the complete active native/S7 pool with native abstention.
+
+    Unlike a lane-specific promotion helper, this function names the
+    inference contract explicitly: all active candidates share one fused
+    score, while a S7 winner must clear the native score by the fixed margin.
+    The logits are supplied by the caller so the same readout is used for
+    logging, selection, and source/target audits.
+    """
+    if detections.ndim != 2 or detections.shape[1] != 6:
+        raise ValueError('Unified high-resolution ranking expects [N, 6] detections')
+    if (quality_logits.shape != (detections.shape[0],)
+            or source_ids.shape != (detections.shape[0],)):
+        raise ValueError('Unified high-resolution ranking inputs are misaligned')
+    if int(max_candidates) <= 0 or float(score_weight) <= 0.0:
+        raise ValueError('Unified high-resolution ranking settings must be positive')
+    if float(promotion_margin) < 0.0:
+        raise ValueError('Unified high-resolution promotion margin must be non-negative')
+    original = torch.arange(detections.shape[0], device=detections.device)
+    native = torch.nonzero(source_ids == 0, as_tuple=False).flatten()
+    s7 = torch.nonzero(source_ids == 1, as_tuple=False).flatten()
+    if not native.numel():
+        return dict(order=original, selected_index=None, native_index=None,
+                    promoted=False, reason='native_missing', candidate_count=0)
+    native_index = native[torch.argmax(detections[native, 5])]
+    s7 = s7[:min(int(max_candidates), int(s7.numel()))]
+    if not s7.numel():
+        index = int(native_index.item())
+        return dict(order=original, selected_index=index,
+                    native_index=index, promoted=False,
+                    reason='native_fallback_no_s7_candidate', candidate_count=0)
+    active = torch.cat((native_index.reshape(1), s7), dim=0)
+    scores = detections[active, 5].clamp(1e-6, 1.0 - 1e-6)
+    fused = torch.log(scores) - torch.log1p(-scores)
+    fused = fused + float(score_weight) * quality_logits[active]
+    if not bool((quality_logits[active].detach().abs() > 1e-7).any().item()):
+        return dict(order=original, selected_index=int(native_index.item()),
+                    native_index=int(native_index.item()), promoted=False,
+                    reason='native_fallback_zero_residual',
+                    candidate_count=int(s7.numel()))
+    best_position = 1 + torch.argmax(fused[1:])
+    best_index = active[best_position]
+    best_margin = fused[best_position] - fused[0]
+    promoted = bool(
+        best_index != native_index
+        and float(best_margin.detach().item()) >= float(promotion_margin))
+    selected = best_index if promoted else native_index
+    remaining = original[original != selected]
+    order = torch.cat((selected.reshape(1), remaining), dim=0)
+    return dict(
+        order=order, selected_index=int(selected.item()),
+        native_index=int(native_index.item()), promoted=promoted,
+        reason=('s7_promoted_unified_quality' if promoted
+                else 'native_fallback_unified_margin'),
+        candidate_count=int(s7.numel()),
+        best_quality=float(quality_logits[best_index].detach().item()),
+        best_margin=float(best_margin.detach().item()))
+
+
 def native_protected_highres_promotion_from_logits(
         quality_logits: torch.Tensor, detections: torch.Tensor,
         source_ids: torch.Tensor, max_candidates: int = 32,

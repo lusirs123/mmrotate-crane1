@@ -119,6 +119,49 @@ def test_highres_margin_grid_reuses_logits_and_changes_only_policy():
     assert conservative['best_margin'] == pytest.approx(0.23)
 
 
+def test_unified_highres_ranker_mines_whole_pool_pairs_and_backprops():
+    head = temporal.S7HighResCandidateQualityHead(
+        embedding_channels=4, highres_channels=3, hidden=8)
+    detections = torch.tensor([
+        [10.0, 10.0, 8.0, 4.0, 0.0, 0.90],
+        [11.0, 10.0, 8.0, 4.0, 0.1, 0.80],
+        [12.0, 10.0, 7.0, 5.0, 0.2, 0.70],
+        [13.0, 10.0, 7.0, 5.0, 0.3, 0.60]])
+    result = temporal.unified_highres_candidate_rank_losses(
+        head, torch.randn(4, 4), torch.randn(4, 3), detections,
+        torch.tensor([0, 1, 1, 0]),
+        gt_overlap=torch.tensor([0.9, 0.7, 0.3, 0.1]),
+        riou_threshold=0.5, hard_pair_count=8)
+    assert result['s7_highres_unified_pair_count'] >= 3
+    assert result['s7_highres_retention_pair_count'] == 1
+    total = sum(result[name] for name in (
+        'loss_s7_highres_quality', 'loss_s7_highres_relative',
+        'loss_s7_highres_unified', 'loss_s7_highres_prior'))
+    total.backward()
+    assert head.output.weight.grad is not None
+    assert torch.isfinite(head.output.weight.grad).all()
+
+
+def test_unified_highres_inference_uses_one_pool_but_keeps_native_margin():
+    detections = torch.tensor([
+        [10.0, 10.0, 8.0, 4.0, 0.0, 0.90],
+        [11.0, 10.0, 8.0, 4.0, 0.1, 0.80],
+        [12.0, 10.0, 7.0, 5.0, 0.2, 0.70]])
+    sources = torch.tensor([0, 1, 1])
+    promoted = temporal.native_protected_unified_highres_ranking_from_logits(
+        torch.tensor([0.0, 1.2, 0.1]), detections, sources,
+        max_candidates=2, promotion_margin=0.25)
+    assert promoted['promoted'] is True
+    assert promoted['selected_index'] == 1
+    assert promoted['reason'] == 's7_promoted_unified_quality'
+    retained = temporal.native_protected_unified_highres_ranking_from_logits(
+        torch.tensor([0.0, 0.1, 0.0]), detections, sources,
+        max_candidates=2, promotion_margin=0.25)
+    assert retained['promoted'] is False
+    assert retained['selected_index'] == 0
+    assert retained['reason'] == 'native_fallback_unified_margin'
+
+
 def test_candidate_quality_relative_ranking_builds_deterministic_pairs():
     logits = torch.zeros(3, requires_grad=True)
     result = temporal.candidate_quality_relative_ranking_loss(

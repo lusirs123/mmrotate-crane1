@@ -36,6 +36,10 @@ def parse_args():
     parser.add_argument('--work-dir', required=True)
     parser.add_argument('--out-json', required=True)
     parser.add_argument('--seed', type=int, default=0)
+    parser.add_argument(
+        '--unified-ranking', action='store_true',
+        help=('Run the next-stage whole-pool hard-pair ranker with native '
+              'protection and source feature-view augmentation.'))
     return parser.parse_args()
 
 
@@ -119,6 +123,11 @@ def build_locked_labeller_argv(args) -> List[str]:
         '--s7-highres-retention-weight', '2.0',
         '--s7-highres-gain-weight', '1.0',
         '--s7-highres-prior-weight', '0.01',
+        *(['--s7-highres-unified-ranking']
+          if bool(getattr(args, 'unified_ranking', False)) else []),
+        '--s7-highres-unified-hard-pairs', '8',
+        '--s7-highres-unified-aug-prob', '0.75',
+        '--s7-highres-unified-aug-strength', '0.15',
         '--s7-highres-teacher-result-json', args.source_result_json,
         '--s7-source-min-full-top1', '688',
         '--s7-source-min-small-top1', '311',

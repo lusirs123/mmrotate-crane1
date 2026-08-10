@@ -177,7 +177,9 @@ def parse_args():
               'head with uncertainty-aware abstention. '
               's7_highres_roi_ranker adds one lightweight stride-7 ROI '
               'quality readout and trains same-frame listwise ranking with '
-              'native protection.'))
+              'native protection. --s7-highres-unified-ranking changes this '
+              'stage to whole-pool hard-pair ranking while retaining the '
+              'same native-protected inference contract.'))
     parser.add_argument(
         '--source-small-repeat', type=int, default=1,
         help='Repeat source-train frames in the lower short-token tertile.')
@@ -350,6 +352,16 @@ def parse_args():
     parser.add_argument('--s7-highres-retention-weight', type=float, default=2.0)
     parser.add_argument('--s7-highres-gain-weight', type=float, default=1.0)
     parser.add_argument('--s7-highres-prior-weight', type=float, default=0.01)
+    parser.add_argument(
+        '--s7-highres-unified-ranking', action='store_true',
+        help=('Use one source-only hard-pair objective over the complete '
+              'native-top1 plus S7-top-k pool. The flag is inference-critical '
+              'and must be repeated when loading the resulting checkpoint.'))
+    parser.add_argument('--s7-highres-unified-hard-pairs', type=int, default=8)
+    parser.add_argument('--s7-highres-unified-aug-prob', type=float,
+                        default=0.75)
+    parser.add_argument('--s7-highres-unified-aug-strength', type=float,
+                        default=0.15)
     parser.add_argument(
         '--s7-highres-teacher-result-json', default=None,
         help=('Phase-2 source result JSON used only for provenance and '
@@ -662,6 +674,12 @@ def validate_args(args):
             raise ValueError(
                 'Two-frame selective promotion requires S7 top-20')
     highres_mode = args.train_components == 's7_highres_roi_ranker'
+    highres_unified = bool(getattr(
+        args, 's7_highres_unified_ranking', False))
+    if highres_unified and not highres_mode:
+        raise ValueError(
+            '--s7-highres-unified-ranking requires '
+            '--train-components s7_highres_roi_ranker')
     highres_margin_audit = bool(getattr(
         args, 'source_highres_margin_audit', False))
     if bool(getattr(args, 's7_highres_roi_ranker', False)) != highres_mode:
@@ -697,7 +715,10 @@ def validate_args(args):
         getattr(args, 's7_highres_relative_max_pairs', 128),
         getattr(args, 's7_highres_retention_weight', 2.0),
         getattr(args, 's7_highres_gain_weight', 1.0),
-        getattr(args, 's7_highres_prior_weight', 0.01))
+        getattr(args, 's7_highres_prior_weight', 0.01),
+        getattr(args, 's7_highres_unified_hard_pairs', 8),
+        getattr(args, 's7_highres_unified_aug_prob', 0.75),
+        getattr(args, 's7_highres_unified_aug_strength', 0.15))
     if highres_mode and any(float(value) <= 0.0 for value in highres_positive):
         raise ValueError('High-resolution ROI ranker settings must be positive')
     if highres_mode and (temporal_enabled or static_mode or selective_mode
@@ -1541,7 +1562,11 @@ def optimization_loss_total(losses: Dict, train_components: str):
             raise RuntimeError(
                 'High-resolution ranker losses missing: {}'.format(
                     ', '.join(missing)))
-        return loss_total({name: losses[name] for name in required})
+        selected = {name: losses[name] for name in required}
+        if 'loss_s7_highres_unified' in losses:
+            selected['loss_s7_highres_unified'] = (
+                losses['loss_s7_highres_unified'])
+        return loss_total(selected)
     if train_components in ('roi_cls_pairwise', 'roi_cls_pairwise_v2'):
         required = ('loss_cls', 'loss_roi_pairwise', 'loss_roi_retention')
         missing = [name for name in required if name not in losses]
@@ -1555,7 +1580,8 @@ def optimization_loss_total(losses: Dict, train_components: str):
 
 def optimization_loss_component_names(
         train_components: str, quality_head: bool = False,
-        relative_quality: bool = False) -> List[str]:
+        relative_quality: bool = False,
+        unified_highres: bool = False) -> List[str]:
     """Return the canonical loss-name list for logs and checkpoints."""
     if train_components == 'all':
         return ['loss_rpn_cls', 'loss_rpn_bbox', 'loss_cls', 'loss_bbox']
@@ -1598,10 +1624,13 @@ def optimization_loss_component_names(
             'loss_s7_selective_retention', 'loss_s7_selective_gain',
             'loss_s7_selective_prior']
     if train_components == 's7_highres_roi_ranker':
-        return [
+        names = [
             'loss_s7_highres_quality', 'loss_s7_highres_relative',
             'loss_s7_highres_retention', 'loss_s7_highres_gain',
             'loss_s7_highres_prior']
+        if unified_highres:
+            names.insert(-1, 'loss_s7_highres_unified')
+        return names
     if train_components in ('roi_cls_pairwise', 'roi_cls_pairwise_v2'):
         return ['loss_cls', 'loss_roi_pairwise', 'loss_roi_retention']
     if train_components == 'roi_cls':
@@ -2756,7 +2785,13 @@ class FrozenDinoRotatedHeads(nn.Module):
                 args, 'train_components', '') == 's7_selective_promotion')
         self.s7_highres_roi_ranker = bool(getattr(
             args, 's7_highres_roi_ranker', False) or getattr(
-                args, 'train_components', '') == 's7_highres_roi_ranker')
+            args, 'train_components', '') == 's7_highres_roi_ranker')
+        self.s7_highres_unified_ranking = bool(
+            getattr(args, 's7_highres_unified_ranking', False))
+        if self.s7_highres_unified_ranking and not self.s7_highres_roi_ranker:
+            raise ValueError(
+                'Unified high-resolution ranking requires the high-resolution '
+                'ROI ranker')
         self.s7_temporal_quality_head_enabled = bool(getattr(
             args, 's7_temporal_quality_head', False)
             or self.s7_selective_promotion)
@@ -3089,15 +3124,30 @@ class FrozenDinoRotatedHeads(nn.Module):
             if apply_highres_ranker is None:
                 apply_highres_ranker = not self.training
             if bool(apply_highres_ranker) and active_detections.shape[0]:
-                highres_selection = temporal.native_protected_highres_promotion(
-                    highres_head, active_embeddings, highres_embeddings,
-                    active_detections, active_sources,
-                    max_candidates=int(getattr(
-                        self._args, 's7_highres_max_candidates', 32)),
-                    score_weight=float(getattr(
-                        self._args, 's7_highres_score_weight', 1.0)),
-                    promotion_margin=float(getattr(
-                        self._args, 's7_highres_promotion_margin', 0.25)))
+                if self.s7_highres_unified_ranking:
+                    highres_selection = (
+                        temporal.native_protected_unified_highres_ranking_from_logits(
+                            highres_quality_logits, active_detections,
+                            active_sources,
+                            max_candidates=int(getattr(
+                                self._args, 's7_highres_max_candidates', 32)),
+                            score_weight=float(getattr(
+                                self._args, 's7_highres_score_weight', 1.0)),
+                            promotion_margin=float(getattr(
+                                self._args, 's7_highres_promotion_margin',
+                                0.25))))
+                else:
+                    highres_selection = (
+                        temporal.native_protected_highres_promotion_from_logits(
+                            highres_quality_logits, active_detections,
+                            active_sources,
+                            max_candidates=int(getattr(
+                                self._args, 's7_highres_max_candidates', 32)),
+                            score_weight=float(getattr(
+                                self._args, 's7_highres_score_weight', 1.0)),
+                            promotion_margin=float(getattr(
+                                self._args, 's7_highres_promotion_margin',
+                                0.25))))
                 if highres_selection.get('reason') != (
                         'native_fallback_zero_residual'):
                     selected = active_indices[highres_selection['order']]
@@ -3941,14 +3991,21 @@ class FrozenDinoRotatedHeads(nn.Module):
                 detections[:, :5].float(), gt_boxes.float()).max(dim=1).values
         else:
             overlap = detections.new_zeros((detections.shape[0],))
-        return temporal.highres_candidate_rank_losses(
-            head, embeddings, highres_embeddings, detections, source_ids,
-            overlap, riou_threshold=riou_thr,
+        loss_fn = (temporal.unified_highres_candidate_rank_losses
+                   if self.s7_highres_unified_ranking
+                   else temporal.highres_candidate_rank_losses)
+        kwargs = dict(
             quality_weight=quality_weight, relative_weight=relative_weight,
             relative_margin=relative_margin, relative_min_gap=relative_min_gap,
             relative_max_pairs=relative_max_pairs, score_weight=score_weight,
             rank_margin=rank_margin, retention_weight=retention_weight,
             gain_weight=gain_weight, prior_weight=prior_weight)
+        if self.s7_highres_unified_ranking:
+            kwargs['hard_pair_count'] = int(getattr(
+                self._args, 's7_highres_unified_hard_pairs', 8))
+        return loss_fn(
+            head, embeddings, highres_embeddings, detections, source_ids,
+            overlap, riou_threshold=riou_thr, **kwargs)
 
     def forward_roi_cls_hard_train(
             self, feature: torch.Tensor, img_meta: Dict,
@@ -4380,18 +4437,26 @@ def static_source_feature_domain_augment(
     DINO features are cached and frozen, so the augmentation is deliberately
     feature-domain: it changes no labels, reads no target frame, and keeps
     the tensor shape and patch geometry required by the fixed detector heads.
+    It is used by the static/selective rankers and the unified high-resolution
+    source-view training path.
     """
     if feature.ndim != 4 or feature.shape[0] != 1:
         raise ValueError('Static feature augmentation expects [1,C,H,W]')
     rng = random.Random(int(seed))
     selective = getattr(args, 'train_components', '') == (
         's7_selective_promotion')
+    unified_highres = (
+        getattr(args, 'train_components', '') == 's7_highres_roi_ranker'
+        and bool(getattr(args, 's7_highres_unified_ranking', False)))
     probability = float(getattr(
-        args, 's7_selective_aug_prob' if selective else 's7_static_aug_prob',
+        args, ('s7_selective_aug_prob' if selective else
+               's7_highres_unified_aug_prob' if unified_highres else
+               's7_static_aug_prob'),
         0.75))
     strength = float(getattr(
-        args, ('s7_selective_aug_strength'
-               if selective else 's7_static_aug_strength'), 0.15))
+        args, ('s7_selective_aug_strength' if selective else
+               's7_highres_unified_aug_strength' if unified_highres else
+               's7_static_aug_strength'), 0.15))
     if probability <= 0.0 or rng.random() >= probability:
         return feature, dict(applied=False, operations=[])
     import torch.nn.functional as functional
@@ -4511,8 +4576,11 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                 dino, record, args, dino_device, head_device))
         cache_hits += int(cached)
         static_augmented = False
-        if args.train_components in (
-                's7_static_domain_ranker', 's7_selective_promotion'):
+        if (args.train_components in (
+                's7_static_domain_ranker', 's7_selective_promotion')
+                or (args.train_components == 's7_highres_roi_ranker'
+                    and bool(getattr(
+                        args, 's7_highres_unified_ranking', False)))):
             feature, augmentation = static_source_feature_domain_augment(
                 feature, args, args.seed + epoch * 1000003 + index * 9176)
             static_augmented = bool(augmentation['applied'])
@@ -4652,6 +4720,8 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                 gain_weight=args.s7_highres_gain_weight,
                 prior_weight=args.s7_highres_prior_weight,
                 max_candidates=args.s7_highres_max_candidates)
+            if bool(getattr(args, 's7_highres_unified_ranking', False)):
+                output['s7_highres_augmented'] = int(static_augmented)
         elif args.train_components == 'roi_cls':
             output = heads.forward_roi_cls_hard_train(
                 feature, img_meta, gt_boxes, args.roi_samples,
@@ -4853,7 +4923,8 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                 message += (
                     'candidate_count={} usable_total={} '
                     'retain_pairs_total={} gain_pairs_total={} '
-                    'relative_pairs_total={}').format(
+                    'relative_pairs_total={} unified_pairs_total={} '
+                    'unified_active_total={} augmented={:.3f}').format(
                     int(round(metric_sums.get(
                         's7_highres_candidate_count', 0.0))),
                     int(round(metric_sums.get(
@@ -4863,14 +4934,22 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                     int(round(metric_sums.get(
                         's7_highres_gain_pair_count', 0.0))),
                     int(round(metric_sums.get(
-                        's7_highres_relative_pair_count', 0.0))))
+                        's7_highres_relative_pair_count', 0.0))),
+                    int(round(metric_sums.get(
+                        's7_highres_unified_pair_count', 0.0))),
+                    int(round(metric_sums.get(
+                        's7_highres_unified_active_count', 0.0))),
+                    float(metric_sums.get('s7_highres_augmented', 0.0))
+                    / float(max(1, index + 1)))
             print(message)
         del feature, gt_boxes, gt_labels, total
     optimized_components = optimization_loss_component_names(
         args.train_components,
         quality_head=bool(getattr(args, 's7_temporal_quality_head', False)),
         relative_quality=bool(getattr(
-            args, 's7_temporal_relative_quality', False)))
+            args, 's7_temporal_relative_quality', False)),
+        unified_highres=bool(getattr(
+            args, 's7_highres_unified_ranking', False)))
     summary = dict(
         epoch=int(epoch), count=len(ordered),
         global_step_end=int(global_step),
@@ -6730,7 +6809,10 @@ def s7_architecture(args) -> Dict:
             if highres_roi_ranker and enabled and protected_merge else None),
         highres_promotion_margin=(float(getattr(
             args, 's7_highres_promotion_margin', 0.25))
-            if highres_roi_ranker and enabled and protected_merge else None))
+            if highres_roi_ranker and enabled and protected_merge else None),
+        highres_unified_ranking=(bool(getattr(
+            args, 's7_highres_unified_ranking', False))
+            if highres_roi_ranker and enabled and protected_merge else False))
 
 
 
@@ -7109,7 +7191,9 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                 quality_head=bool(getattr(
                     args, 's7_temporal_quality_head', False)),
                 relative_quality=bool(getattr(
-                    args, 's7_temporal_relative_quality', False))),
+                    args, 's7_temporal_relative_quality', False)),
+                unified_highres=bool(getattr(
+                    args, 's7_highres_unified_ranking', False))),
             trainable_parameter_names=[
                 name for name, parameter in heads.named_parameters()
                 if parameter.requires_grad],
@@ -7414,9 +7498,27 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                     retention_weight=float(args.s7_highres_retention_weight),
                     gain_weight=float(args.s7_highres_gain_weight),
                     prior_weight=float(args.s7_highres_prior_weight),
+                    unified_ranking=bool(getattr(
+                        args, 's7_highres_unified_ranking', False)),
+                    unified_hard_pairs=int(getattr(
+                        args, 's7_highres_unified_hard_pairs', 8)),
+                    source_feature_domain_augmentation=(
+                        dict(
+                            probability=float(getattr(
+                                args, 's7_highres_unified_aug_prob', 0.75)),
+                            strength=float(getattr(
+                                args, 's7_highres_unified_aug_strength', 0.15)),
+                            operations=['brightness', 'blur', 'scale'])
+                        if bool(getattr(
+                            args, 's7_highres_unified_ranking', False))
+                        else None),
                     readout='frozen_s7_feature_stride7_roi_align',
                     candidate_pool='native_top1_plus_s7_lane_topk',
-                    inference='native_protected_quality_margin',
+                    inference=(
+                        'unified_native_protected_quality_margin'
+                        if bool(getattr(
+                            args, 's7_highres_unified_ranking', False))
+                        else 'native_protected_quality_margin'),
                     additional_dino_forward=False,
                     dense_feature_history=False,
                     foreground_branch=False,
@@ -7632,6 +7734,10 @@ def validate_checkpoint(payload: Dict, in_channels: int, args,
                          != requested_s7.get('highres_score_weight')
                          or stored_s7.get('highres_promotion_margin')
                          != requested_s7.get('highres_promotion_margin'))):
+                architecture_mismatch = True
+            if (bool(stored_s7.get('highres_unified_ranking', False))
+                    != bool(requested_s7.get('highres_unified_ranking', False))
+                    and not allow_highres_roi_initialization):
                 architecture_mismatch = True
             if architecture_mismatch:
                 raise RuntimeError('S7 checkpoint architecture mismatch')
@@ -8794,7 +8900,9 @@ def main():
                         quality_head=bool(getattr(
                             args, 's7_temporal_quality_head', False)),
                         relative_quality=bool(getattr(
-                            args, 's7_temporal_relative_quality', False)))),
+                            args, 's7_temporal_relative_quality', False)),
+                        unified_highres=bool(getattr(
+                            args, 's7_highres_unified_ranking', False)))),
                 epochs=int(args.epochs), optimizer='SGD',
                 lr=float(args.lr), momentum=float(args.momentum),
                 weight_decay=float(args.weight_decay),
@@ -9096,9 +9204,29 @@ def main():
                             args.s7_highres_retention_weight),
                         gain_weight=float(args.s7_highres_gain_weight),
                         prior_weight=float(args.s7_highres_prior_weight),
+                        unified_ranking=bool(getattr(
+                            args, 's7_highres_unified_ranking', False)),
+                        unified_hard_pairs=int(getattr(
+                            args, 's7_highres_unified_hard_pairs', 8)),
+                        source_feature_domain_augmentation=(
+                            dict(
+                                probability=float(getattr(
+                                    args, 's7_highres_unified_aug_prob',
+                                    0.75)),
+                                strength=float(getattr(
+                                    args, 's7_highres_unified_aug_strength',
+                                    0.15)),
+                                operations=['brightness', 'blur', 'scale'])
+                            if bool(getattr(
+                                args, 's7_highres_unified_ranking', False))
+                            else None),
                         readout='frozen_s7_feature_stride7_roi_align',
                         candidate_pool='native_top1_plus_s7_lane_topk',
-                        inference='native_protected_quality_margin',
+                        inference=(
+                            'unified_native_protected_quality_margin'
+                            if bool(getattr(
+                                args, 's7_highres_unified_ranking', False))
+                            else 'native_protected_quality_margin'),
                         additional_dino_forward=False,
                         dense_feature_history=False,
                         foreground_branch=False,
@@ -9135,11 +9263,18 @@ def main():
             source_highres_roi_ranker_training=(
                 args.train_components == 's7_highres_roi_ranker'),
             reason=(
-                'The high-resolution ROI ranker uses only source GT, the '
-                'frozen S7 feature map, a bounded stride-7 ROI readout, and '
-                'native-protected same-frame candidate ranking; no extra DINO '
-                'forward, target data, foreground branch, or temporal state '
-                'is used.'
+                ('The unified high-resolution ranker uses only source GT, the '
+                 'frozen S7 feature map, bounded stride-7 ROI evidence, '
+                 'whole-pool hard-pair ranking, and native protection; its '
+                 'feature-domain views add no extra DINO forward, target data, '
+                 'foreground branch, or temporal state.'
+                 if bool(getattr(
+                     args, 's7_highres_unified_ranking', False)) else
+                 'The high-resolution ROI ranker uses only source GT, the '
+                 'frozen S7 feature map, a bounded stride-7 ROI readout, and '
+                 'native-protected same-frame candidate ranking; no extra DINO '
+                 'forward, target data, foreground branch, or temporal state '
+                 'is used.')
                 if args.train_components == 's7_highres_roi_ranker' else
                 'Selective promotion uses only source GT, a frozen source-gated '
                 'quality teacher, static feature perturbations, and optionally '

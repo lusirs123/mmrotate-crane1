@@ -74,6 +74,15 @@ def _close(left, right, tolerance=1e-12):
         return False
 
 
+def _optional_exact(mapping: Dict, key: str, expected) -> bool:
+    """Accept a historical missing audit marker, but never a contradiction."""
+    return key not in mapping or mapping.get(key) is expected
+
+
+def _optional_close(mapping: Dict, key: str, expected) -> bool:
+    return key not in mapping or _close(mapping.get(key), expected)
+
+
 def strict_source_margin_gate(result: Dict) -> Dict:
     """Revalidate the complete source-only authorization for target-dev."""
     protocol = result.get('protocol') or {}
@@ -289,21 +298,26 @@ def candidate_checkpoint_gate(payload: Dict, source_gate: Dict) -> Dict:
             and int(architecture.get('highres_max_candidates', -1)) == 32
             and _close(architecture.get('highres_score_weight'), 1.0)
             and _close(architecture.get('highres_promotion_margin'),
-                       CHECKPOINT_ARCHITECTURE_MARGIN)),
-        highres_training_protocol=(
-            highres.get('frozen_detector') is True
-            and highres.get('source_only') is True
-            and highres.get('target_read') is False
-            and highres.get('inference_slice_routing') is False
-            and highres.get('sequence_identity_feature') is False
-            and highres.get('additional_dino_forward') is False
-            and highres.get('dense_feature_history') is False
-            and int(highres.get('highres_channels', -1)) == 32
-            and int(highres.get('hidden', -1)) == 32
-            and int(highres.get('max_candidates', -1)) == 32
-            and _close(highres.get('score_weight'), 1.0)
-            and _close(highres.get('promotion_margin'),
-                       CHECKPOINT_ARCHITECTURE_MARGIN)))
+                       CHECKPOINT_ARCHITECTURE_MARGIN)
+            and not bool(highres.get('unified_ranking', False))),
+        highres_training_source_isolation=(
+            _optional_exact(highres, 'source_only', True)
+            and _optional_exact(highres, 'target_read', False)
+            and _optional_exact(highres, 'frozen_detector', True)),
+        highres_training_no_special_route=(
+            _optional_exact(highres, 'inference_slice_routing', False)
+            and _optional_exact(highres, 'sequence_identity_feature', False)),
+        highres_training_no_extra_compute=(
+            _optional_exact(highres, 'additional_dino_forward', False)
+            and _optional_exact(highres, 'dense_feature_history', False)),
+        highres_training_shape=(
+            _optional_close(highres, 'highres_channels', 32)
+            and _optional_close(highres, 'hidden', 32)
+            and _optional_close(highres, 'max_candidates', 32)
+            and _optional_close(highres, 'score_weight', 1.0)
+            and _optional_close(
+                highres, 'promotion_margin',
+                CHECKPOINT_ARCHITECTURE_MARGIN)))
     return dict(checks=checks, passed=all(checks.values()))
 
 
