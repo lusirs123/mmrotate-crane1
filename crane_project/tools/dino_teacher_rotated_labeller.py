@@ -914,9 +914,10 @@ def validate_args(args):
                 'High-resolution margin audit requires its completed source '
                 'training result JSON')
         args.source_highres_margin_audit_spec = (
-            load_highres_margin_audit_spec(
-                result_json, args.eval_only_checkpoint,
-                int(args.source_highres_margin_epoch)))
+            (load_unified_highres_margin_audit_spec
+             if highres_unified else load_highres_margin_audit_spec)(
+                 result_json, args.eval_only_checkpoint,
+                 int(args.source_highres_margin_epoch)))
     if args.init_checkpoint and not os.path.isfile(args.init_checkpoint):
         raise ValueError('Init checkpoint does not exist: {}'.format(
             args.init_checkpoint))
@@ -5483,14 +5484,18 @@ def evaluate_highres_margin_grid_records(
                 record, original, img_meta, native, baseline_merge,
                 args, cached, role=role))
             for margin in margins:
-                selection = (
-                    temporal.native_protected_highres_promotion_from_logits(
-                        pool['quality_logits'], pool['detections'],
-                        pool['source_ids'], max_candidates=int(getattr(
-                            args, 's7_highres_max_candidates', 32)),
-                        score_weight=float(getattr(
-                            args, 's7_highres_score_weight', 1.0)),
-                        promotion_margin=margin))
+                selector = (
+                    temporal.native_protected_unified_highres_ranking_from_logits
+                    if bool(getattr(
+                        args, 's7_highres_unified_ranking', False)) else
+                    temporal.native_protected_highres_promotion_from_logits)
+                selection = selector(
+                    pool['quality_logits'], pool['detections'],
+                    pool['source_ids'], max_candidates=int(getattr(
+                        args, 's7_highres_max_candidates', 32)),
+                    score_weight=float(getattr(
+                        args, 's7_highres_score_weight', 1.0)),
+                    promotion_margin=margin)
                 selected_local = selection.get('selected_index')
                 selected_source = None
                 candidate = base
@@ -5587,6 +5592,14 @@ def build_highres_margin_source_audit(
         gate = s7_source_selection_gate(
             baseline_summary, baseline_small_summary,
             summary, small_summary, retention, args)
+        sequence_gain = source_sequence_gain_summary(
+            baseline_rows, rows, min_gain_sequences=2)
+        bounded_risk_gate = (
+            unified_highres_bounded_risk_source_gate(
+                baseline_summary, baseline_small_summary,
+                summary, small_summary, retention, sequence_gain, args)
+            if spec.get('audit_variant') == 'unified_bounded_risk'
+            else None)
         promotions = sum(bool(
             ((row.get('candidate_merge') or {}).get(
                 's7_highres_roi_ranker') or {}).get('promoted', False))
@@ -5630,17 +5643,39 @@ def build_highres_margin_source_audit(
             promotion_margin=float(margin), full_summary=summary,
             small_summary=small_summary, source_exact_retention=retention,
             source_gate=gate, gate_passed=bool(gate['passed']),
+            source_sequence_gain=sequence_gain,
+            bounded_risk_research_gate=bounded_risk_gate,
+            bounded_risk_gate_passed=(
+                None if bounded_risk_gate is None else
+                bool(bounded_risk_gate['passed'])),
             promotion_count=int(promotions),
             epoch3_reference_reproduced=reference_reproduced))
     passed = [row for row in margin_results if row['gate_passed']]
     selected = (max(passed, key=lambda row: row['promotion_margin'])
                 if passed else None)
+    bounded_passed = [
+        row for row in margin_results
+        if row['bounded_risk_gate_passed'] is True]
+    research_selected = (
+        max(bounded_passed, key=lambda row: (
+            int(row['full_summary']['top1_hits']),
+            int(row['small_summary']['top1_hits']),
+            -int(row['source_exact_retention']['lost_correct_count']),
+            float(row['promotion_margin'])))
+        if bounded_passed else None)
     return dict(
-        mode='frozen_epoch3_shared_forward_source_margin_audit',
+        mode=(
+            'frozen_unified_epoch3_shared_forward_source_margin_audit'
+            if spec.get('audit_variant') == 'unified_bounded_risk' else
+            'frozen_epoch3_shared_forward_source_margin_audit'),
+        audit_variant=spec.get('audit_variant'),
         source_result_json=spec['source_result_json'],
         checkpoint=spec['checkpoint'], checkpoint_epoch=int(spec['epoch']),
         margins=[float(value) for value in margins],
-        selection_rule='highest_margin_among_formal_source_gate_passers',
+        selection_rule=(
+            'formal_exact_gate_then_source_metric_bounded_risk_candidate'
+            if spec.get('audit_variant') == 'unified_bounded_risk' else
+            'highest_margin_among_formal_source_gate_passers'),
         shared_model_forward=True,
         shared_model_forward_count=int(
             evaluated['shared_model_forward_count']),
@@ -5651,6 +5686,16 @@ def build_highres_margin_source_audit(
         native_small_frame_reproduction_summary=(
             native_small_reproduction_summary),
         results=margin_results, formal_gate_passed=bool(selected is not None),
+        bounded_risk_research_gate_passed=bool(research_selected is not None),
+        bounded_risk_protocol=(
+            None if spec.get('audit_variant') != 'unified_bounded_risk' else
+            dict(
+                status='post_source_result_research_continuation_gate',
+                original_exact_retention_gate_unchanged=True,
+                source_safe_claim_allowed=False,
+                deployment_claim_allowed=False,
+                target_threshold_tuning_allowed=False,
+                full_test_allowed=False)),
         selected_margin=(None if selected is None else float(
             selected['promotion_margin'])),
         selected_full_summary=(None if selected is None else
@@ -5659,6 +5704,21 @@ def build_highres_margin_source_audit(
                                 selected['small_summary']),
         selected_exact_retention=(None if selected is None else
                                   selected['source_exact_retention']),
+        research_candidate_margin=(
+            None if research_selected is None else float(
+                research_selected['promotion_margin'])),
+        research_candidate_full_summary=(
+            None if research_selected is None else
+            research_selected['full_summary']),
+        research_candidate_small_summary=(
+            None if research_selected is None else
+            research_selected['small_summary']),
+        research_candidate_exact_retention=(
+            None if research_selected is None else
+            research_selected['source_exact_retention']),
+        eligible_for_fixed_target_dev_diagnostic=bool(
+            selected is not None or research_selected is not None),
+        eligible_for_deployment=False, eligible_for_full_test=False,
         target_read=False)
 
 
@@ -6283,6 +6343,95 @@ def load_highres_margin_audit_spec(
         raise ValueError(
             'Margin audit checkpoint must be {}'.format(expected_checkpoint))
     return dict(
+        audit_variant='lane_specific_exact_retention',
+        source_result_json=os.path.abspath(path), epoch=int(epoch),
+        checkpoint=os.path.abspath(checkpoint), training_result=payload,
+        history_row=row, baseline_summary=baseline,
+        baseline_small_summary=baseline_small,
+        small_sampling=sampling)
+
+
+def load_unified_highres_margin_audit_spec(
+        path: str, checkpoint: str, epoch: int) -> Dict:
+    """Lock the unified audit to the observed epoch-3 source-only result.
+
+    This is intentionally a separate protocol from the earlier lane-specific
+    audit.  It accepts the one-frame-loss source result only as input to a
+    read-only margin audit; it does not reinterpret that training run as an
+    exact-retention pass.
+    """
+    with open(path, 'r') as handle:
+        payload = json.load(handle)
+    source = payload.get('source') or {}
+    isolation = payload.get('isolation') or {}
+    protocol = payload.get('protocol') or {}
+    highres = protocol.get('s7_highres_roi_ranker') or {}
+    architecture = ((payload.get('architecture') or {}).get('s7') or {})
+    if int(payload.get('protocol_version', -1)) != 23:
+        raise ValueError('Unified high-resolution audit requires protocol 23')
+    if (payload.get('target_dev') is not None
+            or highres.get('target_read') is not False):
+        raise ValueError('Unified high-resolution source result read target')
+    if (payload.get('decision') !=
+            'SOURCE_ONLY_HIGHRES_ROI_RANKER_FALLBACK_TARGET_NOT_READ'):
+        raise ValueError('Unified high-resolution source decision is invalid')
+    if (isolation.get('train_components') != 's7_highres_roi_ranker'
+            or isolation.get('dino_parameters_unchanged') is not True
+            or isolation.get('frozen_head_parameters_unchanged') is not True
+            or isolation.get('target_used_for_training') is not False
+            or isolation.get('target_used_for_checkpoint_selection') is not False):
+        raise ValueError('Unified high-resolution source isolation failed')
+    if (highres.get('source_only') is not True
+            or highres.get('unified_ranking') is not True
+            or float(highres.get('promotion_margin', -1.0)) != 0.25
+            or architecture.get('highres_unified_ranking') is not True):
+        raise ValueError('Unified high-resolution architecture mismatch')
+    matches = [row for row in source.get('history', [])
+               if int(row.get('epoch', -1)) == int(epoch)]
+    if len(matches) != 1:
+        raise ValueError(
+            'Expected one unified high-resolution history row for epoch {}'
+            .format(epoch))
+    row = matches[0]
+    full = row.get('source_val') or {}
+    small = row.get('source_small_val') or {}
+    retention = row.get('source_exact_retention') or {}
+    checks = (row.get('source_selection_gate') or {}).get('checks') or {}
+    failed_checks = sorted(name for name, passed in checks.items()
+                           if passed is not True)
+    if (int(epoch) != 3 or row.get('checkpoint_saved') is not True
+            or row.get('selection_eligible') is not True
+            or row.get('source_selection_gate_passed') is not False
+            or int(full.get('top1_hits', -1)) != 696
+            or int(small.get('top1_hits', -1)) != 320
+            or int(full.get('top1_mcml', -1)) != 3
+            or int(small.get('top1_mcml', -1)) != 3
+            or int(retention.get('baseline_correct_count', -1)) != 677
+            or int(retention.get('lost_correct_count', -1)) != 1
+            or int(retention.get('gained_correct_count', -1)) != 20
+            or retention.get('lost_frame_keys') != ['val|real_seq07|215']
+            or failed_checks != ['exact_old_correct_retention']):
+        raise ValueError(
+            'Unified epoch 3 is not the locked 696/320 one-frame-loss result')
+    baseline = source.get('baseline_validation_summary') or {}
+    baseline_small = source.get('baseline_small_validation_summary') or {}
+    sampling = source.get('small_sampling') or {}
+    if (int(baseline.get('top1_hits', -1)) != 677
+            or int(baseline_small.get('top1_hits', -1)) != 303
+            or sampling.get('short_token_threshold') is None):
+        raise ValueError('Unified high-resolution result lacks baselines')
+    selected = payload.get('source_selected_checkpoint')
+    if not selected:
+        raise ValueError('Unified high-resolution result lacks fallback path')
+    expected_checkpoint = os.path.join(
+        os.path.dirname(selected),
+        'labeller_epoch_{:02d}_source_only.pth'.format(int(epoch)))
+    if os.path.realpath(expected_checkpoint) != os.path.realpath(checkpoint):
+        raise ValueError(
+            'Unified margin audit checkpoint must be {}'.format(
+                expected_checkpoint))
+    return dict(
+        audit_variant='unified_bounded_risk',
         source_result_json=os.path.abspath(path), epoch=int(epoch),
         checkpoint=os.path.abspath(checkpoint), training_result=payload,
         history_row=row, baseline_summary=baseline,
@@ -6437,6 +6586,61 @@ def s7_source_selection_gate(
                 baseline_aci is not None and candidate_aci is not None
                 and float(candidate_aci) + 1e-12 >= float(baseline_aci)))
     return dict(checks=checks, passed=all(checks.values()))
+
+
+def unified_highres_bounded_risk_source_gate(
+        baseline_full: Dict, baseline_small: Dict,
+        candidate_full: Dict, candidate_small: Dict,
+        retention: Dict, sequence_gain: Dict, args,
+        max_lost_correct: int = 1,
+        max_lost_fraction: float = 0.002,
+        min_gain_loss_ratio: float = 10.0) -> Dict:
+    """Research-continuation gate that does not replace exact retention.
+
+    The original source-safe gate remains authoritative for deployment.  This
+    second tier only decides whether a source-only candidate has enough net
+    evidence to justify one fixed target-dev diagnosis under a new protocol.
+    """
+    formal = s7_source_selection_gate(
+        baseline_full, baseline_small,
+        candidate_full, candidate_small, retention, args)
+    formal_without_exact = {
+        name: passed for name, passed in formal['checks'].items()
+        if name != 'exact_old_correct_retention'}
+    baseline_correct = int(retention['baseline_correct_count'])
+    lost = int(retention['lost_correct_count'])
+    gained = int(retention['gained_correct_count'])
+    loss_fraction = (
+        float(lost) / float(baseline_correct)
+        if baseline_correct > 0 else float('inf'))
+    gain_loss_ratio = (
+        float('inf') if lost == 0 else float(gained) / float(lost))
+    checks = dict(
+        standard_source_checks_except_exact=all(
+            formal_without_exact.values()),
+        bounded_lost_correct_count=lost <= int(max_lost_correct),
+        bounded_lost_correct_fraction=(
+            loss_fraction <= float(max_lost_fraction) + 1e-12),
+        strong_gain_to_loss_ratio=(
+            gain_loss_ratio + 1e-12 >= float(min_gain_loss_ratio)),
+        positive_net_top1_gain=(
+            int(candidate_full['top1_hits'])
+            > int(baseline_full['top1_hits'])),
+        gains_span_source_sequences=bool(sequence_gain.get('passed', False)))
+    return dict(
+        status='research_continuation_only_not_source_safe',
+        checks=checks, passed=all(checks.values()),
+        original_formal_gate_passed=bool(formal['passed']),
+        original_formal_gate=formal,
+        max_lost_correct=int(max_lost_correct),
+        max_lost_fraction=float(max_lost_fraction),
+        min_gain_loss_ratio=float(min_gain_loss_ratio),
+        observed_lost_fraction=float(loss_fraction),
+        observed_gain_loss_ratio=(
+            None if math.isinf(gain_loss_ratio) else float(gain_loss_ratio)),
+        source_safe_claim_allowed=False,
+        deployment_claim_allowed=False,
+        full_test_allowed=False)
 
 
 def source_sequence_gain_summary(baseline_rows: Sequence[Dict],
@@ -8578,19 +8782,34 @@ def main():
         if not dino_unchanged or not heads_unchanged:
             raise RuntimeError(
                 'Read-only high-resolution margin audit changed parameters')
-        decision = (
-            'SOURCE_ONLY_HIGHRES_MARGIN_AUDIT_GATE_PASSED_TARGET_NOT_READ'
-            if audit['formal_gate_passed'] else
-            'SOURCE_ONLY_HIGHRES_MARGIN_AUDIT_GATE_FAILED_TARGET_NOT_READ')
+        unified_audit = spec.get('audit_variant') == 'unified_bounded_risk'
+        if audit['formal_gate_passed']:
+            decision = (
+                'SOURCE_ONLY_UNIFIED_HIGHRES_MARGIN_AUDIT_FORMAL_GATE_'
+                'PASSED_TARGET_NOT_READ' if unified_audit else
+                'SOURCE_ONLY_HIGHRES_MARGIN_AUDIT_GATE_PASSED_TARGET_NOT_READ')
+        elif (unified_audit
+              and audit['bounded_risk_research_gate_passed']):
+            decision = (
+                'SOURCE_ONLY_UNIFIED_HIGHRES_BOUNDED_RISK_RESEARCH_GATE_'
+                'PASSED_TARGET_NOT_READ')
+        else:
+            decision = (
+                'SOURCE_ONLY_UNIFIED_HIGHRES_MARGIN_AUDIT_ALL_GATES_'
+                'FAILED_TARGET_NOT_READ' if unified_audit else
+                'SOURCE_ONLY_HIGHRES_MARGIN_AUDIT_GATE_FAILED_TARGET_NOT_READ')
         result = dict(
-            protocol_version=24,
+            protocol_version=(26 if unified_audit else 24),
             protocol=dict(
                 architecture=(
+                    'frozen_unified_highres_epoch3_shared_forward_margin_audit'
+                    if unified_audit else
                     'frozen_highres_epoch3_shared_forward_margin_audit'),
                 source_data=source_protocol,
                 checkpoint_selection=(
-                    'highest_promotion_margin_among_formal_source_gate_'
-                    'passers'),
+                    'formal_exact_gate_then_bounded_risk_research_gate'
+                    if unified_audit else
+                    'highest_promotion_margin_among_formal_source_gate_passers'),
                 fixed_margins=list(audit['margins']),
                 shared_model_forward=True,
                 parameter_update=False, source_only=True,
@@ -8600,7 +8819,16 @@ def main():
                         args.s7_source_min_full_top1),
                     min_small_top1=int(args.s7_source_min_small_top1),
                     max_mcml=int(args.s7_source_max_mcml),
-                    dfr_aci_nonregression=True)),
+                    dfr_aci_nonregression=True,
+                    bounded_risk_research_continuation=(
+                        None if not unified_audit else dict(
+                            max_lost_correct=1,
+                            max_lost_fraction=0.002,
+                            min_gain_loss_ratio=10.0,
+                            min_gain_sequences=2,
+                            source_safe_claim_allowed=False,
+                            deployment_claim_allowed=False,
+                            full_test_allowed=False)))),
             isolation=dict(
                 dino_frozen=True,
                 dino_parameters_unchanged=bool(dino_unchanged),
@@ -8622,12 +8850,28 @@ def main():
             source_highres_margin_audit=audit,
             source_selected_checkpoint=(
                 audit['checkpoint'] if audit['formal_gate_passed'] else None),
+            source_research_candidate_checkpoint=(
+                audit['checkpoint']
+                if (unified_audit and
+                    audit['bounded_risk_research_gate_passed']) else None),
             selected_promotion_margin=audit['selected_margin'],
+            research_candidate_promotion_margin=(
+                audit['research_candidate_margin']
+                if unified_audit else None),
+            source_safe=bool(audit['formal_gate_passed']),
+            eligible_for_fixed_target_dev_diagnostic=bool(
+                audit['eligible_for_fixed_target_dev_diagnostic']
+                if unified_audit else audit['formal_gate_passed']),
+            eligible_for_deployment=False,
+            eligible_for_full_test=False,
             target_dev=None, decision=decision)
         replacements = common.write_json_atomic(args.out_json, result)
         print('[dino-labeller] {}'.format(decision))
         print('[source-highres-margin] selected={}'.format(
             audit['selected_margin']))
+        if unified_audit:
+            print('[source-highres-margin] research_candidate={}'.format(
+                audit['research_candidate_margin']))
         print('[json] nonfinite_replacements={}'.format(replacements))
         return
     source_val_rows = None
