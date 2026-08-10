@@ -363,6 +363,31 @@ def parse_args():
     parser.add_argument('--s7-highres-unified-aug-strength', type=float,
                         default=0.15)
     parser.add_argument(
+        '--s7-highres-pairwise-takeover-v2', action='store_true',
+        help=('Use the source-only relative delta-RIoU takeover head with '
+              'uncertainty-aware native abstention.'))
+    parser.add_argument('--s7-takeover-initial-uncertainty', type=float,
+                        default=0.25)
+    parser.add_argument('--s7-takeover-uncertainty-multiplier', type=float,
+                        default=2.0)
+    parser.add_argument('--s7-takeover-margin', type=float, default=0.05)
+    parser.add_argument('--s7-takeover-retention-margin', type=float,
+                        default=0.10)
+    parser.add_argument('--s7-takeover-delta-weight', type=float, default=1.0)
+    parser.add_argument('--s7-takeover-classification-weight', type=float,
+                        default=1.0)
+    parser.add_argument('--s7-takeover-ranking-weight', type=float, default=0.5)
+    parser.add_argument('--s7-takeover-retention-weight', type=float,
+                        default=4.0)
+    parser.add_argument('--s7-takeover-gain-weight', type=float, default=2.0)
+    parser.add_argument('--s7-takeover-consistency-weight', type=float,
+                        default=0.5)
+    parser.add_argument('--s7-takeover-prior-weight', type=float, default=0.01)
+    parser.add_argument('--s7-takeover-ranking-min-gap', type=float,
+                        default=0.05)
+    parser.add_argument('--s7-takeover-max-ranking-pairs', type=int, default=64)
+    parser.add_argument('--s7-takeover-group-dro-eta', type=float, default=0.01)
+    parser.add_argument(
         '--s7-highres-teacher-result-json', default=None,
         help=('Phase-2 source result JSON used only for provenance and '
               'checkpoint integrity.'))
@@ -676,10 +701,18 @@ def validate_args(args):
     highres_mode = args.train_components == 's7_highres_roi_ranker'
     highres_unified = bool(getattr(
         args, 's7_highres_unified_ranking', False))
+    highres_takeover_v2 = bool(getattr(
+        args, 's7_highres_pairwise_takeover_v2', False))
     if highres_unified and not highres_mode:
         raise ValueError(
             '--s7-highres-unified-ranking requires '
             '--train-components s7_highres_roi_ranker')
+    if highres_takeover_v2 and not highres_mode:
+        raise ValueError(
+            '--s7-highres-pairwise-takeover-v2 requires '
+            '--train-components s7_highres_roi_ranker')
+    if highres_takeover_v2 and highres_unified:
+        raise ValueError('Pairwise Takeover V2 and unified V1 are exclusive')
     highres_margin_audit = bool(getattr(
         args, 'source_highres_margin_audit', False))
     if bool(getattr(args, 's7_highres_roi_ranker', False)) != highres_mode:
@@ -721,6 +754,33 @@ def validate_args(args):
         getattr(args, 's7_highres_unified_aug_strength', 0.15))
     if highres_mode and any(float(value) <= 0.0 for value in highres_positive):
         raise ValueError('High-resolution ROI ranker settings must be positive')
+    takeover_positive = (
+        getattr(args, 's7_takeover_initial_uncertainty', 0.25),
+        getattr(args, 's7_takeover_uncertainty_multiplier', 2.0),
+        getattr(args, 's7_takeover_retention_margin', 0.10),
+        getattr(args, 's7_takeover_delta_weight', 1.0),
+        getattr(args, 's7_takeover_classification_weight', 1.0),
+        getattr(args, 's7_takeover_ranking_weight', 0.5),
+        getattr(args, 's7_takeover_retention_weight', 4.0),
+        getattr(args, 's7_takeover_gain_weight', 2.0),
+        getattr(args, 's7_takeover_consistency_weight', 0.5),
+        getattr(args, 's7_takeover_prior_weight', 0.01),
+        getattr(args, 's7_takeover_ranking_min_gap', 0.05),
+        getattr(args, 's7_takeover_max_ranking_pairs', 64),
+        getattr(args, 's7_takeover_group_dro_eta', 0.01))
+    if highres_takeover_v2 and any(
+            float(value) <= 0.0 for value in takeover_positive):
+        raise ValueError('Pairwise Takeover V2 settings must be positive')
+    if (highres_takeover_v2
+            and float(getattr(args, 's7_takeover_margin', 0.05)) < 0.0):
+        raise ValueError('Pairwise Takeover V2 margin must be non-negative')
+    if (highres_takeover_v2
+            and int(getattr(args, 's7_highres_max_candidates', 0)) != 64):
+        raise ValueError('Pairwise Takeover V2 locks the S7 candidate pool to 64')
+    if (highres_takeover_v2 and not math.isclose(
+            float(args.deployment_score_thr), 0.05,
+            rel_tol=0.0, abs_tol=1e-12)):
+        raise ValueError('Pairwise Takeover V2 locks deployment score to 0.05')
     if highres_mode and (temporal_enabled or static_mode or selective_mode
                          or relative_quality
                          or bool(getattr(args, 's7_temporal_student', False))):
@@ -1054,40 +1114,86 @@ def validate_args(args):
                 'JSON')
         with open(teacher_result_json, 'r') as handle:
             teacher_result = json.load(handle)
-        if teacher_result.get('target_dev') is not None:
-            raise ValueError(
-                'High-resolution phase-2 result must not contain target-dev '
-                'output')
-        if int((teacher_result.get('source') or {}).get('best_epoch', -1)) != int(
-                args.s7_highres_base_epoch):
-            raise ValueError(
-                'High-resolution ranker phase-2 result must select epoch {}; '
-                'found {}'.format(
-                    args.s7_highres_base_epoch,
-                    (teacher_result.get('source') or {}).get('best_epoch')))
-        if (teacher_result.get('isolation') or {}).get('train_components') != (
-                's7_temporal_association'):
-            raise ValueError(
-                'High-resolution ranker must initialize from phase-2 '
-                's7_temporal_association training')
-        provenance = phase2_selected_checkpoint_provenance_gate(
-            teacher_result, args.init_checkpoint,
-            expected_epoch=int(args.s7_highres_base_epoch),
-            min_full_top1=int(args.s7_source_min_full_top1),
-            min_small_top1=int(args.s7_source_min_small_top1),
-            max_mcml=int(args.s7_source_max_mcml))
-        if not provenance['passed']:
-            failed = sorted(name for name, passed in provenance['checks'].items()
-                            if not passed)
-            raise ValueError(
-                'High-resolution phase-2 checkpoint provenance gate failed: '
-                + ', '.join(failed))
-        source = teacher_result.get('source') or {}
-        if not source.get('best_validation_summary') or not source.get(
-                'best_small_validation_summary'):
-            raise ValueError(
-                'High-resolution ranker phase-2 result lacks source summaries')
-        args.s7_highres_teacher_result = teacher_result
+        if highres_takeover_v2:
+            audit = teacher_result.get('source_highres_margin_audit') or {}
+            protocol = teacher_result.get('protocol') or {}
+            isolation = teacher_result.get('isolation') or {}
+            candidate = teacher_result.get(
+                'source_research_candidate_checkpoint')
+            checks = dict(
+                protocol_version=int(teacher_result.get(
+                    'protocol_version', -1)) == 26,
+                locked_decision=(teacher_result.get('decision') ==
+                    'SOURCE_ONLY_UNIFIED_HIGHRES_BOUNDED_RISK_'
+                    'RESEARCH_GATE_PASSED_TARGET_NOT_READ'),
+                checkpoint_epoch=int(audit.get('checkpoint_epoch', -1))
+                    == int(args.s7_highres_base_epoch),
+                bounded_risk=audit.get('audit_variant')
+                    == 'unified_bounded_risk',
+                research_margin=float(teacher_result.get(
+                    'research_candidate_promotion_margin', -1.0)) == 0.3,
+                source_only=protocol.get('source_only') is True,
+                target_not_read=(protocol.get('target_read') is False
+                                 and teacher_result.get('target_dev') is None),
+                read_only=(isolation.get('read_only_evaluation') is True
+                           and isolation.get('parameter_updates_performed')
+                           is False),
+                no_target_use=(isolation.get('target_used_for_training')
+                               is False and isolation.get(
+                                   'target_used_for_checkpoint_selection')
+                               is False),
+                research_only=(teacher_result.get('source_safe') is False
+                               and teacher_result.get(
+                                   'eligible_for_deployment') is False
+                               and teacher_result.get(
+                                   'eligible_for_full_test') is False),
+                checkpoint_identity=bool(candidate) and os.path.realpath(
+                    str(candidate)) == os.path.realpath(
+                        args.init_checkpoint))
+            if not all(checks.values()):
+                failed = sorted(name for name, passed in checks.items()
+                                if not passed)
+                raise ValueError(
+                    'Pairwise Takeover V2 protocol-26 gate failed: '
+                    + ', '.join(failed))
+            args.s7_highres_teacher_result = teacher_result
+        else:
+            if teacher_result.get('target_dev') is not None:
+                raise ValueError(
+                    'High-resolution phase-2 result must not contain '
+                    'target-dev output')
+            if int((teacher_result.get('source') or {}).get(
+                    'best_epoch', -1)) != int(args.s7_highres_base_epoch):
+                raise ValueError(
+                    'High-resolution ranker phase-2 result must select epoch '
+                    '{}; found {}'.format(
+                        args.s7_highres_base_epoch,
+                        (teacher_result.get('source') or {}).get('best_epoch')))
+            if (teacher_result.get('isolation') or {}).get(
+                    'train_components') != 's7_temporal_association':
+                raise ValueError(
+                    'High-resolution ranker must initialize from phase-2 '
+                    's7_temporal_association training')
+            provenance = phase2_selected_checkpoint_provenance_gate(
+                teacher_result, args.init_checkpoint,
+                expected_epoch=int(args.s7_highres_base_epoch),
+                min_full_top1=int(args.s7_source_min_full_top1),
+                min_small_top1=int(args.s7_source_min_small_top1),
+                max_mcml=int(args.s7_source_max_mcml))
+            if not provenance['passed']:
+                failed = sorted(
+                    name for name, passed in provenance['checks'].items()
+                    if not passed)
+                raise ValueError(
+                    'High-resolution phase-2 checkpoint provenance gate '
+                    'failed: ' + ', '.join(failed))
+            source = teacher_result.get('source') or {}
+            if not source.get('best_validation_summary') or not source.get(
+                    'best_small_validation_summary'):
+                raise ValueError(
+                    'High-resolution ranker phase-2 result lacks source '
+                    'summaries')
+            args.s7_highres_teacher_result = teacher_result
     roi_cls_modes = ('roi_cls', 'roi_cls_pairwise',
                      'roi_cls_pairwise_v2')
     if (args.train_components in roi_cls_modes
@@ -1452,8 +1558,16 @@ def configure_trainable_components(heads, train_components: str) -> List[str]:
             raise RuntimeError(
                 'High-resolution ranker requires the protected S7 pool and '
                 'its spatial/quality readout')
-        for module in (heads.s7_highres_spatial_projection,
-                       heads.s7_highres_candidate_quality_head):
+        takeover_v2 = bool(getattr(
+            heads, 's7_highres_pairwise_takeover_v2', False))
+        takeover_head = getattr(
+            heads, 's7_highres_pairwise_takeover_head', None)
+        if takeover_v2 and takeover_head is None:
+            raise RuntimeError('Pairwise Takeover V2 head is missing')
+        modules = (heads.s7_highres_spatial_projection,
+                   takeover_head if takeover_v2 else
+                   heads.s7_highres_candidate_quality_head)
+        for module in modules:
             for parameter in module.parameters():
                 parameter.requires_grad_(True)
     else:
@@ -1554,6 +1668,20 @@ def optimization_loss_total(losses: Dict, train_components: str):
                     ', '.join(missing)))
         return loss_total({name: losses[name] for name in required})
     if train_components == 's7_highres_roi_ranker':
+        takeover_required = (
+            'loss_s7_takeover_delta',
+            'loss_s7_takeover_classification',
+            'loss_s7_takeover_ranking',
+            'loss_s7_takeover_retention', 'loss_s7_takeover_gain',
+            'loss_s7_takeover_consistency', 'loss_s7_takeover_prior')
+        if any(name in losses for name in takeover_required):
+            missing = [name for name in takeover_required if name not in losses]
+            if missing:
+                raise RuntimeError(
+                    'Pairwise Takeover V2 losses missing: {}'.format(
+                        ', '.join(missing)))
+            return loss_total({name: losses[name]
+                               for name in takeover_required})
         required = (
             'loss_s7_highres_quality', 'loss_s7_highres_relative',
             'loss_s7_highres_retention', 'loss_s7_highres_gain',
@@ -1582,7 +1710,8 @@ def optimization_loss_total(losses: Dict, train_components: str):
 def optimization_loss_component_names(
         train_components: str, quality_head: bool = False,
         relative_quality: bool = False,
-        unified_highres: bool = False) -> List[str]:
+        unified_highres: bool = False,
+        pairwise_takeover_v2: bool = False) -> List[str]:
     """Return the canonical loss-name list for logs and checkpoints."""
     if train_components == 'all':
         return ['loss_rpn_cls', 'loss_rpn_bbox', 'loss_cls', 'loss_bbox']
@@ -1625,6 +1754,13 @@ def optimization_loss_component_names(
             'loss_s7_selective_retention', 'loss_s7_selective_gain',
             'loss_s7_selective_prior']
     if train_components == 's7_highres_roi_ranker':
+        if pairwise_takeover_v2:
+            return [
+                'loss_s7_takeover_delta',
+                'loss_s7_takeover_classification',
+                'loss_s7_takeover_ranking',
+                'loss_s7_takeover_retention', 'loss_s7_takeover_gain',
+                'loss_s7_takeover_consistency', 'loss_s7_takeover_prior']
         names = [
             'loss_s7_highres_quality', 'loss_s7_highres_relative',
             'loss_s7_highres_retention', 'loss_s7_highres_gain',
@@ -2789,10 +2925,16 @@ class FrozenDinoRotatedHeads(nn.Module):
             args, 'train_components', '') == 's7_highres_roi_ranker')
         self.s7_highres_unified_ranking = bool(
             getattr(args, 's7_highres_unified_ranking', False))
+        self.s7_highres_pairwise_takeover_v2 = bool(
+            getattr(args, 's7_highres_pairwise_takeover_v2', False))
         if self.s7_highres_unified_ranking and not self.s7_highres_roi_ranker:
             raise ValueError(
                 'Unified high-resolution ranking requires the high-resolution '
                 'ROI ranker')
+        if (self.s7_highres_pairwise_takeover_v2
+                and not self.s7_highres_roi_ranker):
+            raise ValueError(
+                'Pairwise Takeover V2 requires the high-resolution ROI ranker')
         self.s7_temporal_quality_head_enabled = bool(getattr(
             args, 's7_temporal_quality_head', False)
             or self.s7_selective_promotion)
@@ -2893,10 +3035,19 @@ class FrozenDinoRotatedHeads(nn.Module):
                         int(getattr(args, 'roi_fc_channels', 1024)),
                         highres_channels,
                         int(getattr(args, 's7_highres_hidden', 32))))
+                self.s7_highres_pairwise_takeover_head = (
+                    temporal.S7HighResPairwiseTakeoverHead(
+                        int(getattr(args, 'roi_fc_channels', 1024)),
+                        highres_channels,
+                        int(getattr(args, 's7_highres_hidden', 32)),
+                        float(getattr(
+                            args, 's7_takeover_initial_uncertainty', 0.25)))
+                    if self.s7_highres_pairwise_takeover_v2 else None)
             else:
                 self.s7_highres_roi_extractor = None
                 self.s7_highres_spatial_projection = None
                 self.s7_highres_candidate_quality_head = None
+                self.s7_highres_pairwise_takeover_head = None
         else:
             self.s7_readout = None
             self.s7_rpn_head = None
@@ -2912,6 +3063,7 @@ class FrozenDinoRotatedHeads(nn.Module):
             self.s7_highres_roi_extractor = None
             self.s7_highres_spatial_projection = None
             self.s7_highres_candidate_quality_head = None
+            self.s7_highres_pairwise_takeover_head = None
         self._roi_cls_teacher_weight = None
         self._roi_cls_teacher_bias = None
 
@@ -2988,7 +3140,9 @@ class FrozenDinoRotatedHeads(nn.Module):
 
     def _highres_roi_embeddings(self, feature: torch.Tensor,
                                 img_meta: Dict, detections: torch.Tensor,
-                                rescale: bool) -> torch.Tensor:
+                                rescale: bool,
+                                s7_feature_override: Optional[
+                                    torch.Tensor] = None) -> torch.Tensor:
         """Read stride-7 spatial evidence for a bounded candidate subset."""
         from mmrotate.core import rbbox2roi
 
@@ -2999,7 +3153,9 @@ class FrozenDinoRotatedHeads(nn.Module):
         if detections.shape[0] == 0:
             channels = int(getattr(self._args, 's7_highres_channels', 32))
             return detections.new_zeros((0, channels))
-        s7 = getattr(self, '_last_s7_feature', None)
+        s7 = s7_feature_override
+        if s7 is None:
+            s7 = getattr(self, '_last_s7_feature', None)
         if s7 is None:
             s7 = self.s7_feature(feature)
         boxes = detections[:, :5].clone()
@@ -3110,9 +3266,21 @@ class FrozenDinoRotatedHeads(nn.Module):
             active_sources = base_source_ids[active_indices]
             highres_embeddings = self._highres_roi_embeddings(
                 feature, img_meta, active_detections, rescale=rescale)
-            highres_quality_logits = highres_head(
-                active_embeddings, highres_embeddings, active_detections,
-                active_sources)
+            pairwise_prediction = None
+            if self.s7_highres_pairwise_takeover_v2:
+                takeover_head = getattr(
+                    self, 's7_highres_pairwise_takeover_head', None)
+                if takeover_head is None:
+                    raise RuntimeError('Pairwise Takeover V2 head is missing')
+                pairwise_prediction = takeover_head(
+                    active_embeddings, highres_embeddings,
+                    active_detections, active_sources)
+                highres_quality_logits = active_detections.new_zeros(
+                    (active_detections.shape[0],))
+            else:
+                highres_quality_logits = highres_head(
+                    active_embeddings, highres_embeddings, active_detections,
+                    active_sources)
             self._last_highres_pool = dict(
                 detections=active_detections.detach(),
                 embeddings=active_embeddings.detach(),
@@ -3120,12 +3288,34 @@ class FrozenDinoRotatedHeads(nn.Module):
                 source_ids=active_sources.detach(),
                 base_indices=active_indices.detach(),
                 quality_logits=highres_quality_logits.detach(),
+                pairwise_prediction=(
+                    None if pairwise_prediction is None else dict(
+                        native_index=pairwise_prediction['native_index'],
+                        s7_indices=pairwise_prediction['s7_indices'].detach(),
+                        mean=pairwise_prediction['mean'].detach(),
+                        raw_mean=pairwise_prediction['raw_mean'].detach(),
+                        uncertainty=(
+                            pairwise_prediction['uncertainty'].detach()))),
                 candidate_limit=int(getattr(
                     self._args, 's7_highres_max_candidates', 32)))
             if apply_highres_ranker is None:
                 apply_highres_ranker = not self.training
             if bool(apply_highres_ranker) and active_detections.shape[0]:
-                if self.s7_highres_unified_ranking:
+                if self.s7_highres_pairwise_takeover_v2:
+                    highres_selection = (
+                        temporal.native_protected_pairwise_highres_takeover(
+                            pairwise_prediction, active_detections,
+                            active_sources,
+                            max_candidates=int(getattr(
+                                self._args, 's7_highres_max_candidates', 64)),
+                            uncertainty_multiplier=float(getattr(
+                                self._args,
+                                's7_takeover_uncertainty_multiplier', 2.0)),
+                            takeover_margin=float(getattr(
+                                self._args, 's7_takeover_margin', 0.05)),
+                            deployment_score_thr=float(getattr(
+                                self._args, 'deployment_score_thr', 0.05))))
+                elif self.s7_highres_unified_ranking:
                     highres_selection = (
                         temporal.native_protected_unified_highres_ranking_from_logits(
                             highres_quality_logits, active_detections,
@@ -3149,8 +3339,10 @@ class FrozenDinoRotatedHeads(nn.Module):
                             promotion_margin=float(getattr(
                                 self._args, 's7_highres_promotion_margin',
                                 0.25))))
-                if highres_selection.get('reason') != (
-                        'native_fallback_zero_residual'):
+                if (highres_selection.get('selected_index') is not None
+                        and (self.s7_highres_pairwise_takeover_v2
+                             or highres_selection.get('reason') !=
+                             'native_fallback_zero_residual')):
                     selected = active_indices[highres_selection['order']]
                     selected_first = selected[:1]
                     remaining = torch.arange(
@@ -3336,7 +3528,16 @@ class FrozenDinoRotatedHeads(nn.Module):
                     promoted=bool(highres_selection.get('promoted', False)),
                     reason=str(highres_selection.get('reason', '')),
                     candidate_count=int(highres_selection.get(
-                        'candidate_count', 0)))))
+                        'candidate_count', 0)),
+                    eligible_count=int(highres_selection.get(
+                        'eligible_count', 0)),
+                    best_advantage=highres_selection.get('best_advantage'),
+                    best_uncertainty=highres_selection.get(
+                        'best_uncertainty'),
+                    best_lower_bound=highres_selection.get(
+                        'best_lower_bound'),
+                    deployment_score=highres_selection.get(
+                        'deployment_score'))))
         return detections
 
     def feature_levels(self, feature: torch.Tensor):
@@ -3840,7 +4041,8 @@ class FrozenDinoRotatedHeads(nn.Module):
             relative_max_pairs: int, score_weight: float,
             rank_margin: float, retention_weight: float,
             gain_weight: float, prior_weight: float,
-            max_candidates: int) -> Dict:
+            max_candidates: int,
+            augmented_feature: Optional[torch.Tensor] = None) -> Dict:
         """Fit one source-only static rank residual on the fixed S7 pool."""
         from mmcv.ops import box_iou_rotated
 
@@ -3992,6 +4194,48 @@ class FrozenDinoRotatedHeads(nn.Module):
                 detections[:, :5].float(), gt_boxes.float()).max(dim=1).values
         else:
             overlap = detections.new_zeros((detections.shape[0],))
+        if self.s7_highres_pairwise_takeover_v2:
+            takeover_head = getattr(
+                self, 's7_highres_pairwise_takeover_head', None)
+            if takeover_head is None:
+                raise RuntimeError('Pairwise Takeover V2 head is missing')
+            augmented_highres = None
+            if augmented_feature is not None:
+                with torch.no_grad():
+                    augmented_s7 = self.s7_feature(augmented_feature)
+                augmented_highres = self._highres_roi_embeddings(
+                    augmented_feature, img_meta, detections, rescale=False,
+                    s7_feature_override=augmented_s7)
+            return temporal.pairwise_highres_takeover_losses(
+                takeover_head, embeddings, highres_embeddings, detections,
+                source_ids, overlap, riou_threshold=riou_thr,
+                deployment_score_thr=float(getattr(
+                    self._args, 'deployment_score_thr', 0.05)),
+                uncertainty_multiplier=float(getattr(
+                    self._args, 's7_takeover_uncertainty_multiplier', 2.0)),
+                takeover_margin=float(getattr(
+                    self._args, 's7_takeover_margin', 0.05)),
+                retention_margin=float(getattr(
+                    self._args, 's7_takeover_retention_margin', 0.10)),
+                delta_weight=float(getattr(
+                    self._args, 's7_takeover_delta_weight', 1.0)),
+                classification_weight=float(getattr(
+                    self._args, 's7_takeover_classification_weight', 1.0)),
+                ranking_weight=float(getattr(
+                    self._args, 's7_takeover_ranking_weight', 0.5)),
+                retention_weight=float(getattr(
+                    self._args, 's7_takeover_retention_weight', 4.0)),
+                gain_weight=float(getattr(
+                    self._args, 's7_takeover_gain_weight', 2.0)),
+                consistency_weight=float(getattr(
+                    self._args, 's7_takeover_consistency_weight', 0.5)),
+                prior_weight=float(getattr(
+                    self._args, 's7_takeover_prior_weight', 0.01)),
+                ranking_min_gap=float(getattr(
+                    self._args, 's7_takeover_ranking_min_gap', 0.05)),
+                max_ranking_pairs=int(getattr(
+                    self._args, 's7_takeover_max_ranking_pairs', 64)),
+                augmented_highres_embedding=augmented_highres)
         loss_fn = (temporal.unified_highres_candidate_rank_losses
                    if self.s7_highres_unified_ranking
                    else temporal.highres_candidate_rank_losses)
@@ -4448,7 +4692,9 @@ def static_source_feature_domain_augment(
         's7_selective_promotion')
     unified_highres = (
         getattr(args, 'train_components', '') == 's7_highres_roi_ranker'
-        and bool(getattr(args, 's7_highres_unified_ranking', False)))
+        and (bool(getattr(args, 's7_highres_unified_ranking', False))
+             or bool(getattr(
+                 args, 's7_highres_pairwise_takeover_v2', False))))
     probability = float(getattr(
         args, ('s7_selective_aug_prob' if selective else
                's7_highres_unified_aug_prob' if unified_highres else
@@ -4491,6 +4737,16 @@ def static_source_feature_domain_augment(
     return augmented.contiguous(), dict(applied=True, operations=operations)
 
 
+def source_domain_label(record: Dict) -> str:
+    explicit = record.get('domain')
+    if explicit:
+        value = str(explicit).lower()
+        return 'sim' if 'sim' in value else 'real'
+    identity = '{} {}'.format(
+        record.get('split', ''), record.get('seq', '')).lower()
+    return 'sim' if 'sim' in identity else 'real'
+
+
 def ordered_source_training_records(
         records: Sequence[Dict], args, epoch: int) -> List[Dict]:
     """Preserve causal video order only for modes that consume history."""
@@ -4505,6 +4761,24 @@ def ordered_source_training_records(
             ordered, key=lambda row: (
                 str(row.get('split', '')), str(row.get('seq', '')),
                 int(row.get('frame', -1))))
+    if bool(getattr(args, 's7_highres_pairwise_takeover_v2', False)):
+        by_domain = collections.defaultdict(list)
+        for row in ordered:
+            domain = source_domain_label(row)
+            by_domain[domain].append(row)
+        if len(by_domain) < 2:
+            raise RuntimeError(
+                'Pairwise Takeover V2 requires at least two source domains')
+        largest = max(len(group) for group in by_domain.values())
+        balanced = []
+        for domain, group in sorted(by_domain.items()):
+            domain_rng = random.Random(
+                args.seed + epoch * 1009 + sum(ord(char) for char in domain))
+            shuffled = list(group)
+            domain_rng.shuffle(shuffled)
+            balanced.extend(shuffled[index % len(shuffled)]
+                            for index in range(largest))
+        ordered = balanced
     random.Random(args.seed + epoch).shuffle(ordered)
     return ordered
 
@@ -4553,13 +4827,24 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
         heads.s7_selective_promotion_head.train()
     elif args.train_components == 's7_highres_roi_ranker':
         heads.s7_highres_spatial_projection.train()
-        heads.s7_highres_candidate_quality_head.train()
+        if bool(getattr(args, 's7_highres_pairwise_takeover_v2', False)):
+            heads.s7_highres_candidate_quality_head.eval()
+            heads.s7_highres_pairwise_takeover_head.train()
+        else:
+            heads.s7_highres_candidate_quality_head.train()
     if head_device.type == 'cuda':
         torch.cuda.reset_peak_memory_stats(head_device)
     ordered = ordered_source_training_records(records, args, epoch)
     losses = []
     component_sums = {}
     metric_sums = {}
+    takeover_v2 = bool(getattr(
+        args, 's7_highres_pairwise_takeover_v2', False))
+    group_log_weights = ({
+        source_domain_label(row): 0.0
+        for row in ordered} if takeover_v2 else {})
+    group_loss_sums = collections.defaultdict(float)
+    group_counts = collections.defaultdict(int)
     cache_hits = 0
     gain_replayed_keys = set()
     gain_replay_extra_count = 0
@@ -4577,14 +4862,23 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                 dino, record, args, dino_device, head_device))
         cache_hits += int(cached)
         static_augmented = False
+        paired_augmented_feature = None
         if (args.train_components in (
                 's7_static_domain_ranker', 's7_selective_promotion')
                 or (args.train_components == 's7_highres_roi_ranker'
-                    and bool(getattr(
-                        args, 's7_highres_unified_ranking', False)))):
-            feature, augmentation = static_source_feature_domain_augment(
+                    and (bool(getattr(
+                        args, 's7_highres_unified_ranking', False))
+                         or bool(getattr(
+                             args, 's7_highres_pairwise_takeover_v2',
+                             False))))):
+            augmented, augmentation = static_source_feature_domain_augment(
                 feature, args, args.seed + epoch * 1000003 + index * 9176)
             static_augmented = bool(augmentation['applied'])
+            if bool(getattr(
+                    args, 's7_highres_pairwise_takeover_v2', False)):
+                paired_augmented_feature = augmented
+            else:
+                feature = augmented
         optimizer.zero_grad()
         if args.train_components == 's7_temporal_association':
             current_key = (
@@ -4720,8 +5014,11 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                 retention_weight=args.s7_highres_retention_weight,
                 gain_weight=args.s7_highres_gain_weight,
                 prior_weight=args.s7_highres_prior_weight,
-                max_candidates=args.s7_highres_max_candidates)
-            if bool(getattr(args, 's7_highres_unified_ranking', False)):
+                max_candidates=args.s7_highres_max_candidates,
+                augmented_feature=paired_augmented_feature)
+            if (bool(getattr(args, 's7_highres_unified_ranking', False))
+                    or bool(getattr(
+                        args, 's7_highres_pairwise_takeover_v2', False))):
                 output['s7_highres_augmented'] = int(static_augmented)
         elif args.train_components == 'roi_cls':
             output = heads.forward_roi_cls_hard_train(
@@ -4791,7 +5088,26 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
             if isinstance(value, (int, float)) and math.isfinite(float(value)):
                 metric_sums[name] = metric_sums.get(name, 0.0) + float(value)
         total = optimization_loss_total(output, args.train_components)
-        total.backward()
+        optimized_total = total
+        if takeover_v2:
+            domain = source_domain_label(record)
+            group_log_weights.setdefault(domain, 0.0)
+            group_log_weights[domain] += (
+                float(args.s7_takeover_group_dro_eta)
+                * float(total.detach().item()))
+            maximum = max(group_log_weights.values())
+            unnormalized = {
+                name: math.exp(value - maximum)
+                for name, value in group_log_weights.items()}
+            denominator = sum(unnormalized.values())
+            weights = {
+                name: value / denominator
+                for name, value in unnormalized.items()}
+            optimized_total = total * (
+                len(weights) * weights[domain])
+            group_loss_sums[domain] += float(total.detach().item())
+            group_counts[domain] += 1
+        optimized_total.backward()
         grad_norm = torch.nn.utils.clip_grad_norm_(
             heads.parameters(), args.max_grad_norm)
         if not math.isfinite(float(grad_norm)):
@@ -4921,7 +5237,29 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                     float(metric_sums.get('s7_selective_augmented', 0.0))
                     / float(max(1, index + 1)))
             elif args.train_components == 's7_highres_roi_ranker':
-                message += (
+                if takeover_v2:
+                    message += (
+                        ' takeover_candidates={} eligible={} rank_pairs={} '
+                        'retain_pairs={} gain_pairs={} uncertainty={:.4f} '
+                        'augmented={:.3f}').format(
+                            int(round(metric_sums.get(
+                                's7_takeover_candidate_count', 0.0))),
+                            int(round(metric_sums.get(
+                                's7_takeover_eligible_count', 0.0))),
+                            int(round(metric_sums.get(
+                                's7_takeover_ranking_pair_count', 0.0))),
+                            int(round(metric_sums.get(
+                                's7_takeover_retention_pair_count', 0.0))),
+                            int(round(metric_sums.get(
+                                's7_takeover_gain_pair_count', 0.0))),
+                            float(metric_sums.get(
+                                's7_takeover_mean_uncertainty', 0.0))
+                            / float(max(1, index + 1)),
+                            float(metric_sums.get(
+                                's7_highres_augmented', 0.0))
+                            / float(max(1, index + 1)))
+                else:
+                    message += (
                     'candidate_count={} usable_total={} '
                     'retain_pairs_total={} gain_pairs_total={} '
                     'relative_pairs_total={} unified_pairs_total={} '
@@ -4950,7 +5288,9 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
         relative_quality=bool(getattr(
             args, 's7_temporal_relative_quality', False)),
         unified_highres=bool(getattr(
-            args, 's7_highres_unified_ranking', False)))
+            args, 's7_highres_unified_ranking', False)),
+        pairwise_takeover_v2=bool(getattr(
+            args, 's7_highres_pairwise_takeover_v2', False)))
     summary = dict(
         epoch=int(epoch), count=len(ordered),
         global_step_end=int(global_step),
@@ -4967,6 +5307,24 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
         head_peak_memory_mb=(
             float(torch.cuda.max_memory_allocated(head_device) / (1024 ** 2))
             if head_device.type == 'cuda' else 0.0))
+    if takeover_v2:
+        maximum = max(group_log_weights.values())
+        unnormalized = {
+            name: math.exp(value - maximum)
+            for name, value in group_log_weights.items()}
+        denominator = sum(unnormalized.values())
+        summary['source_group_dro'] = dict(
+            eta=float(args.s7_takeover_group_dro_eta),
+            balanced_sampling=True,
+            source_labels_used_for_model_input=False,
+            counts={name: int(group_counts[name])
+                    for name in sorted(group_counts)},
+            mean_losses={
+                name: float(group_loss_sums[name] / group_counts[name])
+                for name in sorted(group_counts)},
+            final_weights={
+                name: float(unnormalized[name] / denominator)
+                for name in sorted(unnormalized)})
     if args.train_components == 's7_lane_arbitration':
         summary['s7_lane_gain_replay'] = dict(
             repeat=int(args.s7_lane_gain_repeat),
@@ -5372,6 +5730,7 @@ def evaluate_records(dino, heads, records: Sequence[Dict], args,
                 args.valid_content_tolerance))
             rows.append(dict(
                 role=role, split=record['split'], seq=record['seq'],
+                domain=source_domain_label(record),
                 frame=int(record['frame']), feature_cache_hit=bool(cached),
                 candidate_merge=candidate_merge,
                 temporal_selection=temporal_selection,
@@ -5438,6 +5797,7 @@ def _highres_margin_audit_row(
         args.valid_content_tolerance))
     return dict(
         role=role, split=record['split'], seq=record['seq'],
+        domain=source_domain_label(record),
         frame=int(record['frame']), feature_cache_hit=bool(cached),
         candidate_merge=candidate_merge, temporal_selection=None,
         temporal_attribution=None, metrics=metrics,
@@ -6251,6 +6611,12 @@ def source_correct_frame_keys(rows: Sequence[Dict]) -> List[str]:
         if bool(row['metrics']['top1_hit']))
 
 
+def source_deployment_correct_frame_keys(rows: Sequence[Dict]) -> List[str]:
+    return sorted(
+        source_frame_key(row) for row in rows
+        if bool(row['metrics'].get('deployment_top1_hit', False)))
+
+
 def load_source_conflict_spec(path: str, epoch: int) -> Dict:
     with open(path, 'r') as handle:
         payload = json.load(handle)
@@ -6458,6 +6824,68 @@ def source_top1_retention_summary(
         candidate_correct_count=len(candidate_correct),
         lost_frame_keys=sorted(lost),
         gained_frame_keys=sorted(gained))
+
+
+def source_deployment_retention_summary(
+        baseline_correct_keys: Sequence[str], candidate_rows: Sequence[Dict]
+        ) -> Dict:
+    """Exact retention after applying the fixed deployment score threshold."""
+    baseline = set(str(key) for key in baseline_correct_keys)
+    candidate_correct = {
+        source_frame_key(row) for row in candidate_rows
+        if bool(row['metrics'].get('deployment_top1_hit', False))}
+    retained = baseline & candidate_correct
+    lost = baseline - candidate_correct
+    gained = candidate_correct - baseline
+    return dict(
+        baseline_correct_count=len(baseline),
+        retained_correct_count=len(retained),
+        lost_correct_count=len(lost),
+        gained_correct_count=len(gained),
+        candidate_correct_count=len(candidate_correct),
+        lost_frame_keys=sorted(lost), gained_frame_keys=sorted(gained))
+
+
+def source_domain_nonregression_summary(
+        baseline_rows: Sequence[Dict], candidate_rows: Sequence[Dict]) -> Dict:
+    """Require raw and deployment Top-1 non-regression in every source domain."""
+    baseline_by_domain = collections.defaultdict(list)
+    candidate_by_domain = collections.defaultdict(list)
+    for row in baseline_rows:
+        baseline_by_domain[str(row.get('domain', 'unknown'))].append(row)
+    for row in candidate_rows:
+        candidate_by_domain[str(row.get('domain', 'unknown'))].append(row)
+    same_domains = set(baseline_by_domain) == set(candidate_by_domain)
+    rows = {}
+    if same_domains:
+        for domain in sorted(baseline_by_domain):
+            baseline = baseline_by_domain[domain]
+            candidate = candidate_by_domain[domain]
+            baseline_raw = sum(bool(row['metrics']['top1_hit'])
+                               for row in baseline)
+            candidate_raw = sum(bool(row['metrics']['top1_hit'])
+                                for row in candidate)
+            baseline_deployment = sum(bool(row['metrics'].get(
+                'deployment_top1_hit', False)) for row in baseline)
+            candidate_deployment = sum(bool(row['metrics'].get(
+                'deployment_top1_hit', False)) for row in candidate)
+            rows[domain] = dict(
+                baseline_raw_top1=int(baseline_raw),
+                candidate_raw_top1=int(candidate_raw),
+                raw_delta=int(candidate_raw - baseline_raw),
+                baseline_deployment_top1=int(baseline_deployment),
+                candidate_deployment_top1=int(candidate_deployment),
+                deployment_delta=int(
+                    candidate_deployment - baseline_deployment),
+                passed=bool(candidate_raw >= baseline_raw
+                            and candidate_deployment >= baseline_deployment))
+    return dict(
+        same_domains=bool(same_domains), domains=rows,
+        passed=bool(same_domains and rows
+                    and all(row['passed'] for row in rows.values())),
+        any_positive_domain=bool(any(
+            row['raw_delta'] > 0 or row['deployment_delta'] > 0
+            for row in rows.values())))
 
 
 def s7_calibration_state(heads) -> Optional[Dict]:
@@ -7016,7 +7444,22 @@ def s7_architecture(args) -> Dict:
             if highres_roi_ranker and enabled and protected_merge else None),
         highres_unified_ranking=(bool(getattr(
             args, 's7_highres_unified_ranking', False))
-            if highres_roi_ranker and enabled and protected_merge else False))
+            if highres_roi_ranker and enabled and protected_merge else False),
+        highres_pairwise_takeover_v2=(bool(getattr(
+            args, 's7_highres_pairwise_takeover_v2', False))
+            if highres_roi_ranker and enabled and protected_merge else False),
+        takeover_initial_uncertainty=(float(getattr(
+            args, 's7_takeover_initial_uncertainty', 0.25))
+            if highres_roi_ranker and enabled and protected_merge else None),
+        takeover_uncertainty_multiplier=(float(getattr(
+            args, 's7_takeover_uncertainty_multiplier', 2.0))
+            if highres_roi_ranker and enabled and protected_merge else None),
+        takeover_margin=(float(getattr(args, 's7_takeover_margin', 0.05))
+                         if highres_roi_ranker and enabled and protected_merge
+                         else None),
+        takeover_deployment_score_thr=(float(getattr(
+            args, 'deployment_score_thr', 0.05))
+            if highres_roi_ranker and enabled and protected_merge else None))
 
 
 
@@ -7060,7 +7503,8 @@ def load_heads_checkpoint_state(heads, payload: Dict,
         if allow_highres_roi_initialization:
             allowed_prefixes.extend((
                 's7_highres_spatial_projection.',
-                's7_highres_candidate_quality_head.'))
+                's7_highres_candidate_quality_head.',
+                's7_highres_pairwise_takeover_head.'))
         disallowed_missing = [
             name for name in incompatible.missing_keys
             if not any(name.startswith(prefix) for prefix in allowed_prefixes)]
@@ -7358,7 +7802,8 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                        source_baseline_small_summary: Dict = None,
                        source_baseline_correct_keys: Sequence[str] = None,
                        source_selection_gate_passed: Optional[bool] = None,
-                       source_exact_retention: Optional[Dict] = None
+                       source_exact_retention: Optional[Dict] = None,
+                       source_deployment_exact_retention: Optional[Dict] = None
                        ) -> Dict:
     return dict(
         labeller=LABELLER_NAME, protocol_version=PROTOCOL_VERSION,
@@ -7371,6 +7816,8 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
             None if source_selection_gate_passed is None
             else bool(source_selection_gate_passed)),
         source_exact_retention=source_exact_retention,
+        source_deployment_exact_retention=(
+            source_deployment_exact_retention),
         s7_student_teacher_reproduction=(
             getattr(args, 's7_student_teacher_reproduction_gate', None)
             if args.train_components == 's7_temporal_student' else None),
@@ -7397,7 +7844,9 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                 relative_quality=bool(getattr(
                     args, 's7_temporal_relative_quality', False)),
                 unified_highres=bool(getattr(
-                    args, 's7_highres_unified_ranking', False))),
+                    args, 's7_highres_unified_ranking', False)),
+                pairwise_takeover_v2=bool(getattr(
+                    args, 's7_highres_pairwise_takeover_v2', False))),
             trainable_parameter_names=[
                 name for name, parameter in heads.named_parameters()
                 if parameter.requires_grad],
@@ -7684,7 +8133,10 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                     base_epoch=int(args.s7_highres_base_epoch),
                     trainable=[
                         's7_highres_spatial_projection',
-                        's7_highres_candidate_quality_head'],
+                        ('s7_highres_pairwise_takeover_head'
+                         if bool(getattr(
+                             args, 's7_highres_pairwise_takeover_v2', False))
+                         else 's7_highres_candidate_quality_head')],
                     frozen_detector=True,
                     highres_channels=int(args.s7_highres_channels),
                     hidden=int(args.s7_highres_hidden),
@@ -7704,6 +8156,23 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                     prior_weight=float(args.s7_highres_prior_weight),
                     unified_ranking=bool(getattr(
                         args, 's7_highres_unified_ranking', False)),
+                    pairwise_takeover_v2=bool(getattr(
+                        args, 's7_highres_pairwise_takeover_v2', False)),
+                    takeover_objective=(dict(
+                        target='s7_RIoU_minus_native_top1_RIoU',
+                        uncertainty='heteroscedastic_source_LCB',
+                        multiplier=float(
+                            args.s7_takeover_uncertainty_multiplier),
+                        margin=float(args.s7_takeover_margin),
+                        deployment_score_thr=float(
+                            args.deployment_score_thr),
+                        clean_aug_consistency=True,
+                        source_domain_balancing=True,
+                        group_dro_eta=float(args.s7_takeover_group_dro_eta),
+                        raw_and_deployment_exact_retention=True)
+                        if bool(getattr(
+                            args, 's7_highres_pairwise_takeover_v2', False))
+                        else None),
                     unified_hard_pairs=int(getattr(
                         args, 's7_highres_unified_hard_pairs', 8)),
                     source_feature_domain_augmentation=(
@@ -7713,13 +8182,19 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                             strength=float(getattr(
                                 args, 's7_highres_unified_aug_strength', 0.15)),
                             operations=['brightness', 'blur', 'scale'])
-                        if bool(getattr(
+                        if (bool(getattr(
                             args, 's7_highres_unified_ranking', False))
+                            or bool(getattr(
+                                args, 's7_highres_pairwise_takeover_v2',
+                                False)))
                         else None),
                     readout='frozen_s7_feature_stride7_roi_align',
                     candidate_pool='native_top1_plus_s7_lane_topk',
                     inference=(
-                        'unified_native_protected_quality_margin'
+                        'pairwise_delta_riou_LCB_native_abstention'
+                        if bool(getattr(
+                            args, 's7_highres_pairwise_takeover_v2', False))
+                        else 'unified_native_protected_quality_margin'
                         if bool(getattr(
                             args, 's7_highres_unified_ranking', False))
                         else 'native_protected_quality_margin'),
@@ -7943,6 +8418,29 @@ def validate_checkpoint(payload: Dict, in_channels: int, args,
                     != bool(requested_s7.get('highres_unified_ranking', False))
                     and not allow_highres_roi_initialization):
                 architecture_mismatch = True
+            if (bool(stored_s7.get(
+                    'highres_pairwise_takeover_v2', False))
+                    != bool(requested_s7.get(
+                        'highres_pairwise_takeover_v2', False))
+                    and not allow_highres_roi_initialization):
+                architecture_mismatch = True
+            if (bool(stored_s7.get(
+                    'highres_pairwise_takeover_v2', False))
+                    and bool(requested_s7.get(
+                        'highres_pairwise_takeover_v2', False))
+                    and (stored_s7.get('takeover_initial_uncertainty')
+                         != requested_s7.get('takeover_initial_uncertainty')
+                         or stored_s7.get(
+                             'takeover_uncertainty_multiplier')
+                         != requested_s7.get(
+                             'takeover_uncertainty_multiplier')
+                         or stored_s7.get('takeover_margin')
+                         != requested_s7.get('takeover_margin')
+                         or stored_s7.get(
+                             'takeover_deployment_score_thr')
+                         != requested_s7.get(
+                             'takeover_deployment_score_thr'))):
+                architecture_mismatch = True
             if architecture_mismatch:
                 raise RuntimeError('S7 checkpoint architecture mismatch')
     elif bool(stored_s7.get('enabled', False)):
@@ -7994,6 +8492,7 @@ def train_source_only(dino, heads, train_records, val_records, args,
     source_baseline_summary = None
     source_baseline_small_summary = None
     source_baseline_correct_keys = None
+    source_baseline_deployment_correct_keys = None
     source_baseline_rows = None
     source_initial_temporal_summary = None
     source_initial_temporal_small_summary = None
@@ -8145,22 +8644,34 @@ def train_source_only(dino, heads, train_records, val_records, args,
                         args.s7_highres_base_epoch, payload.get('epoch')))
             stored_protocol = payload.get('training_protocol') or {}
             stored_s7 = payload.get('s7_architecture', {})
-            if (stored_protocol.get('train_components')
-                    != 's7_temporal_association'
-                    or not bool(stored_s7.get('temporal_quality_head', False))
-                    or not bool((stored_protocol.get(
-                        's7_temporal_association') or {}).get(
-                        'relative_quality', False))):
-                raise RuntimeError(
-                    'High-resolution ranker requires the complete phase-2 '
-                    'relative-quality checkpoint')
-            base_gate = source_selected_checkpoint_gate(payload)
-            if not base_gate['passed']:
-                failed = sorted(name for name, passed in
-                                base_gate['checks'].items() if not passed)
-                raise RuntimeError(
-                    'High-resolution ranker base checkpoint failed source '
-                    'gate: ' + ', '.join(failed))
+            if bool(getattr(
+                    args, 's7_highres_pairwise_takeover_v2', False)):
+                if (stored_protocol.get('train_components')
+                        != 's7_highres_roi_ranker'
+                        or not bool(stored_s7.get('highres_roi_ranker', False))
+                        or not bool(stored_s7.get(
+                            'highres_unified_ranking', False))):
+                    raise RuntimeError(
+                        'Pairwise Takeover V2 requires the locked unified V1 '
+                        'high-resolution epoch checkpoint')
+            else:
+                if (stored_protocol.get('train_components')
+                        != 's7_temporal_association'
+                        or not bool(stored_s7.get(
+                            'temporal_quality_head', False))
+                        or not bool((stored_protocol.get(
+                            's7_temporal_association') or {}).get(
+                                'relative_quality', False))):
+                    raise RuntimeError(
+                        'High-resolution ranker requires the complete phase-2 '
+                        'relative-quality checkpoint')
+                base_gate = source_selected_checkpoint_gate(payload)
+                if not base_gate['passed']:
+                    failed = sorted(name for name, passed in
+                                    base_gate['checks'].items() if not passed)
+                    raise RuntimeError(
+                        'High-resolution ranker base checkpoint failed source '
+                        'gate: ' + ', '.join(failed))
         validate_checkpoint(
             payload, in_channels, args,
             allow_training_mode_mismatch=True,
@@ -8273,6 +8784,8 @@ def train_source_only(dino, heads, train_records, val_records, args,
             source_baseline_summary = summarize_rows(baseline_rows)
             source_baseline_correct_keys = source_correct_frame_keys(
                 baseline_rows)
+            source_baseline_deployment_correct_keys = (
+                source_deployment_correct_frame_keys(baseline_rows))
             if contextual_source_validation:
                 small_keys = {
                     '{}|{}|{}'.format(
@@ -8469,11 +8982,26 @@ def train_source_only(dino, heads, train_records, val_records, args,
             key = source_selection_key(val_summary)
         source_gate_passed = True
         retention_summary = None
+        deployment_retention_summary = None
+        source_domain_summary = None
         protected_gate = None
         if val_summary is not None and protected_source_mode:
             if args.train_components in pairwise_modes or s7_mode:
                 retention_summary = source_top1_retention_summary(
                     source_baseline_correct_keys, val_rows)
+                if s7_highres_mode and bool(getattr(
+                        args, 's7_highres_pairwise_takeover_v2', False)):
+                    if (source_baseline_rows is None
+                            or source_baseline_deployment_correct_keys is None):
+                        raise RuntimeError(
+                            'Pairwise Takeover V2 lost its source baselines')
+                    deployment_retention_summary = (
+                        source_deployment_retention_summary(
+                            source_baseline_deployment_correct_keys,
+                            val_rows))
+                    source_domain_summary = (
+                        source_domain_nonregression_summary(
+                            source_baseline_rows, val_rows))
                 if s7_mode:
                     if (s7_merge_mode or s7_lane_mode or s7_quality_mode
                             or s7_temporal_mode or s7_student_mode
@@ -8485,6 +9013,23 @@ def train_source_only(dino, heads, train_records, val_records, args,
                         source_baseline_small_summary,
                         val_summary, small_val_summary,
                         retention_summary, args)
+                    if s7_highres_mode and bool(getattr(
+                            args, 's7_highres_pairwise_takeover_v2', False)):
+                        protected_gate['checks'].update(
+                            exact_deployment_retention=bool(
+                                deployment_retention_summary[
+                                    'lost_correct_count'] == 0),
+                            per_source_domain_nonregression=bool(
+                                source_domain_summary['passed']),
+                            positive_source_domain_gain=bool(
+                                source_domain_summary[
+                                    'any_positive_domain']))
+                        protected_gate['deployment_exact_retention'] = (
+                            deployment_retention_summary)
+                        protected_gate['source_domain_nonregression'] = (
+                            source_domain_summary)
+                        protected_gate['passed'] = all(
+                            protected_gate['checks'].values())
                     if s7_selective_mode:
                         if source_baseline_rows is None:
                             raise RuntimeError(
@@ -8556,7 +9101,9 @@ def train_source_only(dino, heads, train_records, val_records, args,
                 source_baseline_small_summary,
                 source_baseline_correct_keys,
                 source_selection_gate_passed=True,
-                source_exact_retention=retention_summary), best_path)
+                source_exact_retention=retention_summary,
+                source_deployment_exact_retention=(
+                    deployment_retention_summary)), best_path)
         if evaluate_epoch:
             epoch_path = os.path.join(
                 args.work_dir,
@@ -8569,7 +9116,9 @@ def train_source_only(dino, heads, train_records, val_records, args,
                 source_baseline_small_summary,
                 source_baseline_correct_keys,
                 source_selection_gate_passed=source_gate_passed,
-                source_exact_retention=retention_summary), epoch_path)
+                source_exact_retention=retention_summary,
+                source_deployment_exact_retention=(
+                    deployment_retention_summary)), epoch_path)
         exact_retention_passed = (
             bool(protected_gate['checks'][
                 'exact_old_correct_retention'])
@@ -8581,6 +9130,8 @@ def train_source_only(dino, heads, train_records, val_records, args,
             source_selection_gate_passed=bool(source_gate_passed),
             source_retention_passed=exact_retention_passed,
             source_exact_retention=retention_summary,
+            source_deployment_exact_retention=(
+                deployment_retention_summary),
             s7_merge_calibration=(
                 s7_calibration_state(heads)
                 if (s7_merge_mode or s7_lane_mode or s7_quality_mode
@@ -8596,6 +9147,7 @@ def train_source_only(dino, heads, train_records, val_records, args,
                 'roi_cls_pairwise_v2' else None),
             s7_source_gate=(protected_gate if s7_mode else None),
             source_sequence_generalization=sequence_gain,
+            source_domain_generalization=source_domain_summary,
             selected_as_best=bool(improved),
             selection_eligible=bool(selection_eligible),
             checkpoint_saved=bool(evaluate_epoch),
@@ -8607,7 +9159,9 @@ def train_source_only(dino, heads, train_records, val_records, args,
             source_baseline_small_summary,
             source_baseline_correct_keys,
             source_selection_gate_passed=source_gate_passed,
-            source_exact_retention=retention_summary), latest_path)
+            source_exact_retention=retention_summary,
+            source_deployment_exact_retention=(
+                deployment_retention_summary)), latest_path)
         progress_path = None
         progress_replacements = 0
         if args.train_components in (
@@ -9146,7 +9700,10 @@ def main():
                         relative_quality=bool(getattr(
                             args, 's7_temporal_relative_quality', False)),
                         unified_highres=bool(getattr(
-                            args, 's7_highres_unified_ranking', False)))),
+                            args, 's7_highres_unified_ranking', False)),
+                        pairwise_takeover_v2=bool(getattr(
+                            args, 's7_highres_pairwise_takeover_v2',
+                            False)))),
                 epochs=int(args.epochs), optimizer='SGD',
                 lr=float(args.lr), momentum=float(args.momentum),
                 weight_decay=float(args.weight_decay),
@@ -9428,7 +9985,11 @@ def main():
                         base_epoch=int(args.s7_highres_base_epoch),
                         trainable=[
                             's7_highres_spatial_projection',
-                            's7_highres_candidate_quality_head'],
+                            ('s7_highres_pairwise_takeover_head'
+                             if bool(getattr(
+                                 args, 's7_highres_pairwise_takeover_v2',
+                                 False))
+                             else 's7_highres_candidate_quality_head')],
                         highres_channels=int(args.s7_highres_channels),
                         hidden=int(args.s7_highres_hidden),
                         max_candidates=int(args.s7_highres_max_candidates),
@@ -9450,6 +10011,24 @@ def main():
                         prior_weight=float(args.s7_highres_prior_weight),
                         unified_ranking=bool(getattr(
                             args, 's7_highres_unified_ranking', False)),
+                        pairwise_takeover_v2=bool(getattr(
+                            args, 's7_highres_pairwise_takeover_v2', False)),
+                        takeover_objective=(dict(
+                            target='s7_RIoU_minus_native_top1_RIoU',
+                            uncertainty='heteroscedastic_source_LCB',
+                            multiplier=float(
+                                args.s7_takeover_uncertainty_multiplier),
+                            margin=float(args.s7_takeover_margin),
+                            deployment_score_thr=float(
+                                args.deployment_score_thr),
+                            clean_aug_consistency=True,
+                            source_domain_balancing=True,
+                            group_dro_eta=float(
+                                args.s7_takeover_group_dro_eta),
+                            raw_and_deployment_exact_retention=True)
+                            if bool(getattr(
+                                args, 's7_highres_pairwise_takeover_v2',
+                                False)) else None),
                         unified_hard_pairs=int(getattr(
                             args, 's7_highres_unified_hard_pairs', 8)),
                         source_feature_domain_augmentation=(
@@ -9461,13 +10040,20 @@ def main():
                                     args, 's7_highres_unified_aug_strength',
                                     0.15)),
                                 operations=['brightness', 'blur', 'scale'])
-                            if bool(getattr(
+                            if (bool(getattr(
                                 args, 's7_highres_unified_ranking', False))
+                                or bool(getattr(
+                                    args, 's7_highres_pairwise_takeover_v2',
+                                    False)))
                             else None),
                         readout='frozen_s7_feature_stride7_roi_align',
                         candidate_pool='native_top1_plus_s7_lane_topk',
                         inference=(
-                            'unified_native_protected_quality_margin'
+                            'pairwise_delta_riou_LCB_native_abstention'
+                            if bool(getattr(
+                                args, 's7_highres_pairwise_takeover_v2',
+                                False))
+                            else 'unified_native_protected_quality_margin'
                             if bool(getattr(
                                 args, 's7_highres_unified_ranking', False))
                             else 'native_protected_quality_margin'),

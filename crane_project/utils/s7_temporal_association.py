@@ -179,6 +179,111 @@ class S7HighResCandidateQualityHead(nn.Module):
         return self.output(hidden).reshape(-1)
 
 
+class S7HighResPairwiseTakeoverHead(nn.Module):
+    """Predict S7 quality advantage relative to the current native winner.
+
+    This V2 head receives no sequence/domain identity.  Every S7 candidate is
+    compared with the same native top-1 using semantic ROI, stride-7 ROI, and
+    label-free score/geometry differences.  A zero-initialized mean and a
+    positive uncertainty make an untrained checkpoint abstain to native.
+    """
+
+    SCALAR_CHANNELS = 10
+
+    def __init__(self, embedding_channels: int, highres_channels: int,
+                 hidden: int = 32, initial_uncertainty: float = 0.25):
+        super().__init__()
+        if (int(embedding_channels) <= 0 or int(highres_channels) <= 0
+                or int(hidden) <= 0 or float(initial_uncertainty) <= 0.0):
+            raise ValueError('Pairwise takeover dimensions must be positive')
+        self.initial_uncertainty = float(initial_uncertainty)
+        self.semantic_projection = nn.Sequential(
+            nn.Linear(int(embedding_channels) * 2, int(hidden)),
+            nn.LayerNorm(int(hidden)), nn.GELU())
+        self.highres_projection = nn.Sequential(
+            nn.Linear(int(highres_channels) * 2, int(hidden)),
+            nn.LayerNorm(int(hidden)), nn.GELU())
+        self.scalar_projection = nn.Sequential(
+            nn.Linear(self.SCALAR_CHANNELS, int(hidden)), nn.GELU())
+        self.output = nn.Linear(int(hidden) * 3, 2)
+        nn.init.zeros_(self.output.weight)
+        nn.init.zeros_(self.output.bias)
+        nn.init.constant_(
+            self.output.bias[1],
+            _inverse_softplus(float(initial_uncertainty)))
+
+    @staticmethod
+    def _pair_scalars(native: torch.Tensor,
+                      s7: torch.Tensor) -> torch.Tensor:
+        eps = 1e-6
+        native_score = native[5].clamp(eps, 1.0 - eps)
+        s7_score = s7[:, 5].clamp(eps, 1.0 - eps)
+        native_logit = torch.log(native_score) - torch.log1p(-native_score)
+        s7_logit = torch.log(s7_score) - torch.log1p(-s7_score)
+        native_wh = native[2:4].abs().clamp_min(eps)
+        s7_wh = s7[:, 2:4].abs().clamp_min(eps)
+        log_ratio = torch.log(s7_wh / native_wh.reshape(1, 2))
+        area_ratio = torch.log(
+            (s7_wh[:, 0] * s7_wh[:, 1])
+            / (native_wh[0] * native_wh[1]))
+        aspect_delta = torch.log(s7_wh[:, 0] / s7_wh[:, 1]) - torch.log(
+            native_wh[0] / native_wh[1])
+        native_diag = torch.linalg.vector_norm(native_wh)
+        s7_diag = torch.linalg.vector_norm(s7_wh, dim=1)
+        center = torch.linalg.vector_norm(
+            s7[:, :2] - native[:2].reshape(1, 2), dim=1)
+        center = center / (0.5 * (native_diag + s7_diag)).clamp_min(1.0)
+        angle = 2.0 * (s7[:, 4] - native[4])
+        return torch.stack((
+            native_logit.expand_as(s7_logit).clamp(-12.0, 12.0),
+            s7_logit.clamp(-12.0, 12.0),
+            (s7_logit - native_logit).clamp(-12.0, 12.0),
+            log_ratio[:, 0].clamp(-12.0, 12.0),
+            log_ratio[:, 1].clamp(-12.0, 12.0),
+            area_ratio.clamp(-12.0, 12.0),
+            aspect_delta.clamp(-12.0, 12.0),
+            center.clamp(max=20.0), torch.sin(angle), torch.cos(angle)),
+            dim=1)
+
+    def forward(self, embedding: torch.Tensor,
+                highres_embedding: torch.Tensor,
+                detections: torch.Tensor, source_ids: torch.Tensor) -> Dict:
+        if (embedding.ndim != 2 or highres_embedding.ndim != 2
+                or detections.ndim != 2 or detections.shape[1] != 6
+                or embedding.shape[0] != detections.shape[0]
+                or highres_embedding.shape[0] != detections.shape[0]
+                or source_ids.shape != (detections.shape[0],)):
+            raise ValueError('Pairwise takeover inputs are misaligned')
+        native = torch.nonzero(source_ids == 0, as_tuple=False).flatten()
+        s7 = torch.nonzero(source_ids == 1, as_tuple=False).flatten()
+        if not native.numel() or not s7.numel():
+            empty = detections.new_zeros((0,))
+            return dict(native_index=(None if not native.numel() else int(
+                            native[torch.argmax(detections[native, 5])].item())),
+                        s7_indices=s7, mean=empty, raw_mean=empty,
+                        uncertainty=empty)
+        native_index = native[torch.argmax(detections[native, 5])]
+        semantic_native = embedding[native_index].reshape(1, -1)
+        highres_native = highres_embedding[native_index].reshape(1, -1)
+        semantic_delta = embedding[s7] - semantic_native
+        highres_delta = highres_embedding[s7] - highres_native
+        hidden = torch.cat((
+            self.semantic_projection(torch.cat((
+                semantic_delta, semantic_delta.abs()), dim=1).float()),
+            self.highres_projection(torch.cat((
+                highres_delta, highres_delta.abs()), dim=1).float()),
+            self.scalar_projection(self._pair_scalars(
+                detections[native_index], detections[s7]).float())), dim=1)
+        output = self.output(hidden)
+        raw_mean = output[:, 0]
+        mean = torch.tanh(raw_mean)
+        uncertainty = torch.nn.functional.softplus(output[:, 1]).clamp(
+            min=0.05, max=1.0)
+        return dict(native_index=int(native_index.item()), s7_indices=s7,
+                    raw_mean=raw_mean, mean=mean,
+                    uncertainty=uncertainty)
+
+
 class S7SelectivePromotionHead(nn.Module):
     """Predict S7-vs-native quality advantage and calibrated uncertainty.
 
@@ -1236,6 +1341,215 @@ def highres_candidate_rank_losses(
             's7_candidate_quality_relative_pair_count', 0)),
         s7_highres_quality_mean_target=float(target.mean().item()),
         s7_highres_quality_mean_prediction=float(prediction.mean().item()))
+
+
+def pairwise_highres_takeover_losses(
+        takeover_head: S7HighResPairwiseTakeoverHead,
+        embedding: torch.Tensor, highres_embedding: torch.Tensor,
+        detections: torch.Tensor, source_ids: torch.Tensor,
+        gt_overlap: torch.Tensor, riou_threshold: float,
+        deployment_score_thr: float = 0.05,
+        uncertainty_multiplier: float = 2.0,
+        takeover_margin: float = 0.05, retention_margin: float = 0.10,
+        delta_weight: float = 1.0, classification_weight: float = 1.0,
+        ranking_weight: float = 0.5, retention_weight: float = 4.0,
+        gain_weight: float = 2.0, consistency_weight: float = 0.5,
+        prior_weight: float = 0.01, ranking_min_gap: float = 0.05,
+        max_ranking_pairs: int = 64,
+        augmented_highres_embedding: Optional[torch.Tensor] = None) -> Dict:
+    """Source-only V2 objective for conservative S7 takeover decisions."""
+    positive = (
+        uncertainty_multiplier, retention_margin, delta_weight,
+        classification_weight, ranking_weight, retention_weight,
+        gain_weight, consistency_weight, prior_weight, ranking_min_gap,
+        max_ranking_pairs)
+    if any(float(value) <= 0.0 for value in positive):
+        raise ValueError('Pairwise takeover loss settings must be positive')
+    if float(takeover_margin) < 0.0 or not 0.0 <= float(
+            deployment_score_thr) <= 1.0:
+        raise ValueError('Invalid takeover margin or deployment threshold')
+    if (gt_overlap.ndim != 1 or gt_overlap.shape != source_ids.shape
+            or gt_overlap.shape[0] != detections.shape[0]):
+        raise ValueError('Pairwise takeover targets are misaligned')
+
+    prediction = takeover_head(
+        embedding, highres_embedding, detections, source_ids)
+    zero = takeover_head.output.bias.sum() * 0.0
+    mean = prediction['mean']
+    if mean.numel() == 0:
+        return dict(
+            loss_s7_takeover_delta=zero,
+            loss_s7_takeover_classification=zero,
+            loss_s7_takeover_ranking=zero,
+            loss_s7_takeover_retention=zero,
+            loss_s7_takeover_gain=zero,
+            loss_s7_takeover_consistency=zero,
+            loss_s7_takeover_prior=zero,
+            s7_takeover_candidate_count=0,
+            s7_takeover_eligible_count=0,
+            s7_takeover_ranking_pair_count=0,
+            s7_takeover_retention_pair_count=0,
+            s7_takeover_gain_pair_count=0,
+            s7_takeover_native_top1_correct=0,
+            s7_takeover_mean_uncertainty=0.0)
+
+    native_index = int(prediction['native_index'])
+    s7_indices = prediction['s7_indices']
+    target = gt_overlap.detach().float().clamp(0.0, 1.0)
+    delta = (target[s7_indices] - target[native_index]).clamp(-1.0, 1.0)
+    uncertainty = prediction['uncertainty']
+    # The normalized NLL remains non-negative because sigma is clamped at .05.
+    delta_nll = (
+        0.5 * ((mean - delta) / uncertainty).square()
+        + torch.log(uncertainty / 0.05)).mean()
+    classification = torch.nn.functional.binary_cross_entropy_with_logits(
+        prediction['raw_mean'],
+        (delta >= float(ranking_min_gap)).to(dtype=mean.dtype))
+
+    pairs = []
+    detached_delta = delta.detach()
+    for positive_index in range(int(delta.numel())):
+        lower = torch.nonzero(
+            detached_delta[positive_index] - detached_delta
+            >= float(ranking_min_gap), as_tuple=False).flatten()
+        for negative_index in lower.detach().cpu().tolist():
+            pair = (positive_index, int(negative_index))
+            if pair not in pairs:
+                pairs.append(pair)
+            if len(pairs) >= int(max_ranking_pairs):
+                break
+        if len(pairs) >= int(max_ranking_pairs):
+            break
+    if pairs:
+        positive_indices = torch.tensor(
+            [pair[0] for pair in pairs], dtype=torch.long,
+            device=mean.device)
+        negative_indices = torch.tensor(
+            [pair[1] for pair in pairs], dtype=torch.long,
+            device=mean.device)
+        expected_gap = (detached_delta[positive_indices]
+                        - detached_delta[negative_indices]).clamp(max=0.25)
+        ranking = torch.relu(
+            expected_gap - mean[positive_indices]
+            + mean[negative_indices]).mean()
+    else:
+        ranking = zero
+
+    eligible = detections[s7_indices, 5] >= float(deployment_score_thr)
+    lower_bound = mean - float(uncertainty_multiplier) * uncertainty
+    native_correct = bool(target[native_index] >= float(riou_threshold))
+    s7_correct = target[s7_indices] >= float(riou_threshold)
+    risky = eligible & ~s7_correct
+    useful = eligible & s7_correct
+    retention = zero
+    gain = zero
+    retention_count = 0
+    gain_count = 0
+    if native_correct and bool(risky.any().item()):
+        retention = torch.relu(
+            float(retention_margin) + lower_bound[risky].max())
+        retention_count = 1
+    if not native_correct and bool(useful.any().item()):
+        useful_indices = torch.nonzero(useful, as_tuple=False).flatten()
+        best = useful_indices[torch.argmax(delta[useful_indices].detach())]
+        gain = torch.relu(float(takeover_margin) - lower_bound[best])
+        gain_count = 1
+
+    consistency = zero
+    if augmented_highres_embedding is not None:
+        if augmented_highres_embedding.shape != highres_embedding.shape:
+            raise ValueError('Augmented high-resolution ROI features misalign')
+        augmented = takeover_head(
+            embedding, augmented_highres_embedding, detections, source_ids)
+        if not torch.equal(augmented['s7_indices'], s7_indices):
+            raise RuntimeError('Clean/augmented pair indices changed')
+        consistency = (
+            torch.nn.functional.smooth_l1_loss(
+                augmented['mean'], mean.detach())
+            + torch.nn.functional.smooth_l1_loss(
+                torch.log(augmented['uncertainty']),
+                torch.log(uncertainty.detach())))
+
+    prior = mean.square().mean() + (
+        uncertainty - float(takeover_head.initial_uncertainty)).square().mean()
+    return dict(
+        loss_s7_takeover_delta=delta_nll * float(delta_weight),
+        loss_s7_takeover_classification=(
+            classification * float(classification_weight)),
+        loss_s7_takeover_ranking=ranking * float(ranking_weight),
+        loss_s7_takeover_retention=retention * float(retention_weight),
+        loss_s7_takeover_gain=gain * float(gain_weight),
+        loss_s7_takeover_consistency=(
+            consistency * float(consistency_weight)),
+        loss_s7_takeover_prior=prior * float(prior_weight),
+        s7_takeover_candidate_count=int(mean.numel()),
+        s7_takeover_eligible_count=int(eligible.sum().item()),
+        s7_takeover_ranking_pair_count=len(pairs),
+        s7_takeover_retention_pair_count=retention_count,
+        s7_takeover_gain_pair_count=gain_count,
+        s7_takeover_native_top1_correct=int(native_correct),
+        s7_takeover_mean_uncertainty=float(uncertainty.mean().item()),
+        s7_takeover_mean_target_delta=float(delta.mean().item()),
+        s7_takeover_mean_prediction=float(mean.mean().item()))
+
+
+def native_protected_pairwise_highres_takeover(
+        prediction: Dict, detections: torch.Tensor,
+        source_ids: torch.Tensor, max_candidates: int = 64,
+        uncertainty_multiplier: float = 2.0,
+        takeover_margin: float = 0.05,
+        deployment_score_thr: float = 0.05) -> Dict:
+    """Promote one deployable S7 candidate only when its LCB is positive."""
+    if (detections.ndim != 2 or detections.shape[1] != 6
+            or source_ids.shape != (detections.shape[0],)):
+        raise ValueError('Pairwise takeover selection inputs are misaligned')
+    if (int(max_candidates) <= 0 or float(uncertainty_multiplier) <= 0.0
+            or float(takeover_margin) < 0.0
+            or not 0.0 <= float(deployment_score_thr) <= 1.0):
+        raise ValueError('Invalid pairwise takeover selection settings')
+    original = torch.arange(detections.shape[0], device=detections.device)
+    native_index = prediction.get('native_index')
+    s7_indices = prediction.get('s7_indices')
+    if native_index is None:
+        return dict(order=original, selected_index=None, native_index=None,
+                    promoted=False, reason='native_missing',
+                    candidate_count=0, eligible_count=0)
+    native_index = int(native_index)
+    s7_indices = s7_indices[:min(int(max_candidates), int(s7_indices.numel()))]
+    mean = prediction['mean'][:s7_indices.numel()]
+    uncertainty = prediction['uncertainty'][:s7_indices.numel()]
+    if not s7_indices.numel():
+        return dict(order=original, selected_index=native_index,
+                    native_index=native_index, promoted=False,
+                    reason='native_fallback_no_s7_candidate',
+                    candidate_count=0, eligible_count=0)
+    eligible = detections[s7_indices, 5] >= float(deployment_score_thr)
+    if not bool(eligible.any().item()):
+        return dict(order=original, selected_index=native_index,
+                    native_index=native_index, promoted=False,
+                    reason='native_fallback_no_deployable_s7',
+                    candidate_count=int(s7_indices.numel()), eligible_count=0)
+    lower_bound = mean - float(uncertainty_multiplier) * uncertainty
+    eligible_local = torch.nonzero(eligible, as_tuple=False).flatten()
+    best_local = eligible_local[torch.argmax(lower_bound[eligible_local])]
+    best_index = s7_indices[best_local]
+    best_lcb = float(lower_bound[best_local].detach().item())
+    promoted = best_lcb >= float(takeover_margin)
+    selected = best_index if promoted else original.new_tensor(native_index)
+    remaining = original[original != selected]
+    return dict(
+        order=torch.cat((selected.reshape(1), remaining), dim=0),
+        selected_index=int(selected.item()), native_index=native_index,
+        promoted=bool(promoted),
+        reason=('s7_promoted_pairwise_lcb' if promoted
+                else 'native_fallback_pairwise_lcb'),
+        candidate_count=int(s7_indices.numel()),
+        eligible_count=int(eligible.sum().item()),
+        best_advantage=float(mean[best_local].detach().item()),
+        best_uncertainty=float(uncertainty[best_local].detach().item()),
+        best_lower_bound=best_lcb,
+        deployment_score=float(
+            detections[best_index, 5].detach().item()))
 
 
 def unified_highres_candidate_rank_losses(

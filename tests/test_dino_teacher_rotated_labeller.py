@@ -177,6 +177,20 @@ def test_two_frame_source_training_order_is_causal():
         ('a', 1), ('a', 3), ('b', 1), ('b', 2)]
 
 
+def test_pairwise_takeover_balances_real_and_sim_source_records():
+    records = [
+        dict(split='train', seq='real_seq01', frame=1, domain='real'),
+        dict(split='train', seq='real_seq01', frame=2, domain='real'),
+        dict(split='train_sim', seq='sim_seq01', frame=1, domain='sim')]
+    args = argparse.Namespace(
+        train_components='s7_highres_roi_ranker',
+        s7_highres_pairwise_takeover_v2=True,
+        s7_selective_two_frame=False, seed=0)
+    ordered = labeller.ordered_source_training_records(records, args, 1)
+    domains = [labeller.source_domain_label(row) for row in ordered]
+    assert domains.count('real') == domains.count('sim') == 2
+
+
 def test_two_frame_selector_effect_audit_is_selector_specific():
     def row(seq, frame, hit, promoted=False):
         return dict(
@@ -2282,6 +2296,27 @@ def test_exact_source_retention_detects_swapped_correct_frames():
     assert summary['retained_correct_count'] == 1
     assert summary['lost_frame_keys'] == ['val|seq|2']
     assert summary['gained_frame_keys'] == ['val|seq|3']
+
+
+def test_pairwise_takeover_deployment_and_domain_gates_are_separate():
+    def row(domain, frame, raw, deployment):
+        return dict(
+            split='val', seq='{}_seq'.format(domain), frame=frame,
+            domain=domain,
+            metrics=dict(top1_hit=raw,
+                         deployment_top1_hit=deployment))
+
+    baseline = [row('real', 1, True, True), row('sim', 1, False, False)]
+    candidate = [row('real', 1, True, False), row('sim', 1, True, True)]
+    deployment = labeller.source_deployment_retention_summary(
+        labeller.source_deployment_correct_frame_keys(baseline), candidate)
+    domains = labeller.source_domain_nonregression_summary(
+        baseline, candidate)
+    assert deployment['lost_correct_count'] == 1
+    assert domains['domains']['real']['raw_delta'] == 0
+    assert domains['domains']['real']['deployment_delta'] == -1
+    assert domains['any_positive_domain'] is True
+    assert domains['passed'] is False
 
 
 def test_pairwise_v2_source_gate_requires_strict_small_improvement():

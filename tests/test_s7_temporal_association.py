@@ -162,6 +162,65 @@ def test_unified_highres_inference_uses_one_pool_but_keeps_native_margin():
     assert retained['reason'] == 'native_fallback_unified_margin'
 
 
+def test_pairwise_takeover_zero_init_abstains_and_loss_backpropagates():
+    head = temporal.S7HighResPairwiseTakeoverHead(
+        embedding_channels=4, highres_channels=3, hidden=8,
+        initial_uncertainty=0.25)
+    detections = torch.tensor([
+        [10.0, 10.0, 8.0, 4.0, 0.0, 0.90],
+        [11.0, 10.0, 8.0, 4.0, 0.1, 0.80],
+        [12.0, 10.0, 7.0, 5.0, 0.2, 0.70]])
+    embedding = torch.randn(3, 4)
+    highres = torch.randn(3, 3)
+    sources = torch.tensor([0, 1, 1])
+    prediction = head(embedding, highres, detections, sources)
+    assert prediction['mean'].tolist() == pytest.approx([0.0, 0.0])
+    assert prediction['uncertainty'].tolist() == pytest.approx([0.25, 0.25])
+    selection = temporal.native_protected_pairwise_highres_takeover(
+        prediction, detections, sources, uncertainty_multiplier=2.0,
+        takeover_margin=0.05, deployment_score_thr=0.05)
+    assert selection['promoted'] is False
+    assert selection['selected_index'] == 0
+    assert selection['best_lower_bound'] == pytest.approx(-0.5)
+
+    losses = temporal.pairwise_highres_takeover_losses(
+        head, embedding, highres, detections, sources,
+        gt_overlap=torch.tensor([0.2, 0.9, 0.1]),
+        riou_threshold=0.5, augmented_highres_embedding=highres + 0.1)
+    assert losses['s7_takeover_gain_pair_count'] == 1
+    assert losses['s7_takeover_ranking_pair_count'] > 0
+    total = sum(value for name, value in losses.items()
+                if name.startswith('loss_'))
+    total.backward()
+    assert head.output.weight.grad is not None
+    assert torch.isfinite(head.output.weight.grad).all()
+
+
+def test_pairwise_takeover_requires_deployable_score_and_positive_lcb():
+    detections = torch.tensor([
+        [10.0, 10.0, 8.0, 4.0, 0.0, 0.90],
+        [11.0, 10.0, 8.0, 4.0, 0.1, 0.04],
+        [12.0, 10.0, 7.0, 5.0, 0.2, 0.70]])
+    sources = torch.tensor([0, 1, 1])
+    prediction = dict(
+        native_index=0, s7_indices=torch.tensor([1, 2]),
+        raw_mean=torch.tensor([3.0, 2.0]),
+        mean=torch.tensor([0.90, 0.40]),
+        uncertainty=torch.tensor([0.10, 0.10]))
+    selected = temporal.native_protected_pairwise_highres_takeover(
+        prediction, detections, sources, uncertainty_multiplier=2.0,
+        takeover_margin=0.05, deployment_score_thr=0.05)
+    assert selected['promoted'] is True
+    assert selected['selected_index'] == 2
+    assert selected['eligible_count'] == 1
+    conservative = temporal.native_protected_pairwise_highres_takeover(
+        dict(prediction, mean=torch.tensor([0.90, 0.20])),
+        detections, sources, uncertainty_multiplier=2.0,
+        takeover_margin=0.05, deployment_score_thr=0.05)
+    assert conservative['promoted'] is False
+    assert conservative['selected_index'] == 0
+
+
 def test_candidate_quality_relative_ranking_builds_deterministic_pairs():
     logits = torch.zeros(3, requires_grad=True)
     result = temporal.candidate_quality_relative_ranking_loss(
