@@ -284,6 +284,94 @@ class S7HighResPairwiseTakeoverHead(nn.Module):
                     uncertainty=uncertainty)
 
 
+class S7HighResNativeRelativeRiskHead(nn.Module):
+    """Predict a one-sided S7 penalty relative to the native top-1.
+
+    This is deliberately not another takeover classifier.  It leaves native
+    scores untouched and can only subtract from S7 quality logits.  Its
+    learnable gate starts at exactly zero, so adding the module to a trained
+    unified quality head reproduces the prior ranking before source training.
+    """
+
+    SCALAR_CHANNELS = 12
+
+    def __init__(self, embedding_channels: int, highres_channels: int,
+                 hidden: int = 32, max_penalty: float = 2.0):
+        super().__init__()
+        if (int(embedding_channels) <= 0 or int(highres_channels) <= 0
+                or int(hidden) <= 0 or float(max_penalty) <= 0.0):
+            raise ValueError('Native-relative risk dimensions must be positive')
+        self.max_penalty = float(max_penalty)
+        self.semantic_projection = nn.Sequential(
+            nn.Linear(int(embedding_channels) * 2, int(hidden)),
+            nn.LayerNorm(int(hidden)), nn.GELU())
+        self.highres_projection = nn.Sequential(
+            nn.Linear(int(highres_channels) * 2, int(hidden)),
+            nn.LayerNorm(int(hidden)), nn.GELU())
+        self.scalar_projection = nn.Sequential(
+            nn.Linear(self.SCALAR_CHANNELS, int(hidden)), nn.GELU())
+        self.output = nn.Linear(int(hidden) * 3, 1)
+        nn.init.zeros_(self.output.weight)
+        nn.init.zeros_(self.output.bias)
+        # This gate starts at zero.  ``x + relu(-x)`` is max(x, 0), but has a
+        # unit subgradient at x=0 in PyTorch, unlike a direct ReLU/clamp; the
+        # first source retention pair can therefore open the gate without
+        # perturbing the checkpoint's initial ranking.
+        self.risk_scale = nn.Parameter(torch.zeros(()))
+
+    @staticmethod
+    def _pair_scalars(native: torch.Tensor, s7: torch.Tensor,
+                      base_quality_logits: torch.Tensor,
+                      score_weight: float) -> torch.Tensor:
+        geometry = S7HighResPairwiseTakeoverHead._pair_scalars(native, s7)
+        native_quality = base_quality_logits[0]
+        s7_quality = base_quality_logits[1:]
+        quality_delta = (s7_quality - native_quality).clamp(-12.0, 12.0)
+        score_delta = geometry[:, 2]
+        fused_delta = (score_delta + float(score_weight) * quality_delta).clamp(
+            -12.0, 12.0)
+        return torch.cat((geometry, quality_delta.reshape(-1, 1),
+                          fused_delta.reshape(-1, 1)), dim=1)
+
+    def forward(self, embedding: torch.Tensor,
+                highres_embedding: torch.Tensor,
+                detections: torch.Tensor, source_ids: torch.Tensor,
+                base_quality_logits: torch.Tensor,
+                score_weight: float = 1.0) -> torch.Tensor:
+        if (embedding.ndim != 2 or highres_embedding.ndim != 2
+                or detections.ndim != 2 or detections.shape[1] != 6
+                or embedding.shape[0] != detections.shape[0]
+                or highres_embedding.shape[0] != detections.shape[0]
+                or source_ids.shape != (detections.shape[0],)
+                or base_quality_logits.shape != (detections.shape[0],)):
+            raise ValueError('Native-relative risk inputs are misaligned')
+        penalty = detections.new_zeros((detections.shape[0],))
+        native = torch.nonzero(source_ids == 0, as_tuple=False).flatten()
+        s7 = torch.nonzero(source_ids == 1, as_tuple=False).flatten()
+        if not native.numel() or not s7.numel():
+            return penalty
+        native_index = native[torch.argmax(detections[native, 5])]
+        semantic_delta = embedding[s7] - embedding[native_index].reshape(1, -1)
+        highres_delta = (highres_embedding[s7]
+                         - highres_embedding[native_index].reshape(1, -1))
+        active_quality = torch.cat((
+            base_quality_logits[native_index].reshape(1),
+            base_quality_logits[s7])).detach()
+        hidden = torch.cat((
+            self.semantic_projection(torch.cat((
+                semantic_delta, semantic_delta.abs()), dim=1).float()),
+            self.highres_projection(torch.cat((
+                highres_delta, highres_delta.abs()), dim=1).float()),
+            self.scalar_projection(self._pair_scalars(
+                detections[native_index], detections[s7], active_quality,
+                score_weight).float())), dim=1)
+        raw_penalty = torch.nn.functional.softplus(self.output(hidden).reshape(-1))
+        scale = (self.risk_scale + torch.relu(-self.risk_scale)).clamp(
+            max=1.0)
+        penalty[s7] = (scale * raw_penalty).clamp(max=self.max_penalty)
+        return penalty
+
+
 class S7SelectivePromotionHead(nn.Module):
     """Predict S7-vs-native quality advantage and calibrated uncertainty.
 
@@ -1637,7 +1725,12 @@ def unified_highres_candidate_rank_losses(
         smooth_geometry_min_gap: float = 0.05,
         smooth_geometry_max_pairs: int = 64,
         smooth_geometry_s7_only: bool = True,
-        worst_case_retention_weight: float = 0.0) -> Dict:
+        worst_case_retention_weight: float = 0.0,
+        native_relative_risk_head: Optional[
+            S7HighResNativeRelativeRiskHead] = None,
+        native_relative_risk_retention_weight: float = 0.0,
+        native_relative_risk_preserve_weight: float = 0.0,
+        native_relative_risk_prior_weight: float = 0.0) -> Dict:
     """Train one source-only ranker over the unified native/S7 pool.
 
     The original high-resolution stage protects the native winner and mines
@@ -1657,6 +1750,14 @@ def unified_highres_candidate_rank_losses(
         raise ValueError('Smooth geometry loss weight cannot be negative')
     if float(worst_case_retention_weight) < 0.0:
         raise ValueError('Worst-case retention loss weight cannot be negative')
+    risk_weights = (native_relative_risk_retention_weight,
+                    native_relative_risk_preserve_weight,
+                    native_relative_risk_prior_weight)
+    if native_relative_risk_head is None and any(
+            float(value) != 0.0 for value in risk_weights):
+        raise ValueError('Native-relative risk weights require its risk head')
+    if any(float(value) < 0.0 for value in risk_weights):
+        raise ValueError('Native-relative risk weights cannot be negative')
     if float(smooth_geometry_weight) > 0.0 and gt_boxes is None:
         raise ValueError(
             'Smooth geometry training requires source GT boxes explicitly')
@@ -1665,8 +1766,15 @@ def unified_highres_candidate_rank_losses(
             or gt_overlap.shape[0] != detections.shape[0]):
         raise ValueError('Unified high-resolution targets are misaligned')
 
-    logits = quality_head(
+    base_logits = quality_head(
         embedding, highres_embedding, detections, source_ids)
+    risk_penalty = (
+        native_relative_risk_head(
+            embedding, highres_embedding, detections, source_ids,
+            base_logits, score_weight=float(score_weight))
+        if native_relative_risk_head is not None else
+        base_logits.new_zeros(base_logits.shape))
+    logits = base_logits - risk_penalty
     zero = quality_head.output.bias.sum() * 0.0
     if logits.numel() == 0:
         return dict(
@@ -1677,6 +1785,9 @@ def unified_highres_candidate_rank_losses(
             loss_s7_highres_unified=zero,
             loss_s7_highres_smooth_geometry=zero,
             loss_s7_highres_worst_case_retention=zero,
+            loss_s7_highres_relative_risk_retention=zero,
+            loss_s7_highres_relative_risk_preserve=zero,
+            loss_s7_highres_relative_risk_prior=zero,
             loss_s7_highres_prior=zero,
             s7_highres_retention_pair_count=0,
             s7_highres_gain_pair_count=0,
@@ -1687,13 +1798,17 @@ def unified_highres_candidate_rank_losses(
             s7_highres_candidate_count=0)
 
     target = gt_overlap.detach().float().clamp(0.0, 1.0)
-    prediction = torch.sigmoid(logits)
+    # The base quality head keeps its calibrated source quality target.  The
+    # risk residual is trained only through unified ranking and its dedicated
+    # native-relative supervision below; otherwise a quality regression could
+    # simply cancel the one-sided penalty.
+    prediction = torch.sigmoid(base_logits)
     weights = (1.0 + 3.0 * target).detach()
     quality = (torch.nn.functional.smooth_l1_loss(
         prediction, target, reduction='none') * weights).sum() / (
             weights.sum().clamp_min(1e-6))
     relative_result = candidate_quality_relative_ranking_loss(
-        logits, target, margin=float(relative_margin),
+        base_logits, target, margin=float(relative_margin),
         min_gap=float(relative_min_gap), max_pairs=int(relative_max_pairs))
 
     scores = detections[:, 5].clamp(1e-6, 1.0 - 1e-6)
@@ -1783,13 +1898,32 @@ def unified_highres_candidate_rank_losses(
         gain = zero
         active = 0
 
+    relative_risk_retention = zero
+    relative_risk_preserve = zero
+    if native_relative_risk_head is not None:
+        if retention_pair is not None:
+            native_index, competitor_index = retention_pair
+            # Detach the pre-risk gap so this term has one job: teach the
+            # residual how much to reduce this unsafe S7 competitor.
+            base_fused = score_logits + float(score_weight) * base_logits
+            relative_risk_retention = torch.relu(
+                float(rank_margin) + base_fused[competitor_index].detach()
+                - risk_penalty[competitor_index]
+                - base_fused[native_index].detach())
+        if gain_pair is not None:
+            usable_index, _competitor_index = gain_pair
+            if int(source_ids[usable_index].item()) == 1:
+                # A source frame where native is wrong is positive evidence
+                # that the best usable S7 candidate must not be suppressed.
+                relative_risk_preserve = risk_penalty[usable_index].square()
+
     geometry_indices = torch.arange(
         logits.shape[0], dtype=torch.long, device=logits.device)
     if bool(smooth_geometry_s7_only):
         geometry_indices = torch.nonzero(
             source_ids == 1, as_tuple=False).flatten()
     smooth_geometry = smooth_geometry_relative_ranking_loss(
-        logits[geometry_indices], detections[geometry_indices], gt_boxes,
+        base_logits[geometry_indices], detections[geometry_indices], gt_boxes,
         metric=smooth_geometry_metric,
         margin=float(smooth_geometry_margin),
         min_gap=float(smooth_geometry_min_gap),
@@ -1808,7 +1942,17 @@ def unified_highres_candidate_rank_losses(
             * float(smooth_geometry_weight)),
         loss_s7_highres_worst_case_retention=(
             retention * float(worst_case_retention_weight)),
-        loss_s7_highres_prior=logits.square().mean() * float(prior_weight),
+        loss_s7_highres_relative_risk_retention=(
+            relative_risk_retention
+            * float(native_relative_risk_retention_weight)),
+        loss_s7_highres_relative_risk_preserve=(
+            relative_risk_preserve
+            * float(native_relative_risk_preserve_weight)),
+        loss_s7_highres_relative_risk_prior=(
+            risk_penalty.square().mean()
+            * float(native_relative_risk_prior_weight)),
+        loss_s7_highres_prior=(base_logits.square().mean()
+                               * float(prior_weight)),
         s7_highres_retention_pair_count=retention_count,
         s7_highres_gain_pair_count=gain_count,
         s7_highres_unified_pair_count=len(pairs),
@@ -1816,6 +1960,12 @@ def unified_highres_candidate_rank_losses(
         s7_highres_native_top1_correct=int(native_correct),
         s7_highres_usable_candidate_count=int(usable.numel()),
         s7_highres_candidate_count=int(logits.numel()),
+        s7_highres_relative_risk_enabled=bool(
+            native_relative_risk_head is not None),
+        s7_highres_relative_risk_mean=float(
+            risk_penalty.detach().mean().item()),
+        s7_highres_relative_risk_max=float(
+            risk_penalty.detach().max().item()),
         s7_highres_relative_pair_count=int(relative_result.get(
             's7_candidate_quality_relative_pair_count', 0)),
         s7_highres_quality_mean_target=float(target.mean().item()),

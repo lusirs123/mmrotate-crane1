@@ -50,9 +50,15 @@ def parse_args():
     parser.add_argument('--geometry-metric', default='sym_kld',
                         choices=['sym_kld', 'gwd', 'normalized_gwd'])
     parser.add_argument('--geometry-loss-weight', type=float, default=0.25)
-    parser.add_argument('--worst-case-retention-weight', type=float, default=4.0)
+    parser.add_argument('--worst-case-retention-weight', type=float, default=0.0,
+                        help=('Deprecated duplicate retention reweighting. '
+                              'The native-relative risk route locks this to 0.'))
     parser.add_argument('--geometry-min-gap', type=float, default=0.05)
     parser.add_argument('--geometry-max-pairs', type=int, default=64)
+    parser.add_argument(
+        '--native-relative-risk-residual', action='store_true',
+        help=('Train the fixed one-sided S7 risk residual on top of the '
+              'unified smooth-geometry quality head; source only.'))
     return parser.parse_args()
 
 
@@ -108,10 +114,18 @@ def validate_args(args):
         if args.geometry_loss_weight <= 0.0 or args.geometry_min_gap <= 0.0 \
                 or args.geometry_max_pairs <= 0:
             raise ValueError('Smooth-geometry training settings must be positive')
-        if args.worst_case_retention_weight <= 0.0:
+        if args.worst_case_retention_weight < 0.0:
             raise ValueError(
-                'Smooth-geometry training requires positive worst-case '
-                'retention weight')
+                'Worst-case retention weight cannot be negative')
+    if bool(getattr(args, 'native_relative_risk_residual', False)):
+        if not args.smooth_geometry_ranking or not args.unified_ranking:
+            raise ValueError(
+                '--native-relative-risk-residual requires --unified-ranking '
+                'and --smooth-geometry-ranking')
+        if args.worst_case_retention_weight != 0.0:
+            raise ValueError(
+                'Native-relative risk residual requires '
+                '--worst-case-retention-weight 0')
     else:
         with open(args.source_result_json, 'r') as handle:
             source_result = json.load(handle)
@@ -203,12 +217,20 @@ def build_locked_labeller_argv(args) -> List[str]:
             '--s7-highres-smooth-geometry-loss-weight',
             str(args.geometry_loss_weight),
             '--s7-highres-worst-case-retention-weight',
-            str(getattr(args, 'worst_case_retention_weight', 4.0)),
+            str(getattr(args, 'worst_case_retention_weight', 0.0)),
             '--s7-highres-smooth-geometry-min-gap',
             str(args.geometry_min_gap),
             '--s7-highres-smooth-geometry-max-pairs',
             str(args.geometry_max_pairs)])
-    else:
+    if bool(getattr(args, 'native_relative_risk_residual', False)):
+        argv.extend([
+            '--s7-highres-native-relative-risk-residual',
+            '--s7-highres-relative-risk-hidden', '32',
+            '--s7-highres-relative-risk-max-penalty', '2.0',
+            '--s7-highres-relative-risk-retention-weight', '4.0',
+            '--s7-highres-relative-risk-preserve-weight', '2.0',
+            '--s7-highres-relative-risk-prior-weight', '0.01'])
+    if not smooth_geometry:
         argv.extend(['--s7-highres-teacher-result-json',
                      args.source_result_json])
     return argv

@@ -1708,6 +1708,22 @@ def test_highres_optimization_loss_includes_optional_worst_case_retention():
     assert float(total.item()) == pytest.approx(float(len(names)))
 
 
+def test_highres_optimization_loss_includes_native_relative_risk_terms():
+    names = labeller.optimization_loss_component_names(
+        's7_highres_roi_ranker', unified_highres=True,
+        smooth_geometry=True, native_relative_risk=True)
+    assert 'loss_s7_highres_worst_case_retention' not in names
+    assert names[-4:] == [
+        'loss_s7_highres_relative_risk_retention',
+        'loss_s7_highres_relative_risk_preserve',
+        'loss_s7_highres_relative_risk_prior',
+        'loss_s7_highres_prior']
+    losses = {name: torch.tensor(1.0, requires_grad=True) for name in names}
+    total = labeller.optimization_loss_total(
+        losses, 's7_highres_roi_ranker')
+    assert float(total.item()) == pytest.approx(float(len(names)))
+
+
 def test_s7_lane_train_epoch_replays_gain_frames_source_only(
         tmp_path, monkeypatch):
     class TinyHeads(torch.nn.Module):

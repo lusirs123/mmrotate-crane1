@@ -142,6 +142,61 @@ def test_unified_highres_ranker_mines_whole_pool_pairs_and_backprops():
     assert torch.isfinite(head.output.weight.grad).all()
 
 
+def test_native_relative_risk_is_zero_init_native_safe_and_trainable():
+    quality_head = temporal.S7HighResCandidateQualityHead(
+        embedding_channels=4, highres_channels=3, hidden=8)
+    risk_head = temporal.S7HighResNativeRelativeRiskHead(
+        embedding_channels=4, highres_channels=3, hidden=8)
+    detections = torch.tensor([
+        [10.0, 10.0, 8.0, 4.0, 0.0, 0.90],
+        [11.0, 10.0, 7.0, 5.0, 0.1, 0.80],
+        [12.0, 10.0, 7.0, 5.0, 0.2, 0.70]])
+    embedding = torch.randn(3, 4)
+    highres = torch.randn(3, 3)
+    sources = torch.tensor([0, 1, 1])
+    base_quality = torch.tensor([0.0, 1.2, 0.1])
+    penalty = risk_head(
+        embedding, highres, detections, sources, base_quality)
+    assert penalty.tolist() == pytest.approx([0.0, 0.0, 0.0])
+    baseline = temporal.native_protected_unified_highres_ranking_from_logits(
+        base_quality, detections, sources, max_candidates=2,
+        promotion_margin=0.25)
+    adjusted = temporal.native_protected_unified_highres_ranking_from_logits(
+        base_quality - penalty, detections, sources, max_candidates=2,
+        promotion_margin=0.25)
+    assert adjusted['selected_index'] == baseline['selected_index']
+    assert adjusted['native_index'] == baseline['native_index']
+    assert adjusted['reason'] == baseline['reason']
+    assert torch.equal(adjusted['order'], baseline['order'])
+
+    unsafe_detections = detections.clone()
+    unsafe_detections[1, 5] = 0.99
+    losses = temporal.unified_highres_candidate_rank_losses(
+        quality_head, embedding, highres, unsafe_detections, sources,
+        gt_overlap=torch.tensor([0.9, 0.2, 0.1]),
+        riou_threshold=0.5, hard_pair_count=8,
+        native_relative_risk_head=risk_head,
+        native_relative_risk_retention_weight=4.0,
+        native_relative_risk_preserve_weight=2.0,
+        native_relative_risk_prior_weight=0.01)
+    assert losses['s7_highres_relative_risk_enabled'] is True
+    total = sum(losses[name] for name in (
+        'loss_s7_highres_relative_risk_retention',
+        'loss_s7_highres_relative_risk_preserve',
+        'loss_s7_highres_relative_risk_prior'))
+    total.backward()
+    assert risk_head.risk_scale.grad is not None
+    assert abs(float(risk_head.risk_scale.grad.item())) > 0.0
+
+    with torch.no_grad():
+        risk_head.risk_scale.fill_(1.0)
+        risk_head.output.bias.fill_(0.5)
+    penalty = risk_head(
+        embedding, highres, detections, sources, base_quality)
+    assert float(penalty[0].item()) == pytest.approx(0.0)
+    assert float(penalty[1].item()) > 0.0
+
+
 def test_unified_ranker_can_add_source_only_smooth_geometry_pairs():
     pytest.importorskip('mmcv.ops')
     head = temporal.S7HighResCandidateQualityHead(

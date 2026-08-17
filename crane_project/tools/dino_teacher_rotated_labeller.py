@@ -368,6 +368,20 @@ def parse_args():
     parser.add_argument('--s7-highres-unified-aug-strength', type=float,
                         default=0.15)
     parser.add_argument(
+        '--s7-highres-native-relative-risk-residual', action='store_true',
+        help=('Add a zero-initialized, one-sided S7 risk penalty relative to '
+              'the native top-1. It can only reduce an S7 fused score.'))
+    parser.add_argument('--s7-highres-relative-risk-hidden', type=int,
+                        default=32)
+    parser.add_argument('--s7-highres-relative-risk-max-penalty', type=float,
+                        default=2.0)
+    parser.add_argument('--s7-highres-relative-risk-retention-weight',
+                        type=float, default=4.0)
+    parser.add_argument('--s7-highres-relative-risk-preserve-weight',
+                        type=float, default=2.0)
+    parser.add_argument('--s7-highres-relative-risk-prior-weight',
+                        type=float, default=0.01)
+    parser.add_argument(
         '--s7-highres-pairwise-takeover-v2', action='store_true',
         help=('Use the source-only relative delta-RIoU takeover head with '
               'uncertainty-aware native abstention.'))
@@ -754,6 +768,8 @@ def validate_args(args):
         args, 's7_highres_pairwise_takeover_v2', False))
     highres_smooth_geometry = bool(getattr(
         args, 's7_highres_smooth_geometry_ranking', False))
+    highres_relative_risk = bool(getattr(
+        args, 's7_highres_native_relative_risk_residual', False))
     if highres_unified and not highres_mode:
         raise ValueError(
             '--s7-highres-unified-ranking requires '
@@ -770,6 +786,17 @@ def validate_args(args):
     if highres_smooth_geometry and highres_takeover_v2:
         raise ValueError(
             'Smooth-geometry ranking cannot be combined with Pairwise Takeover V2')
+    if highres_relative_risk and not highres_unified:
+        raise ValueError(
+            'Native-relative risk residual requires unified high-resolution '
+            'ranking')
+    if highres_relative_risk and not highres_smooth_geometry:
+        raise ValueError(
+            'Native-relative risk residual requires the source-supported '
+            'smooth-geometry quality route')
+    if highres_relative_risk and highres_takeover_v2:
+        raise ValueError(
+            'Native-relative risk residual cannot use Pairwise Takeover V2')
     highres_margin_audit = bool(getattr(
         args, 'source_highres_margin_audit', False))
     smooth_geometry_audit = bool(getattr(
@@ -914,6 +941,22 @@ def validate_args(args):
             args, 's7_highres_worst_case_retention_weight', 0.0)) < 0.0:
         raise ValueError(
             'High-resolution worst-case retention weight cannot be negative')
+    if highres_relative_risk:
+        if not math.isclose(float(getattr(
+                args, 's7_highres_worst_case_retention_weight', 0.0)), 0.0,
+                rel_tol=0.0, abs_tol=1e-12):
+            raise ValueError(
+                'Native-relative risk residual disables the redundant '
+                'worst-case retention reweighting')
+        relative_risk_positive = (
+            getattr(args, 's7_highres_relative_risk_hidden', 32),
+            getattr(args, 's7_highres_relative_risk_max_penalty', 2.0),
+            getattr(args, 's7_highres_relative_risk_retention_weight', 4.0),
+            getattr(args, 's7_highres_relative_risk_preserve_weight', 2.0),
+            getattr(args, 's7_highres_relative_risk_prior_weight', 0.01))
+        if any(float(value) <= 0.0 for value in relative_risk_positive):
+            raise ValueError(
+                'Native-relative risk residual settings must be positive')
     takeover_positive = (
         getattr(args, 's7_takeover_initial_uncertainty', 0.25),
         getattr(args, 's7_takeover_uncertainty_multiplier', 2.0),
@@ -1729,9 +1772,17 @@ def configure_trainable_components(heads, train_components: str) -> List[str]:
             heads, 's7_highres_pairwise_takeover_head', None)
         if takeover_v2 and takeover_head is None:
             raise RuntimeError('Pairwise Takeover V2 head is missing')
-        modules = (heads.s7_highres_spatial_projection,
+        risk_head = getattr(
+            heads, 's7_highres_native_relative_risk_head', None)
+        if (bool(getattr(
+                heads, 's7_highres_native_relative_risk_residual', False))
+                and risk_head is None):
+            raise RuntimeError('Native-relative risk head is missing')
+        modules = [heads.s7_highres_spatial_projection,
                    takeover_head if takeover_v2 else
-                   heads.s7_highres_candidate_quality_head)
+                   heads.s7_highres_candidate_quality_head]
+        if risk_head is not None:
+            modules.append(risk_head)
         for module in modules:
             for parameter in module.parameters():
                 parameter.requires_grad_(True)
@@ -1866,6 +1917,12 @@ def optimization_loss_total(losses: Dict, train_components: str):
         if 'loss_s7_highres_worst_case_retention' in losses:
             selected['loss_s7_highres_worst_case_retention'] = (
                 losses['loss_s7_highres_worst_case_retention'])
+        for name in (
+                'loss_s7_highres_relative_risk_retention',
+                'loss_s7_highres_relative_risk_preserve',
+                'loss_s7_highres_relative_risk_prior'):
+            if name in losses:
+                selected[name] = losses[name]
         return loss_total(selected)
     if train_components in ('roi_cls_pairwise', 'roi_cls_pairwise_v2'):
         required = ('loss_cls', 'loss_roi_pairwise', 'loss_roi_retention')
@@ -1884,7 +1941,8 @@ def optimization_loss_component_names(
         unified_highres: bool = False,
         pairwise_takeover_v2: bool = False,
         smooth_geometry: bool = False,
-        worst_case_retention: bool = False) -> List[str]:
+        worst_case_retention: bool = False,
+        native_relative_risk: bool = False) -> List[str]:
     """Return the canonical loss-name list for logs and checkpoints."""
     if train_components == 'all':
         return ['loss_rpn_cls', 'loss_rpn_bbox', 'loss_cls', 'loss_bbox']
@@ -1944,6 +2002,11 @@ def optimization_loss_component_names(
             names.insert(-1, 'loss_s7_highres_smooth_geometry')
         if worst_case_retention:
             names.insert(-1, 'loss_s7_highres_worst_case_retention')
+        if native_relative_risk:
+            names[-1:-1] = [
+                'loss_s7_highres_relative_risk_retention',
+                'loss_s7_highres_relative_risk_preserve',
+                'loss_s7_highres_relative_risk_prior']
         return names
     if train_components in ('roi_cls_pairwise', 'roi_cls_pairwise_v2'):
         return ['loss_cls', 'loss_roi_pairwise', 'loss_roi_retention']
@@ -3104,6 +3167,8 @@ class FrozenDinoRotatedHeads(nn.Module):
             getattr(args, 's7_highres_unified_ranking', False))
         self.s7_highres_pairwise_takeover_v2 = bool(
             getattr(args, 's7_highres_pairwise_takeover_v2', False))
+        self.s7_highres_native_relative_risk_residual = bool(getattr(
+            args, 's7_highres_native_relative_risk_residual', False))
         if self.s7_highres_unified_ranking and not self.s7_highres_roi_ranker:
             raise ValueError(
                 'Unified high-resolution ranking requires the high-resolution '
@@ -3112,6 +3177,11 @@ class FrozenDinoRotatedHeads(nn.Module):
                 and not self.s7_highres_roi_ranker):
             raise ValueError(
                 'Pairwise Takeover V2 requires the high-resolution ROI ranker')
+        if (self.s7_highres_native_relative_risk_residual
+                and not self.s7_highres_roi_ranker):
+            raise ValueError(
+                'Native-relative risk residual requires the high-resolution '
+                'ROI ranker')
         self.s7_temporal_quality_head_enabled = bool(getattr(
             args, 's7_temporal_quality_head', False)
             or self.s7_selective_promotion)
@@ -3220,11 +3290,22 @@ class FrozenDinoRotatedHeads(nn.Module):
                         float(getattr(
                             args, 's7_takeover_initial_uncertainty', 0.25)))
                     if self.s7_highres_pairwise_takeover_v2 else None)
+                self.s7_highres_native_relative_risk_head = (
+                    temporal.S7HighResNativeRelativeRiskHead(
+                        int(getattr(args, 'roi_fc_channels', 1024)),
+                        highres_channels,
+                        int(getattr(
+                            args, 's7_highres_relative_risk_hidden', 32)),
+                        float(getattr(
+                            args,
+                            's7_highres_relative_risk_max_penalty', 2.0)))
+                    if self.s7_highres_native_relative_risk_residual else None)
             else:
                 self.s7_highres_roi_extractor = None
                 self.s7_highres_spatial_projection = None
                 self.s7_highres_candidate_quality_head = None
                 self.s7_highres_pairwise_takeover_head = None
+                self.s7_highres_native_relative_risk_head = None
         else:
             self.s7_readout = None
             self.s7_rpn_head = None
@@ -3241,6 +3322,7 @@ class FrozenDinoRotatedHeads(nn.Module):
             self.s7_highres_spatial_projection = None
             self.s7_highres_candidate_quality_head = None
             self.s7_highres_pairwise_takeover_head = None
+            self.s7_highres_native_relative_risk_head = None
         self._roi_cls_teacher_weight = None
         self._roi_cls_teacher_bias = None
 
@@ -3444,6 +3526,8 @@ class FrozenDinoRotatedHeads(nn.Module):
             highres_embeddings = self._highres_roi_embeddings(
                 feature, img_meta, active_detections, rescale=rescale)
             pairwise_prediction = None
+            highres_base_quality_logits = None
+            highres_risk_penalties = None
             if self.s7_highres_pairwise_takeover_v2:
                 takeover_head = getattr(
                     self, 's7_highres_pairwise_takeover_head', None)
@@ -3455,9 +3539,25 @@ class FrozenDinoRotatedHeads(nn.Module):
                 highres_quality_logits = active_detections.new_zeros(
                     (active_detections.shape[0],))
             else:
-                highres_quality_logits = highres_head(
+                highres_base_quality_logits = highres_head(
                     active_embeddings, highres_embeddings, active_detections,
                     active_sources)
+                risk_head = getattr(
+                    self, 's7_highres_native_relative_risk_head', None)
+                if self.s7_highres_native_relative_risk_residual:
+                    if risk_head is None:
+                        raise RuntimeError('Native-relative risk head is missing')
+                    highres_risk_penalties = risk_head(
+                        active_embeddings, highres_embeddings,
+                        active_detections, active_sources,
+                        highres_base_quality_logits,
+                        score_weight=float(getattr(
+                            self._args, 's7_highres_score_weight', 1.0)))
+                else:
+                    highres_risk_penalties = highres_base_quality_logits.new_zeros(
+                        highres_base_quality_logits.shape)
+                highres_quality_logits = (
+                    highres_base_quality_logits - highres_risk_penalties)
             self._last_highres_pool = dict(
                 detections=active_detections.detach(),
                 embeddings=active_embeddings.detach(),
@@ -3465,6 +3565,12 @@ class FrozenDinoRotatedHeads(nn.Module):
                 source_ids=active_sources.detach(),
                 base_indices=active_indices.detach(),
                 quality_logits=highres_quality_logits.detach(),
+                base_quality_logits=(
+                    None if highres_base_quality_logits is None else
+                    highres_base_quality_logits.detach()),
+                risk_penalties=(
+                    None if highres_risk_penalties is None else
+                    highres_risk_penalties.detach()),
                 pairwise_prediction=(
                     None if pairwise_prediction is None else dict(
                         native_index=pairwise_prediction['native_index'],
@@ -3542,6 +3648,14 @@ class FrozenDinoRotatedHeads(nn.Module):
                             detection[5].detach().item())
                         highres_selection['{}_quality'.format(prefix)] = float(
                             highres_quality_logits[index_value].detach().item())
+                        if highres_base_quality_logits is not None:
+                            highres_selection['{}_base_quality'.format(
+                                prefix)] = float(
+                                    highres_base_quality_logits[
+                                        index_value].detach().item())
+                            highres_selection['{}_risk_penalty'.format(
+                                prefix)] = float(highres_risk_penalties[
+                                    index_value].detach().item())
                         score = detection[5].clamp(1e-6, 1.0 - 1e-6)
                         fused_score = torch.log(score) - torch.log1p(-score)
                         fused_score = fused_score + float(getattr(
@@ -4494,6 +4608,22 @@ class FrozenDinoRotatedHeads(nn.Module):
                         self._args,
                         's7_highres_smooth_geometry_max_pairs', 64)))
                 kwargs['smooth_geometry_s7_only'] = True
+            if self.s7_highres_native_relative_risk_residual:
+                risk_head = getattr(
+                    self, 's7_highres_native_relative_risk_head', None)
+                if risk_head is None:
+                    raise RuntimeError('Native-relative risk head is missing')
+                kwargs.update(
+                    native_relative_risk_head=risk_head,
+                    native_relative_risk_retention_weight=float(getattr(
+                        self._args,
+                        's7_highres_relative_risk_retention_weight', 4.0)),
+                    native_relative_risk_preserve_weight=float(getattr(
+                        self._args,
+                        's7_highres_relative_risk_preserve_weight', 2.0)),
+                    native_relative_risk_prior_weight=float(getattr(
+                        self._args,
+                        's7_highres_relative_risk_prior_weight', 0.01)))
         return loss_fn(
             head, embeddings, highres_embeddings, detections, source_ids,
             overlap, riou_threshold=riou_thr, **kwargs)
@@ -5078,6 +5208,10 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
             heads.s7_highres_pairwise_takeover_head.train()
         else:
             heads.s7_highres_candidate_quality_head.train()
+            risk_head = getattr(
+                heads, 's7_highres_native_relative_risk_head', None)
+            if risk_head is not None:
+                risk_head.train()
     if head_device.type == 'cuda':
         torch.cuda.reset_peak_memory_stats(head_device)
     ordered = ordered_source_training_records(records, args, epoch)
@@ -5532,6 +5666,17 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                         's7_highres_unified_active_count', 0.0))),
                     float(metric_sums.get('s7_highres_augmented', 0.0))
                     / float(max(1, index + 1)))
+                    if bool(getattr(
+                            args,
+                            's7_highres_native_relative_risk_residual',
+                            False)):
+                        message += ' risk_penalty_mean={:.4f} risk_penalty_max={:.4f}'.format(
+                            float(metric_sums.get(
+                                's7_highres_relative_risk_mean', 0.0))
+                            / float(max(1, index + 1)),
+                            float(metric_sums.get(
+                                's7_highres_relative_risk_max', 0.0))
+                            / float(max(1, index + 1)))
             print(message)
         del feature, gt_boxes, gt_labels, total
     optimized_components = optimization_loss_component_names(
@@ -5546,7 +5691,9 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
         smooth_geometry=bool(getattr(
             args, 's7_highres_smooth_geometry_ranking', False)),
         worst_case_retention=float(getattr(
-            args, 's7_highres_worst_case_retention_weight', 0.0)) > 0.0)
+            args, 's7_highres_worst_case_retention_weight', 0.0)) > 0.0,
+        native_relative_risk=bool(getattr(
+            args, 's7_highres_native_relative_risk_residual', False)))
     summary = dict(
         epoch=int(epoch), count=len(ordered),
         global_step_end=int(global_step),
@@ -8100,6 +8247,19 @@ def s7_architecture(args) -> Dict:
         highres_pairwise_takeover_v2=(bool(getattr(
             args, 's7_highres_pairwise_takeover_v2', False))
             if highres_roi_ranker and enabled and protected_merge else False),
+        highres_native_relative_risk_residual=(bool(getattr(
+            args, 's7_highres_native_relative_risk_residual', False))
+            if highres_roi_ranker and enabled and protected_merge else False),
+        highres_relative_risk_hidden=(int(getattr(
+            args, 's7_highres_relative_risk_hidden', 32))
+            if bool(getattr(
+                args, 's7_highres_native_relative_risk_residual', False))
+            and highres_roi_ranker and enabled and protected_merge else None),
+        highres_relative_risk_max_penalty=(float(getattr(
+            args, 's7_highres_relative_risk_max_penalty', 2.0))
+            if bool(getattr(
+                args, 's7_highres_native_relative_risk_residual', False))
+            and highres_roi_ranker and enabled and protected_merge else None),
         takeover_initial_uncertainty=(float(getattr(
             args, 's7_takeover_initial_uncertainty', 0.25))
             if highres_roi_ranker and enabled and protected_merge else None),
@@ -8156,7 +8316,8 @@ def load_heads_checkpoint_state(heads, payload: Dict,
             allowed_prefixes.extend((
                 's7_highres_spatial_projection.',
                 's7_highres_candidate_quality_head.',
-                's7_highres_pairwise_takeover_head.'))
+                's7_highres_pairwise_takeover_head.',
+                's7_highres_native_relative_risk_head.'))
         disallowed_missing = [
             name for name in incompatible.missing_keys
             if not any(name.startswith(prefix) for prefix in allowed_prefixes)]
@@ -8511,7 +8672,9 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                 smooth_geometry=bool(getattr(
                     args, 's7_highres_smooth_geometry_ranking', False)),
                 worst_case_retention=float(getattr(
-                    args, 's7_highres_worst_case_retention_weight', 0.0)) > 0.0),
+                    args, 's7_highres_worst_case_retention_weight', 0.0)) > 0.0,
+                native_relative_risk=bool(getattr(
+                    args, 's7_highres_native_relative_risk_residual', False))),
             trainable_parameter_names=[
                 name for name, parameter in heads.named_parameters()
                 if parameter.requires_grad],
@@ -8800,7 +8963,12 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                         ('s7_highres_pairwise_takeover_head'
                          if bool(getattr(
                              args, 's7_highres_pairwise_takeover_v2', False))
-                         else 's7_highres_candidate_quality_head')],
+                         else 's7_highres_candidate_quality_head')
+                    ] + (['s7_highres_native_relative_risk_head']
+                         if bool(getattr(
+                             args,
+                             's7_highres_native_relative_risk_residual',
+                             False)) else []),
                     frozen_detector=True,
                     highres_channels=int(args.s7_highres_channels),
                     hidden=int(args.s7_highres_hidden),
@@ -8822,6 +8990,40 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                         args, 's7_highres_unified_ranking', False)),
                     pairwise_takeover_v2=bool(getattr(
                         args, 's7_highres_pairwise_takeover_v2', False)),
+                    native_relative_risk_residual=bool(getattr(
+                        args, 's7_highres_native_relative_risk_residual',
+                        False)),
+                    relative_risk_objective=(
+                        dict(version='one_sided_native_relative_penalty',
+                             scalar_channels=(
+                                 temporal.S7HighResNativeRelativeRiskHead.
+                                 SCALAR_CHANNELS),
+                             hidden=int(getattr(
+                                 args, 's7_highres_relative_risk_hidden',
+                                 32)),
+                             max_penalty=float(getattr(
+                                 args,
+                                 's7_highres_relative_risk_max_penalty',
+                                 2.0)),
+                             retention_weight=float(getattr(
+                                 args,
+                                 's7_highres_relative_risk_retention_weight',
+                                 4.0)),
+                             preserve_weight=float(getattr(
+                                 args,
+                                 's7_highres_relative_risk_preserve_weight',
+                                 2.0)),
+                             prior_weight=float(getattr(
+                                 args,
+                                 's7_highres_relative_risk_prior_weight',
+                                 0.01)),
+                             native_score_change='forbidden',
+                             s7_adjustment='nonnegative_penalty_only',
+                             zero_initialization='exact_base_ranking')
+                        if bool(getattr(
+                            args,
+                            's7_highres_native_relative_risk_residual',
+                            False)) else None),
                     takeover_objective=(dict(
                         target='s7_RIoU_minus_native_top1_RIoU',
                         uncertainty='heteroscedastic_source_LCB',
@@ -8878,7 +9080,13 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                         'pairwise_delta_riou_LCB_native_abstention'
                         if bool(getattr(
                             args, 's7_highres_pairwise_takeover_v2', False))
-                        else 'unified_native_protected_quality_margin'
+                        else ('unified_native_protected_quality_minus_'
+                              'relative_risk_margin'
+                              if bool(getattr(
+                                  args,
+                                  's7_highres_native_relative_risk_residual',
+                                  False)) else
+                              'unified_native_protected_quality_margin')
                         if bool(getattr(
                             args, 's7_highres_unified_ranking', False))
                         else 'native_protected_quality_margin'),
@@ -9118,6 +9326,21 @@ def validate_checkpoint(payload: Dict, in_channels: int, args,
                     != bool(requested_s7.get(
                         'highres_pairwise_takeover_v2', False))
                     and not allow_highres_roi_initialization):
+                architecture_mismatch = True
+            stored_relative_risk = bool(stored_s7.get(
+                'highres_native_relative_risk_residual', False))
+            requested_relative_risk = bool(requested_s7.get(
+                'highres_native_relative_risk_residual', False))
+            if (stored_relative_risk != requested_relative_risk
+                    and not allow_highres_roi_initialization):
+                architecture_mismatch = True
+            if (stored_relative_risk and requested_relative_risk
+                    and (stored_s7.get('highres_relative_risk_hidden')
+                         != requested_s7.get('highres_relative_risk_hidden')
+                         or stored_s7.get(
+                             'highres_relative_risk_max_penalty')
+                         != requested_s7.get(
+                             'highres_relative_risk_max_penalty'))):
                 architecture_mismatch = True
             if (bool(stored_s7.get(
                     'highres_pairwise_takeover_v2', False))
@@ -10459,7 +10682,11 @@ def main():
                             False)),
                         worst_case_retention=float(getattr(
                             args, 's7_highres_worst_case_retention_weight',
-                            0.0)) > 0.0)),
+                            0.0)) > 0.0,
+                        native_relative_risk=bool(getattr(
+                            args,
+                            's7_highres_native_relative_risk_residual',
+                            False)))),
                 epochs=int(args.epochs), optimizer='SGD',
                 lr=float(args.lr), momentum=float(args.momentum),
                 weight_decay=float(args.weight_decay),
@@ -10735,16 +10962,31 @@ def main():
                 s7_highres_roi_ranker=(
                     None if args.train_components != 's7_highres_roi_ranker'
                     else dict(
-                        base_checkpoint=os.path.abspath(args.init_checkpoint),
+                        # Read-only audits load the fixed checkpoint through
+                        # --eval-only-checkpoint; training uses --init-checkpoint.
+                        # Keep the provenance record aligned with the actual
+                        # checkpoint instead of assuming an init checkpoint.
+                        base_checkpoint=os.path.abspath(
+                            args.eval_only_checkpoint
+                            if args.eval_only_checkpoint else
+                            args.init_checkpoint),
                         teacher_result_json=_highres_provenance_result_json(args),
-                        base_epoch=int(args.s7_highres_base_epoch),
+                        base_epoch=int(
+                            source_conflict_spec['epoch']
+                            if source_conflict_spec is not None else
+                            args.s7_highres_base_epoch),
                         trainable=[
                             's7_highres_spatial_projection',
                             ('s7_highres_pairwise_takeover_head'
                              if bool(getattr(
                                  args, 's7_highres_pairwise_takeover_v2',
                                  False))
-                             else 's7_highres_candidate_quality_head')],
+                             else 's7_highres_candidate_quality_head')
+                        ] + (['s7_highres_native_relative_risk_head']
+                             if bool(getattr(
+                                 args,
+                                 's7_highres_native_relative_risk_residual',
+                                 False)) else []),
                         highres_channels=int(args.s7_highres_channels),
                         hidden=int(args.s7_highres_hidden),
                         max_candidates=int(args.s7_highres_max_candidates),
@@ -10768,6 +11010,40 @@ def main():
                             args, 's7_highres_unified_ranking', False)),
                         pairwise_takeover_v2=bool(getattr(
                             args, 's7_highres_pairwise_takeover_v2', False)),
+                        native_relative_risk_residual=bool(getattr(
+                            args, 's7_highres_native_relative_risk_residual',
+                            False)),
+                        relative_risk_objective=(
+                            dict(version='one_sided_native_relative_penalty',
+                                 scalar_channels=(
+                                     temporal.S7HighResNativeRelativeRiskHead.
+                                     SCALAR_CHANNELS),
+                                 hidden=int(getattr(
+                                     args, 's7_highres_relative_risk_hidden',
+                                     32)),
+                                 max_penalty=float(getattr(
+                                     args,
+                                     's7_highres_relative_risk_max_penalty',
+                                     2.0)),
+                                 retention_weight=float(getattr(
+                                     args,
+                                     's7_highres_relative_risk_retention_weight',
+                                     4.0)),
+                                 preserve_weight=float(getattr(
+                                     args,
+                                     's7_highres_relative_risk_preserve_weight',
+                                     2.0)),
+                                 prior_weight=float(getattr(
+                                     args,
+                                     's7_highres_relative_risk_prior_weight',
+                                     0.01)),
+                                 native_score_change='forbidden',
+                                 s7_adjustment='nonnegative_penalty_only',
+                                 zero_initialization='exact_base_ranking')
+                            if bool(getattr(
+                                args,
+                                's7_highres_native_relative_risk_residual',
+                                False)) else None),
                         takeover_objective=(dict(
                             target='s7_RIoU_minus_native_top1_RIoU',
                             uncertainty='heteroscedastic_source_LCB',
@@ -10826,7 +11102,13 @@ def main():
                             if bool(getattr(
                                 args, 's7_highres_pairwise_takeover_v2',
                                 False))
-                            else 'unified_native_protected_quality_margin'
+                            else ('unified_native_protected_quality_minus_'
+                                  'relative_risk_margin'
+                                  if bool(getattr(
+                                      args,
+                                      's7_highres_native_relative_risk_residual',
+                                      False)) else
+                                  'unified_native_protected_quality_margin')
                             if bool(getattr(
                                 args, 's7_highres_unified_ranking', False))
                             else 'native_protected_quality_margin'),
@@ -10895,7 +11177,8 @@ def main():
             dino_frozen=True, dino_parameters_unchanged=dino_unchanged,
             read_only_evaluation=bool(
                 source_temporal_attribution_audit is not None
-                or source_temporal_immediate_override_audit is not None),
+                or source_temporal_immediate_override_audit is not None
+                or source_conflict_spec is not None),
             parameter_updates_performed=bool(
                 not args.eval_only_checkpoint),
             initialization_checkpoint=(
