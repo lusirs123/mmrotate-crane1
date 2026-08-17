@@ -44,6 +44,8 @@ def parse_args():
     parser.add_argument('--out-json', required=True)
     parser.add_argument('--min-gain-domains', type=int, default=2)
     parser.add_argument('--min-gain-sequences', type=int, default=2)
+    parser.add_argument('--small-min-gain-domains', type=int, default=1)
+    parser.add_argument('--small-min-gain-sequences', type=int, default=1)
     parser.add_argument('--seed', type=int, default=0)
     return parser.parse_args()
 
@@ -68,8 +70,10 @@ def validate_args(args):
         raise ValueError('DINO GPU ids must be non-empty and unique')
     if args.head_gpu in args.dino_gpus:
         raise ValueError('Head GPU must be separate from DINO GPUs')
-    if args.min_gain_domains <= 0 or args.min_gain_sequences <= 0:
-        raise ValueError('Minimum gain domains/sequences must be positive')
+    if (args.min_gain_domains <= 0 or args.min_gain_sequences <= 0
+            or args.small_min_gain_domains <= 0
+            or args.small_min_gain_sequences <= 0):
+        raise ValueError('All gain domain/sequence floors must be positive')
     labeller.load_unified_highres_margin_audit_spec(
         args.source_result_json, args.eval_only_checkpoint, LOCKED_EPOCH)
 
@@ -100,7 +104,7 @@ def build_locked_labeller_argv(args) -> List[str]:
         '--s7-anchor-sizes', '16', '32', '64', '128', '256',
         '--s7-merge-init-bias', '-2.0',
         '--s7-highres-roi-ranker', '--s7-highres-unified-ranking',
-        '--s7-highres-base-epoch', '4',
+        '--s7-highres-base-epoch', str(LOCKED_EPOCH),
         '--s7-highres-hidden', '32', '--s7-highres-channels', '32',
         '--s7-highres-max-candidates', '32',
         '--s7-highres-score-weight', '1.0',
@@ -123,6 +127,10 @@ def build_locked_labeller_argv(args) -> List[str]:
         str(args.min_gain_domains),
         '--source-smooth-geometry-min-gain-sequences',
         str(args.min_gain_sequences),
+        '--source-smooth-geometry-small-min-gain-domains',
+        str(getattr(args, 'small_min_gain_domains', 1)),
+        '--source-smooth-geometry-small-min-gain-sequences',
+        str(getattr(args, 'small_min_gain_sequences', 1)),
         '--s7-source-min-full-top1', '688',
         '--s7-source-min-small-top1', '311',
         '--s7-source-max-mcml', '3',

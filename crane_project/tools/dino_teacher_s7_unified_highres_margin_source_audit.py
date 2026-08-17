@@ -88,7 +88,7 @@ def build_locked_labeller_argv(args) -> List[str]:
         '--s7-anchor-sizes', '16', '32', '64', '128', '256',
         '--s7-merge-init-bias', '-2.0',
         '--s7-highres-roi-ranker', '--s7-highres-unified-ranking',
-        '--s7-highres-base-epoch', '4',
+        '--s7-highres-base-epoch', str(LOCKED_EPOCH),
         '--s7-highres-hidden', '32', '--s7-highres-channels', '32',
         '--s7-highres-max-candidates', '32',
         '--s7-highres-score-weight', '1.0',

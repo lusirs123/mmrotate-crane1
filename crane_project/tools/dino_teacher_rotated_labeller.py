@@ -419,6 +419,34 @@ def parse_args():
     parser.add_argument(
         '--source-smooth-geometry-min-gain-sequences', type=int, default=2,
         help='Minimum source sequences with native-wrong/S7-correct support.')
+    parser.add_argument(
+        '--source-smooth-geometry-small-min-gain-domains', type=int,
+        default=1,
+        help=('Minimum source domains in the source-small support gate. The '
+              'formal source-small split currently contains one domain.'))
+    parser.add_argument(
+        '--source-smooth-geometry-small-min-gain-sequences', type=int,
+        default=1,
+        help=('Minimum source sequences in the source-small support gate. '
+              'The formal source-small split currently contains one sequence.'))
+    parser.add_argument(
+        '--s7-highres-smooth-geometry-ranking', action='store_true',
+        help=('Add source-only smooth-geometry auxiliary pair ranking to the '
+              'unified high-resolution quality logits. GT geometry is used '
+              'only while training; inference remains feature-only.'))
+    parser.add_argument(
+        '--s7-highres-smooth-geometry-support-result-json', default=None,
+        help=('Protocol-28 source-only smooth-geometry support artifact '
+              'required by the geometry-guided training stage.'))
+    parser.add_argument(
+        '--s7-highres-smooth-geometry-metric',
+        choices=['sym_kld', 'gwd', 'normalized_gwd'], default='sym_kld')
+    parser.add_argument(
+        '--s7-highres-smooth-geometry-loss-weight', type=float, default=0.25)
+    parser.add_argument(
+        '--s7-highres-smooth-geometry-min-gap', type=float, default=0.05)
+    parser.add_argument(
+        '--s7-highres-smooth-geometry-max-pairs', type=int, default=64)
     parser.add_argument('--s7-temporal-base-epoch', type=int, default=1)
     parser.add_argument('--s7-temporal-margin', type=float, default=0.5)
     parser.add_argument(
@@ -720,6 +748,8 @@ def validate_args(args):
         args, 's7_highres_unified_ranking', False))
     highres_takeover_v2 = bool(getattr(
         args, 's7_highres_pairwise_takeover_v2', False))
+    highres_smooth_geometry = bool(getattr(
+        args, 's7_highres_smooth_geometry_ranking', False))
     if highres_unified and not highres_mode:
         raise ValueError(
             '--s7-highres-unified-ranking requires '
@@ -730,6 +760,12 @@ def validate_args(args):
             '--train-components s7_highres_roi_ranker')
     if highres_takeover_v2 and highres_unified:
         raise ValueError('Pairwise Takeover V2 and unified V1 are exclusive')
+    if highres_smooth_geometry and not highres_unified:
+        raise ValueError(
+            'Smooth-geometry ranking requires unified high-resolution ranking')
+    if highres_smooth_geometry and highres_takeover_v2:
+        raise ValueError(
+            'Smooth-geometry ranking cannot be combined with Pairwise Takeover V2')
     highres_margin_audit = bool(getattr(
         args, 'source_highres_margin_audit', False))
     smooth_geometry_audit = bool(getattr(
@@ -753,6 +789,10 @@ def validate_args(args):
     if smooth_geometry_audit and highres_margin_audit:
         raise ValueError(
             'Smooth geometry audit cannot be combined with a margin audit')
+    if smooth_geometry_audit and highres_smooth_geometry:
+        raise ValueError(
+            'Smooth geometry audit and geometry-guided training are separate '
+            'source-only stages')
     margin_values = getattr(args, 'source_highres_margin_values', None)
     if highres_margin_audit:
         if not margin_values:
@@ -789,9 +829,63 @@ def validate_args(args):
                 args, 'source_smooth_geometry_min_gain_sequences', 2)) <= 0:
             raise ValueError(
                 '--source-smooth-geometry-min-gain-sequences must be positive')
+        if int(getattr(
+                args, 'source_smooth_geometry_small_min_gain_domains', 1)) <= 0:
+            raise ValueError(
+                '--source-smooth-geometry-small-min-gain-domains must be '
+                'positive')
+        if int(getattr(
+                args, 'source_smooth_geometry_small_min_gain_sequences', 1)) <= 0:
+            raise ValueError(
+                '--source-smooth-geometry-small-min-gain-sequences must be '
+                'positive')
         args.source_smooth_geometry_audit_spec = (
             load_unified_highres_margin_audit_spec(
                 result_json, args.eval_only_checkpoint, 3))
+    if highres_smooth_geometry:
+        if highres_margin_audit or smooth_geometry_audit:
+            raise ValueError(
+                'Smooth-geometry ranking is a training stage, not an audit')
+        support_json = getattr(
+            args, 's7_highres_smooth_geometry_support_result_json', None)
+        if not support_json or not os.path.isfile(support_json):
+            raise ValueError(
+                'Smooth-geometry ranking requires a protocol-28 support JSON')
+        if float(getattr(
+                args, 's7_highres_smooth_geometry_loss_weight', 0.25)) <= 0.0:
+            raise ValueError(
+                '--s7-highres-smooth-geometry-loss-weight must be positive')
+        if float(getattr(
+                args, 's7_highres_smooth_geometry_min_gap', 0.05)) <= 0.0:
+            raise ValueError(
+                '--s7-highres-smooth-geometry-min-gap must be positive')
+        if int(getattr(
+                args, 's7_highres_smooth_geometry_max_pairs', 64)) <= 0:
+            raise ValueError(
+                '--s7-highres-smooth-geometry-max-pairs must be positive')
+        with open(support_json, 'r') as handle:
+            support = json.load(handle)
+        support_source = support.get('source') or {}
+        support_isolation = support.get('isolation') or {}
+        checks = dict(
+            protocol_version=int(support.get('protocol_version', -1)) == 28,
+            target_not_read=(support.get('target_dev') is None
+                             and (support.get('protocol') or {}).get(
+                                 'target_read') is False),
+            eligible_for_training=(support.get(
+                'eligible_for_training') is True),
+            support_gate=(support_source.get('support_gate') or {}).get(
+                'passed') is True,
+            quality_gate=(support_source.get('quality_gate') or {}).get(
+                'passed') is True,
+            read_only=(support.get('parameter_update_count') == 0
+                       and support_isolation.get(
+                           'parameter_updates_performed') is False))
+        if not all(checks.values()):
+            raise ValueError(
+                'Smooth-geometry support artifact failed: ' + ', '.join(
+                    sorted(name for name, passed in checks.items() if not passed)))
+        args.s7_highres_smooth_geometry_support = support
     highres_positive = (
         getattr(args, 's7_highres_base_epoch', 4),
         getattr(args, 's7_highres_hidden', 32),
@@ -1163,7 +1257,8 @@ def validate_args(args):
             raise ValueError(
                 'Selective promotion phase-2 result lacks source summaries')
         args.s7_selective_teacher_result = teacher_result
-    if highres_mode and not (highres_margin_audit or smooth_geometry_audit):
+    if (highres_mode and not (highres_margin_audit or smooth_geometry_audit
+                               or highres_smooth_geometry)):
         teacher_result_json = getattr(
             args, 's7_highres_teacher_result_json', None)
         if not teacher_result_json or not os.path.isfile(teacher_result_json):
@@ -1419,7 +1514,8 @@ def validate_args(args):
                 's7_static_domain_ranker requires '
                 '--s7-source-max-mcml <= 3')
     if highres_mode:
-        if (not (highres_margin_audit or smooth_geometry_audit)
+        if (not (highres_margin_audit or smooth_geometry_audit
+                  or highres_smooth_geometry)
                 and (not args.init_checkpoint or args.resume_checkpoint
                      or args.eval_only_checkpoint)):
             raise ValueError(
@@ -1753,6 +1849,9 @@ def optimization_loss_total(losses: Dict, train_components: str):
         if 'loss_s7_highres_unified' in losses:
             selected['loss_s7_highres_unified'] = (
                 losses['loss_s7_highres_unified'])
+        if 'loss_s7_highres_smooth_geometry' in losses:
+            selected['loss_s7_highres_smooth_geometry'] = (
+                losses['loss_s7_highres_smooth_geometry'])
         return loss_total(selected)
     if train_components in ('roi_cls_pairwise', 'roi_cls_pairwise_v2'):
         required = ('loss_cls', 'loss_roi_pairwise', 'loss_roi_retention')
@@ -1769,7 +1868,8 @@ def optimization_loss_component_names(
         train_components: str, quality_head: bool = False,
         relative_quality: bool = False,
         unified_highres: bool = False,
-        pairwise_takeover_v2: bool = False) -> List[str]:
+        pairwise_takeover_v2: bool = False,
+        smooth_geometry: bool = False) -> List[str]:
     """Return the canonical loss-name list for logs and checkpoints."""
     if train_components == 'all':
         return ['loss_rpn_cls', 'loss_rpn_bbox', 'loss_cls', 'loss_bbox']
@@ -1825,6 +1925,8 @@ def optimization_loss_component_names(
             'loss_s7_highres_prior']
         if unified_highres:
             names.insert(-1, 'loss_s7_highres_unified')
+        if smooth_geometry:
+            names.insert(-1, 'loss_s7_highres_smooth_geometry')
         return names
     if train_components in ('roi_cls_pairwise', 'roi_cls_pairwise_v2'):
         return ['loss_cls', 'loss_roi_pairwise', 'loss_roi_retention']
@@ -4223,7 +4325,8 @@ class FrozenDinoRotatedHeads(nn.Module):
             rank_margin: float, retention_weight: float,
             gain_weight: float, prior_weight: float,
             max_candidates: int,
-            augmented_feature: Optional[torch.Tensor] = None) -> Dict:
+            augmented_feature: Optional[torch.Tensor] = None,
+            smooth_geometry_gt_boxes: Optional[torch.Tensor] = None) -> Dict:
         """Fit the lightweight stride-7 ROI quality readout on source GT."""
         from mmcv.ops import box_iou_rotated
 
@@ -4306,6 +4409,24 @@ class FrozenDinoRotatedHeads(nn.Module):
         if self.s7_highres_unified_ranking:
             kwargs['hard_pair_count'] = int(getattr(
                 self._args, 's7_highres_unified_hard_pairs', 8))
+            if bool(getattr(
+                    self._args, 's7_highres_smooth_geometry_ranking', False)):
+                kwargs.update(
+                    gt_boxes=smooth_geometry_gt_boxes,
+                    smooth_geometry_weight=float(getattr(
+                        self._args,
+                        's7_highres_smooth_geometry_loss_weight', 0.25)),
+                    smooth_geometry_metric=str(getattr(
+                        self._args, 's7_highres_smooth_geometry_metric',
+                        'sym_kld')),
+                    smooth_geometry_margin=float(getattr(
+                        self._args, 's7_highres_rank_margin', 0.25)),
+                    smooth_geometry_min_gap=float(getattr(
+                        self._args,
+                        's7_highres_smooth_geometry_min_gap', 0.05)),
+                    smooth_geometry_max_pairs=int(getattr(
+                        self._args,
+                        's7_highres_smooth_geometry_max_pairs', 64)))
         return loss_fn(
             head, embeddings, highres_embeddings, detections, source_ids,
             overlap, riou_threshold=riou_thr, **kwargs)
@@ -5073,7 +5194,11 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                 gain_weight=args.s7_highres_gain_weight,
                 prior_weight=args.s7_highres_prior_weight,
                 max_candidates=args.s7_highres_max_candidates,
-                augmented_feature=paired_augmented_feature)
+                augmented_feature=paired_augmented_feature,
+                smooth_geometry_gt_boxes=(
+                    gt_boxes if bool(getattr(
+                        args, 's7_highres_smooth_geometry_ranking', False))
+                    else None))
             if (bool(getattr(args, 's7_highres_unified_ranking', False))
                     or bool(getattr(
                         args, 's7_highres_pairwise_takeover_v2', False))):
@@ -5348,7 +5473,9 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
         unified_highres=bool(getattr(
             args, 's7_highres_unified_ranking', False)),
         pairwise_takeover_v2=bool(getattr(
-            args, 's7_highres_pairwise_takeover_v2', False)))
+            args, 's7_highres_pairwise_takeover_v2', False)),
+        smooth_geometry=bool(getattr(
+            args, 's7_highres_smooth_geometry_ranking', False)))
     summary = dict(
         epoch=int(epoch), count=len(ordered),
         global_step_end=int(global_step),
@@ -6197,23 +6324,41 @@ def _smooth_geometry_group_summaries(
 
 
 def _smooth_geometry_source_support_gate(
-        summary: Dict, args) -> Dict:
-    min_domains = int(getattr(
-        args, 'source_smooth_geometry_min_gain_domains', 2))
-    min_sequences = int(getattr(
-        args, 'source_smooth_geometry_min_gain_sequences', 2))
+        summary: Dict, args, subset: str = 'full') -> Dict:
+    if subset not in ('full', 'small'):
+        raise ValueError('Smooth geometry support subset must be full or small')
+    if subset == 'small':
+        min_domains = int(getattr(
+            args, 'source_smooth_geometry_small_min_gain_domains', 1))
+        min_sequences = int(getattr(
+            args, 'source_smooth_geometry_small_min_gain_sequences', 1))
+    else:
+        min_domains = int(getattr(
+            args, 'source_smooth_geometry_min_gain_domains', 2))
+        min_sequences = int(getattr(
+            args, 'source_smooth_geometry_min_gain_sequences', 2))
+    observed_domains = len(summary['gain_domains'])
+    observed_sequences = len(summary['gain_sequences'])
     checks = dict(
         candidate_gain_pair_exists=(
             int(summary['native_wrong_s7_correct_pair_count']) > 0),
         minimum_gain_domains=(
-            len(summary['gain_domains']) >= min_domains),
+            observed_domains >= min_domains),
         minimum_gain_sequences=(
-            len(summary['gain_sequences']) >= min_sequences))
+            observed_sequences >= min_sequences))
     return dict(
         passed=bool(all(checks.values())), checks=checks,
+        subset=subset,
         min_gain_domains=min_domains, min_gain_sequences=min_sequences,
+        observed_gain_domains=observed_domains,
+        observed_gain_sequences=observed_sequences,
         gain_domains=list(summary['gain_domains']),
-        gain_sequences=list(summary['gain_sequences']))
+        gain_sequences=list(summary['gain_sequences']),
+        coverage_limited=bool(
+            observed_domains < int(getattr(
+                args, 'source_smooth_geometry_min_gain_domains', 2))
+            or observed_sequences < int(getattr(
+                args, 'source_smooth_geometry_min_gain_sequences', 2))))
 
 
 def build_smooth_geometry_rank_support_audit(
@@ -6242,8 +6387,10 @@ def build_smooth_geometry_rank_support_audit(
                 expected_full, expected_small,
                 full_summary['native_top1_hits'],
                 small_summary['native_top1_hits']))
-    full_support = _smooth_geometry_source_support_gate(full_summary, args)
-    small_support = _smooth_geometry_source_support_gate(small_summary, args)
+    full_support = _smooth_geometry_source_support_gate(
+        full_summary, args, subset='full')
+    small_support = _smooth_geometry_source_support_gate(
+        small_summary, args, subset='small')
     quality_support = []
     for name in SMOOTH_GEOMETRY_METRICS:
         full_metric = full_summary['metrics'][name]
@@ -6255,12 +6402,16 @@ def build_smooth_geometry_rank_support_audit(
     support_gate_passed = bool(full_support['passed'] and small_support['passed'])
     quality_gate_passed = bool(quality_support)
     training_allowed = bool(support_gate_passed and quality_gate_passed)
+    small_coverage_limited = bool(small_support['coverage_limited'])
     decision = (
+        'SOURCE_ONLY_SMOOTH_GEOMETRY_RANK_SUPPORT_PASS_COVERAGE_LIMITED_'
+        'TARGET_NOT_READ'
+        if training_allowed and small_coverage_limited else
         'SOURCE_ONLY_SMOOTH_GEOMETRY_RANK_SUPPORT_PASS_TARGET_NOT_READ'
         if training_allowed else
         'SOURCE_ONLY_SMOOTH_GEOMETRY_RANK_SUPPORT_INSUFFICIENT_TARGET_NOT_READ')
     return dict(
-        protocol_version=27,
+        protocol_version=28,
         audit_name='Source-only Smooth-Geometry Rank-Support Audit',
         protocol=dict(
             architecture='frozen_unified_highres_native_s7_candidate_pool',
@@ -6272,7 +6423,8 @@ def build_smooth_geometry_rank_support_audit(
             no_target_threshold_tuning=True,
             no_checkpoint_selection=True,
             feasibility_gate=(
-                'source candidate support in full and small subsets, then '
+                'source candidate support in full and small subsets with '
+                'separate coverage-aware domain/sequence floors, then '
                 'positive net top1 gain from at least one smooth metric')),
         isolation=dict(
             dino_frozen=True, detector_parameters_unchanged=True,
@@ -6296,7 +6448,14 @@ def build_smooth_geometry_rank_support_audit(
             by_sequence=_smooth_geometry_group_summaries(rows, 'seq'),
             support_gate=dict(
                 passed=support_gate_passed, full=full_support,
-                small=small_support),
+                small=small_support,
+                coverage_limited=small_coverage_limited,
+                coverage_note=(
+                    'The source-small split has fewer domains/sequences than '
+                    'the full-source coverage floor; this authorizes source-only '
+                    'research training but not a multi-domain small-object '
+                    'generalization claim.'
+                    if small_coverage_limited else None)),
             quality_gate=dict(
                 passed=quality_gate_passed,
                 supported_metrics=quality_support,
@@ -6306,6 +6465,10 @@ def build_smooth_geometry_rank_support_audit(
             training_feasibility=dict(
                 allowed=training_allowed,
                 reason=(
+                    'A later source-only geometry-guided quality head may be '
+                    'implemented; source-small coverage is limited and must '
+                    'not be reported as multi-domain evidence.'
+                    if training_allowed and small_coverage_limited else
                     'A later source-only gain-balanced quality head may be '
                     'implemented.' if training_allowed else
                     'Do not start geometry-quality training from this audit; '
@@ -8209,6 +8372,15 @@ def phase2_selected_checkpoint_provenance_gate(
         candidate_load_error=candidate_load_error)
 
 
+def _highres_provenance_result_json(args) -> Optional[str]:
+    """Return the provenance artifact used by a high-resolution stage."""
+    path = getattr(args, 's7_highres_teacher_result_json', None)
+    if not path:
+        path = getattr(
+            args, 's7_highres_smooth_geometry_support_result_json', None)
+    return None if not path else os.path.abspath(path)
+
+
 def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                        best_epoch: int, best_summary: Dict,
                        in_channels: int, args,
@@ -8263,7 +8435,9 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                 unified_highres=bool(getattr(
                     args, 's7_highres_unified_ranking', False)),
                 pairwise_takeover_v2=bool(getattr(
-                    args, 's7_highres_pairwise_takeover_v2', False))),
+                    args, 's7_highres_pairwise_takeover_v2', False)),
+                smooth_geometry=bool(getattr(
+                    args, 's7_highres_smooth_geometry_ranking', False))),
             trainable_parameter_names=[
                 name for name, parameter in heads.named_parameters()
                 if parameter.requires_grad],
@@ -8545,8 +8719,7 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                 None if args.train_components != 's7_highres_roi_ranker'
                 else dict(
                     base_checkpoint=os.path.abspath(args.init_checkpoint),
-                    teacher_result_json=os.path.abspath(
-                        args.s7_highres_teacher_result_json),
+                    teacher_result_json=_highres_provenance_result_json(args),
                     base_epoch=int(args.s7_highres_base_epoch),
                     trainable=[
                         's7_highres_spatial_projection',
@@ -8592,6 +8765,22 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                         else None),
                     unified_hard_pairs=int(getattr(
                         args, 's7_highres_unified_hard_pairs', 8)),
+                    smooth_geometry_ranking=bool(getattr(
+                        args, 's7_highres_smooth_geometry_ranking', False)),
+                    smooth_geometry_support_result_json=(
+                        None if not getattr(
+                            args, 's7_highres_smooth_geometry_support_result_json',
+                            None) else os.path.abspath(getattr(
+                                args,
+                                's7_highres_smooth_geometry_support_result_json'))),
+                    smooth_geometry_metric=str(getattr(
+                        args, 's7_highres_smooth_geometry_metric', 'sym_kld')),
+                    smooth_geometry_loss_weight=float(getattr(
+                        args, 's7_highres_smooth_geometry_loss_weight', 0.25)),
+                    smooth_geometry_min_gap=float(getattr(
+                        args, 's7_highres_smooth_geometry_min_gap', 0.05)),
+                    smooth_geometry_max_pairs=int(getattr(
+                        args, 's7_highres_smooth_geometry_max_pairs', 64)),
                     source_feature_domain_augmentation=(
                         dict(
                             probability=float(getattr(
@@ -9081,6 +9270,16 @@ def train_source_only(dino, heads, train_records, val_records, args,
                             'highres_unified_ranking', False))):
                     raise RuntimeError(
                         'Pairwise Takeover V2 requires the locked unified V1 '
+                        'high-resolution epoch checkpoint')
+            elif bool(getattr(
+                    args, 's7_highres_smooth_geometry_ranking', False)):
+                if (stored_protocol.get('train_components')
+                        != 's7_highres_roi_ranker'
+                        or not bool(stored_s7.get('highres_roi_ranker', False))
+                        or not bool(stored_s7.get(
+                            'highres_unified_ranking', False))):
+                    raise RuntimeError(
+                        'Smooth-geometry ranking requires the locked unified '
                         'high-resolution epoch checkpoint')
             else:
                 if (stored_protocol.get('train_components')
@@ -10172,6 +10371,9 @@ def main():
                             args, 's7_highres_unified_ranking', False)),
                         pairwise_takeover_v2=bool(getattr(
                             args, 's7_highres_pairwise_takeover_v2',
+                            False)),
+                        smooth_geometry=bool(getattr(
+                            args, 's7_highres_smooth_geometry_ranking',
                             False)))),
                 epochs=int(args.epochs), optimizer='SGD',
                 lr=float(args.lr), momentum=float(args.momentum),
@@ -10449,8 +10651,7 @@ def main():
                     None if args.train_components != 's7_highres_roi_ranker'
                     else dict(
                         base_checkpoint=os.path.abspath(args.init_checkpoint),
-                        teacher_result_json=os.path.abspath(
-                            args.s7_highres_teacher_result_json),
+                        teacher_result_json=_highres_provenance_result_json(args),
                         base_epoch=int(args.s7_highres_base_epoch),
                         trainable=[
                             's7_highres_spatial_projection',
@@ -10500,6 +10701,24 @@ def main():
                                 False)) else None),
                         unified_hard_pairs=int(getattr(
                             args, 's7_highres_unified_hard_pairs', 8)),
+                        smooth_geometry_ranking=bool(getattr(
+                            args, 's7_highres_smooth_geometry_ranking', False)),
+                        smooth_geometry_support_result_json=(
+                            None if not getattr(
+                                args,
+                                's7_highres_smooth_geometry_support_result_json',
+                                None) else os.path.abspath(getattr(
+                                    args,
+                                    's7_highres_smooth_geometry_support_result_json'))),
+                        smooth_geometry_metric=str(getattr(
+                            args, 's7_highres_smooth_geometry_metric', 'sym_kld')),
+                        smooth_geometry_loss_weight=float(getattr(
+                            args, 's7_highres_smooth_geometry_loss_weight',
+                            0.25)),
+                        smooth_geometry_min_gap=float(getattr(
+                            args, 's7_highres_smooth_geometry_min_gap', 0.05)),
+                        smooth_geometry_max_pairs=int(getattr(
+                            args, 's7_highres_smooth_geometry_max_pairs', 64)),
                         source_feature_domain_augmentation=(
                             dict(
                                 probability=float(getattr(

@@ -19,6 +19,7 @@ from crane_project.tools import (
 
 TRAINING_NAME = 'DINO S7 Lightweight High-Resolution ROI Ranker A'
 EXPECTED_BASE_EPOCH = 4
+GEOMETRY_BASE_EPOCH = 3
 
 
 def parse_args():
@@ -40,6 +41,17 @@ def parse_args():
         '--unified-ranking', action='store_true',
         help=('Run the next-stage whole-pool hard-pair ranker with native '
               'protection and source feature-view augmentation.'))
+    parser.add_argument(
+        '--smooth-geometry-ranking', action='store_true',
+        help=('Add the new source-only smooth-geometry auxiliary ranking '
+              'objective. Requires unified ranking and a protocol-28 support '
+              'artifact from the preceding read-only audit.'))
+    parser.add_argument('--geometry-support-json', default=None)
+    parser.add_argument('--geometry-metric', default='sym_kld',
+                        choices=['sym_kld', 'gwd', 'normalized_gwd'])
+    parser.add_argument('--geometry-loss-weight', type=float, default=0.25)
+    parser.add_argument('--geometry-min-gap', type=float, default=0.05)
+    parser.add_argument('--geometry-max-pairs', type=int, default=64)
     return parser.parse_args()
 
 
@@ -64,28 +76,63 @@ def validate_args(args):
         raise ValueError('DINO GPU ids must be non-empty and unique')
     if args.head_gpu in args.dino_gpus:
         raise ValueError('Head GPU must be separate from DINO GPUs')
-    with open(args.source_result_json, 'r') as handle:
-        source_result = json.load(handle)
-    source_gate = fixed_target.strict_source_gate(source_result)
-    if not source_gate['passed']:
-        failed = sorted(name for name, passed in source_gate['checks'].items()
-                        if not passed)
-        raise ValueError('Phase-2 source gate failed: {}'.format(
-            ', '.join(failed)))
-    provenance = labeller.phase2_selected_checkpoint_provenance_gate(
-        source_result, args.init_checkpoint,
-        expected_epoch=EXPECTED_BASE_EPOCH,
-        min_full_top1=688, min_small_top1=311, max_mcml=3)
-    if not provenance['passed']:
-        failed = sorted(name for name, passed in provenance['checks'].items()
-                        if not passed)
-        raise ValueError(
-            'High-resolution phase-2 checkpoint provenance gate failed: '
-            + ', '.join(failed))
+    if bool(getattr(args, 'smooth_geometry_ranking', False)):
+        if not args.unified_ranking:
+            raise ValueError('--smooth-geometry-ranking requires '
+                             '--unified-ranking')
+        if not args.geometry_support_json:
+            raise ValueError('--smooth-geometry-ranking requires '
+                             '--geometry-support-json')
+        with open(args.geometry_support_json, 'r') as handle:
+            support = json.load(handle)
+        checks = dict(
+            protocol_version=int(support.get('protocol_version', -1)) == 28,
+            target_not_read=support.get('target_dev') is None,
+            eligible_for_training=(support.get(
+                'eligible_for_training') is True),
+            support_gate=((support.get('source') or {}).get(
+                'support_gate') or {}).get('passed') is True,
+            quality_gate=((support.get('source') or {}).get(
+                'quality_gate') or {}).get('passed') is True,
+            checkpoint_epoch=int((support.get('checkpoint_used') or {}).get(
+                'epoch', -1)) == GEOMETRY_BASE_EPOCH,
+            checkpoint_identity=os.path.realpath(str(
+                (support.get('checkpoint_used') or {}).get('path', '')))
+            == os.path.realpath(args.init_checkpoint))
+        if not all(checks.values()):
+            raise ValueError('Smooth-geometry support provenance failed: '
+                             + ', '.join(sorted(
+                                 name for name, passed in checks.items()
+                                 if not passed)))
+        if args.geometry_loss_weight <= 0.0 or args.geometry_min_gap <= 0.0 \
+                or args.geometry_max_pairs <= 0:
+            raise ValueError('Smooth-geometry training settings must be positive')
+    else:
+        with open(args.source_result_json, 'r') as handle:
+            source_result = json.load(handle)
+        source_gate = fixed_target.strict_source_gate(source_result)
+        if not source_gate['passed']:
+            failed = sorted(name for name, passed in source_gate['checks'].items()
+                            if not passed)
+            raise ValueError('Phase-2 source gate failed: {}'.format(
+                ', '.join(failed)))
+        provenance = labeller.phase2_selected_checkpoint_provenance_gate(
+            source_result, args.init_checkpoint,
+            expected_epoch=EXPECTED_BASE_EPOCH,
+            min_full_top1=688, min_small_top1=311, max_mcml=3)
+        if not provenance['passed']:
+            failed = sorted(name for name, passed in provenance['checks'].items()
+                            if not passed)
+            raise ValueError(
+                'High-resolution phase-2 checkpoint provenance gate failed: '
+                + ', '.join(failed))
 
 
 def build_locked_labeller_argv(args) -> List[str]:
-    return [
+    smooth_geometry = bool(getattr(args, 'smooth_geometry_ranking', False))
+    base_epoch = (GEOMETRY_BASE_EPOCH if smooth_geometry
+                  else EXPECTED_BASE_EPOCH)
+    argv = [
         'dino_teacher_rotated_labeller.py',
         '--data-root', args.data_root,
         '--source-train-datasets', 'train:train', 'train_sim:train',
@@ -110,7 +157,7 @@ def build_locked_labeller_argv(args) -> List[str]:
         '--s7-anchor-sizes', '16', '32', '64', '128', '256',
         '--s7-merge-init-bias', '-2.0',
         '--s7-highres-roi-ranker',
-        '--s7-highres-base-epoch', str(EXPECTED_BASE_EPOCH),
+        '--s7-highres-base-epoch', str(base_epoch),
         '--s7-highres-hidden', '32', '--s7-highres-channels', '32',
         '--s7-highres-max-candidates', '32',
         '--s7-highres-score-weight', '1.0',
@@ -128,7 +175,6 @@ def build_locked_labeller_argv(args) -> List[str]:
         '--s7-highres-unified-hard-pairs', '8',
         '--s7-highres-unified-aug-prob', '0.75',
         '--s7-highres-unified-aug-strength', '0.15',
-        '--s7-highres-teacher-result-json', args.source_result_json,
         '--s7-source-min-full-top1', '688',
         '--s7-source-min-small-top1', '311',
         '--s7-source-max-mcml', '3',
@@ -143,6 +189,22 @@ def build_locked_labeller_argv(args) -> List[str]:
         '--work-dir', args.work_dir,
         '--skip-target-eval', '--seed', '0', '--out-json', args.out_json,
     ]
+    if smooth_geometry:
+        argv.extend([
+            '--s7-highres-smooth-geometry-ranking',
+            '--s7-highres-smooth-geometry-support-result-json',
+            args.geometry_support_json,
+            '--s7-highres-smooth-geometry-metric', args.geometry_metric,
+            '--s7-highres-smooth-geometry-loss-weight',
+            str(args.geometry_loss_weight),
+            '--s7-highres-smooth-geometry-min-gap',
+            str(args.geometry_min_gap),
+            '--s7-highres-smooth-geometry-max-pairs',
+            str(args.geometry_max_pairs)])
+    else:
+        argv.extend(['--s7-highres-teacher-result-json',
+                     args.source_result_json])
+    return argv
 
 
 def main():

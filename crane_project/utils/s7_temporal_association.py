@@ -1552,6 +1552,74 @@ def native_protected_pairwise_highres_takeover(
             detections[best_index, 5].detach().item()))
 
 
+def smooth_geometry_relative_ranking_loss(
+        logits: torch.Tensor, detections: torch.Tensor,
+        gt_boxes: Optional[torch.Tensor], metric: str = 'sym_kld',
+        margin: float = 0.10, min_gap: float = 0.05,
+        max_pairs: int = 64) -> Dict:
+    """Align quality logits with a source-only smooth OBB geometry ranking.
+
+    ``gt_boxes`` is a training-only target.  The candidate features and
+    logits remain the only inputs used at inference.  Geometry distances are
+    converted to a per-frame robust quality target, so the loss contributes
+    pair ordering rather than an unstable absolute distance calibration.
+    """
+    if metric not in ('sym_kld', 'gwd', 'normalized_gwd'):
+        raise ValueError('Unsupported smooth geometry metric: {}'.format(metric))
+    if float(margin) <= 0.0 or float(min_gap) <= 0.0 or int(max_pairs) <= 0:
+        raise ValueError('Smooth geometry ranking settings must be positive')
+    if logits.ndim != 1 or detections.ndim != 2 or detections.shape[1] != 6:
+        raise ValueError('Smooth geometry ranking inputs have invalid shapes')
+    if logits.shape[0] != detections.shape[0]:
+        raise ValueError('Smooth geometry logits and detections are misaligned')
+    zero = logits.sum() * 0.0
+    empty = dict(
+        loss_s7_highres_smooth_geometry=zero,
+        s7_highres_smooth_geometry_pair_count=0,
+        s7_highres_smooth_geometry_active_count=0,
+        s7_highres_smooth_geometry_mean_target=0.0,
+        s7_highres_smooth_geometry_metric=metric)
+    if logits.numel() == 0 or gt_boxes is None or gt_boxes.numel() == 0:
+        return empty
+    if gt_boxes.ndim != 2 or gt_boxes.shape[1] != 5:
+        raise ValueError('Smooth geometry GT boxes must have shape [M, 5]')
+    from mmcv.ops import box_iou_rotated
+    from crane_project.utils import rotated_geometry_quality as geometry
+
+    with torch.no_grad():
+        overlaps = box_iou_rotated(
+            detections[:, :5].float(), gt_boxes.float())
+        best_gt = overlaps.argmax(dim=1)
+        targets = gt_boxes[best_gt]
+        candidates = detections[:, :5].float()
+        if metric == 'sym_kld':
+            distances = geometry.symmetric_gaussian_kl(candidates, targets)
+        elif metric == 'gwd':
+            distances = geometry.gaussian_wasserstein_distance(
+                candidates, targets)
+        else:
+            distances = geometry.normalized_gaussian_wasserstein_distance(
+                candidates, targets)
+        distances = torch.nan_to_num(
+            distances, nan=1e6, posinf=1e6, neginf=0.0).clamp_min(0.0)
+        scale = torch.median(distances).clamp_min(1e-6)
+        geometry_target = torch.exp(
+            -(distances / scale).clamp(max=12.0)).clamp(0.0, 1.0)
+    ranking = candidate_quality_relative_ranking_loss(
+        logits, geometry_target, margin=float(margin),
+        min_gap=float(min_gap), max_pairs=int(max_pairs))
+    return dict(
+        loss_s7_highres_smooth_geometry=(
+            ranking['loss_s7_candidate_quality_relative']),
+        s7_highres_smooth_geometry_pair_count=int(
+            ranking.get('s7_candidate_quality_relative_pair_count', 0)),
+        s7_highres_smooth_geometry_active_count=int(
+            ranking.get('s7_candidate_quality_relative_active_count', 0)),
+        s7_highres_smooth_geometry_mean_target=float(
+            geometry_target.mean().item()),
+        s7_highres_smooth_geometry_metric=metric)
+
+
 def unified_highres_candidate_rank_losses(
         quality_head: S7HighResCandidateQualityHead,
         embedding: torch.Tensor, highres_embedding: torch.Tensor,
@@ -1562,7 +1630,12 @@ def unified_highres_candidate_rank_losses(
         relative_max_pairs: int = 128, score_weight: float = 1.0,
         rank_margin: float = 0.25, retention_weight: float = 2.0,
         gain_weight: float = 1.0, prior_weight: float = 0.01,
-        hard_pair_count: int = 8) -> Dict:
+        hard_pair_count: int = 8, gt_boxes: Optional[torch.Tensor] = None,
+        smooth_geometry_weight: float = 0.0,
+        smooth_geometry_metric: str = 'sym_kld',
+        smooth_geometry_margin: float = 0.10,
+        smooth_geometry_min_gap: float = 0.05,
+        smooth_geometry_max_pairs: int = 64) -> Dict:
     """Train one source-only ranker over the unified native/S7 pool.
 
     The original high-resolution stage protects the native winner and mines
@@ -1578,6 +1651,11 @@ def unified_highres_candidate_rank_losses(
                 hard_pair_count)
     if any(float(value) <= 0.0 for value in positive):
         raise ValueError('Unified high-resolution ranker settings must be positive')
+    if float(smooth_geometry_weight) < 0.0:
+        raise ValueError('Smooth geometry loss weight cannot be negative')
+    if float(smooth_geometry_weight) > 0.0 and gt_boxes is None:
+        raise ValueError(
+            'Smooth geometry training requires source GT boxes explicitly')
     if (gt_overlap.ndim != 1 or source_ids.ndim != 1
             or gt_overlap.shape != source_ids.shape
             or gt_overlap.shape[0] != detections.shape[0]):
@@ -1593,6 +1671,7 @@ def unified_highres_candidate_rank_losses(
             loss_s7_highres_retention=zero,
             loss_s7_highres_gain=zero,
             loss_s7_highres_unified=zero,
+            loss_s7_highres_smooth_geometry=zero,
             loss_s7_highres_prior=zero,
             s7_highres_retention_pair_count=0,
             s7_highres_gain_pair_count=0,
@@ -1699,6 +1778,12 @@ def unified_highres_candidate_rank_losses(
         gain = zero
         active = 0
 
+    smooth_geometry = smooth_geometry_relative_ranking_loss(
+        logits, detections, gt_boxes, metric=smooth_geometry_metric,
+        margin=float(smooth_geometry_margin),
+        min_gap=float(smooth_geometry_min_gap),
+        max_pairs=int(smooth_geometry_max_pairs))
+
     return dict(
         loss_s7_highres_quality=quality * float(quality_weight),
         loss_s7_highres_relative=(
@@ -1707,6 +1792,9 @@ def unified_highres_candidate_rank_losses(
         loss_s7_highres_retention=retention * float(retention_weight),
         loss_s7_highres_gain=gain * float(gain_weight),
         loss_s7_highres_unified=unified,
+        loss_s7_highres_smooth_geometry=(
+            smooth_geometry['loss_s7_highres_smooth_geometry']
+            * float(smooth_geometry_weight)),
         loss_s7_highres_prior=logits.square().mean() * float(prior_weight),
         s7_highres_retention_pair_count=retention_count,
         s7_highres_gain_pair_count=gain_count,
@@ -1718,7 +1806,15 @@ def unified_highres_candidate_rank_losses(
         s7_highres_relative_pair_count=int(relative_result.get(
             's7_candidate_quality_relative_pair_count', 0)),
         s7_highres_quality_mean_target=float(target.mean().item()),
-        s7_highres_quality_mean_prediction=float(prediction.mean().item()))
+        s7_highres_quality_mean_prediction=float(prediction.mean().item()),
+        s7_highres_smooth_geometry_pair_count=smooth_geometry[
+            's7_highres_smooth_geometry_pair_count'],
+        s7_highres_smooth_geometry_active_count=smooth_geometry[
+            's7_highres_smooth_geometry_active_count'],
+        s7_highres_smooth_geometry_mean_target=smooth_geometry[
+            's7_highres_smooth_geometry_mean_target'],
+        s7_highres_smooth_geometry_metric=smooth_geometry[
+            's7_highres_smooth_geometry_metric'])
 
 
 def native_protected_unified_highres_ranking_from_logits(

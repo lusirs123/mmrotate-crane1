@@ -142,6 +142,36 @@ def test_unified_highres_ranker_mines_whole_pool_pairs_and_backprops():
     assert torch.isfinite(head.output.weight.grad).all()
 
 
+def test_unified_ranker_can_add_source_only_smooth_geometry_pairs():
+    pytest.importorskip('mmcv.ops')
+    head = temporal.S7HighResCandidateQualityHead(
+        embedding_channels=4, highres_channels=3, hidden=8)
+    detections = torch.tensor([
+        [10.0, 10.0, 8.0, 4.0, 0.0, 0.90],
+        [11.0, 10.0, 8.0, 4.0, 0.1, 0.80],
+        [12.0, 10.0, 7.0, 5.0, 0.2, 0.70],
+        [13.0, 10.0, 7.0, 5.0, 0.3, 0.60]])
+    result = temporal.unified_highres_candidate_rank_losses(
+        head, torch.randn(4, 4), torch.randn(4, 3), detections,
+        torch.tensor([0, 1, 1, 0]),
+        gt_overlap=torch.tensor([0.9, 0.7, 0.3, 0.1]),
+        riou_threshold=0.5, hard_pair_count=8,
+        gt_boxes=torch.tensor([[10.0, 10.0, 8.0, 4.0, 0.0]]),
+        smooth_geometry_weight=0.25,
+        smooth_geometry_metric='sym_kld',
+        smooth_geometry_min_gap=0.01,
+        smooth_geometry_max_pairs=8)
+    assert result['s7_highres_smooth_geometry_metric'] == 'sym_kld'
+    assert result['s7_highres_smooth_geometry_pair_count'] > 0
+    total = sum(result[name] for name in (
+        'loss_s7_highres_quality', 'loss_s7_highres_relative',
+        'loss_s7_highres_unified', 'loss_s7_highres_smooth_geometry',
+        'loss_s7_highres_prior'))
+    total.backward()
+    assert head.output.weight.grad is not None
+    assert torch.isfinite(head.output.weight.grad).all()
+
+
 def test_unified_highres_inference_uses_one_pool_but_keeps_native_margin():
     detections = torch.tensor([
         [10.0, 10.0, 8.0, 4.0, 0.0, 0.90],

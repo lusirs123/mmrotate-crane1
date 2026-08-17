@@ -115,6 +115,26 @@ def test_pair_agreement_and_source_support_summary_are_deterministic():
         values, riou, descending=False) == 1.0
 
 
+def test_small_support_uses_its_own_coverage_floor():
+    summary = dict(
+        native_wrong_s7_correct_pair_count=2,
+        gain_domains=['sim'], gain_sequences=['sim_seq10'])
+    args = Namespace(
+        source_smooth_geometry_min_gain_domains=2,
+        source_smooth_geometry_min_gain_sequences=2,
+        source_smooth_geometry_small_min_gain_domains=1,
+        source_smooth_geometry_small_min_gain_sequences=1)
+    full = labeller._smooth_geometry_source_support_gate(
+        summary, args, subset='full')
+    small = labeller._smooth_geometry_source_support_gate(
+        summary, args, subset='small')
+    assert full['passed'] is False
+    assert small['passed'] is True
+    assert small['coverage_limited'] is True
+    assert small['observed_gain_domains'] == 1
+    assert small['observed_gain_sequences'] == 1
+
+
 def test_wrapper_is_read_only_and_locks_unified_source_epoch3(tmp_path):
     work_dir = tmp_path / 'work'
     work_dir.mkdir()
@@ -138,6 +158,7 @@ def test_wrapper_is_read_only_and_locks_unified_source_epoch3(tmp_path):
     assert '--eval-only-checkpoint' in argv
     assert '--skip-target-eval' in argv
     assert '--init-checkpoint' not in argv
+    assert argv[argv.index('--s7-highres-base-epoch') + 1] == '3'
     assert '--resume-checkpoint' not in argv
     assert argv[argv.index('--source-smooth-geometry-min-gain-domains') + 1] == '2'
     assert argv[argv.index('--source-smooth-geometry-min-gain-sequences') + 1] == '2'
@@ -172,4 +193,3 @@ def test_wrapper_arguments_pass_labeller_validation(tmp_path, monkeypatch):
     assert parsed.skip_target_eval is True
     assert parsed.source_smooth_geometry_audit_spec[
         'audit_variant'] == 'unified_bounded_risk'
-
