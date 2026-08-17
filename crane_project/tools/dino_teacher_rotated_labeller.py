@@ -33,6 +33,7 @@ if PROJ_ROOT not in sys.path:
     sys.path.insert(0, PROJ_ROOT)
 
 from crane_project.tools import dino_teacher_common as common  # noqa: E402
+from crane_project.utils import rotated_geometry_quality as geometry  # noqa: E402
 from crane_project.utils import s7_temporal_association as temporal  # noqa: E402
 
 
@@ -402,6 +403,22 @@ def parse_args():
     parser.add_argument(
         '--source-highres-margin-values', type=float, nargs='+', default=None)
     parser.add_argument('--source-highres-margin-epoch', type=int, default=3)
+    parser.add_argument(
+        '--source-smooth-geometry-rank-support-audit', action='store_true',
+        help=('Run a read-only source audit of smooth Gaussian geometry '
+              'surrogates on the frozen native-top1 plus S7-top-k pool. It '
+              'does not train, select a checkpoint, read target data, or '
+              'tune a deployment threshold.'))
+    parser.add_argument(
+        '--source-smooth-geometry-source-result-json', default=None,
+        help=('Unified high-resolution source-only training result used to '
+              'lock the epoch-3 checkpoint and source small sampling.'))
+    parser.add_argument(
+        '--source-smooth-geometry-min-gain-domains', type=int, default=2,
+        help='Minimum source domains with native-wrong/S7-correct support.')
+    parser.add_argument(
+        '--source-smooth-geometry-min-gain-sequences', type=int, default=2,
+        help='Minimum source sequences with native-wrong/S7-correct support.')
     parser.add_argument('--s7-temporal-base-epoch', type=int, default=1)
     parser.add_argument('--s7-temporal-margin', type=float, default=0.5)
     parser.add_argument(
@@ -715,6 +732,8 @@ def validate_args(args):
         raise ValueError('Pairwise Takeover V2 and unified V1 are exclusive')
     highres_margin_audit = bool(getattr(
         args, 'source_highres_margin_audit', False))
+    smooth_geometry_audit = bool(getattr(
+        args, 'source_smooth_geometry_rank_support_audit', False))
     if bool(getattr(args, 's7_highres_roi_ranker', False)) != highres_mode:
         raise ValueError(
             '--s7-highres-roi-ranker and its train-components mode must be '
@@ -722,6 +741,18 @@ def validate_args(args):
     if highres_margin_audit and not highres_mode:
         raise ValueError(
             'High-resolution margin audit requires s7_highres_roi_ranker')
+    if smooth_geometry_audit and not highres_mode:
+        raise ValueError(
+            'Smooth geometry audit requires s7_highres_roi_ranker')
+    if smooth_geometry_audit and not highres_unified:
+        raise ValueError(
+            'Smooth geometry audit requires the unified high-resolution pool')
+    if smooth_geometry_audit and highres_takeover_v2:
+        raise ValueError(
+            'Smooth geometry audit does not support Pairwise Takeover V2')
+    if smooth_geometry_audit and highres_margin_audit:
+        raise ValueError(
+            'Smooth geometry audit cannot be combined with a margin audit')
     margin_values = getattr(args, 'source_highres_margin_values', None)
     if highres_margin_audit:
         if not margin_values:
@@ -734,6 +765,33 @@ def validate_args(args):
             raise ValueError(
                 'High-resolution audit must include the trained 0.25 margin')
         args.source_highres_margin_values = margin_values
+    if smooth_geometry_audit:
+        if (not args.eval_only_checkpoint or args.init_checkpoint
+                or args.resume_checkpoint or not args.skip_target_eval):
+            raise ValueError(
+                'Smooth geometry audit requires one eval-only checkpoint, '
+                'source-only evaluation, and no init/resume')
+        if not os.path.isfile(args.eval_only_checkpoint):
+            raise ValueError(
+                'Smooth geometry audit checkpoint does not exist: {}'.format(
+                    args.eval_only_checkpoint))
+        result_json = getattr(
+            args, 'source_smooth_geometry_source_result_json', None)
+        if not result_json or not os.path.isfile(result_json):
+            raise ValueError(
+                'Smooth geometry audit requires the unified source-only '
+                'training result JSON')
+        if int(getattr(
+                args, 'source_smooth_geometry_min_gain_domains', 2)) <= 0:
+            raise ValueError(
+                '--source-smooth-geometry-min-gain-domains must be positive')
+        if int(getattr(
+                args, 'source_smooth_geometry_min_gain_sequences', 2)) <= 0:
+            raise ValueError(
+                '--source-smooth-geometry-min-gain-sequences must be positive')
+        args.source_smooth_geometry_audit_spec = (
+            load_unified_highres_margin_audit_spec(
+                result_json, args.eval_only_checkpoint, 3))
     highres_positive = (
         getattr(args, 's7_highres_base_epoch', 4),
         getattr(args, 's7_highres_hidden', 32),
@@ -1105,7 +1163,7 @@ def validate_args(args):
             raise ValueError(
                 'Selective promotion phase-2 result lacks source summaries')
         args.s7_selective_teacher_result = teacher_result
-    if highres_mode and not highres_margin_audit:
+    if highres_mode and not (highres_margin_audit or smooth_geometry_audit):
         teacher_result_json = getattr(
             args, 's7_highres_teacher_result_json', None)
         if not teacher_result_json or not os.path.isfile(teacher_result_json):
@@ -1361,7 +1419,7 @@ def validate_args(args):
                 's7_static_domain_ranker requires '
                 '--s7-source-max-mcml <= 3')
     if highres_mode:
-        if (not highres_margin_audit
+        if (not (highres_margin_audit or smooth_geometry_audit)
                 and (not args.init_checkpoint or args.resume_checkpoint
                      or args.eval_only_checkpoint)):
             raise ValueError(
@@ -4041,8 +4099,7 @@ class FrozenDinoRotatedHeads(nn.Module):
             relative_max_pairs: int, score_weight: float,
             rank_margin: float, retention_weight: float,
             gain_weight: float, prior_weight: float,
-            max_candidates: int,
-            augmented_feature: Optional[torch.Tensor] = None) -> Dict:
+            max_candidates: int) -> Dict:
         """Fit one source-only static rank residual on the fixed S7 pool."""
         from mmcv.ops import box_iou_rotated
 
@@ -4165,7 +4222,8 @@ class FrozenDinoRotatedHeads(nn.Module):
             relative_max_pairs: int, score_weight: float,
             rank_margin: float, retention_weight: float,
             gain_weight: float, prior_weight: float,
-            max_candidates: int) -> Dict:
+            max_candidates: int,
+            augmented_feature: Optional[torch.Tensor] = None) -> Dict:
         """Fit the lightweight stride-7 ROI quality readout on source GT."""
         from mmcv.ops import box_iou_rotated
 
@@ -5901,6 +5959,365 @@ def evaluate_highres_margin_grid_records(
         baseline_rows=baseline_rows, rows_by_margin=rows_by_margin,
         shared_model_forward_count=len(records),
         margin_decision_count=len(records) * len(margins))
+
+
+SMOOTH_GEOMETRY_METRICS = (
+    'sym_kld', 'gwd', 'normalized_gwd')
+SMOOTH_GEOMETRY_AUDIT_METRICS = (
+    'roi_score', 'oracle_riou') + SMOOTH_GEOMETRY_METRICS
+
+
+def _smooth_geometry_rank_order(values: np.ndarray, descending: bool):
+    values = np.asarray(values, dtype=np.float64).reshape(-1)
+    if not np.isfinite(values).all():
+        raise RuntimeError('Smooth geometry ranking received non-finite values')
+    return np.argsort(-values if descending else values, kind='stable')
+
+
+def _smooth_geometry_pair_agreement(
+        values: np.ndarray, riou: np.ndarray, descending: bool):
+    """Pairwise rank agreement with oracle RIoU, ignoring exact ties."""
+    values = np.asarray(values, dtype=np.float64).reshape(-1)
+    riou = np.asarray(riou, dtype=np.float64).reshape(-1)
+    if values.shape != riou.shape:
+        raise ValueError('Pair agreement arrays must have the same shape')
+    if values.size < 2:
+        return None
+    if not descending:
+        values = -values
+    value_delta = values[:, None] - values[None, :]
+    riou_delta = riou[:, None] - riou[None, :]
+    upper = np.triu(np.ones(value_delta.shape, dtype=bool), k=1)
+    comparable = upper & (value_delta != 0.0) & (riou_delta != 0.0)
+    if not np.any(comparable):
+        return None
+    agreement = np.sign(value_delta[comparable]) * np.sign(
+        riou_delta[comparable])
+    return float(np.mean(agreement > 0.0))
+
+
+def _smooth_geometry_rank_metrics(
+        order: np.ndarray, riou: np.ndarray, source_ids: np.ndarray,
+        native_index: int, riou_thr: float) -> Dict:
+    selected_index = int(order[0])
+    native_correct = bool(float(riou[native_index]) >= float(riou_thr))
+    selected_correct = bool(float(riou[selected_index]) >= float(riou_thr))
+    usable = np.flatnonzero(riou[order] >= float(riou_thr))
+    native_positions = np.flatnonzero(order == int(native_index))
+    s7_correct = np.flatnonzero(
+        (source_ids[order] == 1) & (riou[order] >= float(riou_thr)))
+    best_s7_rank = None if s7_correct.size == 0 else int(s7_correct[0] + 1)
+    native_rank = (None if native_positions.size == 0
+                   else int(native_positions[0] + 1))
+    return dict(
+        selected_index=selected_index,
+        selected_source=('native_s14' if int(source_ids[selected_index]) == 0
+                         else 'supplement_s7'),
+        selected_riou=float(riou[selected_index]),
+        top1_hit=selected_correct,
+        gain_vs_native=bool(not native_correct and selected_correct),
+        loss_vs_native=bool(native_correct and not selected_correct),
+        best_usable_rank=(None if usable.size == 0 else int(usable[0] + 1)),
+        recall_at_20=bool(usable.size and int(usable[0]) < 20),
+        recall_at_100=bool(usable.size and int(usable[0]) < 100),
+        native_rank=native_rank,
+        best_s7_correct_rank=best_s7_rank,
+        s7_takeover_supported=bool(
+            best_s7_rank is not None and native_rank is not None
+            and best_s7_rank < native_rank))
+
+
+def _smooth_geometry_rank_support_frame(
+        record: Dict, original: np.ndarray, pool: Dict, args) -> Dict:
+    detections = pool['detections'].detach().cpu().numpy().astype(
+        np.float32, copy=False).reshape((-1, 6))
+    source_ids = pool['source_ids'].detach().cpu().numpy().astype(
+        np.int64, copy=False).reshape(-1)
+    if detections.shape[0] != source_ids.shape[0]:
+        raise RuntimeError('Smooth geometry pool metadata disagrees')
+    row = dict(
+        split=record['split'], seq=record['seq'],
+        domain=source_domain_label(record), frame=int(record['frame']),
+        candidate_count=int(detections.shape[0]), eligible=False,
+        native_index=None, native_riou=0.0, native_correct=False,
+        s7_correct_count=0, gain_pair_count=0, rankings={})
+    if detections.shape[0] == 0 or original.shape[0] == 0:
+        return row
+    from mmcv.ops import box_iou_rotated
+
+    boxes = torch.from_numpy(detections[:, :5]).float()
+    gt = torch.from_numpy(np.asarray(original[:, :5], dtype=np.float32))
+    overlaps = box_iou_rotated(boxes, gt).max(dim=1).values.cpu().numpy()
+    best_gt = box_iou_rotated(boxes, gt).argmax(dim=1).cpu().numpy()
+    targets = np.asarray(original, dtype=np.float32)[best_gt]
+    candidate_boxes = torch.from_numpy(detections[:, :5]).float()
+    target_boxes = torch.from_numpy(targets[:, :5]).float()
+    sym_kld = geometry.symmetric_gaussian_kl(
+        candidate_boxes, target_boxes).cpu().numpy()
+    gwd = geometry.gaussian_wasserstein_distance(
+        candidate_boxes, target_boxes).cpu().numpy()
+    normalized_gwd = geometry.normalized_gaussian_wasserstein_distance(
+        candidate_boxes, target_boxes).cpu().numpy()
+    native_indices = np.flatnonzero(source_ids == 0)
+    if native_indices.size == 0:
+        raise RuntimeError('High-resolution pool has no native candidate')
+    native_index = int(native_indices[np.argmax(
+        detections[native_indices, 5])])
+    native_riou = float(overlaps[native_index])
+    native_correct = bool(native_riou >= float(args.riou_thr))
+    s7_correct = (source_ids == 1) & (overlaps >= float(args.riou_thr))
+    row.update(
+        eligible=True, native_index=native_index,
+        native_riou=native_riou, native_correct=native_correct,
+        s7_correct_count=int(np.count_nonzero(s7_correct)),
+        gain_pair_count=int(np.count_nonzero(
+            s7_correct & (not native_correct))))
+    metric_values = dict(
+        roi_score=detections[:, 5],
+        oracle_riou=overlaps,
+        sym_kld=sym_kld, gwd=gwd, normalized_gwd=normalized_gwd)
+    metric_descending = dict(
+        roi_score=True, oracle_riou=True,
+        sym_kld=False, gwd=False, normalized_gwd=False)
+    for name, values in metric_values.items():
+        order = _smooth_geometry_rank_order(
+            values, metric_descending[name])
+        metrics = _smooth_geometry_rank_metrics(
+            order, overlaps, source_ids, native_index, args.riou_thr)
+        metrics['pair_agreement_with_riou'] = (
+            _smooth_geometry_pair_agreement(
+                values, overlaps, metric_descending[name]))
+        row['rankings'][name] = metrics
+    row['geometry_values'] = dict(
+        native_score=float(detections[native_index, 5]),
+        native_sym_kld=float(sym_kld[native_index]),
+        native_gwd=float(gwd[native_index]),
+        native_normalized_gwd=float(normalized_gwd[native_index]))
+    # Candidate-level arrays are intentionally omitted from the JSON.  The
+    # frame-level ranks above are enough to decide whether a later quality
+    # head has source support, while keeping the audit artifact compact.
+    return row
+
+
+def evaluate_smooth_geometry_rank_support_records(
+        dino, heads, records: Sequence[Dict], args,
+        dino_device, head_device) -> List[Dict]:
+    """Collect frozen source candidate-pool geometry/rank diagnostics."""
+    heads.eval()
+    rows = []
+    with torch.no_grad():
+        for index, record in enumerate(records):
+            feature, img_meta, _gt_boxes, _gt_labels, original, cached = (
+                prepare_record(
+                    dino, record, args, dino_device, head_device))
+            heads._protected_merge_detections(
+                feature, img_meta, rescale=True, apply_highres_ranker=False)
+            pool = getattr(heads, '_last_highres_pool', None)
+            if pool is None:
+                raise RuntimeError(
+                    'Smooth geometry audit produced no high-resolution pool')
+            row = _smooth_geometry_rank_support_frame(
+                record, original, pool, args)
+            row['feature_cache_hit'] = bool(cached)
+            rows.append(row)
+            if ((index + 1) % 25 == 0 or index + 1 == len(records)):
+                print('[smooth-geometry] {}/{} eligible={}'.format(
+                    index + 1, len(records),
+                    sum(bool(item['eligible']) for item in rows)))
+            del feature, _gt_boxes, _gt_labels
+    return rows
+
+
+def summarize_smooth_geometry_rank_support(
+        rows: Sequence[Dict], metric_names: Sequence[str] =
+        SMOOTH_GEOMETRY_AUDIT_METRICS) -> Dict:
+    """Summarize source candidate support without selecting a checkpoint."""
+    eligible = [row for row in rows if bool(row.get('eligible', False))]
+    native_hits = sum(bool(row['native_correct']) for row in eligible)
+    gain_rows = [
+        row for row in eligible
+        if (not bool(row['native_correct'])
+            and int(row.get('s7_correct_count', 0)) > 0)]
+    domains = sorted(set(str(row['domain']) for row in gain_rows))
+    sequences = sorted(set(str(row['seq']) for row in gain_rows))
+    result = dict(
+        frame_count=int(len(rows)), eligible_frame_count=int(len(eligible)),
+        candidate_count_total=int(sum(
+            int(row.get('candidate_count', 0)) for row in eligible)),
+        candidate_count_mean=(
+            0.0 if not eligible else float(np.mean([
+                int(row.get('candidate_count', 0)) for row in eligible]))),
+        native_top1_hits=int(native_hits),
+        native_top1_misses=int(len(eligible) - native_hits),
+        native_wrong_s7_correct_frame_count=int(len(gain_rows)),
+        native_wrong_s7_correct_pair_count=int(sum(
+            int(row.get('gain_pair_count', 0)) for row in gain_rows)),
+        gain_domains=domains, gain_sequences=sequences,
+        metrics={})
+    for name in metric_names:
+        metric_rows = [row for row in eligible
+                       if name in (row.get('rankings') or {})]
+        top1_hits = sum(bool(row['rankings'][name]['top1_hit'])
+                        for row in metric_rows)
+        gains = sum(bool(row['rankings'][name]['gain_vs_native'])
+                    for row in metric_rows)
+        losses = sum(bool(row['rankings'][name]['loss_vs_native'])
+                     for row in metric_rows)
+        recall20 = sum(bool(row['rankings'][name].get('recall_at_20', False))
+                       for row in metric_rows)
+        recall100 = sum(bool(row['rankings'][name].get(
+            'recall_at_100', False))
+                        for row in metric_rows)
+        agreements = [
+            float(row['rankings'][name]['pair_agreement_with_riou'])
+            for row in metric_rows
+            if row['rankings'][name]['pair_agreement_with_riou'] is not None]
+        takeover_supported = sum(bool(
+            row['rankings'][name]['s7_takeover_supported'])
+            for row in metric_rows)
+        result['metrics'][name] = dict(
+            frame_count=int(len(metric_rows)), top1_hits=int(top1_hits),
+            top1_gains=int(gains), top1_losses=int(losses),
+            net_top1_gain=int(gains - losses),
+            recall_at_20=int(recall20), recall_at_100=int(recall100),
+            pair_agreement_mean=(
+                None if not agreements else float(np.mean(agreements))),
+            frames_with_s7_takeover_support=int(takeover_supported))
+    return result
+
+
+def _smooth_geometry_group_summaries(
+        rows: Sequence[Dict], field: str) -> Dict:
+    groups = collections.defaultdict(list)
+    for row in rows:
+        groups[str(row[field])].append(row)
+    return {
+        label: summarize_smooth_geometry_rank_support(group)
+        for label, group in sorted(groups.items())}
+
+
+def _smooth_geometry_source_support_gate(
+        summary: Dict, args) -> Dict:
+    min_domains = int(getattr(
+        args, 'source_smooth_geometry_min_gain_domains', 2))
+    min_sequences = int(getattr(
+        args, 'source_smooth_geometry_min_gain_sequences', 2))
+    checks = dict(
+        candidate_gain_pair_exists=(
+            int(summary['native_wrong_s7_correct_pair_count']) > 0),
+        minimum_gain_domains=(
+            len(summary['gain_domains']) >= min_domains),
+        minimum_gain_sequences=(
+            len(summary['gain_sequences']) >= min_sequences))
+    return dict(
+        passed=bool(all(checks.values())), checks=checks,
+        min_gain_domains=min_domains, min_gain_sequences=min_sequences,
+        gain_domains=list(summary['gain_domains']),
+        gain_sequences=list(summary['gain_sequences']))
+
+
+def build_smooth_geometry_rank_support_audit(
+        dino, heads, records: Sequence[Dict], args,
+        dino_device, head_device, spec: Dict,
+        source_protocol: Optional[Dict] = None) -> Dict:
+    """Build the source-only feasibility artifact for smooth geometry ranking."""
+    rows = evaluate_smooth_geometry_rank_support_records(
+        dino, heads, records, args, dino_device, head_device)
+    threshold = float(spec['small_sampling']['short_token_threshold'])
+    small_keys = {
+        (record['split'], record['seq'], int(record['frame']))
+        for record in source_small_records(records, args, threshold)}
+    small_rows = [
+        row for row in rows
+        if (row['split'], row['seq'], int(row['frame'])) in small_keys]
+    full_summary = summarize_smooth_geometry_rank_support(rows)
+    small_summary = summarize_smooth_geometry_rank_support(small_rows)
+    expected_full = int(spec['baseline_summary']['top1_hits'])
+    expected_small = int(spec['baseline_small_summary']['top1_hits'])
+    if (int(full_summary['native_top1_hits']) != expected_full
+            or int(small_summary['native_top1_hits']) != expected_small):
+        raise RuntimeError(
+            'Smooth geometry audit did not reproduce the locked native source '
+            'baseline: expected {}/{} but found {}/{}'.format(
+                expected_full, expected_small,
+                full_summary['native_top1_hits'],
+                small_summary['native_top1_hits']))
+    full_support = _smooth_geometry_source_support_gate(full_summary, args)
+    small_support = _smooth_geometry_source_support_gate(small_summary, args)
+    quality_support = []
+    for name in SMOOTH_GEOMETRY_METRICS:
+        full_metric = full_summary['metrics'][name]
+        small_metric = small_summary['metrics'][name]
+        if (int(full_metric['net_top1_gain']) > 0
+                and int(small_metric['net_top1_gain']) > 0
+                and int(small_metric['top1_gains']) > 0):
+            quality_support.append(name)
+    support_gate_passed = bool(full_support['passed'] and small_support['passed'])
+    quality_gate_passed = bool(quality_support)
+    training_allowed = bool(support_gate_passed and quality_gate_passed)
+    decision = (
+        'SOURCE_ONLY_SMOOTH_GEOMETRY_RANK_SUPPORT_PASS_TARGET_NOT_READ'
+        if training_allowed else
+        'SOURCE_ONLY_SMOOTH_GEOMETRY_RANK_SUPPORT_INSUFFICIENT_TARGET_NOT_READ')
+    return dict(
+        protocol_version=27,
+        audit_name='Source-only Smooth-Geometry Rank-Support Audit',
+        protocol=dict(
+            architecture='frozen_unified_highres_native_s7_candidate_pool',
+            source_only=True, target_read=False, read_only_evaluation=True,
+            parameter_update=False, shared_forward_per_frame=True,
+            candidate_pool='native_s14_top1_plus_s7_top_k',
+            geometry_quality_metrics=list(SMOOTH_GEOMETRY_METRICS),
+            oracle_metric='oracle_riou',
+            no_target_threshold_tuning=True,
+            no_checkpoint_selection=True,
+            feasibility_gate=(
+                'source candidate support in full and small subsets, then '
+                'positive net top1 gain from at least one smooth metric')),
+        isolation=dict(
+            dino_frozen=True, detector_parameters_unchanged=True,
+            read_only_evaluation=True, parameter_updates_performed=False,
+            trainable_parameter_count=0,
+            target_used_for_training=False,
+            target_used_for_checkpoint_selection=False,
+            target_used_for_threshold_tuning=False),
+        checkpoint_used=dict(
+            path=spec['checkpoint'], epoch=int(spec['epoch']),
+            source_result_json=spec['source_result_json']),
+        source=dict(
+            protocol=source_protocol,
+            full=full_summary, small=small_summary,
+            native_reproduction_gate=dict(
+                passed=True, expected_full_top1=expected_full,
+                expected_small_top1=expected_small,
+                observed_full_top1=int(full_summary['native_top1_hits']),
+                observed_small_top1=int(small_summary['native_top1_hits'])),
+            by_domain=_smooth_geometry_group_summaries(rows, 'domain'),
+            by_sequence=_smooth_geometry_group_summaries(rows, 'seq'),
+            support_gate=dict(
+                passed=support_gate_passed, full=full_support,
+                small=small_support),
+            quality_gate=dict(
+                passed=quality_gate_passed,
+                supported_metrics=quality_support,
+                requirement=(
+                    'positive net top1 gain in both full and source-small '
+                    'source subsets')),
+            training_feasibility=dict(
+                allowed=training_allowed,
+                reason=(
+                    'A later source-only gain-balanced quality head may be '
+                    'implemented.' if training_allowed else
+                    'Do not start geometry-quality training from this audit; '
+                    'the source support or ranking signal is insufficient.'))),
+        frame_rows=rows,
+        candidate_forward_count=int(len(records)),
+        parameter_update_count=0,
+        target_dev=None,
+        eligible_for_training=training_allowed,
+        eligible_for_deployment=False,
+        eligible_for_full_test=False,
+        decision=decision)
 
 
 def build_highres_margin_source_audit(
@@ -8402,17 +8819,28 @@ def validate_checkpoint(payload: Dict, in_channels: int, args,
             if (stored_highres != requested_highres
                     and not allow_highres_roi_initialization):
                 architecture_mismatch = True
+            pairwise_takeover_initialization = bool(
+                allow_highres_roi_initialization
+                and requested_s7.get('highres_pairwise_takeover_v2', False))
             if (stored_highres and requested_highres
                     and (stored_s7.get('highres_channels')
                          != requested_s7.get('highres_channels')
                          or stored_s7.get('highres_hidden')
-                         != requested_s7.get('highres_hidden')
-                         or stored_s7.get('highres_max_candidates')
+                         != requested_s7.get('highres_hidden'))):
+                # These dimensions determine checkpoint tensor shapes and can
+                # never change while reusing the V1 spatial projection.
+                architecture_mismatch = True
+            if (stored_highres and requested_highres
+                    and not pairwise_takeover_initialization
+                    and (stored_s7.get('highres_max_candidates')
                          != requested_s7.get('highres_max_candidates')
                          or stored_s7.get('highres_score_weight')
                          != requested_s7.get('highres_score_weight')
                          or stored_s7.get('highres_promotion_margin')
                          != requested_s7.get('highres_promotion_margin'))):
+                # Candidate count and selection margins are policy fields.
+                # Only the explicitly gated V1 -> Pairwise V2 initialization
+                # may replace them; ordinary resume/evaluation remains strict.
                 architecture_mismatch = True
             if (bool(stored_s7.get('highres_unified_ranking', False))
                     != bool(requested_s7.get('highres_unified_ranking', False))
@@ -9426,6 +9854,47 @@ def main():
         if unified_audit:
             print('[source-highres-margin] research_candidate={}'.format(
                 audit['research_candidate_margin']))
+        print('[json] nonfinite_replacements={}'.format(replacements))
+        return
+    if bool(getattr(
+            args, 'source_smooth_geometry_rank_support_audit', False)):
+        spec = args.source_smooth_geometry_audit_spec
+        checkpoint_payload = torch.load(
+            args.eval_only_checkpoint, map_location='cpu')
+        validate_checkpoint(checkpoint_payload, in_channels, args)
+        if int(checkpoint_payload.get('epoch', -1)) != int(spec['epoch']):
+            raise RuntimeError(
+                'Smooth geometry audit checkpoint epoch mismatch')
+        load_heads_checkpoint_state(heads, checkpoint_payload)
+        for parameter in heads.parameters():
+            parameter.requires_grad = False
+        trainable_names = []
+        head_versions = common.module_parameter_versions(heads)
+        audit = build_smooth_geometry_rank_support_audit(
+            dino, heads, source_val, args,
+            dino_device, head_device, spec, source_protocol)
+        dino_unchanged = (
+            dino_versions == common.module_parameter_versions(dino))
+        heads_unchanged = (
+            head_versions == common.module_parameter_versions(heads))
+        if not dino_unchanged or not heads_unchanged:
+            raise RuntimeError(
+                'Read-only smooth geometry audit changed parameters')
+        audit['isolation'].update(
+            dino_parameters_unchanged=bool(dino_unchanged),
+            detector_parameters_unchanged=bool(heads_unchanged),
+            trainable_parameter_names=trainable_names)
+        audit['source']['architecture'] = dict(
+            in_channels=in_channels, patch_size=int(args.patch_size),
+            rpn=rpn_config(in_channels, args),
+            roi=roi_config(in_channels, args),
+            s7=s7_architecture(args),
+            s7_rpn=s7_rpn_config(
+                int(getattr(args, 's7_channels', 128)), args))
+        replacements = common.write_json_atomic(args.out_json, audit)
+        print('[dino-labeller] {}'.format(audit['decision']))
+        print('[smooth-geometry] training_allowed={}'.format(
+            audit['eligible_for_training']))
         print('[json] nonfinite_replacements={}'.format(replacements))
         return
     source_val_rows = None

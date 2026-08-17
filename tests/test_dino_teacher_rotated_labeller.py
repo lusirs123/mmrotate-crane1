@@ -1,4 +1,5 @@
 import argparse
+import inspect
 import json
 import pathlib
 
@@ -2448,6 +2449,53 @@ def test_checkpoint_rejects_non_source_payload(tmp_path):
         heads_state_dict={})
     with pytest.raises(RuntimeError, match='source-only'):
         labeller.validate_checkpoint(payload, 1024, args)
+
+
+def test_pairwise_takeover_init_allows_top32_to_top64_policy_only(tmp_path):
+    args = _args(
+        tmp_path, train_components='s7_highres_roi_ranker',
+        s7_residual=True, s7_highres_roi_ranker=True,
+        s7_highres_pairwise_takeover_v2=True,
+        s7_highres_channels=32, s7_highres_hidden=32,
+        s7_highres_max_candidates=64,
+        s7_highres_score_weight=1.0,
+        s7_highres_promotion_margin=0.25,
+        s7_takeover_initial_uncertainty=0.25,
+        s7_takeover_uncertainty_multiplier=2.0,
+        s7_takeover_margin=0.05)
+    stored = dict(labeller.s7_architecture(args))
+    stored.update(
+        highres_max_candidates=32,
+        highres_unified_ranking=True,
+        highres_pairwise_takeover_v2=False)
+    payload = dict(
+        source_only=True, frozen_dinov2=True,
+        in_channels=1024, patch_size=14,
+        rpn_feat_channels=256, roi_fc_channels=1024,
+        heads_state_dict={}, s7_architecture=stored,
+        training_protocol=dict(train_components='s7_highres_roi_ranker'))
+
+    labeller.validate_checkpoint(
+        payload, 1024, args, allow_highres_roi_initialization=True)
+    with pytest.raises(RuntimeError, match='architecture mismatch'):
+        labeller.validate_checkpoint(payload, 1024, args)
+
+    stored['highres_channels'] = 64
+    with pytest.raises(RuntimeError, match='architecture mismatch'):
+        labeller.validate_checkpoint(
+            payload, 1024, args, allow_highres_roi_initialization=True)
+
+
+def test_pairwise_takeover_train_call_and_method_signatures_match():
+    highres = inspect.signature(
+        labeller.FrozenDinoRotatedHeads.
+        forward_s7_highres_roi_ranker_train)
+    static = inspect.signature(
+        labeller.FrozenDinoRotatedHeads.
+        forward_s7_static_domain_ranker_train)
+    assert 'augmented_feature' in highres.parameters
+    assert highres.parameters['augmented_feature'].default is None
+    assert 'augmented_feature' not in static.parameters
 
 
 def test_cache_signature_changes_with_dino_checkpoint(tmp_path):
