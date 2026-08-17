@@ -1635,7 +1635,9 @@ def unified_highres_candidate_rank_losses(
         smooth_geometry_metric: str = 'sym_kld',
         smooth_geometry_margin: float = 0.10,
         smooth_geometry_min_gap: float = 0.05,
-        smooth_geometry_max_pairs: int = 64) -> Dict:
+        smooth_geometry_max_pairs: int = 64,
+        smooth_geometry_s7_only: bool = True,
+        worst_case_retention_weight: float = 0.0) -> Dict:
     """Train one source-only ranker over the unified native/S7 pool.
 
     The original high-resolution stage protects the native winner and mines
@@ -1653,6 +1655,8 @@ def unified_highres_candidate_rank_losses(
         raise ValueError('Unified high-resolution ranker settings must be positive')
     if float(smooth_geometry_weight) < 0.0:
         raise ValueError('Smooth geometry loss weight cannot be negative')
+    if float(worst_case_retention_weight) < 0.0:
+        raise ValueError('Worst-case retention loss weight cannot be negative')
     if float(smooth_geometry_weight) > 0.0 and gt_boxes is None:
         raise ValueError(
             'Smooth geometry training requires source GT boxes explicitly')
@@ -1672,6 +1676,7 @@ def unified_highres_candidate_rank_losses(
             loss_s7_highres_gain=zero,
             loss_s7_highres_unified=zero,
             loss_s7_highres_smooth_geometry=zero,
+            loss_s7_highres_worst_case_retention=zero,
             loss_s7_highres_prior=zero,
             s7_highres_retention_pair_count=0,
             s7_highres_gain_pair_count=0,
@@ -1778,8 +1783,14 @@ def unified_highres_candidate_rank_losses(
         gain = zero
         active = 0
 
+    geometry_indices = torch.arange(
+        logits.shape[0], dtype=torch.long, device=logits.device)
+    if bool(smooth_geometry_s7_only):
+        geometry_indices = torch.nonzero(
+            source_ids == 1, as_tuple=False).flatten()
     smooth_geometry = smooth_geometry_relative_ranking_loss(
-        logits, detections, gt_boxes, metric=smooth_geometry_metric,
+        logits[geometry_indices], detections[geometry_indices], gt_boxes,
+        metric=smooth_geometry_metric,
         margin=float(smooth_geometry_margin),
         min_gap=float(smooth_geometry_min_gap),
         max_pairs=int(smooth_geometry_max_pairs))
@@ -1795,6 +1806,8 @@ def unified_highres_candidate_rank_losses(
         loss_s7_highres_smooth_geometry=(
             smooth_geometry['loss_s7_highres_smooth_geometry']
             * float(smooth_geometry_weight)),
+        loss_s7_highres_worst_case_retention=(
+            retention * float(worst_case_retention_weight)),
         loss_s7_highres_prior=logits.square().mean() * float(prior_weight),
         s7_highres_retention_pair_count=retention_count,
         s7_highres_gain_pair_count=gain_count,
@@ -1814,7 +1827,9 @@ def unified_highres_candidate_rank_losses(
         s7_highres_smooth_geometry_mean_target=smooth_geometry[
             's7_highres_smooth_geometry_mean_target'],
         s7_highres_smooth_geometry_metric=smooth_geometry[
-            's7_highres_smooth_geometry_metric'])
+            's7_highres_smooth_geometry_metric'],
+        s7_highres_smooth_geometry_candidate_scope=(
+            's7_only' if bool(smooth_geometry_s7_only) else 'unified_pool'))
 
 
 def native_protected_unified_highres_ranking_from_logits(
@@ -1850,7 +1865,13 @@ def native_protected_unified_highres_ranking_from_logits(
         index = int(native_index.item())
         return dict(order=original, selected_index=index,
                     native_index=index, promoted=False,
-                    reason='native_fallback_no_s7_candidate', candidate_count=0)
+                    best_index=index,
+                    reason='native_fallback_no_s7_candidate', candidate_count=0,
+                    native_score=float(detections[index, 5].detach().item()),
+                    best_score=float(detections[index, 5].detach().item()),
+                    native_quality=float(quality_logits[index].detach().item()),
+                    best_quality=float(quality_logits[index].detach().item()),
+                    native_fused_score=None, best_fused_score=None)
     active = torch.cat((native_index.reshape(1), s7), dim=0)
     scores = detections[active, 5].clamp(1e-6, 1.0 - 1e-6)
     fused = torch.log(scores) - torch.log1p(-scores)
@@ -1858,6 +1879,7 @@ def native_protected_unified_highres_ranking_from_logits(
     if not bool((quality_logits[active].detach().abs() > 1e-7).any().item()):
         return dict(order=original, selected_index=int(native_index.item()),
                     native_index=int(native_index.item()), promoted=False,
+                    best_index=int(native_index.item()),
                     reason='native_fallback_zero_residual',
                     candidate_count=int(s7.numel()))
     best_position = 1 + torch.argmax(fused[1:])
@@ -1876,7 +1898,13 @@ def native_protected_unified_highres_ranking_from_logits(
                 else 'native_fallback_unified_margin'),
         candidate_count=int(s7.numel()),
         best_quality=float(quality_logits[best_index].detach().item()),
-        best_margin=float(best_margin.detach().item()))
+        best_margin=float(best_margin.detach().item()),
+        best_index=int(best_index.item()),
+        native_score=float(detections[native_index, 5].detach().item()),
+        best_score=float(detections[best_index, 5].detach().item()),
+        native_quality=float(quality_logits[native_index].detach().item()),
+        native_fused_score=float(fused[0].detach().item()),
+        best_fused_score=float(fused[best_position].detach().item()))
 
 
 def native_protected_highres_promotion_from_logits(
@@ -1905,7 +1933,13 @@ def native_protected_highres_promotion_from_logits(
     if not s7.numel():
         return dict(order=original, selected_index=int(native_index.item()),
                     native_index=int(native_index.item()), promoted=False,
-                    reason='native_fallback_no_s7_candidate', candidate_count=0)
+                    best_index=int(native_index.item()),
+                    reason='native_fallback_no_s7_candidate', candidate_count=0,
+                    native_score=float(detections[native_index, 5].detach().item()),
+                    best_score=float(detections[native_index, 5].detach().item()),
+                    native_quality=float(quality_logits[native_index].detach().item()),
+                    best_quality=float(quality_logits[native_index].detach().item()),
+                    native_fused_score=None, best_fused_score=None)
     active = torch.cat((native_index.reshape(1), s7), dim=0)
     quality = quality_logits[active]
     scores = detections[active, 5].clamp(1e-6, 1.0 - 1e-6)
@@ -1915,6 +1949,7 @@ def native_protected_highres_promotion_from_logits(
     if not bool((quality.detach().abs() > 1e-7).any().item()):
         return dict(order=original, selected_index=int(native_index.item()),
                     native_index=int(native_index.item()), promoted=False,
+                    best_index=int(native_index.item()),
                     reason='native_fallback_zero_residual',
                     candidate_count=int(s7.numel()))
     best_position = 1 + torch.argmax(fused[1:])
@@ -1933,7 +1968,13 @@ def native_protected_highres_promotion_from_logits(
                 else 'native_fallback_highres_margin'),
         candidate_count=int(s7.numel()),
         best_quality=float(quality[best_position].detach().item()),
-        best_margin=float((fused[best_position] - fused[0]).detach().item()))
+        best_margin=float((fused[best_position] - fused[0]).detach().item()),
+        best_index=int(best_index.item()),
+        native_score=float(detections[native_index, 5].detach().item()),
+        best_score=float(detections[best_index, 5].detach().item()),
+        native_quality=float(quality[native_index].detach().item()),
+        native_fused_score=float(fused[0].detach().item()),
+        best_fused_score=float(fused[best_position].detach().item()))
 
 
 def native_protected_highres_promotion(

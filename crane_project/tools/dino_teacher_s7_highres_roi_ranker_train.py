@@ -50,6 +50,7 @@ def parse_args():
     parser.add_argument('--geometry-metric', default='sym_kld',
                         choices=['sym_kld', 'gwd', 'normalized_gwd'])
     parser.add_argument('--geometry-loss-weight', type=float, default=0.25)
+    parser.add_argument('--worst-case-retention-weight', type=float, default=4.0)
     parser.add_argument('--geometry-min-gap', type=float, default=0.05)
     parser.add_argument('--geometry-max-pairs', type=int, default=64)
     return parser.parse_args()
@@ -107,6 +108,10 @@ def validate_args(args):
         if args.geometry_loss_weight <= 0.0 or args.geometry_min_gap <= 0.0 \
                 or args.geometry_max_pairs <= 0:
             raise ValueError('Smooth-geometry training settings must be positive')
+        if args.worst_case_retention_weight <= 0.0:
+            raise ValueError(
+                'Smooth-geometry training requires positive worst-case '
+                'retention weight')
     else:
         with open(args.source_result_json, 'r') as handle:
             source_result = json.load(handle)
@@ -197,6 +202,8 @@ def build_locked_labeller_argv(args) -> List[str]:
             '--s7-highres-smooth-geometry-metric', args.geometry_metric,
             '--s7-highres-smooth-geometry-loss-weight',
             str(args.geometry_loss_weight),
+            '--s7-highres-worst-case-retention-weight',
+            str(getattr(args, 'worst_case_retention_weight', 4.0)),
             '--s7-highres-smooth-geometry-min-gap',
             str(args.geometry_min_gap),
             '--s7-highres-smooth-geometry-max-pairs',

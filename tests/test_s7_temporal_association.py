@@ -172,6 +172,41 @@ def test_unified_ranker_can_add_source_only_smooth_geometry_pairs():
     assert torch.isfinite(head.output.weight.grad).all()
 
 
+def test_smooth_geometry_ranking_is_restricted_to_s7_lane(monkeypatch):
+    head = temporal.S7HighResCandidateQualityHead(
+        embedding_channels=4, highres_channels=3, hidden=8)
+    observed = {}
+
+    def fake_geometry(logits, detections, gt_boxes, **kwargs):
+        observed['logits'] = int(logits.shape[0])
+        observed['detections'] = int(detections.shape[0])
+        zero = logits.sum() * 0.0
+        return dict(
+            loss_s7_highres_smooth_geometry=zero,
+            s7_highres_smooth_geometry_pair_count=0,
+            s7_highres_smooth_geometry_active_count=0,
+            s7_highres_smooth_geometry_mean_target=0.0,
+            s7_highres_smooth_geometry_metric=kwargs['metric'])
+
+    monkeypatch.setattr(
+        temporal, 'smooth_geometry_relative_ranking_loss', fake_geometry)
+    detections = torch.tensor([
+        [10.0, 10.0, 8.0, 4.0, 0.0, 0.90],
+        [11.0, 10.0, 8.0, 4.0, 0.1, 0.80],
+        [12.0, 10.0, 7.0, 5.0, 0.2, 0.70],
+        [13.0, 10.0, 7.0, 5.0, 0.3, 0.60]])
+    result = temporal.unified_highres_candidate_rank_losses(
+        head, torch.randn(4, 4), torch.randn(4, 3), detections,
+        torch.tensor([0, 1, 1, 0]),
+        gt_overlap=torch.tensor([0.9, 0.7, 0.3, 0.1]),
+        riou_threshold=0.5, gt_boxes=torch.tensor([
+            [10.0, 10.0, 8.0, 4.0, 0.0]]),
+        smooth_geometry_weight=0.25,
+        worst_case_retention_weight=4.0)
+    assert observed == {'logits': 2, 'detections': 2}
+    assert 'loss_s7_highres_worst_case_retention' in result
+
+
 def test_unified_highres_inference_uses_one_pool_but_keeps_native_margin():
     detections = torch.tensor([
         [10.0, 10.0, 8.0, 4.0, 0.0, 0.90],

@@ -62,3 +62,5 @@ def test_highres_wrapper_locks_geometry_guided_source_stage(tmp_path):
     assert '--s7-highres-smooth-geometry-ranking' in argv
     assert '--s7-highres-smooth-geometry-support-result-json' in argv
     assert '--s7-highres-teacher-result-json' not in argv
+    assert argv[argv.index(
+        '--s7-highres-worst-case-retention-weight') + 1] == '4.0'

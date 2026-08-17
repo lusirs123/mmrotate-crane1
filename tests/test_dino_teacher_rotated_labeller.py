@@ -1698,6 +1698,16 @@ def test_s7_quality_uses_no_gain_or_promotion_loss():
     assert float(total.item()) == pytest.approx(4.0)
 
 
+def test_highres_optimization_loss_includes_optional_worst_case_retention():
+    names = labeller.optimization_loss_component_names(
+        's7_highres_roi_ranker', unified_highres=True,
+        smooth_geometry=True, worst_case_retention=True)
+    losses = {name: torch.tensor(1.0, requires_grad=True) for name in names}
+    total = labeller.optimization_loss_total(
+        losses, 's7_highres_roi_ranker')
+    assert float(total.item()) == pytest.approx(float(len(names)))
+
+
 def test_s7_lane_train_epoch_replays_gain_frames_source_only(
         tmp_path, monkeypatch):
     class TinyHeads(torch.nn.Module):
@@ -1811,6 +1821,27 @@ def test_validate_source_conflict_audit_is_eval_only_and_target_free(tmp_path):
     args.skip_target_eval = False
     with pytest.raises(ValueError, match='skip-target-eval'):
         labeller.validate_args(args)
+
+
+def test_validate_highres_source_conflict_audit_is_allowed(tmp_path):
+    result_path = tmp_path / 'train_result.json'
+    result_path.write_text('{}')
+    eval_path = tmp_path / 'epoch01.pth'
+    eval_path.write_bytes(b'checkpoint')
+    args = _args(
+        tmp_path, s7_residual=True,
+        train_components='s7_highres_roi_ranker',
+        s7_highres_roi_ranker=True,
+        s7_highres_unified_ranking=True,
+        s7_source_min_full_top1=688,
+        s7_source_min_small_top1=311,
+        s7_source_max_mcml=3,
+        source_train_datasets=['train:train'],
+        source_val_datasets=['val:val'],
+        epochs=4, lr_steps=[2, 3], selection_epochs=[1, 2, 3, 4],
+        eval_only_checkpoint=str(eval_path), skip_target_eval=True,
+        source_conflict_result_json=str(result_path), source_conflict_epoch=1)
+    labeller.validate_args(args)
 
 
 def test_validate_temporal_attribution_is_fixed_eval_only_and_target_free(
