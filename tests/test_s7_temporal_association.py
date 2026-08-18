@@ -169,17 +169,28 @@ def test_native_relative_risk_is_zero_init_native_safe_and_trainable():
     assert adjusted['reason'] == baseline['reason']
     assert torch.equal(adjusted['order'], baseline['order'])
 
-    unsafe_detections = detections.clone()
-    unsafe_detections[1, 5] = 0.99
+    risk_detections = torch.tensor([
+        [10.0, 10.0, 8.0, 4.0, 0.0, 0.90],
+        [9.0, 10.0, 7.0, 5.0, 0.1, 0.89],
+        [11.0, 10.0, 7.0, 5.0, 0.2, 0.88],
+        [12.0, 10.0, 7.0, 5.0, 0.3, 0.70],
+        [13.0, 10.0, 7.0, 5.0, 0.4, 0.65]])
+    risk_embedding = torch.randn(5, 4)
+    risk_highres = torch.randn(5, 3)
+    risk_sources = torch.tensor([0, 0, 1, 1, 1])
     losses = temporal.unified_highres_candidate_rank_losses(
-        quality_head, embedding, highres, unsafe_detections, sources,
-        gt_overlap=torch.tensor([0.9, 0.2, 0.1]),
+        quality_head, risk_embedding, risk_highres, risk_detections,
+        risk_sources, gt_overlap=torch.tensor([0.9, 0.1, 0.2, 0.7, 0.6]),
         riou_threshold=0.5, hard_pair_count=8,
         native_relative_risk_head=risk_head,
         native_relative_risk_retention_weight=4.0,
         native_relative_risk_preserve_weight=2.0,
         native_relative_risk_prior_weight=0.01)
     assert losses['s7_highres_relative_risk_enabled'] is True
+    assert losses[
+        's7_highres_relative_risk_retention_pair_count'] == 1
+    assert losses[
+        's7_highres_relative_risk_preserve_pair_count'] == 2
     total = sum(losses[name] for name in (
         'loss_s7_highres_relative_risk_retention',
         'loss_s7_highres_relative_risk_preserve',

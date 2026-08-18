@@ -39,6 +39,7 @@ from crane_project.utils import s7_temporal_association as temporal  # noqa: E40
 
 LABELLER_NAME = 'Frozen DINOv2 Oriented RPN/ROI Source Labeller V1'
 PROTOCOL_VERSION = 23
+NATIVE_RELATIVE_RISK_PROTOCOL_VERSION = 29
 PAIRWISE_V2_MAX_EPOCHS = 4
 S7_QUALITY_MIN_FULL_TOP1 = 688
 S7_QUALITY_MIN_SMALL_TOP1 = 311
@@ -53,6 +54,14 @@ LIDERE_PAPER_URL = (
     'https://openaccess.thecvf.com/content/CVPR2026/html/'
     'Luddecke_LiDeRe_A_Lightweight_Readout_for_Fast_and_Data-Efficient_'
     'Dense_Prediction_CVPR_2026_paper.html')
+
+
+def result_protocol_version(args) -> int:
+    """Return the result schema version for the selected source route."""
+    if bool(getattr(
+            args, 's7_highres_native_relative_risk_residual', False)):
+        return NATIVE_RELATIVE_RISK_PROTOCOL_VERSION
+    return PROTOCOL_VERSION
 
 def parse_args():
     parser = argparse.ArgumentParser(description=LABELLER_NAME)
@@ -2552,7 +2561,7 @@ def write_source_training_progress(
     output_path = source_progress_path(args.out_json)
     payload = dict(
         labeller=LABELLER_NAME,
-        protocol_version=PROTOCOL_VERSION,
+        protocol_version=result_protocol_version(args),
         status=str(status),
         target_read=False,
         train_components=str(args.train_components),
@@ -5670,7 +5679,26 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                             args,
                             's7_highres_native_relative_risk_residual',
                             False)):
-                        message += ' risk_penalty_mean={:.4f} risk_penalty_max={:.4f}'.format(
+                        message += (
+                            ' risk_pairs={} risk_active={} '
+                            'preserve_pairs={} risk_nonzero={} '
+                            'risk_scale={:.4f} risk_penalty_mean={:.4f} '
+                            'risk_penalty_max={:.4f}').format(
+                            int(round(metric_sums.get(
+                                's7_highres_relative_risk_retention_pair_count',
+                                0.0))),
+                            int(round(metric_sums.get(
+                                's7_highres_relative_risk_retention_active_count',
+                                0.0))),
+                            int(round(metric_sums.get(
+                                's7_highres_relative_risk_preserve_pair_count',
+                                0.0))),
+                            int(round(metric_sums.get(
+                                's7_highres_relative_risk_nonzero_count',
+                                0.0))),
+                            float(metric_sums.get(
+                                's7_highres_relative_risk_scale', 0.0))
+                            / float(max(1, index + 1)),
                             float(metric_sums.get(
                                 's7_highres_relative_risk_mean', 0.0))
                             / float(max(1, index + 1)),
@@ -8628,7 +8656,8 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                        source_deployment_exact_retention: Optional[Dict] = None
                        ) -> Dict:
     return dict(
-        labeller=LABELLER_NAME, protocol_version=PROTOCOL_VERSION,
+        labeller=LABELLER_NAME,
+        protocol_version=result_protocol_version(args),
         source_only=True, frozen_dinov2=True,
         epoch=int(epoch), best_epoch=int(best_epoch),
         global_step=int(global_step),
@@ -9019,7 +9048,13 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                                  0.01)),
                              native_score_change='forbidden',
                              s7_adjustment='nonnegative_penalty_only',
-                             zero_initialization='exact_base_ranking')
+                             zero_initialization='exact_base_ranking',
+                             retention_candidates='wrong_s7_only',
+                             preserve_candidates='all_usable_s7',
+                             diagnostics=[
+                                 'risk_scale', 'risk_nonzero_count',
+                                 'risk_retention_pair_count',
+                                 'risk_preserve_pair_count'])
                         if bool(getattr(
                             args,
                             's7_highres_native_relative_risk_residual',
@@ -10597,7 +10632,8 @@ def main():
                 + [source_merge_conflict_row(rows_by_key[key], 'gained')
                    for key in source_conflict_spec['gained_frame_keys']]))
     payload = dict(
-        labeller=LABELLER_NAME, protocol_version=PROTOCOL_VERSION,
+        labeller=LABELLER_NAME,
+        protocol_version=result_protocol_version(args),
         paper=PAPER_URL, paper_code=PAPER_CODE_URL,
         related_work=dict(
             lidere=dict(
@@ -11039,7 +11075,13 @@ def main():
                                      0.01)),
                                  native_score_change='forbidden',
                                  s7_adjustment='nonnegative_penalty_only',
-                                 zero_initialization='exact_base_ranking')
+                                 zero_initialization='exact_base_ranking',
+                                 retention_candidates='wrong_s7_only',
+                                 preserve_candidates='all_usable_s7',
+                                 diagnostics=[
+                                     'risk_scale', 'risk_nonzero_count',
+                                     'risk_retention_pair_count',
+                                     'risk_preserve_pair_count'])
                             if bool(getattr(
                                 args,
                                 's7_highres_native_relative_risk_residual',

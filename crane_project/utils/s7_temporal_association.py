@@ -1795,7 +1795,12 @@ def unified_highres_candidate_rank_losses(
             s7_highres_unified_active_count=0,
             s7_highres_native_top1_correct=0,
             s7_highres_usable_candidate_count=0,
-            s7_highres_candidate_count=0)
+            s7_highres_candidate_count=0,
+            s7_highres_relative_risk_retention_pair_count=0,
+            s7_highres_relative_risk_retention_active_count=0,
+            s7_highres_relative_risk_preserve_pair_count=0,
+            s7_highres_relative_risk_nonzero_count=0,
+            s7_highres_relative_risk_scale=0.0)
 
     target = gt_overlap.detach().float().clamp(0.0, 1.0)
     # The base quality head keeps its calibrated source quality target.  The
@@ -1850,6 +1855,8 @@ def unified_highres_candidate_rank_losses(
                            >= float(riou_threshold))
     best_usable = (usable[torch.argmax(target[usable].detach())]
                    if usable.numel() else None)
+    s7_wrong = wrong[source_ids[wrong] == 1]
+    usable_s7 = usable[source_ids[usable] == 1]
     retention_count = 0
     gain_count = 0
     retention_pair = None
@@ -1900,22 +1907,32 @@ def unified_highres_candidate_rank_losses(
 
     relative_risk_retention = zero
     relative_risk_preserve = zero
+    relative_risk_retention_pair_count = 0
+    relative_risk_retention_active_count = 0
+    relative_risk_preserve_pair_count = 0
     if native_relative_risk_head is not None:
-        if retention_pair is not None:
-            native_index, competitor_index = retention_pair
-            # Detach the pre-risk gap so this term has one job: teach the
-            # residual how much to reduce this unsafe S7 competitor.
+        if native_correct and s7_wrong.numel():
+            # The quality-head retention pair may be a native wrong
+            # candidate.  The residual can only change S7, so its supervision
+            # must never be sourced from a native competitor.
             base_fused = score_logits + float(score_weight) * base_logits
-            relative_risk_retention = torch.relu(
-                float(rank_margin) + base_fused[competitor_index].detach()
-                - risk_penalty[competitor_index]
-                - base_fused[native_index].detach())
-        if gain_pair is not None:
-            usable_index, _competitor_index = gain_pair
-            if int(source_ids[usable_index].item()) == 1:
-                # A source frame where native is wrong is positive evidence
-                # that the best usable S7 candidate must not be suppressed.
-                relative_risk_preserve = risk_penalty[usable_index].square()
+            native_fused = base_fused[native_top].detach()
+            s7_target_penalty = torch.relu(
+                float(rank_margin) + base_fused[s7_wrong].detach()
+                - native_fused)
+            # Regress to the penalty required to put each wrong S7 candidate
+            # below the native anchor.  The target is zero when it is already
+            # safe, and remains informative even if another native candidate
+            # is the global wrong competitor.
+            relative_risk_retention = torch.nn.functional.smooth_l1_loss(
+                risk_penalty[s7_wrong], s7_target_penalty, reduction='mean')
+            relative_risk_retention_pair_count = int(s7_wrong.numel())
+            relative_risk_retention_active_count = int(
+                (s7_target_penalty > 0.0).sum().item())
+        if usable_s7.numel():
+            # Every usable S7 candidate is positive evidence against risk.
+            relative_risk_preserve = risk_penalty[usable_s7].square().mean()
+            relative_risk_preserve_pair_count = int(usable_s7.numel())
 
     geometry_indices = torch.arange(
         logits.shape[0], dtype=torch.long, device=logits.device)
@@ -1928,6 +1945,12 @@ def unified_highres_candidate_rank_losses(
         margin=float(smooth_geometry_margin),
         min_gap=float(smooth_geometry_min_gap),
         max_pairs=int(smooth_geometry_max_pairs))
+    risk_scale = 0.0
+    if native_relative_risk_head is not None:
+        risk_scale = float((
+            native_relative_risk_head.risk_scale
+            + torch.relu(-native_relative_risk_head.risk_scale)).detach()
+            .clamp(min=0.0, max=1.0).item())
 
     return dict(
         loss_s7_highres_quality=quality * float(quality_weight),
@@ -1966,6 +1989,15 @@ def unified_highres_candidate_rank_losses(
             risk_penalty.detach().mean().item()),
         s7_highres_relative_risk_max=float(
             risk_penalty.detach().max().item()),
+        s7_highres_relative_risk_retention_pair_count=(
+            relative_risk_retention_pair_count),
+        s7_highres_relative_risk_retention_active_count=(
+            relative_risk_retention_active_count),
+        s7_highres_relative_risk_preserve_pair_count=(
+            relative_risk_preserve_pair_count),
+        s7_highres_relative_risk_nonzero_count=int(
+            (risk_penalty.detach() > 1e-8).sum().item()),
+        s7_highres_relative_risk_scale=risk_scale,
         s7_highres_relative_pair_count=int(relative_result.get(
             's7_candidate_quality_relative_pair_count', 0)),
         s7_highres_quality_mean_target=float(target.mean().item()),

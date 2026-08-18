@@ -1724,6 +1724,18 @@ def test_highres_optimization_loss_includes_native_relative_risk_terms():
     assert float(total.item()) == pytest.approx(float(len(names)))
 
 
+def test_native_relative_risk_uses_distinct_result_protocol_version(tmp_path):
+    base = _args(tmp_path)
+    risk = _args(
+        tmp_path, train_components='s7_highres_roi_ranker',
+        s7_residual=True, s7_highres_roi_ranker=True,
+        s7_highres_unified_ranking=True,
+        s7_highres_smooth_geometry_ranking=True,
+        s7_highres_native_relative_risk_residual=True)
+    assert labeller.result_protocol_version(base) == 23
+    assert labeller.result_protocol_version(risk) == 29
+
+
 def test_s7_lane_train_epoch_replays_gain_frames_source_only(
         tmp_path, monkeypatch):
     class TinyHeads(torch.nn.Module):
