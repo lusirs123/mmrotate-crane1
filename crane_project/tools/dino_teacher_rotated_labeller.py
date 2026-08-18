@@ -457,6 +457,16 @@ def parse_args():
         help=('Minimum source sequences in the source-small support gate. '
               'The formal source-small split currently contains one sequence.'))
     parser.add_argument(
+        '--source-native-relative-risk-support-audit', action='store_true',
+        help=('Run a read-only source-train audit of wrong-S7/native score '
+              'gaps and required one-sided risk penalties. It never trains, '
+              'selects a checkpoint, reads target data, or tunes a threshold.'))
+    parser.add_argument(
+        '--source-native-relative-risk-source-result-json', default=None,
+        help=('Protocol-29 source-only native-relative-risk result used only '
+              'to lock the rejected fallback checkpoint and document the '
+              'observed zero-effective-penalty failure.'))
+    parser.add_argument(
         '--s7-highres-smooth-geometry-ranking', action='store_true',
         help=('Add source-only smooth-geometry auxiliary pair ranking to the '
               'unified high-resolution quality logits. GT geometry is used '
@@ -810,6 +820,8 @@ def validate_args(args):
         args, 'source_highres_margin_audit', False))
     smooth_geometry_audit = bool(getattr(
         args, 'source_smooth_geometry_rank_support_audit', False))
+    native_relative_risk_audit = bool(getattr(
+        args, 'source_native_relative_risk_support_audit', False))
     if bool(getattr(args, 's7_highres_roi_ranker', False)) != highres_mode:
         raise ValueError(
             '--s7-highres-roi-ranker and its train-components mode must be '
@@ -829,6 +841,22 @@ def validate_args(args):
     if smooth_geometry_audit and highres_margin_audit:
         raise ValueError(
             'Smooth geometry audit cannot be combined with a margin audit')
+    if native_relative_risk_audit and not highres_mode:
+        raise ValueError(
+            'Native-relative risk support audit requires s7_highres_roi_ranker')
+    if native_relative_risk_audit and not highres_unified:
+        raise ValueError(
+            'Native-relative risk support audit requires unified ranking')
+    if native_relative_risk_audit and not highres_smooth_geometry:
+        raise ValueError(
+            'Native-relative risk support audit requires its locked geometry route')
+    if native_relative_risk_audit and not highres_relative_risk:
+        raise ValueError(
+            'Native-relative risk support audit requires the risk residual')
+    if native_relative_risk_audit and (
+            highres_margin_audit or smooth_geometry_audit):
+        raise ValueError(
+            'Native-relative risk support audit is exclusive with other audits')
     if smooth_geometry_audit and highres_smooth_geometry:
         raise ValueError(
             'Smooth geometry audit and geometry-guided training are separate '
@@ -882,7 +910,26 @@ def validate_args(args):
         args.source_smooth_geometry_audit_spec = (
             load_unified_highres_margin_audit_spec(
                 result_json, args.eval_only_checkpoint, 3))
-    if highres_smooth_geometry:
+    if native_relative_risk_audit:
+        if (not args.eval_only_checkpoint or args.init_checkpoint
+                or args.resume_checkpoint or not args.skip_target_eval):
+            raise ValueError(
+                'Native-relative risk support audit requires one eval-only '
+                'checkpoint, source-only evaluation, and no init/resume')
+        if not os.path.isfile(args.eval_only_checkpoint):
+            raise ValueError(
+                'Native-relative risk audit checkpoint does not exist: {}'.format(
+                    args.eval_only_checkpoint))
+        result_json = getattr(
+            args, 'source_native_relative_risk_source_result_json', None)
+        if not result_json or not os.path.isfile(result_json):
+            raise ValueError(
+                'Native-relative risk support audit requires the protocol-29 '
+                'source-only result JSON')
+        args.source_native_relative_risk_audit_spec = (
+            load_native_relative_risk_support_audit_spec(
+                result_json, args.eval_only_checkpoint))
+    if highres_smooth_geometry and not native_relative_risk_audit:
         if highres_margin_audit or smooth_geometry_audit:
             raise ValueError(
                 'Smooth-geometry ranking is a training stage, not an audit')
@@ -6729,6 +6776,232 @@ def build_smooth_geometry_rank_support_audit(
         decision=decision)
 
 
+_NATIVE_RELATIVE_RISK_PENALTY_BINS = (
+    0.0, 1e-6, 0.05, 0.10, 0.25, 0.50, 1.0, 2.0)
+
+
+def _native_relative_risk_support_frame(
+        record: Dict, original: np.ndarray, pool: Dict, args) -> Dict:
+    """Describe frozen native/S7 risk supervision for one source frame.
+
+    This mirrors the risk-loss candidate definition but does not invoke a
+    loss, apply a penalty, or choose a training cutoff.  In particular, the
+    fixed bins below are reporting bins for the existing 0.25 rank margin,
+    not a new inference or training threshold.
+    """
+    detections = pool['detections'].detach().cpu().numpy().astype(
+        np.float32, copy=False).reshape((-1, 6))
+    source_ids = pool['source_ids'].detach().cpu().numpy().astype(
+        np.int64, copy=False).reshape(-1)
+    base_logits_tensor = pool.get('base_quality_logits')
+    penalties_tensor = pool.get('risk_penalties')
+    if base_logits_tensor is None or penalties_tensor is None:
+        raise RuntimeError('Native-relative risk audit pool lacks risk metadata')
+    base_logits = base_logits_tensor.detach().cpu().numpy().astype(
+        np.float32, copy=False).reshape(-1)
+    penalties = penalties_tensor.detach().cpu().numpy().astype(
+        np.float32, copy=False).reshape(-1)
+    if not (detections.shape[0] == source_ids.shape[0] == base_logits.shape[0]
+            == penalties.shape[0]):
+        raise RuntimeError('Native-relative risk pool metadata disagrees')
+    row = dict(
+        split=record['split'], seq=record['seq'],
+        domain=source_domain_label(record), frame=int(record['frame']),
+        candidate_count=int(detections.shape[0]), eligible=False,
+        native_index=None, native_correct=False, native_riou=0.0,
+        wrong_s7_count=0, usable_s7_count=0,
+        active_required_penalty_count=0,
+        required_penalty_sum=0.0, required_penalty_max=0.0,
+        required_penalty_histogram=[0] * (len(_NATIVE_RELATIVE_RISK_PENALTY_BINS) + 1),
+        oracle_s7=False, oracle_rank_by_base_fused=None,
+        effective_penalty_nonzero_count=int(np.count_nonzero(
+            np.abs(penalties) > 1e-8)),
+        effective_penalty_max=(0.0 if penalties.size == 0 else float(
+            np.max(np.abs(penalties)))))
+    if detections.shape[0] == 0 or original.shape[0] == 0:
+        return row
+    from mmcv.ops import box_iou_rotated
+
+    boxes = torch.from_numpy(detections[:, :5]).float()
+    gt = torch.from_numpy(np.asarray(original[:, :5], dtype=np.float32))
+    overlaps = box_iou_rotated(boxes, gt).max(dim=1).values.cpu().numpy()
+    native_indices = np.flatnonzero(source_ids == 0)
+    if native_indices.size == 0:
+        raise RuntimeError('Native-relative risk pool has no native candidate')
+    native_index = int(native_indices[np.argmax(detections[native_indices, 5])])
+    native_correct = bool(overlaps[native_index] >= float(args.riou_thr))
+    scores = np.clip(detections[:, 5], 1e-6, 1.0 - 1e-6)
+    base_fused = np.log(scores) - np.log1p(-scores) + float(
+        args.s7_highres_score_weight) * base_logits
+    wrong_s7 = np.flatnonzero(
+        (source_ids == 1) & (overlaps < float(args.riou_thr)))
+    usable_s7 = np.flatnonzero(
+        (source_ids == 1) & (overlaps >= float(args.riou_thr)))
+    required = np.maximum(
+        0.0, float(args.s7_highres_rank_margin)
+        + base_fused[wrong_s7] - base_fused[native_index])
+    positive_required = required[required > 1e-8]
+    histogram = np.histogram(
+        positive_required, bins=np.asarray(_NATIVE_RELATIVE_RISK_PENALTY_BINS + (
+            np.inf,), dtype=np.float32))[0].astype(np.int64).tolist()
+    # np.histogram has len(edges)-1 bins.  Prefix an explicit exact-zero bin
+    # so the JSON distinguishes safe wrong candidates from positive targets.
+    zero_count = int(np.count_nonzero(required <= 1e-8))
+    histogram = [zero_count] + histogram
+    oracle_index = int(np.argmax(overlaps))
+    order = np.argsort(-base_fused, kind='mergesort')
+    oracle_rank = int(np.flatnonzero(order == oracle_index)[0] + 1)
+    row.update(
+        eligible=True, native_index=native_index,
+        native_correct=native_correct,
+        native_riou=float(overlaps[native_index]),
+        wrong_s7_count=int(wrong_s7.size), usable_s7_count=int(usable_s7.size),
+        active_required_penalty_count=int(np.count_nonzero(required > 1e-8)),
+        required_penalty_sum=float(required.sum()),
+        required_penalty_max=(0.0 if required.size == 0 else float(required.max())),
+        required_penalty_histogram=histogram,
+        oracle_s7=bool(source_ids[oracle_index] == 1),
+        oracle_rank_by_base_fused=oracle_rank)
+    return row
+
+
+def evaluate_native_relative_risk_support_records(
+        dino, heads, records: Sequence[Dict], args,
+        dino_device, head_device) -> List[Dict]:
+    """Collect source-train gap evidence without gradient updates."""
+    heads.eval()
+    rows = []
+    with torch.no_grad():
+        for index, record in enumerate(records):
+            feature, img_meta, _gt_boxes, _gt_labels, original, cached = (
+                prepare_record(dino, record, args, dino_device, head_device))
+            heads._protected_merge_detections(
+                feature, img_meta, rescale=True, apply_highres_ranker=False)
+            pool = getattr(heads, '_last_highres_pool', None)
+            if pool is None:
+                raise RuntimeError(
+                    'Native-relative risk audit produced no high-resolution pool')
+            row = _native_relative_risk_support_frame(
+                record, original, pool, args)
+            row['feature_cache_hit'] = bool(cached)
+            rows.append(row)
+            if ((index + 1) % 25 == 0 or index + 1 == len(records)):
+                print('[native-relative-risk] {}/{} eligible={}'.format(
+                    index + 1, len(records),
+                    sum(bool(item['eligible']) for item in rows)))
+            del feature, _gt_boxes, _gt_labels
+    return rows
+
+
+def summarize_native_relative_risk_support(rows: Sequence[Dict]) -> Dict:
+    """Aggregate reporting-only source evidence for a later V2 decision."""
+    eligible = [row for row in rows if bool(row.get('eligible', False))]
+    native_correct_rows = [row for row in eligible if row['native_correct']]
+    gain_rows = [row for row in eligible if (
+        not row['native_correct'] and int(row['usable_s7_count']) > 0)]
+    active_rows = [row for row in native_correct_rows if int(
+        row['active_required_penalty_count']) > 0]
+    histogram = np.zeros(
+        len(_NATIVE_RELATIVE_RISK_PENALTY_BINS) + 1, dtype=np.int64)
+    for row in eligible:
+        histogram += np.asarray(row['required_penalty_histogram'], dtype=np.int64)
+    active_domains = sorted(set(str(row['domain']) for row in active_rows))
+    active_sequences = sorted(set(str(row['seq']) for row in active_rows))
+    return dict(
+        frame_count=int(len(rows)), eligible_frame_count=int(len(eligible)),
+        candidate_count_total=int(sum(row['candidate_count'] for row in eligible)),
+        candidate_count_mean=(0.0 if not eligible else float(np.mean([
+            row['candidate_count'] for row in eligible]))),
+        native_correct_frame_count=int(len(native_correct_rows)),
+        native_wrong_usable_s7_frame_count=int(len(gain_rows)),
+        native_wrong_usable_s7_domains=sorted(set(
+            str(row['domain']) for row in gain_rows)),
+        native_wrong_usable_s7_sequences=sorted(set(
+            str(row['seq']) for row in gain_rows)),
+        wrong_s7_candidate_count=int(sum(row['wrong_s7_count'] for row in eligible)),
+        usable_s7_candidate_count=int(sum(row['usable_s7_count'] for row in eligible)),
+        active_required_penalty_candidate_count=int(sum(
+            row['active_required_penalty_count'] for row in eligible)),
+        active_required_penalty_frame_count=int(len(active_rows)),
+        active_required_penalty_domains=active_domains,
+        active_required_penalty_sequences=active_sequences,
+        required_penalty_sum=float(sum(
+            row['required_penalty_sum'] for row in eligible)),
+        required_penalty_max=float(max(
+            [row['required_penalty_max'] for row in eligible] or [0.0])),
+        required_penalty_histogram=dict(
+            bins=[0.0] + list(_NATIVE_RELATIVE_RISK_PENALTY_BINS),
+            counts=[int(value) for value in histogram.tolist()],
+            note=('reporting bins only; they do not select a threshold or '
+                  'authorize a V2 training configuration')),
+        oracle_s7_frame_count=int(sum(bool(row['oracle_s7']) for row in eligible)),
+        oracle_s7_not_top1_count=int(sum(
+            bool(row['oracle_s7']) and int(row['oracle_rank_by_base_fused']) > 1
+            for row in eligible)),
+        effective_penalty_nonzero_count=int(sum(
+            row['effective_penalty_nonzero_count'] for row in eligible)),
+        effective_penalty_max=float(max([
+            row['effective_penalty_max'] for row in eligible] or [0.0])))
+
+
+def _native_relative_risk_group_summaries(
+        rows: Sequence[Dict], field: str) -> Dict:
+    groups = collections.defaultdict(list)
+    for row in rows:
+        groups[str(row[field])].append(row)
+    return {label: summarize_native_relative_risk_support(group)
+            for label, group in sorted(groups.items())}
+
+
+def build_native_relative_risk_support_audit(
+        dino, heads, records: Sequence[Dict], args,
+        dino_device, head_device, spec: Dict,
+        source_protocol: Optional[Dict] = None) -> Dict:
+    """Build the protocol-30 source-only diagnostic; it never authorizes V2."""
+    rows = evaluate_native_relative_risk_support_records(
+        dino, heads, records, args, dino_device, head_device)
+    full = summarize_native_relative_risk_support(rows)
+    raw_scale = float(heads.s7_highres_native_relative_risk_head.risk_scale
+                      .detach().cpu().item())
+    if abs(raw_scale) > 1e-8 or full['effective_penalty_nonzero_count'] != 0:
+        raise RuntimeError(
+            'Risk support audit must use the frozen zero-penalty fallback')
+    return dict(
+        protocol_version=30,
+        audit_name='Source-only Native-relative Risk Score-gap Support Audit',
+        protocol=dict(
+            architecture='frozen_unified_highres_native_s7_candidate_pool',
+            source_only=True, source_split='train_plus_train_sim',
+            target_read=False, read_only_evaluation=True,
+            parameter_update=False, shared_forward_per_frame=True,
+            candidate_pool='native_s14_top1_plus_s7_top_k',
+            risk_target=('relu(rank_margin + wrong_s7_base_fused - '
+                         'native_base_fused)'),
+            no_target_threshold_tuning=True, no_checkpoint_selection=True,
+            training_authorization='forbidden_by_this_diagnostic'),
+        isolation=dict(
+            dino_frozen=True, detector_parameters_unchanged=True,
+            read_only_evaluation=True, parameter_updates_performed=False,
+            trainable_parameter_count=0,
+            target_used_for_training=False,
+            target_used_for_checkpoint_selection=False,
+            target_used_for_threshold_tuning=False),
+        checkpoint_used=dict(
+            path=spec['checkpoint'], epoch=0,
+            raw_risk_scale=raw_scale,
+            source_result_json=spec['source_result_json']),
+        observed_protocol29_failure=spec['observed_failure'],
+        source=dict(protocol=source_protocol, full=full,
+                    by_domain=_native_relative_risk_group_summaries(rows, 'domain'),
+                    by_sequence=_native_relative_risk_group_summaries(rows, 'seq')),
+        frame_rows=rows, candidate_forward_count=int(len(records)),
+        parameter_update_count=0, target_dev=None,
+        eligible_for_training=False, eligible_for_deployment=False,
+        eligible_for_full_test=False,
+        decision=('SOURCE_ONLY_NATIVE_RELATIVE_RISK_SUPPORT_AUDIT_COMPLETE_'
+                  'TARGET_NOT_READ'))
+
+
 def build_highres_margin_source_audit(
         dino, heads, records: Sequence[Dict], args,
         dino_device, head_device, spec: Dict) -> Dict:
@@ -7629,6 +7902,78 @@ def load_unified_highres_margin_audit_spec(
         history_row=row, baseline_summary=baseline,
         baseline_small_summary=baseline_small,
         small_sampling=sampling)
+
+
+def load_native_relative_risk_support_audit_spec(
+        path: str, checkpoint: str) -> Dict:
+    """Lock protocol-30 to the rejected protocol-29 fallback checkpoint."""
+    with open(path, 'r') as handle:
+        payload = json.load(handle)
+    source = payload.get('source') or {}
+    isolation = payload.get('isolation') or {}
+    highres = (payload.get('protocol') or {}).get(
+        's7_highres_roi_ranker') or {}
+    architecture = ((payload.get('architecture') or {}).get('s7') or {})
+    if int(payload.get('protocol_version', -1)) != 29:
+        raise ValueError('Native-relative risk audit requires protocol 29')
+    if (payload.get('decision') !=
+            'SOURCE_ONLY_HIGHRES_ROI_RANKER_FALLBACK_TARGET_NOT_READ'
+            or payload.get('target_dev') is not None):
+        raise ValueError('Native-relative risk result must be source-only fallback')
+    if (isolation.get('train_components') != 's7_highres_roi_ranker'
+            or isolation.get('dino_parameters_unchanged') is not True
+            or isolation.get('frozen_head_parameters_unchanged') is not True
+            or isolation.get('target_used_for_training') is not False
+            or isolation.get('target_used_for_checkpoint_selection') is not False):
+        raise ValueError('Native-relative risk source isolation failed')
+    if (highres.get('source_only') is not True
+            or highres.get('target_read') is not False
+            or highres.get('unified_ranking') is not True
+            or highres.get('smooth_geometry_ranking') is not True
+            or highres.get('native_relative_risk_residual') is not True
+            or architecture.get('highres_native_relative_risk_residual') is not True):
+        raise ValueError('Native-relative risk architecture mismatch')
+    selected = payload.get('source_selected_checkpoint')
+    if not selected or os.path.realpath(selected) != os.path.realpath(checkpoint):
+        raise ValueError(
+            'Risk support audit must use protocol-29 fallback checkpoint')
+    if int(source.get('best_epoch', -1)) != 0:
+        raise ValueError('Risk support audit requires the epoch-0 fallback')
+    history = source.get('history') or []
+    if len(history) != 4:
+        raise ValueError('Protocol-29 history must contain four fixed epochs')
+    observed = []
+    for epoch in range(1, 5):
+        matches = [row for row in history if int(row.get('epoch', -1)) == epoch]
+        if len(matches) != 1:
+            raise ValueError('Protocol-29 history epoch {} is missing'.format(epoch))
+        row = matches[0]
+        retention = row.get('source_exact_retention') or {}
+        metrics = ((row.get('train') or {}).get('mean_training_metrics')
+                   or row.get('mean_training_metrics')
+                   or row.get('train_mean_metrics') or {})
+        if (row.get('source_selection_gate_passed') is not False
+                or int(retention.get('lost_correct_count', -1)) <= 0
+                or float(metrics.get('s7_highres_relative_risk_scale', 0.0)) != 0.0
+                or float(metrics.get('s7_highres_relative_risk_nonzero_count', 0.0)) != 0.0):
+            raise ValueError(
+                'Protocol-29 must document zero effective risk penalty and '
+                'an exact-retention failure')
+        observed.append(dict(
+            epoch=epoch,
+            lost_correct_count=int(retention['lost_correct_count']),
+            gained_correct_count=int(retention.get('gained_correct_count', 0)),
+            risk_retention_active_count=float(metrics.get(
+                's7_highres_relative_risk_retention_active_count', 0.0)),
+            effective_risk_scale=float(metrics.get(
+                's7_highres_relative_risk_scale', 0.0))))
+    return dict(
+        source_result_json=os.path.abspath(path),
+        checkpoint=os.path.abspath(checkpoint), observed_failure=dict(
+            mechanism=('protocol-29 effective risk penalty was zero in every '
+                       'recorded epoch; this audit measures source support '
+                       'without claiming the failed parameterization is valid'),
+            epochs=observed))
 
 
 def source_top1_retention_summary(
@@ -10434,6 +10779,50 @@ def main():
         print('[dino-labeller] {}'.format(audit['decision']))
         print('[smooth-geometry] training_allowed={}'.format(
             audit['eligible_for_training']))
+        print('[json] nonfinite_replacements={}'.format(replacements))
+        return
+    if bool(getattr(args, 'source_native_relative_risk_support_audit', False)):
+        spec = args.source_native_relative_risk_audit_spec
+        checkpoint_payload = torch.load(
+            args.eval_only_checkpoint, map_location='cpu')
+        validate_checkpoint(checkpoint_payload, in_channels, args)
+        if int(checkpoint_payload.get('epoch', -1)) != 0:
+            raise RuntimeError(
+                'Native-relative risk support audit requires epoch-0 fallback')
+        load_heads_checkpoint_state(heads, checkpoint_payload)
+        # The rejected epoch-0 fallback serializes S7 inference as disabled
+        # for deployment safety.  This audit needs the frozen S7 proposals to
+        # measure their source supervision, so it enables the already-loaded
+        # S7 lane only inside this read-only process.
+        heads.set_s7_inference_enabled(True)
+        for parameter in heads.parameters():
+            parameter.requires_grad = False
+        trainable_names = []
+        head_versions = common.module_parameter_versions(heads)
+        audit = build_native_relative_risk_support_audit(
+            dino, heads, source_train, args,
+            dino_device, head_device, spec, source_protocol)
+        dino_unchanged = (
+            dino_versions == common.module_parameter_versions(dino))
+        heads_unchanged = (
+            head_versions == common.module_parameter_versions(heads))
+        if not dino_unchanged or not heads_unchanged:
+            raise RuntimeError(
+                'Read-only native-relative risk audit changed parameters')
+        audit['isolation'].update(
+            dino_parameters_unchanged=bool(dino_unchanged),
+            detector_parameters_unchanged=bool(heads_unchanged),
+            trainable_parameter_names=trainable_names)
+        audit['source']['architecture'] = dict(
+            in_channels=in_channels, patch_size=int(args.patch_size),
+            rpn=rpn_config(in_channels, args),
+            roi=roi_config(in_channels, args),
+            s7=s7_architecture(args),
+            s7_rpn=s7_rpn_config(
+                int(getattr(args, 's7_channels', 128)), args))
+        replacements = common.write_json_atomic(args.out_json, audit)
+        print('[dino-labeller] {}'.format(audit['decision']))
+        print('[native-relative-risk] training_allowed=False')
         print('[json] nonfinite_replacements={}'.format(replacements))
         return
     source_val_rows = None
