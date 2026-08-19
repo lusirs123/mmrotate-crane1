@@ -485,6 +485,30 @@ def parse_args():
         '--source-paired-view-max-sequence-fraction', type=float,
         default=0.50)
     parser.add_argument(
+        '--source-dense-temporal-separability-audit', action='store_true',
+        help=('Run protocol-33: a read-only source-only audit of dense '
+              'object-centric candidate separability across adjacent frames '
+              'and locked image views. It never trains or reads target data.'))
+    parser.add_argument(
+        '--source-dense-temporal-source-result-json', default=None,
+        help=('Unified high-resolution source-only result used to lock the '
+              'epoch-3 candidate checkpoint and source validation baseline.'))
+    parser.add_argument(
+        '--source-dense-temporal-min-pairs-per-sequence', type=int, default=32)
+    parser.add_argument(
+        '--source-dense-temporal-min-real-sequences', type=int, default=2)
+    parser.add_argument(
+        '--source-dense-temporal-min-sim-sequences', type=int, default=1)
+    parser.add_argument(
+        '--source-dense-temporal-min-success-fraction', type=float,
+        default=0.60)
+    parser.add_argument(
+        '--source-dense-temporal-min-cosine-margin', type=float, default=0.02)
+    parser.add_argument(
+        '--source-dense-temporal-negative-riou-max', type=float, default=0.30)
+    parser.add_argument(
+        '--source-dense-temporal-hard-negatives', type=int, default=8)
+    parser.add_argument(
         '--s7-highres-smooth-geometry-ranking', action='store_true',
         help=('Add source-only smooth-geometry auxiliary pair ranking to the '
               'unified high-resolution quality logits. GT geometry is used '
@@ -842,6 +866,8 @@ def validate_args(args):
         args, 'source_native_relative_risk_support_audit', False))
     paired_view_audit = bool(getattr(
         args, 'source_paired_view_role_switch_support_audit', False))
+    dense_temporal_audit = bool(getattr(
+        args, 'source_dense_temporal_separability_audit', False))
     if bool(getattr(args, 's7_highres_roi_ranker', False)) != highres_mode:
         raise ValueError(
             '--s7-highres-roi-ranker and its train-components mode must be '
@@ -890,6 +916,20 @@ def validate_args(args):
         raise ValueError(
             'Paired-view role-switch audit is exclusive with other highres '
             'training and audit routes')
+    if dense_temporal_audit and not highres_mode:
+        raise ValueError(
+            'Dense temporal separability audit requires s7_highres_roi_ranker')
+    if dense_temporal_audit and not highres_unified:
+        raise ValueError(
+            'Dense temporal separability audit requires unified ranking')
+    if dense_temporal_audit and (
+            highres_margin_audit or smooth_geometry_audit
+            or native_relative_risk_audit or paired_view_audit
+            or highres_takeover_v2 or highres_smooth_geometry
+            or highres_relative_risk):
+        raise ValueError(
+            'Dense temporal separability audit is exclusive with other '
+            'highres training and audit routes')
     if smooth_geometry_audit and highres_smooth_geometry:
         raise ValueError(
             'Smooth geometry audit and geometry-guided training are separate '
@@ -991,6 +1031,50 @@ def validate_args(args):
             raise ValueError(
                 '--source-paired-view-max-sequence-fraction must be in (0, 1]')
         args.source_paired_view_audit_spec = (
+            load_paired_view_role_switch_support_audit_spec(
+                result_json, args.eval_only_checkpoint))
+    if dense_temporal_audit:
+        if (not args.eval_only_checkpoint or args.init_checkpoint
+                or args.resume_checkpoint or not args.skip_target_eval):
+            raise ValueError(
+                'Dense temporal separability audit requires one eval-only '
+                'checkpoint, source-only evaluation, and no init/resume')
+        if not os.path.isfile(args.eval_only_checkpoint):
+            raise ValueError(
+                'Dense temporal audit checkpoint does not exist: {}'.format(
+                    args.eval_only_checkpoint))
+        result_json = getattr(
+            args, 'source_dense_temporal_source_result_json', None)
+        if not result_json or not os.path.isfile(result_json):
+            raise ValueError(
+                'Dense temporal separability audit requires the unified '
+                'source-only training result JSON')
+        for name in (
+                'source_dense_temporal_min_pairs_per_sequence',
+                'source_dense_temporal_min_real_sequences',
+                'source_dense_temporal_min_sim_sequences',
+                'source_dense_temporal_hard_negatives'):
+            if int(getattr(args, name)) <= 0:
+                raise ValueError('--{} must be positive'.format(
+                    name.replace('_', '-')))
+        fraction = float(getattr(
+            args, 'source_dense_temporal_min_success_fraction', 0.60))
+        if not 0.5 < fraction <= 1.0:
+            raise ValueError(
+                '--source-dense-temporal-min-success-fraction must be in '
+                '(0.5, 1]')
+        margin = float(getattr(
+            args, 'source_dense_temporal_min_cosine_margin', 0.02))
+        if margin < 0.0:
+            raise ValueError(
+                '--source-dense-temporal-min-cosine-margin must be non-negative')
+        negative_riou = float(getattr(
+            args, 'source_dense_temporal_negative_riou_max', 0.30))
+        if not 0.0 <= negative_riou < float(args.riou_thr):
+            raise ValueError(
+                '--source-dense-temporal-negative-riou-max must be in '
+                '[0, --riou-thr)')
+        args.source_dense_temporal_audit_spec = (
             load_paired_view_role_switch_support_audit_spec(
                 result_json, args.eval_only_checkpoint))
     if highres_smooth_geometry and not native_relative_risk_audit:
@@ -1431,8 +1515,8 @@ def validate_args(args):
                 'Selective promotion phase-2 result lacks source summaries')
         args.s7_selective_teacher_result = teacher_result
         if (highres_mode and not (highres_margin_audit or smooth_geometry_audit
-                                   or paired_view_audit or highres_smooth_geometry
-                                   or conflict_json)):
+                                   or paired_view_audit or dense_temporal_audit
+                                   or highres_smooth_geometry or conflict_json)):
             teacher_result_json = getattr(
                 args, 's7_highres_teacher_result_json', None)
             if not teacher_result_json or not os.path.isfile(teacher_result_json):
@@ -1689,7 +1773,8 @@ def validate_args(args):
                 '--s7-source-max-mcml <= 3')
     if highres_mode:
         if (not (highres_margin_audit or smooth_geometry_audit
-                  or paired_view_audit or highres_smooth_geometry or conflict_json)
+                  or paired_view_audit or dense_temporal_audit
+                  or highres_smooth_geometry or conflict_json)
                 and (not args.init_checkpoint or args.resume_checkpoint
                      or args.eval_only_checkpoint)):
             raise ValueError(
@@ -7449,6 +7534,410 @@ def build_paired_view_role_switch_support_audit(
         decision=decision)
 
 
+def _dense_temporal_candidate_state(
+        original: np.ndarray, pool: Dict, args) -> Dict:
+    """Build one in-memory GT-labelled candidate state for protocol-33."""
+    detections_gpu = pool['detections'].detach()
+    source_ids = pool['source_ids'].detach().cpu().long()
+    roi_embeddings = pool['embeddings'].detach().cpu().float()
+    highres_embeddings = pool['highres_embeddings'].detach().cpu().float()
+    detections = detections_gpu.cpu().float()
+    if not (detections.shape[0] == source_ids.shape[0]
+            == roi_embeddings.shape[0] == highres_embeddings.shape[0]):
+        raise RuntimeError('Dense temporal candidate pool metadata disagrees')
+    if detections.shape[0] and original.shape[0]:
+        from mmcv.ops import box_iou_rotated
+        gt = torch.as_tensor(
+            np.asarray(original[:, :5], dtype=np.float32),
+            device=detections_gpu.device, dtype=torch.float32)
+        overlaps = box_iou_rotated(
+            detections_gpu[:, :5].float(), gt).max(dim=1).values.cpu()
+    else:
+        overlaps = torch.zeros((detections.shape[0],), dtype=torch.float32)
+    positive_indices = torch.nonzero(
+        overlaps >= float(args.riou_thr), as_tuple=False).flatten()
+    negative_indices = torch.nonzero(
+        overlaps <= float(args.source_dense_temporal_negative_riou_max),
+        as_tuple=False).flatten()
+    if negative_indices.numel():
+        order = torch.argsort(
+            detections[negative_indices, 5], descending=True)
+        negative_indices = negative_indices[order[:int(
+            args.source_dense_temporal_hard_negatives)]]
+    representative = None
+    if positive_indices.numel():
+        representative = int(positive_indices[
+            torch.argmax(overlaps[positive_indices])].item())
+    return dict(
+        detections=detections, source_ids=source_ids,
+        roi_embeddings=roi_embeddings,
+        highres_embeddings=highres_embeddings, overlaps=overlaps,
+        positive_indices=positive_indices,
+        negative_indices=negative_indices,
+        representative_index=representative)
+
+
+def _dense_temporal_state_summary(state: Dict) -> Dict:
+    representative = state['representative_index']
+    source = None
+    riou = None
+    if representative is not None:
+        source = ('native_s14' if int(
+            state['source_ids'][representative].item()) == 0 else
+                  'supplement_s7')
+        riou = float(state['overlaps'][representative].item())
+    return dict(
+        candidate_count=int(state['detections'].shape[0]),
+        positive_candidate_count=int(state['positive_indices'].numel()),
+        hard_negative_candidate_count=int(state['negative_indices'].numel()),
+        representative_source=source, representative_riou=riou)
+
+
+def _dense_temporal_cosine_comparison(
+        reference: Dict, candidate: Dict, embedding_key: str) -> Optional[Dict]:
+    """Compare current positives/hard negatives to one prior positive."""
+    reference_index = reference.get('representative_index')
+    positive = candidate['positive_indices']
+    negative = candidate['negative_indices']
+    if (reference_index is None or not positive.numel()
+            or not negative.numel()):
+        return None
+    reference_embedding = reference[embedding_key][reference_index]
+    reference_embedding = torch.nn.functional.normalize(
+        reference_embedding.reshape(1, -1), dim=1)
+    candidate_embeddings = torch.nn.functional.normalize(
+        candidate[embedding_key], dim=1)
+    similarities = torch.matmul(
+        candidate_embeddings, reference_embedding.transpose(0, 1)).flatten()
+    positive_score = float(similarities[positive].max().item())
+    negative_score = float(similarities[negative].max().item())
+    return dict(
+        positive_similarity=positive_score,
+        hardest_negative_similarity=negative_score,
+        margin=float(positive_score - negative_score))
+
+
+def _periodic_pi_delta(value: torch.Tensor, reference: torch.Tensor):
+    return torch.remainder(value - reference + np.pi / 2.0, np.pi) - np.pi / 2.0
+
+
+def _dense_temporal_motion_comparison(
+        previous_previous: Optional[Dict], previous: Dict,
+        current: Dict) -> Optional[Dict]:
+    """Evaluate constant-velocity OBB residual without fitting any weights."""
+    if previous_previous is None:
+        return None
+    indices = [previous_previous.get('representative_index'),
+               previous.get('representative_index')]
+    if any(index is None for index in indices):
+        return None
+    if (not current['positive_indices'].numel()
+            or not current['negative_indices'].numel()):
+        return None
+    older_box = previous_previous['detections'][indices[0], :5]
+    previous_box = previous['detections'][indices[1], :5]
+    boxes = current['detections'][:, :5]
+    predicted_center = previous_box[:2] + (
+        previous_box[:2] - older_box[:2])
+    older_log_size = torch.log(torch.clamp(older_box[2:4], min=1e-6))
+    previous_log_size = torch.log(torch.clamp(previous_box[2:4], min=1e-6))
+    predicted_log_size = previous_log_size + (
+        previous_log_size - older_log_size)
+    angle_velocity = _periodic_pi_delta(
+        previous_box[4], older_box[4])
+    predicted_angle = previous_box[4] + angle_velocity
+    normalizer = torch.sqrt(torch.clamp(
+        previous_box[2] * previous_box[3], min=1.0))
+    center_cost = torch.linalg.vector_norm(
+        boxes[:, :2] - predicted_center.reshape(1, 2), dim=1) / normalizer
+    size_cost = torch.abs(
+        torch.log(torch.clamp(boxes[:, 2:4], min=1e-6))
+        - predicted_log_size.reshape(1, 2)).mean(dim=1)
+    angle_cost = torch.abs(_periodic_pi_delta(
+        boxes[:, 4], predicted_angle)) / (np.pi / 2.0)
+    cost = center_cost + 0.5 * size_cost + 0.25 * angle_cost
+    positive_cost = float(cost[current['positive_indices']].min().item())
+    negative_cost = float(cost[current['negative_indices']].min().item())
+    return dict(
+        best_positive_cost=positive_cost,
+        hardest_negative_cost=negative_cost,
+        margin=float(negative_cost - positive_cost))
+
+
+def _dense_temporal_comparison_row(
+        reference: Dict, candidate: Dict, minimum_margin: float,
+        motion_reference: Optional[Dict] = None) -> Optional[Dict]:
+    roi = _dense_temporal_cosine_comparison(
+        reference, candidate, 'roi_embeddings')
+    highres = _dense_temporal_cosine_comparison(
+        reference, candidate, 'highres_embeddings')
+    if roi is None or highres is None:
+        return None
+    combined_margin = float(0.5 * (roi['margin'] + highres['margin']))
+    motion = _dense_temporal_motion_comparison(
+        motion_reference, reference, candidate)
+    return dict(
+        roi=roi, highres=highres, combined_margin=combined_margin,
+        appearance_success=bool(combined_margin >= float(minimum_margin)),
+        motion=motion,
+        motion_success=(None if motion is None else bool(
+            motion['margin'] > 0.0)))
+
+
+def _dense_temporal_rows_summary(rows: Sequence[Dict]) -> Dict:
+    margins = [float(row['combined_margin']) for row in rows]
+    motion = [float(row['motion']['margin']) for row in rows
+              if row.get('motion') is not None]
+    return dict(
+        pair_count=int(len(rows)),
+        appearance_success_count=int(sum(
+            bool(row['appearance_success']) for row in rows)),
+        appearance_success_fraction=(0.0 if not rows else float(sum(
+            bool(row['appearance_success']) for row in rows)) / len(rows)),
+        combined_margin_median=(None if not margins else float(
+            np.median(np.asarray(margins, dtype=np.float64)))),
+        combined_margin_mean=(None if not margins else float(
+            np.mean(np.asarray(margins, dtype=np.float64)))),
+        motion_pair_count=int(len(motion)),
+        motion_success_fraction=(0.0 if not motion else float(sum(
+            value > 0.0 for value in motion)) / len(motion)),
+        motion_margin_median=(None if not motion else float(
+            np.median(np.asarray(motion, dtype=np.float64)))))
+
+
+def summarize_dense_temporal_separability(
+        temporal_rows: Sequence[Dict], cross_view_rows: Sequence[Dict],
+        args) -> Dict:
+    """Summarize protocol-33 support by complete source sequence."""
+    keys = sorted(set(
+        (str(row['domain']), str(row['seq']))
+        for row in list(temporal_rows) + list(cross_view_rows)))
+    by_sequence = {}
+    qualified = []
+    for domain, sequence in keys:
+        temporal = [row for row in temporal_rows
+                    if str(row['seq']) == sequence]
+        cross_view = [row for row in cross_view_rows
+                      if str(row['seq']) == sequence]
+        temporal_summary = _dense_temporal_rows_summary(temporal)
+        cross_view_summary = _dense_temporal_rows_summary(cross_view)
+        checks = dict(
+            minimum_temporal_pairs=(temporal_summary['pair_count'] >= int(
+                args.source_dense_temporal_min_pairs_per_sequence)),
+            minimum_cross_view_pairs=(cross_view_summary['pair_count'] >= int(
+                args.source_dense_temporal_min_pairs_per_sequence)),
+            temporal_appearance_separable=(
+                temporal_summary['appearance_success_fraction'] >= float(
+                    args.source_dense_temporal_min_success_fraction)),
+            cross_view_appearance_separable=(
+                cross_view_summary['appearance_success_fraction'] >= float(
+                    args.source_dense_temporal_min_success_fraction)))
+        is_qualified = bool(all(checks.values()))
+        if is_qualified:
+            qualified.append((domain, sequence))
+        by_sequence[sequence] = dict(
+            domain=domain, temporal=temporal_summary,
+            cross_view=cross_view_summary, checks=checks,
+            qualified_for_temporal_adapter_support=is_qualified)
+    qualified_real = sorted(
+        sequence for domain, sequence in qualified if domain == 'real')
+    qualified_sim = sorted(
+        sequence for domain, sequence in qualified if domain == 'sim')
+    gate_checks = dict(
+        minimum_real_sequences=(len(qualified_real) >= int(
+            args.source_dense_temporal_min_real_sequences)),
+        minimum_sim_sequences=(len(qualified_sim) >= int(
+            args.source_dense_temporal_min_sim_sequences)))
+    return dict(
+        temporal=_dense_temporal_rows_summary(temporal_rows),
+        cross_view=_dense_temporal_rows_summary(cross_view_rows),
+        by_sequence=by_sequence,
+        support_gate=dict(
+            passed=bool(all(gate_checks.values())), checks=gate_checks,
+            min_pairs_per_sequence=int(
+                args.source_dense_temporal_min_pairs_per_sequence),
+            min_success_fraction=float(
+                args.source_dense_temporal_min_success_fraction),
+            min_cosine_margin=float(
+                args.source_dense_temporal_min_cosine_margin),
+            min_real_sequences=int(
+                args.source_dense_temporal_min_real_sequences),
+            min_sim_sequences=int(
+                args.source_dense_temporal_min_sim_sequences),
+            qualified_real_sequences=qualified_real,
+            qualified_sim_sequences=qualified_sim))
+
+
+def evaluate_dense_temporal_separability_records(
+        dino, heads, records: Sequence[Dict], args,
+        dino_device, head_device) -> Dict:
+    """Run locked views and build dense cross-view/temporal comparisons."""
+    ordered = sorted(records, key=lambda row: (
+        str(row['split']), str(row['seq']), int(row['frame'])))
+    heads.eval()
+    frame_rows = []
+    temporal_rows = []
+    cross_view_rows = []
+    histories = collections.defaultdict(list)
+    cache_hits = collections.Counter()
+    with torch.no_grad():
+        for position, record in enumerate(ordered):
+            states = {}
+            view_summaries = {}
+            for view in PAIRED_VIEW_NAMES:
+                feature, img_meta, _gt_boxes, _gt_labels, original, cached = (
+                    prepare_record_paired_view(
+                        dino, record, view, args, dino_device, head_device))
+                heads._protected_merge_detections(
+                    feature, img_meta, rescale=True,
+                    apply_highres_ranker=False)
+                pool = getattr(heads, '_last_highres_pool', None)
+                if pool is None:
+                    raise RuntimeError(
+                        'Dense temporal audit produced no high-resolution pool')
+                state = _dense_temporal_candidate_state(original, pool, args)
+                states[view] = state
+                view_summaries[view] = _dense_temporal_state_summary(state)
+                cache_hits[view] += int(cached)
+                del feature, _gt_boxes, _gt_labels
+            key = (str(record['split']), str(record['seq']))
+            frame = int(record['frame'])
+            history = histories[key]
+            if history and frame != int(history[-1]['frame']) + 1:
+                history.clear()
+            clean = states['clean']
+            if history:
+                comparison = _dense_temporal_comparison_row(
+                    history[-1]['state'], clean,
+                    args.source_dense_temporal_min_cosine_margin,
+                    motion_reference=(history[-2]['state']
+                                      if len(history) >= 2 else None))
+                if comparison is not None:
+                    comparison.update(
+                        domain=source_domain_label(record),
+                        seq=str(record['seq']),
+                        previous_frame=int(history[-1]['frame']), frame=frame)
+                    temporal_rows.append(comparison)
+            for view in PAIRED_VIEW_NAMES:
+                if view == 'clean':
+                    continue
+                comparison = _dense_temporal_comparison_row(
+                    clean, states[view],
+                    args.source_dense_temporal_min_cosine_margin)
+                if comparison is not None:
+                    comparison.update(
+                        domain=source_domain_label(record),
+                        seq=str(record['seq']), frame=frame, view=view)
+                    cross_view_rows.append(comparison)
+            if clean.get('representative_index') is not None:
+                history.append(dict(frame=frame, state=clean))
+                if len(history) > 2:
+                    del history[:-2]
+            else:
+                history.clear()
+            frame_rows.append(dict(
+                split=str(record['split']), seq=str(record['seq']),
+                domain=source_domain_label(record), frame=frame,
+                frame_key='{}|{}|{}'.format(
+                    record['split'], record['seq'], frame),
+                views=view_summaries))
+            if ((position + 1) % 25 == 0 or position + 1 == len(ordered)):
+                print('[dense-temporal] {}/{} temporal_pairs={} '
+                      'cross_view_pairs={}'.format(
+                          position + 1, len(ordered), len(temporal_rows),
+                          len(cross_view_rows)))
+    return dict(
+        frame_rows=frame_rows, temporal_rows=temporal_rows,
+        cross_view_rows=cross_view_rows,
+        feature_cache_hits=dict(sorted(cache_hits.items())))
+
+
+def build_dense_temporal_separability_audit(
+        dino, heads, source_train: Sequence[Dict], source_val: Sequence[Dict],
+        args, dino_device, head_device, spec: Dict,
+        source_protocol: Optional[Dict] = None) -> Dict:
+    """Build protocol-33 without fitting an adapter or reading target data."""
+    evidence = evaluate_dense_temporal_separability_records(
+        dino, heads, source_train, args, dino_device, head_device)
+    summary = summarize_dense_temporal_separability(
+        evidence['temporal_rows'], evidence['cross_view_rows'], args)
+    validation_rows = evaluate_paired_view_role_switch_support_records(
+        dino, heads, source_val, args, dino_device, head_device,
+        views=('clean',))
+    validation_summary = summarize_paired_view_role_switch_support(
+        validation_rows)
+    threshold = float(spec['small_sampling']['short_token_threshold'])
+    small_keys = {
+        (record['split'], record['seq'], int(record['frame']))
+        for record in source_small_records(source_val, args, threshold)}
+    small_rows = [row for row in validation_rows if (
+        row['split'], row['seq'], int(row['frame'])) in small_keys]
+    small_summary = summarize_paired_view_role_switch_support(small_rows)
+    observed_full = int(
+        validation_summary['view_summaries']['clean']['native_top1_hits'])
+    observed_small = int(
+        small_summary['view_summaries']['clean']['native_top1_hits'])
+    expected_full = int(spec['baseline_summary']['top1_hits'])
+    expected_small = int(spec['baseline_small_summary']['top1_hits'])
+    if observed_full != expected_full or observed_small != expected_small:
+        raise RuntimeError(
+            'Dense temporal audit did not reproduce locked native baseline: '
+            'expected {}/{} but found {}/{}'.format(
+                expected_full, expected_small, observed_full, observed_small))
+    passed = bool(summary['support_gate']['passed'])
+    return dict(
+        protocol_version=33,
+        audit_name='Source-only Dense Object-Centric Temporal Separability Audit',
+        protocol=dict(
+            architecture='frozen_unified_highres_native_s7_candidate_pool',
+            source_only=True, target_read=False, read_only_evaluation=True,
+            parameter_update=False,
+            paired_views=list(PAIRED_VIEW_NAMES),
+            paired_view_version=PAIRED_VIEW_VERSION,
+            complete_sequence_order=True, no_frame_random_split=True,
+            positive_definition='candidate_max_riou_ge_0.5',
+            hard_negative_definition='candidate_max_riou_le_locked_threshold',
+            temporal_reference='previous_gt_matched_candidate',
+            motion_reference='two_previous_gt_matched_candidates',
+            no_target_threshold_tuning=True, no_checkpoint_selection=True,
+            training_authorization=(
+                'A source-only temporal contrastive candidate adapter may be '
+                'implemented only if this dense separability gate passes.')),
+        isolation=dict(
+            dino_frozen=True, detector_parameters_unchanged=True,
+            read_only_evaluation=True, parameter_updates_performed=False,
+            trainable_parameter_count=0,
+            target_used_for_training=False,
+            target_used_for_checkpoint_selection=False,
+            target_used_for_threshold_tuning=False),
+        checkpoint_used=dict(
+            path=spec['checkpoint'], epoch=int(spec['epoch']),
+            source_result_json=spec['source_result_json']),
+        source=dict(
+            protocol=source_protocol,
+            dense_temporal_separability=summary,
+            validation_clean=dict(
+                expected_full_top1=expected_full,
+                expected_small_top1=expected_small,
+                observed_full_top1=observed_full,
+                observed_small_top1=observed_small,
+                passed=True),
+            feature_cache_hits=evidence['feature_cache_hits']),
+        frame_rows=evidence['frame_rows'],
+        temporal_comparison_rows=evidence['temporal_rows'],
+        cross_view_comparison_rows=evidence['cross_view_rows'],
+        candidate_forward_count=int(
+            len(source_train) * len(PAIRED_VIEW_NAMES) + len(source_val)),
+        parameter_update_count=0, target_dev=None,
+        eligible_for_training=passed,
+        eligible_for_temporal_adapter_training=passed,
+        eligible_for_deployment=False, eligible_for_full_test=False,
+        decision=(
+            'SOURCE_ONLY_DENSE_TEMPORAL_SEPARABILITY_PASS_TARGET_NOT_READ'
+            if passed else
+            'SOURCE_ONLY_DENSE_TEMPORAL_SEPARABILITY_INSUFFICIENT_TARGET_NOT_READ'))
+
+
 def build_highres_margin_source_audit(
         dino, heads, records: Sequence[Dict], args,
         dino_device, head_device, spec: Dict) -> Dict:
@@ -11276,6 +11765,48 @@ def main():
         replacements = common.write_json_atomic(args.out_json, audit)
         print('[dino-labeller] {}'.format(audit['decision']))
         print('[native-relative-risk] training_allowed=False')
+        print('[json] nonfinite_replacements={}'.format(replacements))
+        return
+    if bool(getattr(
+            args, 'source_dense_temporal_separability_audit', False)):
+        spec = args.source_dense_temporal_audit_spec
+        checkpoint_payload = torch.load(
+            args.eval_only_checkpoint, map_location='cpu')
+        validate_checkpoint(checkpoint_payload, in_channels, args)
+        if int(checkpoint_payload.get('epoch', -1)) != int(spec['epoch']):
+            raise RuntimeError(
+                'Dense temporal audit checkpoint epoch mismatch')
+        load_heads_checkpoint_state(heads, checkpoint_payload)
+        heads.set_s7_inference_enabled(True)
+        for parameter in heads.parameters():
+            parameter.requires_grad = False
+        trainable_names = []
+        head_versions = common.module_parameter_versions(heads)
+        audit = build_dense_temporal_separability_audit(
+            dino, heads, source_train, source_val, args,
+            dino_device, head_device, spec, source_protocol)
+        dino_unchanged = (
+            dino_versions == common.module_parameter_versions(dino))
+        heads_unchanged = (
+            head_versions == common.module_parameter_versions(heads))
+        if not dino_unchanged or not heads_unchanged:
+            raise RuntimeError(
+                'Read-only dense temporal audit changed parameters')
+        audit['isolation'].update(
+            dino_parameters_unchanged=bool(dino_unchanged),
+            detector_parameters_unchanged=bool(heads_unchanged),
+            trainable_parameter_names=trainable_names)
+        audit['source']['architecture'] = dict(
+            in_channels=in_channels, patch_size=int(args.patch_size),
+            rpn=rpn_config(in_channels, args),
+            roi=roi_config(in_channels, args),
+            s7=s7_architecture(args),
+            s7_rpn=s7_rpn_config(
+                int(getattr(args, 's7_channels', 128)), args))
+        replacements = common.write_json_atomic(args.out_json, audit)
+        print('[dino-labeller] {}'.format(audit['decision']))
+        print('[dense-temporal] training_allowed={}'.format(
+            audit['eligible_for_temporal_adapter_training']))
         print('[json] nonfinite_replacements={}'.format(replacements))
         return
     if bool(getattr(
