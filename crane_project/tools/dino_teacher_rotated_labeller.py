@@ -1881,7 +1881,8 @@ def validate_args(args):
     if highres_mode:
         if (not (highres_margin_audit or smooth_geometry_audit
                   or paired_view_audit or dense_temporal_audit
-                  or roi_temporal_train or highres_smooth_geometry
+                  or roi_temporal_train or roi_temporal_audit
+                  or highres_smooth_geometry
                   or conflict_json)
                 and (not args.init_checkpoint or args.resume_checkpoint
                      or args.eval_only_checkpoint)):

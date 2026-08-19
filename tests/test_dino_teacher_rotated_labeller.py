@@ -1907,6 +1907,40 @@ def test_validate_protocol34_allows_locked_eval_only_base(
     assert args.init_checkpoint is None
 
 
+def test_validate_protocol35_allows_locked_read_only_checkpoints(
+        tmp_path, monkeypatch):
+    result_path = tmp_path / 'protocol34.json'
+    result_path.write_text('{}')
+    adapter_path = tmp_path / 'roi_temporal_adapter_source_only.pth'
+    adapter_path.write_bytes(b'adapter')
+    eval_path = tmp_path / 'labeller_epoch_03_source_only.pth'
+    eval_path.write_bytes(b'checkpoint')
+    monkeypatch.setattr(
+        labeller, 'load_roi_temporal_counterfactual_spec',
+        lambda result, adapter, checkpoint: dict(
+            result_json=result, adapter_checkpoint=adapter,
+            base_checkpoint=checkpoint))
+    args = _args(
+        tmp_path, s7_residual=True,
+        train_components='s7_highres_roi_ranker',
+        s7_highres_roi_ranker=True,
+        s7_highres_unified_ranking=True,
+        source_roi_temporal_counterfactual_audit=True,
+        source_roi_temporal_result_json=str(result_path),
+        source_roi_temporal_adapter_checkpoint=str(adapter_path),
+        source_roi_temporal_empty_cache_interval=1,
+        s7_source_min_full_top1=688,
+        s7_source_min_small_top1=311,
+        source_train_datasets=['train:train', 'train_sim:train'],
+        source_val_datasets=['val:val'],
+        epochs=4, lr_steps=[2, 3], selection_epochs=[1, 2, 3, 4],
+        eval_only_checkpoint=str(eval_path), skip_target_eval=True)
+    labeller.validate_args(args)
+    assert args.source_roi_temporal_counterfactual_spec[
+        'adapter_checkpoint'] == str(adapter_path)
+    assert args.init_checkpoint is None
+
+
 def test_validate_temporal_attribution_is_fixed_eval_only_and_target_free(
         tmp_path):
     checkpoint = tmp_path / 'labeller_epoch_04_source_only.pth'
