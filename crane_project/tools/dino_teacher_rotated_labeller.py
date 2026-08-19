@@ -8534,11 +8534,19 @@ def build_roi_temporal_contrastive_result(
             target_threshold_tuning=False,
             state_propagation_audit=True),
         memory_contract=dict(
-            gpu_limit_gib=8, candidate_views_sequential=True,
+            gpu_count_max=3, dino_shard_gpu_count=2,
+            head_adapter_gpu_count=1, gpu_limit_gib=8,
+            candidate_views_sequential=True,
             cache_device='cpu', cache_dtype='float16',
             training_batch_size=int(args.source_roi_temporal_batch_size),
             cuda_empty_cache_interval=int(
-                args.source_roi_temporal_empty_cache_interval)),
+                args.source_roi_temporal_empty_cache_interval),
+            data_parallel_world_size=1,
+            effective_adapter_batch_size=int(
+                args.source_roi_temporal_batch_size),
+            adapter_learning_rate=float(args.lr),
+            learning_rate_scaling=(
+                'none_two_dino_shards_do_not_data_parallelize_adapter')),
         isolation=dict(
             dino_frozen=True, detector_frozen=True,
             trainable_module='roi_temporal_adapter_only',

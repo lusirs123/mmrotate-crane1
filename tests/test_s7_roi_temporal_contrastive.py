@@ -1,5 +1,10 @@
 import torch
+import pytest
+from types import SimpleNamespace
 
+from crane_project.tools import (
+    dino_teacher_s7_roi_temporal_contrastive_train as protocol34,
+)
 from crane_project.tools.dino_teacher_rotated_labeller import (
     roi_temporal_holdout_selection_key,
     roi_temporal_representation_gate,
@@ -194,3 +199,47 @@ def test_state_propagation_includes_s7_fallback_without_margin_promotion():
     assert audit['s7_state_update_count'] == 1
     assert audit['post_s7_state_old_correct_loss_frame_keys'] == [
         'val|real_seq07|1']
+
+
+def _protocol34_args(tmp_path):
+    support = tmp_path / 'support.json'
+    checkpoint = tmp_path / 'base.pth'
+    dino_checkpoint = tmp_path / 'dino.pth'
+    dino_repo = tmp_path / 'dinov2'
+    work_dir = tmp_path / 'work'
+    for path in (support, checkpoint, dino_checkpoint):
+        path.write_text('placeholder')
+    dino_repo.mkdir()
+    return SimpleNamespace(
+        seed=0, support_result_json=str(support),
+        eval_only_checkpoint=str(checkpoint),
+        dinov2_checkpoint=str(dino_checkpoint), dinov2_repo=str(dino_repo),
+        out_json=str(work_dir / 'result.json'), work_dir=str(work_dir),
+        dino_gpus=[0, 1], head_gpu=2, batch_size=128,
+        legacy_sdpa_query_chunk=256, epochs=4, lr=0.0003,
+        temperature=0.07, promotion_margin=0.05, motion_weight=0.25)
+
+
+def test_protocol34_accepts_only_three_visible_gpus(
+        tmp_path, monkeypatch):
+    args = _protocol34_args(tmp_path)
+    monkeypatch.setattr(
+        protocol34.labeller, 'load_roi_temporal_support_spec',
+        lambda *_args: {})
+    monkeypatch.setenv('CUDA_VISIBLE_DEVICES', '1,2,3')
+    protocol34.validate_args(args)
+    monkeypatch.setenv('CUDA_VISIBLE_DEVICES', '0,1,2,3')
+    with pytest.raises(ValueError, match='at most three GPUs'):
+        protocol34.validate_args(args)
+
+
+def test_protocol34_rejects_unscaled_formal_optimizer_settings(
+        tmp_path, monkeypatch):
+    args = _protocol34_args(tmp_path)
+    monkeypatch.setattr(
+        protocol34.labeller, 'load_roi_temporal_support_spec',
+        lambda *_args: {})
+    monkeypatch.setenv('CUDA_VISIBLE_DEVICES', '1,2,3')
+    args.lr = 0.000225
+    with pytest.raises(ValueError, match='locks --lr 0.0003'):
+        protocol34.validate_args(args)

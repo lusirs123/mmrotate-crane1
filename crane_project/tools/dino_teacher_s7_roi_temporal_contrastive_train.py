@@ -66,12 +66,31 @@ def validate_args(args):
         raise ValueError('DINO GPU ids must be non-empty and unique')
     if args.head_gpu in args.dino_gpus:
         raise ValueError('Head GPU must be separate from DINO GPUs')
+    if len(args.dino_gpus) != 2:
+        raise ValueError('Protocol-34 requires exactly two DINO shard GPUs')
+    if len(set(args.dino_gpus + [args.head_gpu])) > 3:
+        raise ValueError('Protocol-34 may use at most three GPUs')
+    visible = os.environ.get('CUDA_VISIBLE_DEVICES')
+    if visible:
+        visible_devices = [value.strip() for value in visible.split(',')
+                           if value.strip()]
+        if len(visible_devices) > 3:
+            raise ValueError(
+                'Protocol-34 CUDA_VISIBLE_DEVICES may expose at most three GPUs')
     if not 1 <= args.batch_size <= 256:
         raise ValueError('--batch-size must be in [1, 256] for the 8G route')
     if not 1 <= args.legacy_sdpa_query_chunk <= 256:
         raise ValueError('--legacy-sdpa-query-chunk must be in [1, 256]')
     if args.epochs < 1 or args.epochs > 8:
         raise ValueError('--epochs must be in [1, 8]')
+    if args.epochs != 4:
+        raise ValueError('Protocol-34 locks --epochs 4')
+    if args.batch_size != 128:
+        raise ValueError('Protocol-34 locks --batch-size 128')
+    if float(args.lr) != 0.0003:
+        raise ValueError('Protocol-34 locks --lr 0.0003')
+    if float(args.temperature) != 0.07:
+        raise ValueError('Protocol-34 locks --temperature 0.07')
     if float(args.promotion_margin) != 0.05:
         raise ValueError('Protocol-34 locks --promotion-margin 0.05')
     if float(args.motion_weight) != 0.25:
