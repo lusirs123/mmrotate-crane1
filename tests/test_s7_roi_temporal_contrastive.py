@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 from crane_project.tools import (
     dino_teacher_s7_roi_temporal_contrastive_train as protocol34,
+    dino_teacher_s7_roi_temporal_counterfactual_audit as protocol35,
 )
 from crane_project.tools.dino_teacher_rotated_labeller import (
     roi_temporal_holdout_selection_key,
@@ -126,6 +127,36 @@ def test_roi_temporal_selector_keeps_native_plus_all_32_s7_candidates():
     assert result['order'][0].item() == 32
 
 
+def test_roi_temporal_native_anchor_does_not_commit_s7_output():
+    adapter = _identity_adapter()
+    selector = CausalRoiTemporalAdapterSelector(
+        adapter, max_candidates=2, promotion_margin=0.05,
+        motion_weight=0.0, state_update_policy='native')
+    detections = torch.tensor([
+        [0.0, 0.0, 10.0, 10.0, 0.0, 0.9],
+        [1.0, 0.0, 10.0, 10.0, 0.0, 0.8],
+    ])
+    source_ids = torch.tensor([0, 1])
+    selector.select(
+        detections, torch.tensor([[1.0, 0.0, 0.0, 0.0],
+                                  [0.0, 1.0, 0.0, 0.0]]),
+        source_ids, 'source', 0)
+    promoted = selector.select(
+        detections, torch.tensor([[0.0, 1.0, 0.0, 0.0],
+                                  [1.0, 0.0, 0.0, 0.0]]),
+        source_ids, 'source', 1)
+    assert promoted['selected_source'] == 'supplement_s7'
+    assert promoted['state_update_source'] == 'native_s14'
+    # The third frame still compares against frame-1 native [0, 1], proving
+    # that the promoted S7 [1, 0] was not recursively committed.
+    third = selector.select(
+        detections, torch.tensor([[0.0, 1.0, 0.0, 0.0],
+                                  [1.0, 0.0, 0.0, 0.0]]),
+        source_ids, 'source', 2)
+    assert third['selected_source'] == 'native_s14'
+    assert third['promotion'] is False
+
+
 def test_holdout_selection_cannot_trade_temporal_for_cross_view():
     cross_view_heavy = {
         'overall': {'success_fraction': 0.95, 'margin_median': 0.30},
@@ -201,6 +232,28 @@ def test_state_propagation_includes_s7_fallback_without_margin_promotion():
         'val|real_seq07|1']
 
 
+def test_state_propagation_uses_actual_state_update_not_selected_output():
+    def row(frame, hit, selected_source, state_source):
+        return {
+            'split': 'val', 'seq': 'real_seq07', 'frame': frame,
+            'metrics': {'top1_hit': hit},
+            'temporal_selection': {
+                'promotion': selected_source == 'supplement_s7',
+                'selected_source': selected_source,
+                'state_update_source': state_source},
+        }
+
+    baseline = [row(0, True, 'native_s14', 'native_s14'),
+                row(1, True, 'native_s14', 'native_s14')]
+    candidate = [row(0, False, 'supplement_s7', 'native_s14'),
+                 row(1, True, 'native_s14', 'native_s14')]
+    audit = summarize_roi_temporal_state_propagation(baseline, candidate)
+    assert audit['promotion_count'] == 1
+    assert audit['wrong_promotion_count'] == 1
+    assert audit['s7_state_update_count'] == 0
+    assert audit['post_s7_state_old_correct_loss_count'] == 0
+
+
 def _protocol34_args(tmp_path):
     support = tmp_path / 'support.json'
     checkpoint = tmp_path / 'base.pth'
@@ -243,3 +296,31 @@ def test_protocol34_rejects_unscaled_formal_optimizer_settings(
     args.lr = 0.000225
     with pytest.raises(ValueError, match='locks --lr 0.0003'):
         protocol34.validate_args(args)
+
+
+def test_protocol35_builds_read_only_three_gpu_route(tmp_path, monkeypatch):
+    paths = {}
+    for name in ('protocol34_result_json', 'adapter_checkpoint',
+                 'eval_only_checkpoint', 'dinov2_checkpoint'):
+        path = tmp_path / '{}.bin'.format(name)
+        path.write_text('placeholder')
+        paths[name] = str(path)
+    dino_repo = tmp_path / 'dinov2'
+    dino_repo.mkdir()
+    args = SimpleNamespace(
+        **paths, data_root='data', dinov2_repo=str(dino_repo),
+        dino_gpus=[1, 2], head_gpu=0, legacy_sdpa_query_chunk=256,
+        feature_cache_dir=str(tmp_path / 'cache'),
+        work_dir=str(tmp_path / 'work'),
+        out_json=str(tmp_path / 'work' / 'result.json'),
+        empty_cache_interval=1, seed=0)
+    monkeypatch.setattr(
+        protocol35.labeller, 'load_roi_temporal_counterfactual_spec',
+        lambda *_args: {})
+    monkeypatch.setenv('CUDA_VISIBLE_DEVICES', '0,1,2')
+    protocol35.validate_args(args)
+    argv = protocol35.build_locked_labeller_argv(args)
+    assert '--source-roi-temporal-counterfactual-audit' in argv
+    assert '--skip-target-eval' in argv
+    assert argv[argv.index('--dino-gpus') + 1:argv.index('--head-gpu')] == [
+        '1', '2']

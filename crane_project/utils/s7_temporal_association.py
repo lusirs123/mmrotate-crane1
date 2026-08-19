@@ -636,17 +636,21 @@ class CausalRoiTemporalAdapterSelector:
 
     def __init__(self, adapter: RoiTemporalContrastiveAdapter,
                  max_candidates: int = 32, promotion_margin: float = 0.05,
-                 motion_weight: float = 0.25):
+                 motion_weight: float = 0.25,
+                 state_update_policy: str = 'selected'):
         self.adapter = adapter
         # ``max_candidates`` is the locked S7 supplement limit.  The native
         # fallback is additional, so the active pool may contain 1 + K rows.
         self.max_candidates = int(max_candidates)
         self.promotion_margin = float(promotion_margin)
         self.motion_weight = float(motion_weight)
+        self.state_update_policy = str(state_update_policy)
         if self.max_candidates <= 0 or self.promotion_margin < 0.0:
             raise ValueError('Invalid ROI temporal selector settings')
         if self.motion_weight < 0.0:
             raise ValueError('Motion weight must be non-negative')
+        if self.state_update_policy not in ('selected', 'native'):
+            raise ValueError('State update policy must be selected or native')
         self.reset()
 
     def reset(self):
@@ -751,7 +755,14 @@ class CausalRoiTemporalAdapterSelector:
             else:
                 selected = fallback
                 reason = 'native_fallback_margin'
-        self._store(detections, embeddings, selected, seq, frame)
+        # Protocol-34 used ``selected`` and therefore allowed one wrong S7
+        # takeover to become the next temporal reference.  The ``native``
+        # policy is intentionally available for the source-only
+        # counterfactual audit: it changes the current output ordering but
+        # never lets an S7 output recursively replace the native anchor.
+        state_index = (selected if self.state_update_policy == 'selected'
+                       else fallback)
+        self._store(detections, embeddings, state_index, seq, frame)
         remaining = torch.arange(count, device=detections.device)
         order = torch.cat((remaining.new_tensor([selected]),
                            remaining[remaining != selected]))
@@ -759,6 +770,10 @@ class CausalRoiTemporalAdapterSelector:
             selected_index=int(selected), order=order, reason=reason,
             reset=bool(reset), promotion=bool(selected != fallback),
             fallback_index=int(fallback), advantage=advantage,
+            state_update_index=int(state_index),
+            state_update_source=(
+                'native_s14' if int(source_ids[state_index]) == 0
+                else 'supplement_s7'),
             selected_source=('native_s14' if int(source_ids[selected]) == 0
                              else 'supplement_s7'))
 

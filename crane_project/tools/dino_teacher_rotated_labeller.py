@@ -531,6 +531,17 @@ def parse_args():
     parser.add_argument('--source-roi-temporal-holdout-seq',
                         default='real_seq05')
     parser.add_argument(
+        '--source-roi-temporal-counterfactual-audit', action='store_true',
+        help=('Run protocol-35: a read-only source-val attribution audit of '
+              'the fixed protocol-34 adapter. It compares selected-state '
+              'and native-anchored recurrence with top-8/top-32 pools.'))
+    parser.add_argument(
+        '--source-roi-temporal-result-json', default=None,
+        help='Completed protocol-34 result that locks the failed adapter.')
+    parser.add_argument(
+        '--source-roi-temporal-adapter-checkpoint', default=None,
+        help='Protocol-34 ROI temporal adapter checkpoint to audit.')
+    parser.add_argument(
         '--s7-highres-smooth-geometry-ranking', action='store_true',
         help=('Add source-only smooth-geometry auxiliary pair ranking to the '
               'unified high-resolution quality logits. GT geometry is used '
@@ -892,6 +903,8 @@ def validate_args(args):
         args, 'source_dense_temporal_separability_audit', False))
     roi_temporal_train = bool(getattr(
         args, 'source_roi_temporal_contrastive_train', False))
+    roi_temporal_audit = bool(getattr(
+        args, 'source_roi_temporal_counterfactual_audit', False))
     if bool(getattr(args, 's7_highres_roi_ranker', False)) != highres_mode:
         raise ValueError(
             '--s7-highres-roi-ranker and its train-components mode must be '
@@ -966,6 +979,18 @@ def validate_args(args):
         raise ValueError(
             'ROI temporal contrastive training is exclusive with other '
             'highres training and audit routes')
+    if roi_temporal_audit and (not highres_mode or not highres_unified):
+        raise ValueError(
+            'ROI temporal counterfactual audit requires the unified highres '
+            'candidate architecture')
+    if roi_temporal_audit and (
+            roi_temporal_train or highres_margin_audit or smooth_geometry_audit
+            or native_relative_risk_audit or paired_view_audit
+            or dense_temporal_audit or highres_takeover_v2
+            or highres_smooth_geometry or highres_relative_risk):
+        raise ValueError(
+            'ROI temporal counterfactual audit is exclusive with training '
+            'and other highres audit routes')
     if smooth_geometry_audit and highres_smooth_geometry:
         raise ValueError(
             'Smooth geometry audit and geometry-guided training are separate '
@@ -1141,6 +1166,24 @@ def validate_args(args):
                 '--source-roi-temporal-motion-weight must be non-negative')
         args.source_roi_temporal_spec = load_roi_temporal_support_spec(
             support_json, args.eval_only_checkpoint)
+    if roi_temporal_audit:
+        if (not args.eval_only_checkpoint or args.init_checkpoint
+                or args.resume_checkpoint or not args.skip_target_eval):
+            raise ValueError(
+                'ROI temporal counterfactual audit requires one frozen base '
+                'checkpoint, source-only execution, and no init/resume')
+        result_json = getattr(args, 'source_roi_temporal_result_json', None)
+        adapter_checkpoint = getattr(
+            args, 'source_roi_temporal_adapter_checkpoint', None)
+        if not result_json or not os.path.isfile(result_json):
+            raise ValueError(
+                'ROI temporal counterfactual audit requires protocol-34 JSON')
+        if not adapter_checkpoint or not os.path.isfile(adapter_checkpoint):
+            raise ValueError(
+                'ROI temporal counterfactual audit requires adapter checkpoint')
+        args.source_roi_temporal_counterfactual_spec = (
+            load_roi_temporal_counterfactual_spec(
+                result_json, adapter_checkpoint, args.eval_only_checkpoint))
     if highres_smooth_geometry and not native_relative_risk_audit:
         if highres_margin_audit or smooth_geometry_audit:
             raise ValueError(
@@ -8301,7 +8344,8 @@ def summarize_roi_temporal_state_propagation(
         selection = candidate.get('temporal_selection') or {}
         promotion = bool(selection.get('promotion', False))
         s7_selected = bool(
-            selection.get('selected_source') == 'supplement_s7')
+            selection.get('state_update_source',
+                          selection.get('selected_source')) == 'supplement_s7')
         baseline_hit = bool(baseline['metrics']['top1_hit'])
         candidate_hit = bool(candidate['metrics']['top1_hit'])
         promotions += int(promotion)
@@ -8474,6 +8518,178 @@ def evaluate_roi_temporal_source_gate(
         state_propagation_audit=propagation,
         promotion_count=int(propagation['promotion_count']),
         candidate_rows=candidate_rows)
+
+
+def build_roi_temporal_counterfactual_audit(
+        dino, heads, adapter, records: Sequence[Dict], args,
+        dino_device, head_device, spec: Dict, source_protocol: Dict) -> Dict:
+    """Attribute protocol-34 failure without fitting or threshold scanning."""
+    policy_specs = {
+        'closed_loop_top32': dict(limit=32, state='selected'),
+        'native_anchor_top32': dict(limit=32, state='native'),
+        'closed_loop_top8': dict(limit=8, state='selected'),
+        'native_anchor_top8': dict(limit=8, state='native'),
+    }
+    selectors = {
+        name: temporal.CausalRoiTemporalAdapterSelector(
+            adapter, max_candidates=policy['limit'],
+            promotion_margin=0.05, motion_weight=0.25,
+            state_update_policy=policy['state'])
+        for name, policy in policy_specs.items()}
+    rows = {name: [] for name in policy_specs}
+    baseline_rows = []
+    ordered = sorted(records, key=lambda row: (
+        str(row['split']), str(row['seq']), int(row['frame'])))
+    heads.eval()
+    adapter.eval()
+    with torch.no_grad():
+        for position, record in enumerate(ordered):
+            feature, img_meta, _boxes, _labels, original, cached = prepare_record(
+                dino, record, args, dino_device, head_device)
+            heads._protected_merge_detections(
+                feature, img_meta, rescale=True, apply_highres_ranker=False)
+            pool = getattr(heads, '_last_highres_pool', None)
+            if pool is None:
+                raise RuntimeError('Protocol-35 source audit has no pool')
+            detections = pool['detections']
+            source_ids = pool['source_ids']
+            native_indices = torch.nonzero(
+                source_ids == 0, as_tuple=False).flatten()
+            native = (detections[:0] if not native_indices.numel() else
+                      detections[native_indices[:1]])
+            baseline_rows.append(_highres_margin_audit_row(
+                record, original, img_meta, native.detach().cpu().numpy(),
+                None, args, cached))
+            valid = valid_rotated_detection_mask(
+                detections.detach().cpu().numpy(), img_meta,
+                args.valid_content_tolerance)
+            valid_mask = torch.as_tensor(
+                valid, dtype=torch.bool, device=detections.device)
+            for name, selector in selectors.items():
+                selection = selector.select(
+                    detections, pool['embeddings'], source_ids,
+                    '{}|{}'.format(record['split'], record['seq']),
+                    int(record['frame']), valid_mask=valid_mask)
+                candidate = _highres_margin_audit_row(
+                    record, original, img_meta,
+                    detections[selection['order']].detach().cpu().numpy(),
+                    None, args, cached)
+                candidate['temporal_selection'] = {
+                    key: value for key, value in selection.items()
+                    if key != 'order'}
+                rows[name].append(candidate)
+            del feature, _boxes, _labels, pool, detections
+            interval = int(args.source_roi_temporal_empty_cache_interval)
+            if torch.cuda.is_available() and (position + 1) % interval == 0:
+                torch.cuda.empty_cache()
+            if (position + 1) % 25 == 0 or position + 1 == len(ordered):
+                text = ' '.join('{}={}'.format(
+                    name, sum(row['metrics']['top1_hit'] for row in values))
+                    for name, values in rows.items())
+                print('[roi-temporal-counterfactual] {}/{} {}'.format(
+                    position + 1, len(ordered), text))
+
+    baseline_summary = summarize_rows(baseline_rows)
+    expected_gate = ((spec['result'].get('source') or {}).get('final_gate')
+                     or {})
+    expected = expected_gate.get('baseline_summary') or {}
+    expected_small = expected_gate.get('baseline_small_summary') or {}
+    if (int(baseline_summary.get('top1_hits', -1))
+            != int(expected.get('top1_hits', -2))):
+        raise RuntimeError('Protocol-35 did not reproduce native baseline')
+    base_sampling = spec['support']['base']['small_sampling']
+    threshold = float(base_sampling['short_token_threshold'])
+    small_keys = {source_frame_key(row) for row in source_small_records(
+        records, args, threshold)}
+    observed_baseline_small = summarize_rows([
+        row for row in baseline_rows if source_frame_key(row) in small_keys])
+    if (int(observed_baseline_small.get('top1_hits', -1))
+            != int(expected_small.get('top1_hits', -2))
+            or int(observed_baseline_small.get('frame_count', -1))
+            != int(expected_small.get('frame_count', -2))):
+        raise RuntimeError(
+            'Protocol-35 did not reproduce native small baseline')
+    baseline_correct = source_correct_frame_keys(baseline_rows)
+    policy_results = {}
+    for name, candidate_rows in rows.items():
+        summary = summarize_rows(candidate_rows)
+        small_rows = [row for row in candidate_rows
+                      if source_frame_key(row) in small_keys]
+        small_summary = summarize_rows(small_rows)
+        retention = source_top1_retention_summary(
+            baseline_correct, candidate_rows)
+        gate = s7_source_selection_gate(
+            expected, expected_small, summary, small_summary,
+            retention, args)
+        propagation = summarize_roi_temporal_state_propagation(
+            baseline_rows, candidate_rows)
+        gate['checks']['no_post_s7_state_old_correct_loss'] = bool(
+            propagation['post_s7_state_old_correct_loss_count'] == 0)
+        gate['passed'] = bool(all(gate['checks'].values()))
+        policy_results[name] = dict(
+            policy=policy_specs[name], summary=summary,
+            small_summary=small_summary, source_exact_retention=retention,
+            source_gate=gate, state_propagation_audit=propagation,
+            selection_rows=[dict(
+                frame_key=source_frame_key(row),
+                top1_hit=bool(row['metrics']['top1_hit']),
+                top1_riou=float(row['metrics']['top1_riou']),
+                selection=row.get('temporal_selection'))
+                for row in candidate_rows])
+    closed32 = policy_results['closed_loop_top32']
+    native32 = policy_results['native_anchor_top32']
+    closed8 = policy_results['closed_loop_top8']
+    state_poisoning_supported = bool(
+        native32['summary']['top1_hits'] > closed32['summary']['top1_hits']
+        and native32['state_propagation_audit'][
+            'post_s7_state_old_correct_loss_count']
+        < closed32['state_propagation_audit'][
+            'post_s7_state_old_correct_loss_count'])
+    pool_mismatch_supported = bool(
+        closed8['summary']['top1_hits'] > closed32['summary']['top1_hits'])
+    def first_policy_divergence(left: str, right: str):
+        for left_row, right_row in zip(rows[left], rows[right]):
+            left_selection = left_row.get('temporal_selection') or {}
+            right_selection = right_row.get('temporal_selection') or {}
+            if (left_selection.get('selected_index')
+                    != right_selection.get('selected_index')):
+                return source_frame_key(left_row)
+        return None
+    return dict(
+        protocol_version=35,
+        audit_name='Source-only ROI Temporal Counterfactual Attribution',
+        protocol=dict(
+            source_only=True, target_read=False, parameter_update=False,
+            fixed_adapter_epoch=int(spec['selected_epoch']),
+            fixed_promotion_margin=0.05, fixed_motion_weight=0.25,
+            policies=policy_specs, no_margin_scan=True,
+            source_data=source_protocol),
+        isolation=dict(
+            read_only_evaluation=True, parameter_updates_performed=False,
+            target_used_for_training=False,
+            target_used_for_checkpoint_selection=False,
+            target_used_for_threshold_tuning=False),
+        checkpoint_used=dict(
+            base=spec['base_checkpoint'], adapter=spec['adapter_checkpoint'],
+            protocol34_result=spec['result_json']),
+        source=dict(
+            baseline_summary=expected,
+            baseline_small_summary=expected_small,
+            policies=policy_results,
+            attribution=dict(
+                recursive_state_poisoning_supported=state_poisoning_supported,
+                top8_top32_training_inference_mismatch_supported=(
+                    pool_mismatch_supported),
+                first_closed_loop_vs_native_anchor_divergence=(
+                    first_policy_divergence(
+                        'closed_loop_top32', 'native_anchor_top32')),
+                first_top32_vs_top8_closed_loop_divergence=(
+                    first_policy_divergence(
+                        'closed_loop_top32', 'closed_loop_top8')))),
+        target_dev=None, eligible_for_deployment=False,
+        eligible_for_fixed_target_dev_diagnostic=False,
+        eligible_for_full_test=False,
+        decision='SOURCE_ONLY_ROI_TEMPORAL_COUNTERFACTUAL_COMPLETE_TARGET_NOT_READ')
 
 
 def build_roi_temporal_contrastive_result(
@@ -9000,10 +9216,12 @@ def summarize_temporal_association_audit(rows: Sequence[Dict]) -> Optional[Dict]
             'native_fallback_pending_confirmation'
             for row in temporal_rows)),
         override_selected_count=int(sum(
-            bool(row['temporal_selection'].get('override', False))
+            bool(row['temporal_selection'].get(
+                'override', row['temporal_selection'].get('promotion', False)))
             for row in temporal_rows)),
         override_selected_s7_count=int(sum(
-            bool(row['temporal_selection'].get('override', False))
+            bool(row['temporal_selection'].get(
+                'override', row['temporal_selection'].get('promotion', False)))
             and row['temporal_selection'].get('selected_source') ==
             'supplement_s7' for row in temporal_rows)),
         reset_count=int(sum(
@@ -9202,7 +9420,8 @@ def summarize_rows(rows: Sequence[Dict]) -> Dict:
         candidate_merge_frame_count=len(merge_rows),
         temporal_selection_frame_count=len(temporal_rows),
         temporal_override_count=int(sum(
-            bool(row.get('override', False)) for row in temporal_rows)),
+            bool(row.get('override', row.get('promotion', False)))
+            for row in temporal_rows)),
         temporal_reset_count=int(sum(
             bool(row.get('reset', False)) for row in temporal_rows)),
         temporal_selected_source_counts={
@@ -9579,6 +9798,60 @@ def load_roi_temporal_support_spec(path: str, checkpoint: str) -> Dict:
         source_result_json=os.path.abspath(source_result),
         checkpoint=os.path.abspath(checkpoint), epoch=3,
         base=base)
+
+
+def load_roi_temporal_counterfactual_spec(
+        result_path: str, adapter_checkpoint: str,
+        base_checkpoint: str) -> Dict:
+    """Lock protocol-35 to one completed source-only protocol-34 run."""
+    with open(result_path, 'r') as handle:
+        result = json.load(handle)
+    if int(result.get('protocol_version', -1)) != 34:
+        raise ValueError('Counterfactual audit requires protocol-34 result')
+    if (result.get('target_dev') is not None
+            or (result.get('protocol') or {}).get('target_read') is not False):
+        raise ValueError('Protocol-34 result must be source-only')
+    if result.get('selected_epoch') is None:
+        raise ValueError('Protocol-34 result has no selected adapter epoch')
+    adapter_payload = torch.load(adapter_checkpoint, map_location='cpu')
+    if int(adapter_payload.get('protocol_version', -1)) != 34:
+        raise ValueError('Adapter checkpoint is not protocol-34')
+    if int(adapter_payload.get('epoch', -1)) != int(result['selected_epoch']):
+        raise ValueError('Protocol-34 result and adapter epoch disagree')
+    if adapter_payload.get('target_read') is not False:
+        raise ValueError('Protocol-34 adapter checkpoint read target data')
+    frozen_base = adapter_payload.get('frozen_base_checkpoint')
+    if (not frozen_base or os.path.realpath(str(frozen_base))
+            != os.path.realpath(base_checkpoint)):
+        raise ValueError('Protocol-34 adapter and frozen base disagree')
+    expected_hash = adapter_payload.get('frozen_base_sha256')
+    if (not expected_hash
+            or common.file_sha256(base_checkpoint) != str(expected_hash)):
+        raise ValueError('Protocol-34 frozen base checksum mismatch')
+    architecture = adapter_payload.get('architecture') or {}
+    if (int(architecture.get('input_dim', -1)) <= 0
+            or int(architecture.get('hidden_dim', -1)) <= 0
+            or int(architecture.get('output_dim', -1)) <= 0):
+        raise ValueError('Protocol-34 adapter architecture is incomplete')
+    runtime = adapter_payload.get('runtime_selection') or {}
+    if (int(runtime.get('s7_candidate_limit', -1)) != 32
+            or runtime.get('native_candidate_additional') is not True
+            or float(runtime.get('promotion_margin', -1.0)) != 0.05
+            or float(runtime.get('motion_weight', -1.0)) != 0.25):
+        raise ValueError('Protocol-34 runtime policy is not the locked one')
+    support_path = (result.get('checkpoint_used') or {}).get(
+        'support_result_json')
+    if not support_path or not os.path.isfile(support_path):
+        raise ValueError('Protocol-34 support result is unavailable')
+    support = load_roi_temporal_support_spec(support_path, base_checkpoint)
+    return dict(
+        result_json=os.path.abspath(result_path), result=result,
+        adapter_checkpoint=os.path.abspath(adapter_checkpoint),
+        adapter_payload=adapter_payload,
+        base_checkpoint=os.path.abspath(base_checkpoint),
+        selected_epoch=int(result['selected_epoch']),
+        architecture=architecture, runtime_selection=runtime,
+        support=support)
 
 
 def source_top1_retention_summary(
@@ -12428,6 +12701,55 @@ def main():
         replacements = common.write_json_atomic(args.out_json, audit)
         print('[dino-labeller] {}'.format(audit['decision']))
         print('[native-relative-risk] training_allowed=False')
+        print('[json] nonfinite_replacements={}'.format(replacements))
+        return
+    if bool(getattr(
+            args, 'source_roi_temporal_counterfactual_audit', False)):
+        spec = args.source_roi_temporal_counterfactual_spec
+        checkpoint_payload = torch.load(
+            args.eval_only_checkpoint, map_location='cpu')
+        validate_checkpoint(checkpoint_payload, in_channels, args)
+        load_heads_checkpoint_state(heads, checkpoint_payload)
+        heads.set_s7_inference_enabled(True)
+        for parameter in heads.parameters():
+            parameter.requires_grad = False
+        trainable_names = []
+        head_versions = common.module_parameter_versions(heads)
+        architecture = spec['architecture']
+        adapter = temporal.RoiTemporalContrastiveAdapter(
+            input_dim=int(architecture['input_dim']),
+            hidden_dim=int(architecture['hidden_dim']),
+            output_dim=int(architecture['output_dim'])).to(head_device)
+        adapter.load_state_dict(spec['adapter_payload']['adapter_state_dict'])
+        for parameter in adapter.parameters():
+            parameter.requires_grad = False
+        adapter_versions = common.module_parameter_versions(adapter)
+        result = build_roi_temporal_counterfactual_audit(
+            dino, heads, adapter, source_val, args,
+            dino_device, head_device, spec, source_protocol)
+        dino_unchanged = (
+            dino_versions == common.module_parameter_versions(dino))
+        heads_unchanged = (
+            head_versions == common.module_parameter_versions(heads))
+        adapter_unchanged = (
+            adapter_versions == common.module_parameter_versions(adapter))
+        if not dino_unchanged or not heads_unchanged or not adapter_unchanged:
+            raise RuntimeError(
+                'Protocol-35 changed a frozen model parameter')
+        result['isolation'].update(
+            dino_parameters_unchanged=bool(dino_unchanged),
+            detector_parameters_unchanged=bool(heads_unchanged),
+            adapter_parameters_unchanged=bool(adapter_unchanged),
+            trainable_parameter_names=trainable_names,
+            trainable_parameter_count=0)
+        replacements = common.write_json_atomic(args.out_json, result)
+        print('[dino-labeller] {}'.format(result['decision']))
+        print('[roi-temporal-counterfactual] state_poisoning={} pool_mismatch={}'
+              .format(
+                  result['source']['attribution'][
+                      'recursive_state_poisoning_supported'],
+                  result['source']['attribution'][
+                      'top8_top32_training_inference_mismatch_supported']))
         print('[json] nonfinite_replacements={}'.format(replacements))
         return
     if bool(getattr(args, 'source_roi_temporal_contrastive_train', False)):
