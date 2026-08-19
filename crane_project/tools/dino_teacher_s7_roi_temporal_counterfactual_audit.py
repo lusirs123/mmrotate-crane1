@@ -117,6 +117,10 @@ def build_locked_labeller_argv(args) -> List[str]:
         '--s7-source-min-full-top1', '688',
         '--s7-source-min-small-top1', '311', '--s7-source-max-mcml', '3',
         '--train-components', 's7_highres_roi_ranker',
+        # The shared validator derives S7 schedule guards before dispatching
+        # the read-only audit branch.  Pin the compatible four-epoch metadata;
+        # protocol-35 still performs zero optimizer steps.
+        '--epochs', '4',
         '--eval-only-checkpoint', args.eval_only_checkpoint,
         '--feature-cache-dir', args.feature_cache_dir,
         '--work-dir', args.work_dir,

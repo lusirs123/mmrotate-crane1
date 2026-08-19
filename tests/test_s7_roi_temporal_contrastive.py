@@ -322,5 +322,11 @@ def test_protocol35_builds_read_only_three_gpu_route(tmp_path, monkeypatch):
     argv = protocol35.build_locked_labeller_argv(args)
     assert '--source-roi-temporal-counterfactual-audit' in argv
     assert '--skip-target-eval' in argv
+    assert argv[argv.index('--epochs') + 1] == '4'
     assert argv[argv.index('--dino-gpus') + 1:argv.index('--head-gpu')] == [
         '1', '2']
+    monkeypatch.setattr(protocol35.sys, 'argv', argv)
+    parsed = protocol35.labeller.parse_args()
+    protocol35.labeller.validate_args(parsed)
+    assert parsed.epochs == 4
+    assert parsed.lr_steps == [2, 3]
