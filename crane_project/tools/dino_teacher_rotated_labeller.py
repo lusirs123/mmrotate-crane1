@@ -467,6 +467,24 @@ def parse_args():
               'to lock the rejected fallback checkpoint and document the '
               'observed zero-effective-penalty failure.'))
     parser.add_argument(
+        '--source-paired-view-role-switch-support-audit', action='store_true',
+        help=('Run the locked source-only paired image-view candidate '
+              'role-switch audit. Each augmented view re-runs frozen DINO, '
+              'native/S7 RPN and ROI; it never trains or reads target data.'))
+    parser.add_argument(
+        '--source-paired-view-source-result-json', default=None,
+        help=('Unified high-resolution source-only result used only to lock '
+              'the epoch-3 candidate checkpoint and native source baselines.'))
+    parser.add_argument(
+        '--source-paired-view-min-gain-frames', type=int, default=32,
+        help=('Minimum distinct original source frames whose paired view '
+              'requires S7 while the clean view prefers native.'))
+    parser.add_argument(
+        '--source-paired-view-min-gain-sequences', type=int, default=3)
+    parser.add_argument(
+        '--source-paired-view-max-sequence-fraction', type=float,
+        default=0.50)
+    parser.add_argument(
         '--s7-highres-smooth-geometry-ranking', action='store_true',
         help=('Add source-only smooth-geometry auxiliary pair ranking to the '
               'unified high-resolution quality logits. GT geometry is used '
@@ -822,6 +840,8 @@ def validate_args(args):
         args, 'source_smooth_geometry_rank_support_audit', False))
     native_relative_risk_audit = bool(getattr(
         args, 'source_native_relative_risk_support_audit', False))
+    paired_view_audit = bool(getattr(
+        args, 'source_paired_view_role_switch_support_audit', False))
     if bool(getattr(args, 's7_highres_roi_ranker', False)) != highres_mode:
         raise ValueError(
             '--s7-highres-roi-ranker and its train-components mode must be '
@@ -857,6 +877,19 @@ def validate_args(args):
             highres_margin_audit or smooth_geometry_audit):
         raise ValueError(
             'Native-relative risk support audit is exclusive with other audits')
+    if paired_view_audit and not highres_mode:
+        raise ValueError(
+            'Paired-view role-switch audit requires s7_highres_roi_ranker')
+    if paired_view_audit and not highres_unified:
+        raise ValueError(
+            'Paired-view role-switch audit requires unified ranking')
+    if paired_view_audit and (
+            highres_margin_audit or smooth_geometry_audit
+            or native_relative_risk_audit or highres_takeover_v2
+            or highres_smooth_geometry or highres_relative_risk):
+        raise ValueError(
+            'Paired-view role-switch audit is exclusive with other highres '
+            'training and audit routes')
     if smooth_geometry_audit and highres_smooth_geometry:
         raise ValueError(
             'Smooth geometry audit and geometry-guided training are separate '
@@ -928,6 +961,37 @@ def validate_args(args):
                 'source-only result JSON')
         args.source_native_relative_risk_audit_spec = (
             load_native_relative_risk_support_audit_spec(
+                result_json, args.eval_only_checkpoint))
+    if paired_view_audit:
+        if (not args.eval_only_checkpoint or args.init_checkpoint
+                or args.resume_checkpoint or not args.skip_target_eval):
+            raise ValueError(
+                'Paired-view role-switch audit requires one eval-only '
+                'checkpoint, source-only evaluation, and no init/resume')
+        if not os.path.isfile(args.eval_only_checkpoint):
+            raise ValueError(
+                'Paired-view role-switch audit checkpoint does not exist: {}'
+                .format(args.eval_only_checkpoint))
+        result_json = getattr(
+            args, 'source_paired_view_source_result_json', None)
+        if not result_json or not os.path.isfile(result_json):
+            raise ValueError(
+                'Paired-view role-switch audit requires the unified '
+                'source-only training result JSON')
+        if int(getattr(args, 'source_paired_view_min_gain_frames', 32)) <= 0:
+            raise ValueError(
+                '--source-paired-view-min-gain-frames must be positive')
+        if int(getattr(
+                args, 'source_paired_view_min_gain_sequences', 3)) <= 0:
+            raise ValueError(
+                '--source-paired-view-min-gain-sequences must be positive')
+        fraction = float(getattr(
+            args, 'source_paired_view_max_sequence_fraction', 0.50))
+        if not 0.0 < fraction <= 1.0:
+            raise ValueError(
+                '--source-paired-view-max-sequence-fraction must be in (0, 1]')
+        args.source_paired_view_audit_spec = (
+            load_paired_view_role_switch_support_audit_spec(
                 result_json, args.eval_only_checkpoint))
     if highres_smooth_geometry and not native_relative_risk_audit:
         if highres_margin_audit or smooth_geometry_audit:
@@ -1367,7 +1431,7 @@ def validate_args(args):
                 'Selective promotion phase-2 result lacks source summaries')
         args.s7_selective_teacher_result = teacher_result
         if (highres_mode and not (highres_margin_audit or smooth_geometry_audit
-                                   or highres_smooth_geometry
+                                   or paired_view_audit or highres_smooth_geometry
                                    or conflict_json)):
             teacher_result_json = getattr(
                 args, 's7_highres_teacher_result_json', None)
@@ -1625,7 +1689,7 @@ def validate_args(args):
                 '--s7-source-max-mcml <= 3')
     if highres_mode:
         if (not (highres_margin_audit or smooth_geometry_audit
-                  or highres_smooth_geometry or conflict_json)
+                  or paired_view_audit or highres_smooth_geometry or conflict_json)
                 and (not args.init_checkpoint or args.resume_checkpoint
                      or args.eval_only_checkpoint)):
             raise ValueError(
@@ -2564,13 +2628,19 @@ def file_identity(path: str) -> Dict:
 
 
 def cache_signature(record: Dict, args) -> Dict:
-    return dict(
+    signature = dict(
         image=file_identity(record['image']),
         dinov2_checkpoint=file_identity(args.dinov2_checkpoint),
         dinov2_model=args.dinov2_model,
         dino_height=int(args.dino_height),
         dino_max_long_side=int(args.dino_max_long_side),
         patch_size=int(args.patch_size))
+    view = str(record.get('paired_view', 'clean'))
+    if view != 'clean':
+        signature.update(
+            paired_view=view,
+            paired_view_version=int(record.get('paired_view_version', 0)))
+    return signature
 
 
 def cache_path(record: Dict, args) -> str:
@@ -2679,6 +2749,7 @@ def extract_or_load_feature(dino, record: Dict, args,
     image = cv2.imread(record['image'])
     if image is None:
         raise RuntimeError('Cannot read {}'.format(record['image']))
+    image = paired_view_image(image, record)
     tensor, dino_meta = common.resize_and_normalize_bgr(
         image, args.dino_height, args.patch_size,
         args.dino_max_long_side)
@@ -2692,6 +2763,64 @@ def extract_or_load_feature(dino, record: Dict, args,
         dino_meta=dino_meta, frozen_dinov2=True), path)
     del tensor, feature
     return feature_cpu, dino_meta, False
+
+
+PAIRED_VIEW_VERSION = 1
+PAIRED_VIEW_NAMES = ('clean', 'photometric', 'degradation')
+
+
+def _paired_view_seed(record: Dict, view: str) -> int:
+    """Return a stable per-frame seed without using global RNG state."""
+    key = '{}|{}|{}|{}|{}'.format(
+        record.get('split', ''), record.get('seq', ''),
+        int(record.get('frame', -1)), view, PAIRED_VIEW_VERSION)
+    return int(hashlib.sha256(key.encode('utf-8')).hexdigest()[:16], 16)
+
+
+def paired_view_image(image: np.ndarray, record: Dict) -> np.ndarray:
+    """Create a deterministic, label-preserving source-only image view.
+
+    The audit intentionally uses no crop, flip, rotation, or spatial warp, so
+    the original OBB annotations remain valid.  Each non-clean view has the
+    same H/W as the original and must subsequently take its own DINO/RPN/ROI
+    forward path; this helper never perturbs a cached feature tensor.
+    """
+    view = str(record.get('paired_view', 'clean'))
+    version = int(record.get('paired_view_version', 0))
+    if view not in PAIRED_VIEW_NAMES:
+        raise ValueError('Unknown paired image view: {}'.format(view))
+    if view == 'clean':
+        return image
+    if version != PAIRED_VIEW_VERSION:
+        raise ValueError(
+            'Paired view {} requires version {}, found {}'.format(
+                view, PAIRED_VIEW_VERSION, version))
+    if image.ndim != 3 or image.shape[2] != 3:
+        raise ValueError('Paired view expects a BGR HxWx3 image')
+    rng = np.random.default_rng(_paired_view_seed(record, view))
+    source = image.astype(np.float32)
+    if view == 'photometric':
+        gamma = float(rng.uniform(0.78, 1.22))
+        gain = float(rng.uniform(0.82, 1.18))
+        offset = float(rng.uniform(-16.0, 16.0))
+        normalized = np.clip(source / 255.0, 0.0, 1.0)
+        transformed = np.power(normalized, gamma) * 255.0
+        transformed = transformed * gain + offset
+        return np.clip(transformed, 0.0, 255.0).astype(np.uint8)
+    if view == 'degradation':
+        blurred = cv2.GaussianBlur(source, (3, 3), sigmaX=0.8)
+        height, width = image.shape[:2]
+        ratio = float(rng.uniform(0.58, 0.72))
+        small_h = max(1, int(round(height * ratio)))
+        small_w = max(1, int(round(width * ratio)))
+        reduced = cv2.resize(
+            blurred, (small_w, small_h), interpolation=cv2.INTER_AREA)
+        restored = cv2.resize(
+            reduced, (width, height), interpolation=cv2.INTER_CUBIC)
+        noise = rng.normal(0.0, float(rng.uniform(1.0, 3.0)),
+                           size=restored.shape)
+        return np.clip(restored + noise, 0.0, 255.0).astype(np.uint8)
+    raise AssertionError('Unreachable paired-view branch')
 
 
 def parse_original_gt(annotation: str) -> np.ndarray:
@@ -5036,6 +5165,18 @@ def prepare_record(dino, record: Dict, args, dino_device, head_device):
     return feature, img_meta, gt_boxes, gt_labels, original, cached
 
 
+def prepare_record_paired_view(
+        dino, record: Dict, view: str, args, dino_device, head_device):
+    """Prepare one clean or augmented full-forward audit view."""
+    if view not in PAIRED_VIEW_NAMES:
+        raise ValueError('Unknown paired view: {}'.format(view))
+    view_record = dict(record)
+    view_record['paired_view'] = view
+    view_record['paired_view_version'] = (
+        0 if view == 'clean' else PAIRED_VIEW_VERSION)
+    return prepare_record(dino, view_record, args, dino_device, head_device)
+
+
 def audit_s7_quality_training_support(
         dino, heads, records: Sequence[Dict], args,
         dino_device, head_device) -> Dict:
@@ -7002,6 +7143,312 @@ def build_native_relative_risk_support_audit(
                   'TARGET_NOT_READ'))
 
 
+def _paired_view_lane_row(
+        record: Dict, view: str, original: np.ndarray, pool: Dict,
+        args, cached: bool) -> Dict:
+    """Describe native/S7 correctness for one full image forward view."""
+    detections = pool['detections'].detach().cpu().numpy().astype(
+        np.float32, copy=False).reshape((-1, 6))
+    source_ids = pool['source_ids'].detach().cpu().numpy().astype(
+        np.int64, copy=False).reshape(-1)
+    row = dict(
+        view=str(view), candidate_count=int(detections.shape[0]),
+        eligible=False, native_index=None, native_riou=0.0,
+        native_correct=False, s7_correct_count=0, best_s7_riou=0.0,
+        best_s7_rank_by_roi_score=None, native_rank_by_roi_score=None,
+        feature_cache_hit=bool(cached))
+    if detections.shape[0] == 0 or original.shape[0] == 0:
+        return row
+    if detections.shape[0] != source_ids.shape[0]:
+        raise RuntimeError('Paired-view candidate pool metadata disagrees')
+    from mmcv.ops import box_iou_rotated
+
+    boxes = torch.from_numpy(detections[:, :5]).float()
+    gt = torch.from_numpy(np.asarray(original[:, :5], dtype=np.float32))
+    overlaps = box_iou_rotated(boxes, gt).max(dim=1).values.cpu().numpy()
+    native_indices = np.flatnonzero(source_ids == 0)
+    if native_indices.size == 0:
+        raise RuntimeError('Paired-view candidate pool has no native candidate')
+    native_index = int(native_indices[np.argmax(detections[native_indices, 5])])
+    s7_indices = np.flatnonzero(source_ids == 1)
+    s7_correct = s7_indices[overlaps[s7_indices] >= float(args.riou_thr)]
+    order = np.argsort(-detections[:, 5], kind='mergesort')
+    native_rank = int(np.flatnonzero(order == native_index)[0] + 1)
+    best_s7 = (0.0 if s7_indices.size == 0 else float(
+        np.max(overlaps[s7_indices])))
+    best_s7_rank = None
+    if s7_correct.size:
+        best_s7_rank = int(min(
+            int(np.flatnonzero(order == index)[0] + 1)
+            for index in s7_correct.tolist()))
+    row.update(
+        eligible=True, native_index=native_index,
+        native_riou=float(overlaps[native_index]),
+        native_correct=bool(overlaps[native_index] >= float(args.riou_thr)),
+        s7_correct_count=int(s7_correct.size), best_s7_riou=best_s7,
+        best_s7_rank_by_roi_score=best_s7_rank,
+        native_rank_by_roi_score=native_rank)
+    return row
+
+
+def _paired_view_frame_row(record: Dict, views: Dict[str, Dict]) -> Dict:
+    """Collapse all views of one original frame without double counting it."""
+    clean = views.get('clean')
+    if clean is None:
+        raise RuntimeError('Paired-view audit requires the clean view')
+    augmented = [views[name] for name in PAIRED_VIEW_NAMES
+                 if name != 'clean' and name in views]
+    if len(augmented) != 2:
+        raise RuntimeError('Paired-view audit requires both locked augmented views')
+    gain_views = [view for view in augmented if (
+        bool(view['eligible']) and not bool(view['native_correct'])
+        and int(view['s7_correct_count']) > 0)]
+    clean_native_preferred = bool(
+        clean['eligible'] and clean['native_correct'])
+    return dict(
+        split=str(record['split']), seq=str(record['seq']),
+        domain=source_domain_label(record), frame=int(record['frame']),
+        frame_key='{}|{}|{}'.format(
+            record['split'], record['seq'], int(record['frame'])),
+        eligible=bool(clean['eligible'] and all(
+            bool(view['eligible']) for view in augmented)),
+        views=views,
+        clean_native_preferred=clean_native_preferred,
+        clean_native_wrong_s7_correct=bool(
+            clean['eligible'] and not clean['native_correct']
+            and int(clean['s7_correct_count']) > 0),
+        augmented_native_wrong_s7_correct=bool(gain_views),
+        augmented_gain_views=[str(view['view']) for view in gain_views],
+        role_switch_to_s7=bool(clean_native_preferred and gain_views),
+        candidate_gain_emergence=bool(
+            gain_views and not (not clean['native_correct']
+                                and int(clean['s7_correct_count']) > 0)),
+        retention_support_any_view=bool(any(
+            view['eligible'] and view['native_correct']
+            and int(view['s7_correct_count']) == 0
+            for view in views.values())))
+
+
+def evaluate_paired_view_role_switch_support_records(
+        dino, heads, records: Sequence[Dict], args,
+        dino_device, head_device,
+        views: Sequence[str] = PAIRED_VIEW_NAMES) -> List[Dict]:
+    """Run independent frozen DINO/RPN/ROI forwards for all locked views."""
+    views = tuple(views)
+    if not views or views[0] != 'clean' or any(
+            view not in PAIRED_VIEW_NAMES for view in views):
+        raise ValueError('Paired-view audit requires clean plus known views')
+    heads.eval()
+    rows = []
+    with torch.no_grad():
+        for index, record in enumerate(records):
+            per_view = {}
+            for view in views:
+                feature, img_meta, _gt_boxes, _gt_labels, original, cached = (
+                    prepare_record_paired_view(
+                        dino, record, view, args, dino_device, head_device))
+                heads._protected_merge_detections(
+                    feature, img_meta, rescale=True,
+                    apply_highres_ranker=False)
+                pool = getattr(heads, '_last_highres_pool', None)
+                if pool is None:
+                    raise RuntimeError(
+                        'Paired-view audit produced no high-resolution pool')
+                per_view[view] = _paired_view_lane_row(
+                    record, view, original, pool, args, cached)
+                del feature, _gt_boxes, _gt_labels
+            if views == PAIRED_VIEW_NAMES:
+                rows.append(_paired_view_frame_row(record, per_view))
+            else:
+                clean = per_view['clean']
+                rows.append(dict(
+                    split=str(record['split']), seq=str(record['seq']),
+                    domain=source_domain_label(record), frame=int(record['frame']),
+                    frame_key='{}|{}|{}'.format(
+                        record['split'], record['seq'], int(record['frame'])),
+                    eligible=bool(clean['eligible']), views=per_view))
+            if ((index + 1) % 25 == 0 or index + 1 == len(records)):
+                print('[paired-view] {}/{} eligible={}'.format(
+                    index + 1, len(records),
+                    sum(bool(item['eligible']) for item in rows)))
+    return rows
+
+
+def summarize_paired_view_role_switch_support(
+        rows: Sequence[Dict]) -> Dict:
+    """Summarize unique original-frame support without selecting a model."""
+    eligible = [row for row in rows if bool(row.get('eligible', False))]
+    role_switch = [row for row in eligible if bool(
+        row.get('role_switch_to_s7', False))]
+    augmented_gain = [row for row in eligible if bool(
+        row.get('augmented_native_wrong_s7_correct', False))]
+    emergence = [row for row in eligible if bool(
+        row.get('candidate_gain_emergence', False))]
+    retention = [row for row in eligible if bool(
+        row.get('retention_support_any_view', False))]
+    sequence_counts = collections.Counter(str(row['seq']) for row in role_switch)
+    role_count = len(role_switch)
+    max_fraction = (0.0 if not role_count else float(
+        max(sequence_counts.values())) / float(role_count))
+    by_view = {}
+    for view in PAIRED_VIEW_NAMES:
+        view_rows = [row['views'][view] for row in eligible
+                     if view in row.get('views', {})]
+        by_view[view] = dict(
+            frame_count=int(len(view_rows)),
+            eligible_frame_count=int(sum(
+                bool(item['eligible']) for item in view_rows)),
+            native_top1_hits=int(sum(
+                bool(item['native_correct']) for item in view_rows)),
+            native_wrong_s7_correct_frame_count=int(sum(
+                bool(item['eligible']) and not bool(item['native_correct'])
+                and int(item['s7_correct_count']) > 0
+                for item in view_rows)),
+            retention_only_frame_count=int(sum(
+                bool(item['eligible']) and bool(item['native_correct'])
+                and int(item['s7_correct_count']) == 0
+                for item in view_rows)),
+            candidate_count_total=int(sum(
+                int(item['candidate_count']) for item in view_rows)))
+    return dict(
+        frame_count=int(len(rows)), eligible_frame_count=int(len(eligible)),
+        paired_gain_role_switch_frame_count=int(role_count),
+        paired_gain_role_switch_domains=sorted(set(
+            str(row['domain']) for row in role_switch)),
+        paired_gain_role_switch_sequences=sorted(sequence_counts),
+        paired_gain_role_switch_sequence_counts=dict(
+            sorted((key, int(value)) for key, value in sequence_counts.items())),
+        paired_gain_role_switch_max_sequence_fraction=max_fraction,
+        augmented_native_wrong_s7_correct_frame_count=int(len(augmented_gain)),
+        candidate_gain_emergence_frame_count=int(len(emergence)),
+        retention_support_any_view_frame_count=int(len(retention)),
+        retention_support_domains=sorted(set(
+            str(row['domain']) for row in retention)),
+        retention_support_sequences=sorted(set(
+            str(row['seq']) for row in retention)),
+        view_summaries=by_view)
+
+
+def _paired_view_role_switch_support_gate(summary: Dict, args) -> Dict:
+    role_count = int(summary['paired_gain_role_switch_frame_count'])
+    min_frames = int(args.source_paired_view_min_gain_frames)
+    min_sequences = int(args.source_paired_view_min_gain_sequences)
+    max_fraction = float(args.source_paired_view_max_sequence_fraction)
+    role_domains = set(summary['paired_gain_role_switch_domains'])
+    retention_domains = set(summary['retention_support_domains'])
+    checks = dict(
+        minimum_distinct_original_frames=role_count >= min_frames,
+        real_and_sim_gain_coverage=role_domains == {'real', 'sim'},
+        minimum_gain_sequences=(len(
+            summary['paired_gain_role_switch_sequences']) >= min_sequences),
+        no_single_sequence_dominates=(float(
+            summary['paired_gain_role_switch_max_sequence_fraction'])
+            <= max_fraction),
+        real_and_sim_retention_coverage=retention_domains == {'real', 'sim'})
+    return dict(
+        passed=bool(all(checks.values())), checks=checks,
+        min_gain_frames=min_frames, min_gain_sequences=min_sequences,
+        max_sequence_fraction=max_fraction,
+        observed_gain_frames=role_count,
+        observed_gain_domains=sorted(role_domains),
+        observed_gain_sequences=list(
+            summary['paired_gain_role_switch_sequences']),
+        observed_max_sequence_fraction=float(
+            summary['paired_gain_role_switch_max_sequence_fraction']),
+        observed_retention_domains=sorted(retention_domains))
+
+
+def _paired_view_group_summaries(rows: Sequence[Dict], field: str) -> Dict:
+    groups = collections.defaultdict(list)
+    for row in rows:
+        groups[str(row[field])].append(row)
+    return {label: summarize_paired_view_role_switch_support(group)
+            for label, group in sorted(groups.items())}
+
+
+def build_paired_view_role_switch_support_audit(
+        dino, heads, source_train: Sequence[Dict], source_val: Sequence[Dict],
+        args, dino_device, head_device, spec: Dict,
+        source_protocol: Optional[Dict] = None) -> Dict:
+    """Build protocol-31 without training, target access, or model selection."""
+    train_rows = evaluate_paired_view_role_switch_support_records(
+        dino, heads, source_train, args, dino_device, head_device)
+    val_rows = evaluate_paired_view_role_switch_support_records(
+        dino, heads, source_val, args, dino_device, head_device,
+        views=('clean',))
+    train_summary = summarize_paired_view_role_switch_support(train_rows)
+    val_summary = summarize_paired_view_role_switch_support(val_rows)
+    threshold = float(spec['small_sampling']['short_token_threshold'])
+    small_keys = {
+        (record['split'], record['seq'], int(record['frame']))
+        for record in source_small_records(source_val, args, threshold)}
+    small_val_rows = [row for row in val_rows if (
+        row['split'], row['seq'], int(row['frame'])) in small_keys]
+    small_val_summary = summarize_paired_view_role_switch_support(small_val_rows)
+    expected_full = int(spec['baseline_summary']['top1_hits'])
+    expected_small = int(spec['baseline_small_summary']['top1_hits'])
+    observed_full = int(val_summary['view_summaries']['clean']['native_top1_hits'])
+    observed_small = int(
+        small_val_summary['view_summaries']['clean']['native_top1_hits'])
+    if observed_full != expected_full or observed_small != expected_small:
+        raise RuntimeError(
+            'Paired-view clean source validation did not reproduce locked '
+            'native baseline: expected {}/{} but found {}/{}'.format(
+                expected_full, expected_small, observed_full, observed_small))
+    support_gate = _paired_view_role_switch_support_gate(train_summary, args)
+    decision = (
+        'SOURCE_ONLY_PAIRED_VIEW_ROLE_SWITCH_SUPPORT_PASS_TARGET_NOT_READ'
+        if support_gate['passed'] else
+        'SOURCE_ONLY_PAIRED_VIEW_ROLE_SWITCH_SUPPORT_INSUFFICIENT_TARGET_NOT_READ')
+    return dict(
+        protocol_version=31,
+        audit_name='Source-only Paired-View Candidate Role-Switch Support Audit',
+        protocol=dict(
+            architecture='frozen_unified_highres_native_s7_candidate_pool',
+            source_only=True, target_read=False, read_only_evaluation=True,
+            parameter_update=False,
+            paired_views=list(PAIRED_VIEW_NAMES),
+            paired_view_version=PAIRED_VIEW_VERSION,
+            full_dino_rpn_roi_forward_per_view=True,
+            no_feature_tensor_augmentation=True,
+            label_preserving_no_spatial_warp=True,
+            no_target_threshold_tuning=True, no_checkpoint_selection=True,
+            training_authorization=(
+                'A later source-only diversity-invariance quality ranker may '
+                'be implemented only when this support gate passes.')),
+        isolation=dict(
+            dino_frozen=True, detector_parameters_unchanged=True,
+            read_only_evaluation=True, parameter_updates_performed=False,
+            trainable_parameter_count=0,
+            target_used_for_training=False,
+            target_used_for_checkpoint_selection=False,
+            target_used_for_threshold_tuning=False),
+        checkpoint_used=dict(
+            path=spec['checkpoint'], epoch=int(spec['epoch']),
+            source_result_json=spec['source_result_json']),
+        source=dict(
+            protocol=source_protocol,
+            train=train_summary,
+            validation_clean=val_summary,
+            validation_clean_small=small_val_summary,
+            clean_native_reproduction_gate=dict(
+                passed=True, expected_full_top1=expected_full,
+                expected_small_top1=expected_small,
+                observed_full_top1=observed_full,
+                observed_small_top1=observed_small),
+            by_domain=_paired_view_group_summaries(train_rows, 'domain'),
+            by_sequence=_paired_view_group_summaries(train_rows, 'seq'),
+            support_gate=support_gate),
+        train_frame_rows=train_rows,
+        validation_clean_frame_rows=val_rows,
+        candidate_forward_count=int(
+            len(source_train) * len(PAIRED_VIEW_NAMES) + len(source_val)),
+        parameter_update_count=0, target_dev=None,
+        eligible_for_training=bool(support_gate['passed']),
+        eligible_for_deployment=False, eligible_for_full_test=False,
+        decision=decision)
+
+
 def build_highres_margin_source_audit(
         dino, heads, records: Sequence[Dict], args,
         dino_device, head_device, spec: Dict) -> Dict:
@@ -7974,6 +8421,12 @@ def load_native_relative_risk_support_audit_spec(
                        'recorded epoch; this audit measures source support '
                        'without claiming the failed parameterization is valid'),
             epochs=observed))
+
+
+def load_paired_view_role_switch_support_audit_spec(
+        path: str, checkpoint: str) -> Dict:
+    """Lock protocol-31 to the frozen unified epoch-3 candidate checkpoint."""
+    return load_unified_highres_margin_audit_spec(path, checkpoint, 3)
 
 
 def source_top1_retention_summary(
@@ -10823,6 +11276,52 @@ def main():
         replacements = common.write_json_atomic(args.out_json, audit)
         print('[dino-labeller] {}'.format(audit['decision']))
         print('[native-relative-risk] training_allowed=False')
+        print('[json] nonfinite_replacements={}'.format(replacements))
+        return
+    if bool(getattr(
+            args, 'source_paired_view_role_switch_support_audit', False)):
+        spec = args.source_paired_view_audit_spec
+        checkpoint_payload = torch.load(
+            args.eval_only_checkpoint, map_location='cpu')
+        validate_checkpoint(checkpoint_payload, in_channels, args)
+        if int(checkpoint_payload.get('epoch', -1)) != int(spec['epoch']):
+            raise RuntimeError(
+                'Paired-view audit checkpoint epoch mismatch')
+        load_heads_checkpoint_state(heads, checkpoint_payload)
+        # This process is an offline source-only support measurement.  The
+        # locked checkpoint carries the S7 candidate modules; force-enable
+        # that lane only in memory so clean/augmented candidate roles can be
+        # compared.  No checkpoint is written or altered.
+        heads.set_s7_inference_enabled(True)
+        for parameter in heads.parameters():
+            parameter.requires_grad = False
+        trainable_names = []
+        head_versions = common.module_parameter_versions(heads)
+        audit = build_paired_view_role_switch_support_audit(
+            dino, heads, source_train, source_val, args,
+            dino_device, head_device, spec, source_protocol)
+        dino_unchanged = (
+            dino_versions == common.module_parameter_versions(dino))
+        heads_unchanged = (
+            head_versions == common.module_parameter_versions(heads))
+        if not dino_unchanged or not heads_unchanged:
+            raise RuntimeError(
+                'Read-only paired-view role-switch audit changed parameters')
+        audit['isolation'].update(
+            dino_parameters_unchanged=bool(dino_unchanged),
+            detector_parameters_unchanged=bool(heads_unchanged),
+            trainable_parameter_names=trainable_names)
+        audit['source']['architecture'] = dict(
+            in_channels=in_channels, patch_size=int(args.patch_size),
+            rpn=rpn_config(in_channels, args),
+            roi=roi_config(in_channels, args),
+            s7=s7_architecture(args),
+            s7_rpn=s7_rpn_config(
+                int(getattr(args, 's7_channels', 128)), args))
+        replacements = common.write_json_atomic(args.out_json, audit)
+        print('[dino-labeller] {}'.format(audit['decision']))
+        print('[paired-view] training_allowed={}'.format(
+            audit['eligible_for_training']))
         print('[json] nonfinite_replacements={}'.format(replacements))
         return
     source_val_rows = None
