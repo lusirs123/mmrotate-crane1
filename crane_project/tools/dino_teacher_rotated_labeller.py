@@ -10,6 +10,7 @@ read after the source-selected checkpoint has been fixed.
 
 import argparse
 import collections
+import copy
 import glob
 import hashlib
 import json
@@ -509,6 +510,27 @@ def parse_args():
     parser.add_argument(
         '--source-dense-temporal-hard-negatives', type=int, default=8)
     parser.add_argument(
+        '--source-roi-temporal-contrastive-train', action='store_true',
+        help=('Run protocol-34 source-only ROI temporal contrastive adapter '
+              'training. Frozen DINO/detector candidates are cached on CPU; '
+              'target data is never opened.'))
+    parser.add_argument(
+        '--source-roi-temporal-support-result-json', default=None,
+        help='Passing protocol-33 result that authorizes protocol-34.')
+    parser.add_argument('--source-roi-temporal-hidden', type=int, default=128)
+    parser.add_argument('--source-roi-temporal-output', type=int, default=64)
+    parser.add_argument('--source-roi-temporal-batch-size', type=int, default=128)
+    parser.add_argument('--source-roi-temporal-temperature', type=float,
+                        default=0.07)
+    parser.add_argument('--source-roi-temporal-promotion-margin', type=float,
+                        default=0.05)
+    parser.add_argument('--source-roi-temporal-motion-weight', type=float,
+                        default=0.25)
+    parser.add_argument('--source-roi-temporal-empty-cache-interval', type=int,
+                        default=1)
+    parser.add_argument('--source-roi-temporal-holdout-seq',
+                        default='real_seq05')
+    parser.add_argument(
         '--s7-highres-smooth-geometry-ranking', action='store_true',
         help=('Add source-only smooth-geometry auxiliary pair ranking to the '
               'unified high-resolution quality logits. GT geometry is used '
@@ -868,6 +890,8 @@ def validate_args(args):
         args, 'source_paired_view_role_switch_support_audit', False))
     dense_temporal_audit = bool(getattr(
         args, 'source_dense_temporal_separability_audit', False))
+    roi_temporal_train = bool(getattr(
+        args, 'source_roi_temporal_contrastive_train', False))
     if bool(getattr(args, 's7_highres_roi_ranker', False)) != highres_mode:
         raise ValueError(
             '--s7-highres-roi-ranker and its train-components mode must be '
@@ -929,6 +953,18 @@ def validate_args(args):
             or highres_relative_risk):
         raise ValueError(
             'Dense temporal separability audit is exclusive with other '
+            'highres training and audit routes')
+    if roi_temporal_train and (not highres_mode or not highres_unified):
+        raise ValueError(
+            'ROI temporal contrastive training requires the unified highres '
+            'candidate architecture')
+    if roi_temporal_train and (
+            highres_margin_audit or smooth_geometry_audit
+            or native_relative_risk_audit or paired_view_audit
+            or dense_temporal_audit or highres_takeover_v2
+            or highres_smooth_geometry or highres_relative_risk):
+        raise ValueError(
+            'ROI temporal contrastive training is exclusive with other '
             'highres training and audit routes')
     if smooth_geometry_audit and highres_smooth_geometry:
         raise ValueError(
@@ -1077,6 +1113,34 @@ def validate_args(args):
         args.source_dense_temporal_audit_spec = (
             load_paired_view_role_switch_support_audit_spec(
                 result_json, args.eval_only_checkpoint))
+    if roi_temporal_train:
+        if (not args.eval_only_checkpoint or args.init_checkpoint
+                or args.resume_checkpoint or not args.skip_target_eval):
+            raise ValueError(
+                'ROI temporal training requires one frozen eval checkpoint, '
+                'source-only execution, and no init/resume')
+        support_json = getattr(
+            args, 'source_roi_temporal_support_result_json', None)
+        if not support_json or not os.path.isfile(support_json):
+            raise ValueError(
+                'ROI temporal training requires a protocol-33 support JSON')
+        for name in ('source_roi_temporal_hidden',
+                     'source_roi_temporal_output',
+                     'source_roi_temporal_batch_size',
+                     'source_roi_temporal_empty_cache_interval'):
+            if int(getattr(args, name)) <= 0:
+                raise ValueError('--{} must be positive'.format(
+                    name.replace('_', '-')))
+        if float(args.source_roi_temporal_temperature) <= 0.0:
+            raise ValueError('--source-roi-temporal-temperature must be positive')
+        if float(args.source_roi_temporal_promotion_margin) < 0.0:
+            raise ValueError(
+                '--source-roi-temporal-promotion-margin must be non-negative')
+        if float(args.source_roi_temporal_motion_weight) < 0.0:
+            raise ValueError(
+                '--source-roi-temporal-motion-weight must be non-negative')
+        args.source_roi_temporal_spec = load_roi_temporal_support_spec(
+            support_json, args.eval_only_checkpoint)
     if highres_smooth_geometry and not native_relative_risk_audit:
         if highres_margin_audit or smooth_geometry_audit:
             raise ValueError(
@@ -7938,6 +8002,567 @@ def build_dense_temporal_separability_audit(
             'SOURCE_ONLY_DENSE_TEMPORAL_SEPARABILITY_INSUFFICIENT_TARGET_NOT_READ'))
 
 
+def _roi_temporal_compact_state(state: Dict, hard_negatives: int) -> Optional[Dict]:
+    representative = state.get('representative_index')
+    negatives = state['negative_indices'][:int(hard_negatives)]
+    if representative is None or not negatives.numel():
+        return None
+    embeddings = state['roi_embeddings']
+    negative_embeddings = embeddings[negatives]
+    if negative_embeddings.shape[0] < int(hard_negatives):
+        repeats = int(hard_negatives) - int(negative_embeddings.shape[0])
+        negative_embeddings = torch.cat((
+            negative_embeddings,
+            negative_embeddings[:1].repeat(repeats, 1)), dim=0)
+    return dict(
+        positive=embeddings[int(representative)].half().cpu(),
+        negatives=negative_embeddings[:int(hard_negatives)].half().cpu(),
+        representative_source=int(state['source_ids'][int(representative)]),
+        representative_riou=float(state['overlaps'][int(representative)]))
+
+
+def extract_roi_temporal_contrastive_cache(
+        dino, heads, records: Sequence[Dict], args,
+        dino_device, head_device) -> List[Dict]:
+    """Materialize only compact FP16 ROI samples on CPU/disk."""
+    ordered = sorted(records, key=lambda row: (
+        str(row['split']), str(row['seq']), int(row['frame'])))
+    compact_rows = []
+    heads.eval()
+    with torch.no_grad():
+        for position, record in enumerate(ordered):
+            views = {}
+            for view in PAIRED_VIEW_NAMES:
+                feature, img_meta, _boxes, _labels, original, _cached = (
+                    prepare_record_paired_view(
+                        dino, record, view, args, dino_device, head_device))
+                heads._protected_merge_detections(
+                    feature, img_meta, rescale=True,
+                    apply_highres_ranker=False)
+                pool = getattr(heads, '_last_highres_pool', None)
+                if pool is None:
+                    raise RuntimeError('Protocol-34 produced no candidate pool')
+                state = _dense_temporal_candidate_state(original, pool, args)
+                views[view] = _roi_temporal_compact_state(
+                    state, args.source_dense_temporal_hard_negatives)
+                del feature, _boxes, _labels, state, pool
+            compact_rows.append(dict(
+                split=str(record['split']), seq=str(record['seq']),
+                domain=source_domain_label(record), frame=int(record['frame']),
+                views=views))
+            interval = int(args.source_roi_temporal_empty_cache_interval)
+            if torch.cuda.is_available() and (position + 1) % interval == 0:
+                torch.cuda.empty_cache()
+            if (position + 1) % 25 == 0 or position + 1 == len(ordered):
+                print('[roi-temporal-cache] {}/{} usable={}'.format(
+                    position + 1, len(ordered), sum(
+                        row['views']['clean'] is not None
+                        for row in compact_rows)))
+    cache_path = os.path.join(
+        args.work_dir, 'roi_temporal_source_train_cache_fp16.pt')
+    torch.save(dict(protocol_version=34, target_read=False,
+                    rows=compact_rows), cache_path)
+    return compact_rows
+
+
+def build_roi_temporal_pairs(rows: Sequence[Dict]) -> List[Dict]:
+    """Build cross-view and adjacent-frame samples without frame splitting."""
+    samples = []
+    histories = {}
+    for row in sorted(rows, key=lambda item: (
+            str(item['split']), str(item['seq']), int(item['frame']))):
+        clean = row['views'].get('clean')
+        if clean is not None:
+            for view in PAIRED_VIEW_NAMES:
+                candidate = row['views'].get(view)
+                if view != 'clean' and candidate is not None:
+                    samples.append(dict(
+                        kind='cross_view', anchor=clean['positive'],
+                        positive=candidate['positive'],
+                        negatives=candidate['negatives']))
+        key = (str(row['split']), str(row['seq']))
+        previous = histories.get(key)
+        if (clean is not None and previous is not None
+                and int(row['frame']) == int(previous['frame']) + 1):
+            samples.append(dict(
+                kind='temporal', anchor=previous['clean']['positive'],
+                positive=clean['positive'], negatives=clean['negatives']))
+        if clean is None:
+            histories.pop(key, None)
+        else:
+            histories[key] = dict(frame=int(row['frame']), clean=clean)
+    return samples
+
+
+def summarize_roi_temporal_pairs(
+        adapter, samples: Sequence[Dict], device, minimum_margin=0.02) -> Dict:
+    margins = []
+    by_kind = collections.defaultdict(list)
+    if adapter is not None:
+        adapter.eval()
+    with torch.no_grad():
+        for sample in samples:
+            anchor = sample['anchor'].float().reshape(1, -1).to(device)
+            positive = sample['positive'].float().reshape(1, -1).to(device)
+            negatives = sample['negatives'].float().to(device)
+            if adapter is None:
+                anchor_z = torch.nn.functional.normalize(anchor, dim=1)
+                positive_z = torch.nn.functional.normalize(positive, dim=1)
+                negative_z = torch.nn.functional.normalize(negatives, dim=1)
+            else:
+                anchor_z = adapter(anchor)
+                positive_z = adapter(positive)
+                negative_z = adapter(negatives)
+            positive_score = float((anchor_z * positive_z).sum().item())
+            negative_score = float((negative_z @ anchor_z[0]).max().item())
+            margin = positive_score - negative_score
+            margins.append(margin)
+            by_kind[str(sample['kind'])].append(margin)
+
+    def summary(values):
+        return dict(
+            pair_count=len(values),
+            success_fraction=(0.0 if not values else float(sum(
+                value >= float(minimum_margin) for value in values))
+                / len(values)),
+            margin_median=(None if not values else float(np.median(
+                np.asarray(values, dtype=np.float64)))))
+    return dict(overall=summary(margins), **{
+        kind: summary(values) for kind, values in sorted(by_kind.items())})
+
+
+def roi_temporal_holdout_selection_key(summary: Dict) -> Tuple:
+    """Select an epoch without letting abundant cross-view pairs dominate."""
+    temporal_summary = summary.get('temporal') or {}
+    cross_view_summary = summary.get('cross_view') or {}
+    temporal_success = float(temporal_summary.get('success_fraction', 0.0))
+    cross_view_success = float(
+        cross_view_summary.get('success_fraction', 0.0))
+    temporal_margin_value = temporal_summary.get('margin_median')
+    cross_view_margin_value = cross_view_summary.get('margin_median')
+    temporal_margin = (float('-inf') if temporal_margin_value is None
+                       else float(temporal_margin_value))
+    cross_view_margin = (float('-inf') if cross_view_margin_value is None
+                         else float(cross_view_margin_value))
+    return (min(temporal_success, cross_view_success), temporal_success,
+            cross_view_success, temporal_margin, cross_view_margin)
+
+
+def roi_temporal_representation_gate(
+        raw_holdout: Dict, selected_holdout: Dict,
+        train_pair_count: int, holdout_pair_count: int) -> Dict:
+    """Require both supervision branches to retain raw ROI separability."""
+    checks = {}
+    for kind in ('temporal', 'cross_view'):
+        raw = raw_holdout.get(kind) or {}
+        selected = selected_holdout.get(kind) or {}
+        checks['{}_success_fraction_nonregression'.format(kind)] = (
+            float(selected.get('success_fraction', -1.0))
+            >= float(raw.get('success_fraction', 0.0)))
+        checks['{}_median_margin_nonregression'.format(kind)] = (
+            selected.get('margin_median') is not None
+            and raw.get('margin_median') is not None
+            and float(selected['margin_median']) >= float(raw['margin_median']))
+    return dict(
+        passed=bool(all(checks.values())), checks=checks,
+        raw_roi_holdout=raw_holdout,
+        selected_adapter_holdout=selected_holdout,
+        train_pair_count=int(train_pair_count),
+        holdout_pair_count=int(holdout_pair_count))
+
+
+def train_roi_temporal_adapter(
+        rows: Sequence[Dict], args, head_device):
+    holdout_seq = str(args.source_roi_temporal_holdout_seq)
+    observed_sequences = {str(row['seq']) for row in rows}
+    expected_sequences = {
+        'real_seq01', 'real_seq04', 'real_seq05', 'real_seq06', 'sim_seq08'}
+    if observed_sequences != expected_sequences:
+        raise RuntimeError(
+            'Protocol-34 source-train sequences changed: {}'.format(
+                sorted(observed_sequences)))
+    train_rows = [row for row in rows if str(row['seq']) != holdout_seq]
+    holdout_rows = [row for row in rows if str(row['seq']) == holdout_seq]
+    if not train_rows or not holdout_rows:
+        raise RuntimeError('Protocol-34 train/holdout sequence split is empty')
+    train_pairs = build_roi_temporal_pairs(train_rows)
+    holdout_pairs = build_roi_temporal_pairs(holdout_rows)
+    if not train_pairs or not holdout_pairs:
+        raise RuntimeError('Protocol-34 has no train or holdout pairs')
+    raw_holdout = summarize_roi_temporal_pairs(
+        None, holdout_pairs, head_device)
+    adapter = temporal.RoiTemporalContrastiveAdapter(
+        input_dim=int(args.roi_fc_channels),
+        hidden_dim=int(args.source_roi_temporal_hidden),
+        output_dim=int(args.source_roi_temporal_output)).to(head_device)
+    optimizer = torch.optim.AdamW(
+        adapter.parameters(), lr=float(args.lr),
+        weight_decay=float(args.weight_decay))
+    history = []
+    best_state = None
+    best_key = None
+    best_epoch = 0
+    batch_size = int(args.source_roi_temporal_batch_size)
+    for epoch in range(1, int(args.epochs) + 1):
+        adapter.train()
+        order = list(range(len(train_pairs)))
+        random.Random(int(args.seed) + epoch).shuffle(order)
+        losses = []
+        for start in range(0, len(order), batch_size):
+            batch = [train_pairs[index]
+                     for index in order[start:start + batch_size]]
+            anchors = torch.stack([row['anchor'] for row in batch]).to(
+                head_device, dtype=torch.float32)
+            positives = torch.stack([row['positive'] for row in batch]).to(
+                head_device, dtype=torch.float32)
+            negatives = torch.stack([row['negatives'] for row in batch]).to(
+                head_device, dtype=torch.float32)
+            optimizer.zero_grad(set_to_none=True)
+            loss = temporal.roi_temporal_info_nce_loss(
+                adapter, anchors, positives, negatives,
+                args.source_roi_temporal_temperature)
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(
+                adapter.parameters(), float(args.max_grad_norm))
+            optimizer.step()
+            losses.append(float(loss.detach().item()))
+            del anchors, positives, negatives, loss
+        holdout = summarize_roi_temporal_pairs(
+            adapter, holdout_pairs, head_device)
+        key = roi_temporal_holdout_selection_key(holdout)
+        if best_key is None or key > best_key:
+            best_key = key
+            best_epoch = epoch
+            best_state = copy.deepcopy({
+                name: value.detach().cpu()
+                for name, value in adapter.state_dict().items()})
+        history.append(dict(
+            epoch=epoch, mean_loss=float(np.mean(losses)),
+            holdout=holdout, selected_so_far=(best_epoch == epoch)))
+        print('[roi-temporal-train] epoch={} loss={:.5f} holdout_success={:.4f} '
+              'holdout_margin={:.5f} best_epoch={}'.format(
+                  epoch, history[-1]['mean_loss'],
+                  holdout['overall']['success_fraction'],
+                  holdout['overall']['margin_median'], best_epoch))
+    adapter.load_state_dict(best_state)
+    selected_holdout = history[best_epoch - 1]['holdout']
+    representation_gate = roi_temporal_representation_gate(
+        raw_holdout, selected_holdout, len(train_pairs), len(holdout_pairs))
+    return adapter, history, best_epoch, representation_gate
+
+
+def summarize_roi_temporal_state_propagation(
+        baseline_rows: Sequence[Dict], candidate_rows: Sequence[Dict]) -> Dict:
+    """Audit whether a causal S7 takeover contaminates later selections."""
+    if len(baseline_rows) != len(candidate_rows):
+        raise ValueError('Propagation audit rows must align')
+    promotions = 0
+    wrong_promotions = 0
+    s7_state_updates = 0
+    wrong_s7_state_updates = 0
+    post_s7_state_old_correct_losses = []
+    promotion_runs = []
+    wrong_promotion_runs = []
+    s7_state_runs = []
+    wrong_s7_state_runs = []
+    recovery_gaps = []
+    unresolved_incidents = []
+    promotion_run = 0
+    wrong_run = 0
+    s7_state_run = 0
+    wrong_s7_state_run = 0
+    active_wrong = None
+    previous = None
+    for baseline, candidate in zip(baseline_rows, candidate_rows):
+        if source_frame_key(baseline) != source_frame_key(candidate):
+            raise ValueError('Propagation audit frame keys disagree')
+        seq = str(candidate.get('seq'))
+        frame = int(candidate['frame'])
+        continuous = bool(
+            previous is not None and previous['seq'] == seq
+            and frame == int(previous['frame']) + 1)
+        if not continuous:
+            if promotion_run:
+                promotion_runs.append(promotion_run)
+            if wrong_run:
+                wrong_promotion_runs.append(wrong_run)
+            if s7_state_run:
+                s7_state_runs.append(s7_state_run)
+            if wrong_s7_state_run:
+                wrong_s7_state_runs.append(wrong_s7_state_run)
+            if active_wrong is not None:
+                unresolved_incidents.append(active_wrong['frame_key'])
+            promotion_run = 0
+            wrong_run = 0
+            s7_state_run = 0
+            wrong_s7_state_run = 0
+            active_wrong = None
+        selection = candidate.get('temporal_selection') or {}
+        promotion = bool(selection.get('promotion', False))
+        s7_selected = bool(
+            selection.get('selected_source') == 'supplement_s7')
+        baseline_hit = bool(baseline['metrics']['top1_hit'])
+        candidate_hit = bool(candidate['metrics']['top1_hit'])
+        promotions += int(promotion)
+        wrong_promotions += int(promotion and not candidate_hit)
+        s7_state_updates += int(s7_selected)
+        wrong_s7_state_updates += int(s7_selected and not candidate_hit)
+        if promotion:
+            promotion_run += 1
+        else:
+            if promotion_run:
+                promotion_runs.append(promotion_run)
+            promotion_run = 0
+        if promotion and not candidate_hit:
+            wrong_run += 1
+            if active_wrong is None:
+                active_wrong = dict(
+                    seq=seq, frame=frame,
+                    frame_key=source_frame_key(candidate))
+        else:
+            if wrong_run:
+                wrong_promotion_runs.append(wrong_run)
+            wrong_run = 0
+        if s7_selected:
+            s7_state_run += 1
+        else:
+            if s7_state_run:
+                s7_state_runs.append(s7_state_run)
+            s7_state_run = 0
+        if s7_selected and not candidate_hit:
+            wrong_s7_state_run += 1
+            if active_wrong is None:
+                active_wrong = dict(
+                    seq=seq, frame=frame,
+                    frame_key=source_frame_key(candidate))
+        else:
+            if wrong_s7_state_run:
+                wrong_s7_state_runs.append(wrong_s7_state_run)
+            wrong_s7_state_run = 0
+        if active_wrong is not None and candidate_hit:
+            recovery_gaps.append(int(frame - active_wrong['frame']))
+            active_wrong = None
+        if (continuous and previous['s7_selected'] and baseline_hit
+                and not candidate_hit):
+            post_s7_state_old_correct_losses.append(source_frame_key(candidate))
+        previous = dict(
+            seq=seq, frame=frame, promotion=promotion,
+            s7_selected=s7_selected)
+    if promotion_run:
+        promotion_runs.append(promotion_run)
+    if wrong_run:
+        wrong_promotion_runs.append(wrong_run)
+    if s7_state_run:
+        s7_state_runs.append(s7_state_run)
+    if wrong_s7_state_run:
+        wrong_s7_state_runs.append(wrong_s7_state_run)
+    if active_wrong is not None:
+        unresolved_incidents.append(active_wrong['frame_key'])
+    return dict(
+        promotion_count=int(promotions),
+        wrong_promotion_count=int(wrong_promotions),
+        s7_state_update_count=int(s7_state_updates),
+        wrong_s7_state_update_count=int(wrong_s7_state_updates),
+        max_consecutive_promotion_run=(max(promotion_runs)
+                                       if promotion_runs else 0),
+        max_consecutive_wrong_promotion_run=(max(wrong_promotion_runs)
+                                             if wrong_promotion_runs else 0),
+        max_consecutive_s7_state_run=(max(s7_state_runs)
+                                      if s7_state_runs else 0),
+        max_consecutive_wrong_s7_state_run=(max(wrong_s7_state_runs)
+                                            if wrong_s7_state_runs else 0),
+        post_s7_state_old_correct_loss_count=len(
+            post_s7_state_old_correct_losses),
+        post_s7_state_old_correct_loss_frame_keys=sorted(
+            post_s7_state_old_correct_losses),
+        recovered_wrong_promotion_incident_count=len(recovery_gaps),
+        wrong_promotion_recovery_gap_max=(max(recovery_gaps)
+                                          if recovery_gaps else None),
+        unresolved_wrong_promotion_incident_count=len(unresolved_incidents),
+        unresolved_wrong_promotion_frame_keys=sorted(unresolved_incidents))
+
+
+def evaluate_roi_temporal_source_gate(
+        dino, heads, adapter, records: Sequence[Dict], args,
+        dino_device, head_device, spec: Dict) -> Dict:
+    selector = temporal.CausalRoiTemporalAdapterSelector(
+        adapter, max_candidates=int(args.s7_highres_max_candidates),
+        promotion_margin=float(args.source_roi_temporal_promotion_margin),
+        motion_weight=float(args.source_roi_temporal_motion_weight))
+    baseline_rows, candidate_rows = [], []
+    heads.eval()
+    adapter.eval()
+    ordered = sorted(records, key=lambda row: (
+        str(row['split']), str(row['seq']), int(row['frame'])))
+    with torch.no_grad():
+        for position, record in enumerate(ordered):
+            feature, img_meta, _boxes, _labels, original, cached = prepare_record(
+                dino, record, args, dino_device, head_device)
+            heads._protected_merge_detections(
+                feature, img_meta, rescale=True, apply_highres_ranker=False)
+            pool = getattr(heads, '_last_highres_pool', None)
+            if pool is None:
+                raise RuntimeError('Protocol-34 source gate has no pool')
+            detections = pool['detections']
+            source_ids = pool['source_ids']
+            native_indices = torch.nonzero(
+                source_ids == 0, as_tuple=False).flatten()
+            native = (detections[:0] if not native_indices.numel() else
+                      detections[native_indices[:1]])
+            baseline_rows.append(_highres_margin_audit_row(
+                record, original, img_meta, native.detach().cpu().numpy(),
+                None, args, cached))
+            valid = valid_rotated_detection_mask(
+                detections.detach().cpu().numpy(), img_meta,
+                args.valid_content_tolerance)
+            selection = selector.select(
+                detections, pool['embeddings'], source_ids,
+                '{}|{}'.format(record['split'], record['seq']),
+                int(record['frame']), valid_mask=torch.as_tensor(
+                    valid, dtype=torch.bool, device=detections.device))
+            ordered_detections = detections[selection['order']]
+            row = _highres_margin_audit_row(
+                record, original, img_meta,
+                ordered_detections.detach().cpu().numpy(), None, args, cached)
+            row['temporal_selection'] = {
+                key: value for key, value in selection.items() if key != 'order'}
+            candidate_rows.append(row)
+            del feature, _boxes, _labels, pool, detections
+            interval = int(args.source_roi_temporal_empty_cache_interval)
+            if torch.cuda.is_available() and (position + 1) % interval == 0:
+                torch.cuda.empty_cache()
+            if (position + 1) % 25 == 0 or position + 1 == len(ordered):
+                print('[roi-temporal-source-val] {}/{} top1_hits={}'.format(
+                    position + 1, len(ordered), sum(
+                        row['metrics']['top1_hit'] for row in candidate_rows)))
+    baseline_summary = summarize_rows(baseline_rows)
+    candidate_summary = summarize_rows(candidate_rows)
+    threshold = float(spec['base']['small_sampling']['short_token_threshold'])
+    small_keys = {('{}|{}|{}'.format(
+        row['split'], row['seq'], int(row['frame'])))
+        for row in source_small_records(records, args, threshold)}
+    baseline_small = [row for row in baseline_rows
+                      if source_frame_key(row) in small_keys]
+    candidate_small = [row for row in candidate_rows
+                       if source_frame_key(row) in small_keys]
+    baseline_small_summary = summarize_rows(baseline_small)
+    candidate_small_summary = summarize_rows(candidate_small)
+    expected = spec['base']['baseline_summary']
+    expected_small = spec['base']['baseline_small_summary']
+    if (int(baseline_summary['top1_hits']) != int(expected['top1_hits'])
+            or int(baseline_small_summary['top1_hits'])
+            != int(expected_small['top1_hits'])):
+        raise RuntimeError('Protocol-34 did not reproduce locked native baseline')
+    retention = source_top1_retention_summary(
+        source_correct_frame_keys(baseline_rows), candidate_rows)
+    gate = s7_source_selection_gate(
+        expected, expected_small, candidate_summary,
+        candidate_small_summary, retention, args)
+    propagation = summarize_roi_temporal_state_propagation(
+        baseline_rows, candidate_rows)
+    gate['checks']['no_post_s7_state_old_correct_loss'] = bool(
+        propagation['post_s7_state_old_correct_loss_count'] == 0)
+    gate['passed'] = bool(all(gate['checks'].values()))
+    return dict(
+        baseline_summary=expected, baseline_small_summary=expected_small,
+        observed_native_summary=baseline_summary,
+        observed_native_small_summary=baseline_small_summary,
+        candidate_summary=candidate_summary,
+        candidate_small_summary=candidate_small_summary,
+        source_exact_retention=retention, source_gate=gate,
+        state_propagation_audit=propagation,
+        promotion_count=int(propagation['promotion_count']),
+        candidate_rows=candidate_rows)
+
+
+def build_roi_temporal_contrastive_result(
+        dino, heads, source_train, source_val, args,
+        dino_device, head_device, spec, source_protocol):
+    rows = extract_roi_temporal_contrastive_cache(
+        dino, heads, source_train, args, dino_device, head_device)
+    adapter, history, best_epoch, representation_gate = train_roi_temporal_adapter(
+        rows, args, head_device)
+    source_gate = evaluate_roi_temporal_source_gate(
+        dino, heads, adapter, source_val, args,
+        dino_device, head_device, spec)
+    passed = bool(
+        representation_gate['passed'] and source_gate['source_gate']['passed'])
+    checkpoint_path = os.path.join(
+        args.work_dir, 'roi_temporal_adapter_source_only.pth')
+    frozen_base_sha256 = common.file_sha256(spec['checkpoint'])
+    torch.save(dict(
+        protocol_version=34, epoch=int(best_epoch),
+        adapter_state_dict={name: value.detach().cpu()
+                            for name, value in adapter.state_dict().items()},
+        architecture=dict(input_dim=int(args.roi_fc_channels),
+                          hidden_dim=int(args.source_roi_temporal_hidden),
+                          output_dim=int(args.source_roi_temporal_output)),
+        runtime_selection=dict(
+            s7_candidate_limit=int(args.s7_highres_max_candidates),
+            native_candidate_additional=True,
+            promotion_margin=float(
+                args.source_roi_temporal_promotion_margin),
+            motion_weight=float(args.source_roi_temporal_motion_weight)),
+        frozen_base_checkpoint=spec['checkpoint'],
+        frozen_base_sha256=frozen_base_sha256,
+        source_gate_passed=passed, target_read=False), checkpoint_path)
+    candidate_rows = source_gate.pop('candidate_rows')
+    source_gate['selection_rows'] = [dict(
+        frame_key=source_frame_key(row),
+        top1_hit=bool(row['metrics']['top1_hit']),
+        top1_riou=float(row['metrics']['top1_riou']),
+        selection=row.get('temporal_selection')) for row in candidate_rows]
+    return dict(
+        protocol_version=34,
+        audit_name='Source-only ROI Temporal Contrastive Candidate Adapter V1',
+        protocol=dict(
+            source_only=True, target_read=False,
+            complete_sequence_split=True,
+            train_sequences=['real_seq01', 'real_seq04', 'real_seq06',
+                             'sim_seq08'],
+            internal_holdout_sequence=str(
+                args.source_roi_temporal_holdout_seq),
+            epoch_selection=(
+                'internal_holdout_branch_balanced_retrieval_only'),
+            epoch_selection_key=(
+                'min_temporal_cross_view_success_then_temporal_then_'
+                'cross_view_then_branch_margins'),
+            official_source_val_use='single_final_gate_only',
+            active_candidate_pool='one_native_plus_at_most_32_s7',
+            fixed_promotion_margin=float(
+                args.source_roi_temporal_promotion_margin),
+            target_threshold_tuning=False,
+            state_propagation_audit=True),
+        memory_contract=dict(
+            gpu_limit_gib=8, candidate_views_sequential=True,
+            cache_device='cpu', cache_dtype='float16',
+            training_batch_size=int(args.source_roi_temporal_batch_size),
+            cuda_empty_cache_interval=int(
+                args.source_roi_temporal_empty_cache_interval)),
+        isolation=dict(
+            dino_frozen=True, detector_frozen=True,
+            trainable_module='roi_temporal_adapter_only',
+            trainable_parameter_count=int(sum(
+                parameter.numel() for parameter in adapter.parameters())),
+            target_used_for_training=False,
+            target_used_for_checkpoint_selection=False,
+            target_used_for_threshold_tuning=False),
+        checkpoint_used=dict(path=spec['checkpoint'], epoch=3,
+                             sha256=frozen_base_sha256,
+                             support_result_json=spec['support_result_json']),
+        adapter_checkpoint=checkpoint_path, selected_epoch=int(best_epoch),
+        source=dict(protocol=source_protocol, history=history,
+                    representation_gate=representation_gate,
+                    final_gate=source_gate),
+        target_dev=None,
+        eligible_for_fixed_target_dev_diagnostic=passed,
+        eligible_for_deployment=False, eligible_for_full_test=False,
+        decision=(
+            'SOURCE_ONLY_ROI_TEMPORAL_ADAPTER_PASS_TARGET_NOT_READ'
+            if passed else
+            'SOURCE_ONLY_ROI_TEMPORAL_ADAPTER_FAIL_KEEP_NATIVE_BASELINE'))
+
+
 def build_highres_margin_source_audit(
         dino, heads, records: Sequence[Dict], args,
         dino_device, head_device, spec: Dict) -> Dict:
@@ -8916,6 +9541,35 @@ def load_paired_view_role_switch_support_audit_spec(
         path: str, checkpoint: str) -> Dict:
     """Lock protocol-31 to the frozen unified epoch-3 candidate checkpoint."""
     return load_unified_highres_margin_audit_spec(path, checkpoint, 3)
+
+
+def load_roi_temporal_support_spec(path: str, checkpoint: str) -> Dict:
+    """Validate the protocol-33 authorization and recover its locked base."""
+    with open(path, 'r') as handle:
+        payload = json.load(handle)
+    if int(payload.get('protocol_version', -1)) != 33:
+        raise ValueError('ROI temporal training requires protocol-33 evidence')
+    if (payload.get('decision')
+            != 'SOURCE_ONLY_DENSE_TEMPORAL_SEPARABILITY_PASS_TARGET_NOT_READ'):
+        raise ValueError('Protocol-33 dense temporal support gate did not pass')
+    if payload.get('target_dev') is not None:
+        raise ValueError('Protocol-33 support artifact must not contain target')
+    locked = payload.get('checkpoint_used') or {}
+    if os.path.abspath(str(locked.get('path', ''))) != os.path.abspath(
+            checkpoint):
+        raise ValueError('Protocol-33 and requested checkpoint disagree')
+    if int(locked.get('epoch', -1)) != 3:
+        raise ValueError('Protocol-34 requires the locked epoch-3 base')
+    source_result = locked.get('source_result_json')
+    if not source_result or not os.path.isfile(source_result):
+        raise ValueError('Protocol-33 source result is unavailable')
+    base = load_paired_view_role_switch_support_audit_spec(
+        source_result, checkpoint)
+    return dict(
+        support_result_json=os.path.abspath(path),
+        source_result_json=os.path.abspath(source_result),
+        checkpoint=os.path.abspath(checkpoint), epoch=3,
+        base=base)
 
 
 def source_top1_retention_summary(
@@ -11765,6 +12419,39 @@ def main():
         replacements = common.write_json_atomic(args.out_json, audit)
         print('[dino-labeller] {}'.format(audit['decision']))
         print('[native-relative-risk] training_allowed=False')
+        print('[json] nonfinite_replacements={}'.format(replacements))
+        return
+    if bool(getattr(args, 'source_roi_temporal_contrastive_train', False)):
+        spec = args.source_roi_temporal_spec
+        checkpoint_payload = torch.load(
+            args.eval_only_checkpoint, map_location='cpu')
+        validate_checkpoint(checkpoint_payload, in_channels, args)
+        if int(checkpoint_payload.get('epoch', -1)) != int(spec['epoch']):
+            raise RuntimeError('ROI temporal base checkpoint epoch mismatch')
+        load_heads_checkpoint_state(heads, checkpoint_payload)
+        heads.set_s7_inference_enabled(True)
+        for parameter in heads.parameters():
+            parameter.requires_grad = False
+        trainable_names = []
+        head_versions = common.module_parameter_versions(heads)
+        result = build_roi_temporal_contrastive_result(
+            dino, heads, source_train, source_val, args,
+            dino_device, head_device, spec, source_protocol)
+        dino_unchanged = (
+            dino_versions == common.module_parameter_versions(dino))
+        heads_unchanged = (
+            head_versions == common.module_parameter_versions(heads))
+        if not dino_unchanged or not heads_unchanged:
+            raise RuntimeError(
+                'Protocol-34 changed a frozen DINO/detector parameter')
+        result['isolation'].update(
+            dino_parameters_unchanged=bool(dino_unchanged),
+            detector_parameters_unchanged=bool(heads_unchanged))
+        replacements = common.write_json_atomic(args.out_json, result)
+        print('[dino-labeller] {}'.format(result['decision']))
+        print('[roi-temporal] selected_epoch={} source_gate={}'.format(
+            result['selected_epoch'],
+            result['source']['final_gate']['source_gate']['passed']))
         print('[json] nonfinite_replacements={}'.format(replacements))
         return
     if bool(getattr(

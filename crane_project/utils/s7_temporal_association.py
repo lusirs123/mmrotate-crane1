@@ -584,6 +584,185 @@ def _two_frame_candidate_motion_features(
         appearance.clamp(-1.0, 1.0).reshape(-1, 1)), dim=1)
 
 
+class RoiTemporalContrastiveAdapter(nn.Module):
+    """Project frozen ROI features into a normalized temporal metric space."""
+
+    def __init__(self, input_dim: int = 1024, hidden_dim: int = 128,
+                 output_dim: int = 64):
+        super().__init__()
+        if min(int(input_dim), int(hidden_dim), int(output_dim)) <= 0:
+            raise ValueError('ROI temporal adapter dimensions must be positive')
+        self.input_dim = int(input_dim)
+        self.output_dim = int(output_dim)
+        self.projector = nn.Sequential(
+            nn.Linear(int(input_dim), int(hidden_dim)), nn.GELU(),
+            nn.Linear(int(hidden_dim), int(output_dim)))
+
+    def forward(self, features: torch.Tensor) -> torch.Tensor:
+        if features.ndim != 2 or features.shape[1] != self.input_dim:
+            raise ValueError('ROI adapter expects [N, {}] features'.format(
+                self.input_dim))
+        return torch.nn.functional.normalize(
+            self.projector(features.float()), dim=1, eps=1e-6)
+
+
+def roi_temporal_info_nce_loss(
+        adapter: RoiTemporalContrastiveAdapter,
+        anchors: torch.Tensor, positives: torch.Tensor,
+        negatives: torch.Tensor, temperature: float = 0.07) -> torch.Tensor:
+    """One-positive, in-frame hard-negative contrastive objective."""
+    if anchors.ndim != 2 or positives.shape != anchors.shape:
+        raise ValueError('Contrastive anchors and positives must align')
+    if (negatives.ndim != 3 or negatives.shape[0] != anchors.shape[0]
+            or negatives.shape[2] != anchors.shape[1]):
+        raise ValueError('Contrastive negatives must be [B, K, D]')
+    if negatives.shape[1] < 1 or float(temperature) <= 0.0:
+        raise ValueError('Contrastive loss requires negatives and temperature')
+    anchor_z = adapter(anchors)
+    positive_z = adapter(positives)
+    negative_z = adapter(negatives.reshape(-1, negatives.shape[-1])).reshape(
+        negatives.shape[0], negatives.shape[1], -1)
+    positive_logit = (anchor_z * positive_z).sum(dim=1, keepdim=True)
+    negative_logits = torch.einsum('bd,bkd->bk', anchor_z, negative_z)
+    logits = torch.cat((positive_logit, negative_logits), dim=1) / float(
+        temperature)
+    labels = torch.zeros(
+        anchors.shape[0], dtype=torch.long, device=anchors.device)
+    return torch.nn.functional.cross_entropy(logits, labels)
+
+
+class CausalRoiTemporalAdapterSelector:
+    """Causal ROI-metric selector with an exact native fallback path."""
+
+    def __init__(self, adapter: RoiTemporalContrastiveAdapter,
+                 max_candidates: int = 32, promotion_margin: float = 0.05,
+                 motion_weight: float = 0.25):
+        self.adapter = adapter
+        # ``max_candidates`` is the locked S7 supplement limit.  The native
+        # fallback is additional, so the active pool may contain 1 + K rows.
+        self.max_candidates = int(max_candidates)
+        self.promotion_margin = float(promotion_margin)
+        self.motion_weight = float(motion_weight)
+        if self.max_candidates <= 0 or self.promotion_margin < 0.0:
+            raise ValueError('Invalid ROI temporal selector settings')
+        if self.motion_weight < 0.0:
+            raise ValueError('Motion weight must be non-negative')
+        self.reset()
+
+    def reset(self):
+        self.previous_box = None
+        self.older_box = None
+        self.previous_embedding = None
+        self.previous_seq = None
+        self.previous_frame = None
+
+    @staticmethod
+    def _first(mask: torch.Tensor) -> Optional[int]:
+        indices = torch.nonzero(mask, as_tuple=False).flatten()
+        return None if not indices.numel() else int(indices[0].item())
+
+    def _continuous(self, seq: str, frame: int) -> bool:
+        return bool(
+            self.previous_box is not None and self.previous_seq == str(seq)
+            and self.previous_frame is not None
+            and int(frame) == int(self.previous_frame) + 1)
+
+    def _motion_cost(self, detections: torch.Tensor) -> torch.Tensor:
+        if self.older_box is None:
+            return torch.zeros(
+                detections.shape[0], device=detections.device,
+                dtype=detections.dtype)
+        previous = self.previous_box.to(detections)
+        older = self.older_box.to(detections)
+        previous_log = torch.log(previous[2:4].abs().clamp_min(1e-6))
+        older_log = torch.log(older[2:4].abs().clamp_min(1e-6))
+        predicted_center = previous[:2] + (previous[:2] - older[:2])
+        predicted_log = previous_log + (previous_log - older_log)
+        predicted_angle = previous[4] + _periodic_angle_delta(
+            previous[4], older[4])
+        boxes = detections[:, :5]
+        normalizer = torch.sqrt(
+            (previous[2].abs() * previous[3].abs()).clamp_min(1.0))
+        center = torch.linalg.vector_norm(
+            boxes[:, :2] - predicted_center.reshape(1, 2), dim=1) / normalizer
+        size = torch.abs(
+            torch.log(boxes[:, 2:4].abs().clamp_min(1e-6))
+            - predicted_log.reshape(1, 2)).mean(dim=1)
+        angle = torch.abs(_periodic_angle_delta(
+            boxes[:, 4], predicted_angle)) / (math.pi / 2.0)
+        return center + 0.5 * size + 0.25 * angle
+
+    def _store(self, detections, embeddings, index, seq, frame):
+        self.older_box = self.previous_box
+        self.previous_box = detections[index, :5].detach().clone()
+        self.previous_embedding = embeddings[index].detach().clone()
+        self.previous_seq = str(seq)
+        self.previous_frame = int(frame)
+
+    def select(self, detections: torch.Tensor, embeddings: torch.Tensor,
+               source_ids: torch.Tensor, seq: str, frame: int,
+               valid_mask: Optional[torch.Tensor] = None) -> Dict:
+        count = detections.shape[0]
+        if (detections.ndim != 2 or detections.shape[1] != 6
+                or embeddings.ndim != 2 or embeddings.shape[0] != count
+                or source_ids.shape != (count,)):
+            raise ValueError('ROI temporal candidate metadata is misaligned')
+        if valid_mask is None:
+            valid_mask = torch.ones(
+                count, dtype=torch.bool, device=detections.device)
+        else:
+            valid_mask = valid_mask.to(detections.device, dtype=torch.bool)
+        s7_indices = torch.nonzero(
+            source_ids == 1, as_tuple=False).flatten()
+        bounded = source_ids == 0
+        if s7_indices.numel():
+            bounded = bounded.clone()
+            bounded[s7_indices[:self.max_candidates]] = True
+        eligible = valid_mask & bounded
+        native = self._first(eligible & (source_ids == 0))
+        fallback = native if native is not None else self._first(eligible)
+        if fallback is None:
+            self.reset()
+            return dict(selected_index=None, order=torch.arange(
+                count, device=detections.device), reason='no_valid_candidate',
+                reset=True, promotion=False, advantage=None)
+        reset = not self._continuous(seq, frame)
+        advantage = None
+        if reset:
+            self.reset()
+            selected = fallback
+            reason = 'native_fallback_after_reset'
+        else:
+            projected = self.adapter(embeddings)
+            reference = self.adapter(
+                self.previous_embedding.to(embeddings).reshape(1, -1))[0]
+            score = projected @ reference
+            score = score - self.motion_weight * self._motion_cost(detections)
+            s7_indices = torch.nonzero(
+                eligible & (source_ids == 1), as_tuple=False).flatten()
+            supplement = None
+            if s7_indices.numel():
+                supplement = int(s7_indices[
+                    torch.argmax(score[s7_indices])].item())
+                advantage = float((score[supplement] - score[fallback]).item())
+            if supplement is not None and advantage >= self.promotion_margin:
+                selected = supplement
+                reason = 's7_temporal_margin_promotion'
+            else:
+                selected = fallback
+                reason = 'native_fallback_margin'
+        self._store(detections, embeddings, selected, seq, frame)
+        remaining = torch.arange(count, device=detections.device)
+        order = torch.cat((remaining.new_tensor([selected]),
+                           remaining[remaining != selected]))
+        return dict(
+            selected_index=int(selected), order=order, reason=reason,
+            reset=bool(reset), promotion=bool(selected != fallback),
+            fallback_index=int(fallback), advantage=advantage,
+            selected_source=('native_s14' if int(source_ids[selected]) == 0
+                             else 'supplement_s7'))
+
+
 class S7SmallTemporalRankerHead(nn.Module):
     """Tiny scalar-only native/S7 pair head for small-object ordering.
 
