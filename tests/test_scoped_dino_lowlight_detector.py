@@ -208,12 +208,14 @@ def test_formal_unified_config_keeps_symeood_and_common_dino_ranking():
             'crane_symeood_dino_unified_v1.py'))
     model = config['model']
     assert model['type'] == 'SymEOODDinoUnifiedDetector'
-    assert model['baseline_config'].endswith('crane_symeood_k1.py')
+    assert model['baseline_config'].endswith(
+        'crane_symeood_k1_brightaug.py')
     assert model['fusion_policy'] == 'sym_eood_proposal_dino_roi_union'
     assert model['scope_policy'] == 'all_frames'
     assert model['scope_manifest'] is None
     assert model['stabilizer']['enabled'] is False
     assert model['temporal_association']['enabled'] is False
+    assert model['fusion_audit_enabled'] is True
     assert model['dino_head_checkpoint'].endswith(
         'dino_teacher_fc_cls_interpolation_v1/'
         'source_safe_interpolated_head.pth')
@@ -224,14 +226,15 @@ def test_formal_unified_config_keeps_symeood_and_common_dino_ranking():
     assert config['dino_checkpoint_contract']['alpha'] == pytest.approx(0.5)
     formal = config['formal_detection_contract']
     assert formal['proposal_sources'] == [
-        'symeood_k1_top1', 'frozen_dino_native_s14_rpn']
+        'symeood_k1_brightaug_top1', 'frozen_dino_native_s14_rpn']
     assert formal['sym_eood_checkpoint'].endswith(
-        'crane_symeood_k1/best_Weighted_R_center_epoch_12.pth')
+        'crane_symeood_k1_brightaug/epoch_20.pth')
     assert formal['common_ranker'] == 'frozen_dino_roi_classifier_alpha05'
+    assert formal['source_owned_geometry'] is True
     assert formal['raw_cross_model_score_comparison'] is False
     assert formal['target_scope'] is False
     assert formal['sequence_identity_routing'] is False
-    assert formal['brightaug'] is False
+    assert formal['brightaug'] is True
 
 
 def test_symeood_proposal_is_scaled_and_raw_score_is_discarded():
@@ -244,6 +247,80 @@ def test_symeood_proposal_is_scaled_and_raw_score_is_discarded():
     assert proposal[0, :5].tolist() == pytest.approx(
         [20, 40, 60, 80, 0.25])
     assert proposal[0, 5].item() == pytest.approx(1.0)
+
+
+class _UnifiedHeads:
+    def __init__(self, scores):
+        self.scores = torch.tensor(scores, dtype=torch.float32)
+
+    def simple_test_proposals(self, feature, feature_meta):
+        del feature, feature_meta
+        native = torch.tensor([
+            [1, 2, 3, 4, 0.1, 0.4],
+            [5, 6, 7, 8, 0.2, 0.3],
+        ], dtype=torch.float32)
+        return [torch.empty(0)], [native]
+
+    def _decode_roi_candidates(self, feature, feature_meta, proposals,
+                               rescale):
+        del feature, feature_meta, rescale
+        # The final row intentionally differs from the external proposal.  A
+        # correct source-owned selector must never return this regressed row
+        # when SymEOOD wins.
+        decoded = torch.tensor([
+            [11, 12, 13, 14, 0.11],
+            [21, 22, 23, 24, 0.22],
+            [91, 92, 93, 94, 0.99],
+        ], dtype=torch.float32)
+        assert decoded.shape[0] == proposals.shape[0]
+        return (decoded, self.scores, self.scores,
+                torch.empty((3, 0), dtype=torch.float32))
+
+
+class _AllValidLabeller:
+    @staticmethod
+    def valid_rotated_detection_mask(detections, feature_meta):
+        del feature_meta
+        return np.ones(detections.shape[0], dtype=bool)
+
+
+def _unified_selector(scores):
+    detector = Detector.__new__(Detector)
+    nn.Module.__init__(detector)
+    detector._test_score_thr = 0.05
+    detector.__dict__['_dino_runtime'] = dict(
+        heads=_UnifiedHeads(scores), labeller=_AllValidLabeller())
+    return detector
+
+
+def test_unified_selector_preserves_symeood_geometry_when_external_wins():
+    detector = _unified_selector([0.6, 0.7, 0.9])
+    baseline = np.asarray([[31, 32, 33, 34, 0.33, 0.2]], np.float32)
+    ranked, audit = detector._dino_test_with_sym_eood_proposal(
+        torch.empty(0), dict(scale_factor=np.ones(4, np.float32)), baseline)
+    assert ranked[0, :5].tolist() == pytest.approx(baseline[0, :5])
+    assert ranked[0, 5] == pytest.approx(0.9)
+    assert audit['selected_source'] == 'sym_eood'
+    assert audit['sym_eood_geometry_preserved'] is True
+
+
+def test_unified_selector_keeps_dino_regression_when_native_wins():
+    detector = _unified_selector([0.95, 0.7, 0.9])
+    baseline = np.asarray([[31, 32, 33, 34, 0.33, 0.2]], np.float32)
+    ranked, audit = detector._dino_test_with_sym_eood_proposal(
+        torch.empty(0), dict(scale_factor=np.ones(4, np.float32)), baseline)
+    assert ranked[0, :5].tolist() == pytest.approx(
+        [11, 12, 13, 14, 0.11])
+    assert audit['selected_source'] == 'dino_native'
+
+
+def test_unified_source_val_config_uses_val_split():
+    root = pathlib.Path(__file__).resolve().parents[1]
+    config = runpy.run_path(
+        str(root / 'crane_project/configs/'
+            'crane_symeood_dino_unified_source_val_v1.py'))
+    assert config['data']['test']['ann_file'] == 'val/annfiles/'
+    assert config['data']['test']['img_prefix'] == 'val/images/'
 
 
 def test_symeood_proposal_fusion_rejects_more_than_top1():

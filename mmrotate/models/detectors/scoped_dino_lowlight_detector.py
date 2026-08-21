@@ -159,6 +159,7 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
                  stabilizer=None,
                  temporal_association=None,
                  dino_checkpoint_contract=None,
+                 fusion_audit_enabled=False,
                  pretrained=None,
                  train_cfg=None,
                  test_cfg=None,
@@ -190,6 +191,15 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
                 'dino_primary', 'sym_eood_proposal_dino_roi_union'):
             raise ValueError('Unknown fusion policy: {}'.format(
                 self._fusion_policy))
+        self._fusion_audit_enabled = bool(fusion_audit_enabled)
+        self._fusion_audit_records = []
+        test_cfg = dict(test_cfg or {})
+        self._test_score_thr = float(test_cfg.get('score_thr', 0.05))
+        if not 0.0 <= self._test_score_thr < 1.0:
+            raise ValueError('test_cfg.score_thr must be in [0, 1)')
+        if (self._fusion_policy == 'sym_eood_proposal_dino_roi_union'
+                and int(test_cfg.get('max_per_img', 1)) != 1):
+            raise ValueError('Unified detector requires max_per_img=1')
         stabilizer = dict(stabilizer or {})
         self._alpha = float(stabilizer.get('alpha', 0.25))
         if not 0.0 < self._alpha <= 1.0:
@@ -403,24 +413,81 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
 
     def _dino_test_with_sym_eood_proposal(self, feature, feature_meta,
                                           baseline):
-        """Use one shared DINO ROI head to rank native and SymEOOD proposals."""
+        """Rank both proposal lanes while preserving source-owned geometry.
+
+        The frozen DINO ROI classifier supplies the comparable foreground
+        score for every proposal.  Native proposals use DINO-regressed OBBs;
+        the external SymEOOD proposal keeps its original OBB because replacing
+        that geometry was found to damage angle and temporal metrics.
+        """
         runtime = self.__dict__['_dino_runtime']
         heads = runtime['heads']
-        features, proposal_list = heads.simple_test_proposals(
+        _features, proposal_list = heads.simple_test_proposals(
             feature, feature_meta)
         native = proposal_list[0]
         external = self._sym_eood_proposals_for_dino(
             baseline, feature_meta, native.device)
         union = torch.cat([native, external], dim=0)
-        results = heads.roi_head.simple_test(
-            features, [union], [feature_meta], rescale=True)
-        if len(results) != 1 or len(results[0]) != 1:
-            raise RuntimeError('Unexpected unified one-image/one-class result')
-        self.__dict__['_last_unified_fusion'] = dict(
+        decoded, _log_odds, foreground_scores, _embedding = (
+            heads._decode_roi_candidates(
+                feature, feature_meta, union, rescale=True))
+        if (decoded.shape[0] != union.shape[0]
+                or foreground_scores.shape[0] != union.shape[0]):
+            raise RuntimeError('Unified ROI candidate order was not preserved')
+
+        native_count = int(native.shape[0])
+        native_detections = torch.cat(
+            [decoded[:native_count, :5],
+             foreground_scores[:native_count, None]], dim=1)
+        if external.shape[0] > 0:
+            baseline_geometry = torch.as_tensor(
+                np.asarray(baseline, dtype=np.float32)[:, :5],
+                dtype=decoded.dtype, device=decoded.device)
+            sym_detection = torch.cat(
+                [baseline_geometry,
+                 foreground_scores[native_count:, None]], dim=1)
+        else:
+            sym_detection = decoded.new_zeros((0, 6))
+        detections = torch.cat(
+            [native_detections, sym_detection], dim=0)
+        source_ids = np.concatenate([
+            np.zeros(native_detections.shape[0], dtype=np.int64),
+            np.ones(sym_detection.shape[0], dtype=np.int64)])
+        detections = detections.detach().cpu().numpy().astype(
+            np.float32, copy=False)
+        valid = runtime['labeller'].valid_rotated_detection_mask(
+            detections, feature_meta)
+        eligible = valid & (detections[:, 5] >= self._test_score_thr)
+        eligible_indices = np.flatnonzero(eligible)
+        if eligible_indices.size:
+            local_order = np.argsort(
+                -detections[eligible_indices, 5], kind='stable')
+            order = eligible_indices[local_order]
+            ranked = detections[order]
+            ranked_sources = source_ids[order]
+        else:
+            ranked = detections[:0]
+            ranked_sources = source_ids[:0]
+        selected_source = (
+            'dino_native' if ranked_sources.size and ranked_sources[0] == 0
+            else 'sym_eood' if ranked_sources.size else 'sym_eood_fallback')
+        audit = dict(
             native_proposal_count=int(native.shape[0]),
             sym_eood_proposal_count=int(external.shape[0]),
-            union_proposal_count=int(union.shape[0]))
-        return np.asarray(results[0][0], dtype=np.float32)
+            union_proposal_count=int(union.shape[0]),
+            valid_candidate_count=int(valid.sum()),
+            eligible_candidate_count=int(eligible.sum()),
+            selected_source=selected_source,
+            selected_common_score=(
+                float(ranked[0, 5]) if ranked.shape[0] else None),
+            score_threshold=float(self._test_score_thr),
+            sym_eood_geometry_preserved=True)
+        self.__dict__['_last_unified_fusion'] = audit
+        return ranked, audit
+
+    def fusion_audit_records(self):
+        """Return a copy of per-frame source-attribution records."""
+        return [dict(record) for record in self._fusion_audit_records]
 
     def _load_from_state_dict(self, state_dict, prefix, local_metadata,
                               strict, missing_keys, unexpected_keys,
@@ -548,8 +615,9 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
         feature_meta = runtime['labeller'].feature_meta(image_path, dino_meta)
         with torch.no_grad():
             if self._fusion_policy == 'sym_eood_proposal_dino_roi_union':
-                dino_detections = self._dino_test_with_sym_eood_proposal(
-                    feature, feature_meta, baseline)
+                dino_detections, fusion_audit = (
+                    self._dino_test_with_sym_eood_proposal(
+                        feature, feature_meta, baseline))
             else:
                 dino_detections = runtime['heads'].simple_test(
                     feature, feature_meta)
@@ -574,6 +642,17 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
             dino_detections, feature_meta)
         selected = (dino_detections[:1] if dino_detections.shape[0] > 0
                     else baseline)
+        if (self._fusion_policy == 'sym_eood_proposal_dino_roi_union'
+                and self._fusion_audit_enabled):
+            record = dict(fusion_audit)
+            record.update(dict(
+                filename=image_path, sequence=seq, frame=int(frame),
+                output_source=(fusion_audit['selected_source']
+                               if dino_detections.shape[0] > 0
+                               else 'sym_eood_fallback'),
+                output_score=float(selected[0, 5])
+                if selected.shape[0] else None))
+            self._fusion_audit_records.append(record)
         selected = self._stabilize(selected, seq, frame)
         return [[selected]]
 

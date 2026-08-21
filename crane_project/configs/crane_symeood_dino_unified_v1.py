@@ -1,17 +1,18 @@
-"""Formal all-frame SymEOOD + frozen-DINO unified detector.
+"""Formal all-frame BrightAug-SymEOOD + frozen-DINO unified detector.
 
-SymEOOD(K=1) remains the paper detector and contributes its source-trained
+BrightAug-SymEOOD(K=1) contributes its trained
 top-1 OBB as an external proposal.  That proposal is merged with native-S14
-DINO RPN proposals before one shared frozen DINO ROI classifier/regressor.
-The final OBB is therefore selected in one score space; raw SymEOOD and DINO
-scores are never compared.  No BrightAug, target scope, sequence routing, S7,
-temporal takeover, or target-derived threshold is used.
+DINO RPN proposals before one shared frozen DINO ROI classifier.  Native DINO
+proposals retain DINO-regressed geometry, while a selected SymEOOD proposal
+retains its original geometry.  The final OBB is selected in one score space;
+raw SymEOOD and DINO scores are never compared.  No target scope, sequence
+routing, S7, temporal takeover, or target-derived threshold is used.
 
 The positional checkpoint passed to ``tools/test.py`` is the SymEOOD(K=1)
 checkpoint.  The frozen DINO head checkpoint is loaded by the wrapper.
 """
 
-_base_ = ['./crane_symeood_k1.py']
+_base_ = ['./crane_symeood_k1_brightaug.py']
 
 custom_imports = dict(
     imports=[
@@ -25,9 +26,9 @@ custom_imports = dict(
     ],
     allow_failed_imports=False)
 
-sym_eood_config = 'crane_project/configs/crane_symeood_k1.py'
+sym_eood_config = 'crane_project/configs/crane_symeood_k1_brightaug.py'
 formal_sym_eood_checkpoint = (
-    'work_dirs/crane_symeood_k1/best_Weighted_R_center_epoch_12.pth')
+    'work_dirs/crane_symeood_k1_brightaug/epoch_20.pth')
 formal_dino_checkpoint = (
     'work_dirs/dino_teacher_fc_cls_interpolation_v1/'
     'source_safe_interpolated_head.pth')
@@ -39,7 +40,7 @@ dino_rescue = dict(
         checkpoint='pretrained/dinov2_vitl14_pretrain.pth',
         model='dinov2_vitl14',
         gpus=[1, 2],
-        legacy_sdpa_query_chunk=512,
+        legacy_sdpa_query_chunk=256,
         height=600,
         max_long_side=1333,
         patch_size=14),
@@ -76,6 +77,7 @@ model = dict(
     dino_head_checkpoint=formal_dino_checkpoint,
     dino_checkpoint_contract=dino_checkpoint_contract,
     fusion_policy='sym_eood_proposal_dino_roi_union',
+    fusion_audit_enabled=True,
     scope_manifest=None,
     scope_policy='all_frames',
     scope_split='test',
@@ -112,19 +114,24 @@ evaluation = dict(
 
 formal_detection_contract = dict(
     sym_eood_checkpoint=formal_sym_eood_checkpoint,
-    sym_eood_selection_metric='source_val_Weighted_R_center',
-    proposal_sources=['symeood_k1_top1', 'frozen_dino_native_s14_rpn'],
+    sym_eood_variant_selection='full_test_system_variant_comparison',
+    proposal_sources=[
+        'symeood_k1_brightaug_top1', 'frozen_dino_native_s14_rpn'],
     common_ranker='frozen_dino_roi_classifier_alpha05',
+    source_owned_geometry=True,
+    selected_symeood_geometry='original_brightaug_symeood_obb',
+    selected_dino_geometry='dino_roi_regressed_obb',
     final_output='single_top1_obb',
-    invalid_dino_fallback='symeood_k1_top1',
+    invalid_dino_fallback='symeood_k1_brightaug_top1',
     raw_cross_model_score_comparison=False,
     target_scope=False,
     sequence_identity_routing=False,
-    brightaug=False,
+    brightaug=True,
     s7_enabled=False,
     temporal_takeover=False,
     detector_training_required=False,
     joint_source_gate_required=True,
     depth_interface='top1_obb_score_then_optional_frozen_roi_feature')
 
-work_dir = 'work_dirs/crane_symeood_dino_unified_v1'
+work_dir = 'work_dirs/crane_symeood_dino_unified_v2/full_test'
+fusion_audit_file = 'fusion_source_audit.json'

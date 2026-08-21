@@ -241,6 +241,30 @@ def main():
 
     rank, _ = get_dist_info()
     if rank == 0:
+        raw_model = model.module if hasattr(model, 'module') else model
+        audit_getter = getattr(raw_model, 'fusion_audit_records', None)
+        if callable(audit_getter):
+            audit_records = audit_getter()
+            if audit_records:
+                audit_dir = args.work_dir
+                if audit_dir is None and args.out:
+                    audit_dir = osp.dirname(osp.abspath(args.out))
+                if audit_dir:
+                    mmcv.mkdir_or_exist(audit_dir)
+                    audit_name = cfg.get(
+                        'fusion_audit_file', 'fusion_source_audit.json')
+                    counts = {}
+                    for record in audit_records:
+                        source = record.get('output_source', 'unknown')
+                        counts[source] = counts.get(source, 0) + 1
+                    audit_path = osp.join(audit_dir, audit_name)
+                    mmcv.dump(dict(
+                        protocol='source_owned_geometry_union_v2',
+                        frame_count=len(audit_records),
+                        output_source_counts=counts,
+                        records=audit_records), audit_path)
+                    print('writing fusion source audit to {}'.format(
+                        audit_path))
         if args.out:
             print(f'\nwriting results to {args.out}')
             mmcv.dump(outputs, args.out)
