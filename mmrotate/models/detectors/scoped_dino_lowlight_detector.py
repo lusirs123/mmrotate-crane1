@@ -1,11 +1,11 @@
-"""Config-driven BrightAug + frozen-DINO low-light detector.
+"""Config-driven MMRotate detector plus frozen-DINO inference branch.
 
-This detector is the deployable form of the previously audited composition.
-The BrightAug detector remains the registered child module and therefore owns
-the positional checkpoint passed to ``tools/test.py``.  DINOv2 and its source
-trained rotated heads are deliberately kept outside PyTorch's module tree:
-the DINO transformer is sharded over dedicated GPUs and must not be moved or
-replicated by MMDataParallel.
+The registered MMRotate child owns the positional checkpoint passed to
+``tools/test.py``.  DINOv2 and its source-trained rotated heads stay outside
+PyTorch's module tree: the transformer is sharded over dedicated GPUs and must
+not be moved or replicated by MMDataParallel.  Historical configs use scoped
+replacement; the formal unified config instead adds the SymEOOD top-1 as a
+proposal and ranks the complete union with one frozen DINO ROI head.
 """
 
 import copy
@@ -87,9 +87,66 @@ def _in_scope(intervals, seq, frame):
     return False
 
 
+def _validate_dino_checkpoint_contract(payload, contract):
+    """Validate config-declared provenance for a formal DINO checkpoint.
+
+    Historical scoped configs intentionally omit this contract.  A formal
+    all-frame config uses it to prevent an old low-light, S7, or rejected
+    experimental checkpoint from being loaded through the same runtime.
+    """
+    contract = dict(contract or {})
+    if not contract:
+        return
+    interpolation = payload.get('source_only_fc_cls_interpolation')
+    if not isinstance(interpolation, dict):
+        raise RuntimeError(
+            'Formal DINO checkpoint lacks source-only fc-cls interpolation '
+            'provenance')
+    expected_selector = contract.get('selector')
+    if (expected_selector is not None
+            and interpolation.get('selector') != expected_selector):
+        raise RuntimeError('Formal DINO checkpoint selector mismatch')
+    expected_protocol = contract.get('protocol_version')
+    if (expected_protocol is not None
+            and int(interpolation.get('protocol_version', -1))
+            != int(expected_protocol)):
+        raise RuntimeError('Formal DINO checkpoint protocol mismatch')
+    expected_alpha = contract.get('alpha')
+    if (expected_alpha is not None
+            and not math.isclose(
+                float(interpolation.get('alpha', float('nan'))),
+                float(expected_alpha), rel_tol=0.0, abs_tol=1e-12)):
+        raise RuntimeError('Formal DINO checkpoint interpolation mismatch')
+    if (bool(contract.get('require_target_unread', True))
+            and interpolation.get('target_data_read') is not False):
+        raise RuntimeError('Formal DINO checkpoint provenance read target data')
+    if (bool(contract.get('require_source_gate', True))
+            and (interpolation.get('source_gate') or {}).get('passed')
+            is not True):
+        raise RuntimeError('Formal DINO checkpoint source gate did not pass')
+    stored_s7 = payload.get('s7_architecture') or {'enabled': False}
+    if (bool(contract.get('require_s7_disabled', True))
+            and bool(stored_s7.get('enabled', False))):
+        raise RuntimeError('Formal native-S14 checkpoint unexpectedly enables S7')
+
+    for name, payload_key in (
+            ('source_full', 'best_source_val_summary'),
+            ('source_small', 'best_source_small_val_summary')):
+        expected = contract.get(name)
+        if expected is None:
+            continue
+        observed = payload.get(payload_key) or {}
+        for metric in ('top1_hits', 'top1_mcml'):
+            if metric in expected and int(observed.get(metric, -1)) != int(
+                    expected[metric]):
+                raise RuntimeError(
+                    'Formal DINO checkpoint {} {} mismatch'.format(
+                        name, metric))
+
+
 @ROTATED_DETECTORS.register_module(force=True)
 class ScopedDinoLowlightDetector(RotatedBaseDetector):
-    """BrightAug detector with a frozen, scope-gated DINOv2 rescue branch."""
+    """MMRotate baseline detector with a frozen DINOv2 inference branch."""
 
     def __init__(self,
                  baseline_config,
@@ -98,8 +155,10 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
                  scope_manifest=None,
                  scope_split='test',
                  scope_policy='manifest',
+                 fusion_policy='dino_primary',
                  stabilizer=None,
                  temporal_association=None,
+                 dino_checkpoint_contract=None,
                  pretrained=None,
                  train_cfg=None,
                  test_cfg=None,
@@ -126,6 +185,11 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
         else:
             raise ValueError('Unknown scope policy: {}'.format(
                 self._scope_policy))
+        self._fusion_policy = str(fusion_policy)
+        if self._fusion_policy not in (
+                'dino_primary', 'sym_eood_proposal_dino_roi_union'):
+            raise ValueError('Unknown fusion policy: {}'.format(
+                self._fusion_policy))
         stabilizer = dict(stabilizer or {})
         self._alpha = float(stabilizer.get('alpha', 0.25))
         if not 0.0 < self._alpha <= 1.0:
@@ -135,9 +199,10 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
         self._previous_seq = None
         self._previous_frame = None
 
-        # Build the exact BrightAug detector from its original config.  It is
-        # the only child module so the positional BrightAug checkpoint loads
-        # through the normal MMDetection checkpoint mechanism.
+        if baseline_config is None:
+            raise ValueError('Scoped DINO requires a baseline detector')
+        # Keep the MMRotate detector as a registered child so its positional
+        # checkpoint loads through the standard test entry.
         from mmcv import Config
         from mmcv.utils import import_modules_from_strings
         from mmrotate.models import build_detector
@@ -153,9 +218,9 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
         self.CLASSES = getattr(self.baseline, 'CLASSES', None)
         self._baseline_test_cfg = baseline_model_cfg.get('test_cfg')
         if self._baseline_test_cfg is None:
-            raise RuntimeError('BrightAug config has no model.test_cfg')
+            raise RuntimeError('Baseline config has no model.test_cfg')
         if int(self._baseline_test_cfg.get('max_per_img', 0)) != 1:
-            raise RuntimeError('Scoped DINO requires BrightAug max_per_img=1')
+            raise RuntimeError('Scoped DINO requires baseline max_per_img=1')
 
         # Lazy imports avoid a detector-registry cycle during MMRotate startup.
         from crane_project.tools import dino_teacher_common as common
@@ -247,6 +312,8 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
         heads = labeller.FrozenDinoRotatedHeads(
             int(getattr(dino, 'embed_dim')), args).to(head_device)
         checkpoint = torch.load(dino_head_checkpoint, map_location='cpu')
+        _validate_dino_checkpoint_contract(
+            checkpoint, dino_checkpoint_contract)
         labeller.validate_checkpoint(checkpoint, int(getattr(dino, 'embed_dim')), args)
         labeller.load_heads_checkpoint_state(heads, checkpoint)
         dino.eval()
@@ -258,6 +325,11 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
         temporal_cfg = dict(temporal_association or {})
         temporal_enabled = bool(temporal_cfg.get(
             'enabled', args.s7_temporal_association))
+        if (self._fusion_policy == 'sym_eood_proposal_dino_roi_union'
+                and temporal_enabled):
+            raise ValueError(
+                'SymEOOD proposal fusion cannot use an experimental '
+                'temporal selector')
         source_selected = bool(temporal_cfg.get('source_selected', False))
         if source_selected and not temporal_enabled:
             raise ValueError(
@@ -302,10 +374,58 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
             patch_size=args.patch_size,
             temporal_selector=temporal_selector)
 
+    @staticmethod
+    def _sym_eood_proposals_for_dino(baseline, feature_meta, device):
+        """Map the source-safe SymEOOD top-1 OBB into DINO image space.
+
+        The sixth detector-score column is deliberately replaced by one: the
+        Oriented ROI head discards proposal scores and ranks every proposal
+        with its own shared classifier.  This prevents incomparable SymEOOD
+        and DINO scores from being mixed during fusion.
+        """
+        boxes = np.asarray(baseline, dtype=np.float32).reshape((-1, 6))
+        if boxes.shape[0] == 0:
+            return torch.zeros((0, 6), dtype=torch.float32, device=device)
+        if boxes.shape[0] != 1:
+            raise RuntimeError('Unified SymEOOD input must contain top-1 only')
+        if (not np.isfinite(boxes).all()
+                or np.any(boxes[:, 2:4] <= 0.0)):
+            raise RuntimeError('Unified SymEOOD proposal is invalid')
+        scale_factor = np.asarray(
+            feature_meta['scale_factor'], dtype=np.float32).reshape(-1)
+        if scale_factor.size < 4 or not np.isfinite(scale_factor[:4]).all():
+            raise RuntimeError('Invalid DINO scale factor for proposal fusion')
+        proposal = boxes[:, :5].copy()
+        proposal[:, :4] *= scale_factor[:4]
+        proposal = np.concatenate(
+            [proposal, np.ones((1, 1), dtype=np.float32)], axis=1)
+        return torch.as_tensor(proposal, dtype=torch.float32, device=device)
+
+    def _dino_test_with_sym_eood_proposal(self, feature, feature_meta,
+                                          baseline):
+        """Use one shared DINO ROI head to rank native and SymEOOD proposals."""
+        runtime = self.__dict__['_dino_runtime']
+        heads = runtime['heads']
+        features, proposal_list = heads.simple_test_proposals(
+            feature, feature_meta)
+        native = proposal_list[0]
+        external = self._sym_eood_proposals_for_dino(
+            baseline, feature_meta, native.device)
+        union = torch.cat([native, external], dim=0)
+        results = heads.roi_head.simple_test(
+            features, [union], [feature_meta], rescale=True)
+        if len(results) != 1 or len(results[0]) != 1:
+            raise RuntimeError('Unexpected unified one-image/one-class result')
+        self.__dict__['_last_unified_fusion'] = dict(
+            native_proposal_count=int(native.shape[0]),
+            sym_eood_proposal_count=int(external.shape[0]),
+            union_proposal_count=int(union.shape[0]))
+        return np.asarray(results[0][0], dtype=np.float32)
+
     def _load_from_state_dict(self, state_dict, prefix, local_metadata,
                               strict, missing_keys, unexpected_keys,
                               error_msgs):
-        # ``tools/test.py`` supplies the original BrightAug checkpoint.  Map
+        # ``tools/test.py`` supplies the original baseline checkpoint.  Map
         # its unprefixed keys into the registered child before MMDet recurses.
         if prefix == '':
             direct = [key for key in list(state_dict)
@@ -390,8 +510,14 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
         if len(img_metas) != 1 or int(img.shape[0]) != 1:
             raise RuntimeError(
                 'Scoped DINO sequential inference requires batch size 1')
-        baseline_result = self.baseline.simple_test(img, img_metas, rescale=rescale)
+        baseline_result = self.baseline.simple_test(
+            img, img_metas, rescale=rescale)
         baseline = _as_array(baseline_result)
+        if (self._fusion_policy == 'sym_eood_proposal_dino_roi_union'
+                and not rescale):
+            raise RuntimeError(
+                'Unified SymEOOD-DINO inference requires rescale=True so '
+                'both proposal sources use original-image coordinates')
         meta = img_metas[0]
         image_path = _filename(meta)
         seq, frame = _sequence_frame(image_path)
@@ -400,8 +526,8 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
         if not enabled:
             self._reset_temporal()
             return [[baseline]]
-        # BrightAug and the rotated DINO heads share the 8 GB head GPU.  The
-        # calls are sequential; releasing cached BrightAug activations before
+        # SymEOOD and the rotated DINO heads share the 8 GB head GPU.  The
+        # calls are sequential; releasing cached SymEOOD activations before
         # the DINO head keeps the integrated path within the audited budget.
         if torch.cuda.is_available():
             with torch.cuda.device(img.device):
@@ -421,7 +547,12 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
         feature = feature.to(head_device, dtype=torch.float32)
         feature_meta = runtime['labeller'].feature_meta(image_path, dino_meta)
         with torch.no_grad():
-            dino_detections = runtime['heads'].simple_test(feature, feature_meta)
+            if self._fusion_policy == 'sym_eood_proposal_dino_roi_union':
+                dino_detections = self._dino_test_with_sym_eood_proposal(
+                    feature, feature_meta, baseline)
+            else:
+                dino_detections = runtime['heads'].simple_test(
+                    feature, feature_meta)
             selector = runtime.get('temporal_selector')
             if selector is not None:
                 pool = runtime['heads']._last_temporal_pool
@@ -451,3 +582,31 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
         raise RuntimeError(
             'Scoped DINO sequential inference does not support test-time '
             'augmentation; use the configured single-view test pipeline')
+
+
+@ROTATED_DETECTORS.register_module(force=True)
+class SymEOODDinoUnifiedDetector(ScopedDinoLowlightDetector):
+    """All-frame SymEOOD proposal generation plus shared DINO ROI ranking."""
+
+    def __init__(self, baseline_config, dino_rescue, dino_head_checkpoint,
+                 dino_checkpoint_contract=None, **kwargs):
+        if baseline_config is None:
+            raise ValueError('SymEOODDinoUnifiedDetector requires SymEOOD')
+        requested_policy = kwargs.pop(
+            'fusion_policy', 'sym_eood_proposal_dino_roi_union')
+        if requested_policy != 'sym_eood_proposal_dino_roi_union':
+            raise ValueError(
+                'Unified detector locks SymEOOD-DINO ROI proposal fusion')
+        requested_scope = kwargs.pop('scope_policy', 'all_frames')
+        if requested_scope != 'all_frames':
+            raise ValueError('Unified detector requires all-frame inference')
+        if kwargs.get('scope_manifest') is not None:
+            raise ValueError('Unified detector cannot use a target scope')
+        super().__init__(
+            baseline_config=baseline_config,
+            dino_rescue=dino_rescue,
+            dino_head_checkpoint=dino_head_checkpoint,
+            dino_checkpoint_contract=dino_checkpoint_contract,
+            fusion_policy='sym_eood_proposal_dino_roi_union',
+            scope_policy='all_frames',
+            **kwargs)

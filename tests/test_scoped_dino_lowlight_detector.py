@@ -163,6 +163,107 @@ def test_formal_config_builds_integrated_model_and_paper_metrics():
     assert config['evaluation']['paper_temporal'] is True
 
 
+def _formal_native_payload(alpha=0.5, s7_enabled=False):
+    return dict(
+        source_only_fc_cls_interpolation=dict(
+            selector='Frozen DINO ROI Classifier Source Interpolation '
+                     'Selector V1',
+            protocol_version=1,
+            alpha=alpha,
+            target_data_read=False,
+            source_gate=dict(passed=True)),
+        s7_architecture=dict(enabled=s7_enabled),
+        best_source_val_summary=dict(top1_hits=677, top1_mcml=3),
+        best_source_small_val_summary=dict(top1_hits=303, top1_mcml=3))
+
+
+def _formal_native_contract():
+    return dict(
+        selector='Frozen DINO ROI Classifier Source Interpolation Selector V1',
+        protocol_version=1,
+        alpha=0.5,
+        require_target_unread=True,
+        require_source_gate=True,
+        require_s7_disabled=True,
+        source_full=dict(top1_hits=677, top1_mcml=3),
+        source_small=dict(top1_hits=303, top1_mcml=3))
+
+
+def test_formal_native_checkpoint_contract_accepts_only_locked_baseline():
+    MODULE._validate_dino_checkpoint_contract(
+        _formal_native_payload(), _formal_native_contract())
+    with pytest.raises(RuntimeError, match='interpolation mismatch'):
+        MODULE._validate_dino_checkpoint_contract(
+            _formal_native_payload(alpha=0.25), _formal_native_contract())
+    with pytest.raises(RuntimeError, match='unexpectedly enables S7'):
+        MODULE._validate_dino_checkpoint_contract(
+            _formal_native_payload(s7_enabled=True),
+            _formal_native_contract())
+
+
+def test_formal_unified_config_keeps_symeood_and_common_dino_ranking():
+    root = pathlib.Path(__file__).resolve().parents[1]
+    config = runpy.run_path(
+        str(root / 'crane_project/configs/'
+            'crane_symeood_dino_unified_v1.py'))
+    model = config['model']
+    assert model['type'] == 'SymEOODDinoUnifiedDetector'
+    assert model['baseline_config'].endswith('crane_symeood_k1.py')
+    assert model['fusion_policy'] == 'sym_eood_proposal_dino_roi_union'
+    assert model['scope_policy'] == 'all_frames'
+    assert model['scope_manifest'] is None
+    assert model['stabilizer']['enabled'] is False
+    assert model['temporal_association']['enabled'] is False
+    assert model['dino_head_checkpoint'].endswith(
+        'dino_teacher_fc_cls_interpolation_v1/'
+        'source_safe_interpolated_head.pth')
+    head = model['dino_rescue']['head']
+    assert head['feature_strides'] == [14]
+    assert head['roi_nms_iou_thr'] == pytest.approx(0.5)
+    assert head['s7_residual'] is False
+    assert config['dino_checkpoint_contract']['alpha'] == pytest.approx(0.5)
+    formal = config['formal_detection_contract']
+    assert formal['proposal_sources'] == [
+        'symeood_k1_top1', 'frozen_dino_native_s14_rpn']
+    assert formal['sym_eood_checkpoint'].endswith(
+        'crane_symeood_k1/best_Weighted_R_center_epoch_12.pth')
+    assert formal['common_ranker'] == 'frozen_dino_roi_classifier_alpha05'
+    assert formal['raw_cross_model_score_comparison'] is False
+    assert formal['target_scope'] is False
+    assert formal['sequence_identity_routing'] is False
+    assert formal['brightaug'] is False
+
+
+def test_symeood_proposal_is_scaled_and_raw_score_is_discarded():
+    baseline = np.asarray([[10, 20, 30, 40, 0.25, 0.123]], np.float32)
+    proposal = MODULE.ScopedDinoLowlightDetector._sym_eood_proposals_for_dino(
+        baseline,
+        dict(scale_factor=np.asarray([2, 2, 2, 2], np.float32)),
+        torch.device('cpu'))
+    assert proposal.shape == (1, 6)
+    assert proposal[0, :5].tolist() == pytest.approx(
+        [20, 40, 60, 80, 0.25])
+    assert proposal[0, 5].item() == pytest.approx(1.0)
+
+
+def test_symeood_proposal_fusion_rejects_more_than_top1():
+    baseline = np.zeros((2, 6), np.float32)
+    with pytest.raises(RuntimeError, match='top-1 only'):
+        MODULE.ScopedDinoLowlightDetector._sym_eood_proposals_for_dino(
+            baseline,
+            dict(scale_factor=np.ones(4, np.float32)),
+            torch.device('cpu'))
+
+
+def test_symeood_proposal_fusion_rejects_invalid_geometry():
+    baseline = np.asarray([[10, 20, 0, 40, 0.25, 0.8]], np.float32)
+    with pytest.raises(RuntimeError, match='proposal is invalid'):
+        MODULE.ScopedDinoLowlightDetector._sym_eood_proposals_for_dino(
+            baseline,
+            dict(scale_factor=np.ones(4, np.float32)),
+            torch.device('cpu'))
+
+
 def test_unified_temporal_config_removes_target_slice_routing():
     root = pathlib.Path(__file__).resolve().parents[1]
     config = runpy.run_path(
