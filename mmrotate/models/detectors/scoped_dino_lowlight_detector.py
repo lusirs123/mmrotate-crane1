@@ -160,6 +160,7 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
                  temporal_association=None,
                  dino_checkpoint_contract=None,
                  fusion_audit_enabled=False,
+                 conservative_takeover=None,
                  pretrained=None,
                  train_cfg=None,
                  test_cfg=None,
@@ -200,6 +201,41 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
         if (self._fusion_policy == 'sym_eood_proposal_dino_roi_union'
                 and int(test_cfg.get('max_per_img', 1)) != 1):
             raise ValueError('Unified detector requires max_per_img=1')
+        takeover_cfg = dict(conservative_takeover or {})
+        self._conservative_takeover_enabled = bool(
+            takeover_cfg.get('enabled', False))
+        self._conservative_takeover_calibration = None
+        self._conservative_selector = None
+        if self._conservative_takeover_enabled:
+            calibration_path = takeover_cfg.get('calibration_json')
+            if not calibration_path:
+                raise ValueError(
+                    'Conservative takeover requires calibration_json')
+            calibration_path = os.path.abspath(os.fspath(calibration_path))
+            if not os.path.isfile(calibration_path):
+                raise RuntimeError(
+                    'Conservative takeover calibration does not exist: '
+                    + calibration_path)
+            with open(calibration_path, 'r') as handle:
+                calibration = json.load(handle)
+            if (calibration.get('protocol') !=
+                    'source_calibrated_conservative_takeover_v2'):
+                raise RuntimeError('Unexpected takeover calibration protocol')
+            if calibration.get('selection_split') != 'val':
+                raise RuntimeError('Takeover calibration must use source val')
+            if bool(calibration.get('target_data_read', True)):
+                raise RuntimeError('Takeover calibration read target data')
+            if not bool(calibration.get('eligible_for_test', False)):
+                raise RuntimeError('Takeover calibration is not test-eligible')
+            parameters = dict(calibration.get('selected_parameters') or {})
+            from crane_project.utils.conservative_takeover import (
+                ConservativeTakeoverSelector)
+            self._conservative_selector = ConservativeTakeoverSelector(
+                **parameters)
+            self._conservative_takeover_calibration = dict(
+                path=calibration_path,
+                parameters=parameters,
+                source_gate=calibration.get('source_gate'))
         stabilizer = dict(stabilizer or {})
         self._alpha = float(stabilizer.get('alpha', 0.25))
         if not 0.0 < self._alpha <= 1.0:
@@ -412,7 +448,8 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
         return torch.as_tensor(proposal, dtype=torch.float32, device=device)
 
     def _dino_test_with_sym_eood_proposal(self, feature, feature_meta,
-                                          baseline):
+                                          baseline, sequence=None,
+                                          frame=None):
         """Rank both proposal lanes while preserving source-owned geometry.
 
         The frozen DINO ROI classifier supplies the comparable foreground
@@ -468,9 +505,31 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
         else:
             ranked = detections[:0]
             ranked_sources = source_ids[:0]
-        selected_source = (
+        raw_selected_source = (
             'dino_native' if ranked_sources.size and ranked_sources[0] == 0
             else 'sym_eood' if ranked_sources.size else 'sym_eood_fallback')
+
+        native_eligible = np.flatnonzero(
+            eligible & (source_ids == 0))
+        sym_eligible = np.flatnonzero(
+            eligible & (source_ids == 1))
+        native_top = (None if not native_eligible.size else detections[
+            native_eligible[np.argmax(detections[native_eligible, 5])]])
+        sym_top = (None if not sym_eligible.size else detections[
+            sym_eligible[np.argmax(detections[sym_eligible, 5])]])
+        takeover = None
+        if self._conservative_selector is not None:
+            if sequence is None or frame is None:
+                raise RuntimeError(
+                    'Conservative takeover requires sequence and frame')
+            takeover = self._conservative_selector.select(
+                sym_top, native_top, sequence, frame)
+            selected = takeover['selected']
+            ranked = (detections[:0] if selected is None else
+                      np.asarray(selected, dtype=np.float32).reshape(1, 6))
+            selected_source = takeover['selected_source']
+        else:
+            selected_source = raw_selected_source
         audit = dict(
             native_proposal_count=int(native.shape[0]),
             sym_eood_proposal_count=int(external.shape[0]),
@@ -478,16 +537,48 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
             valid_candidate_count=int(valid.sum()),
             eligible_candidate_count=int(eligible.sum()),
             selected_source=selected_source,
+            raw_selected_source=raw_selected_source,
             selected_common_score=(
                 float(ranked[0, 5]) if ranked.shape[0] else None),
+            sym_eood_common_score=(
+                None if sym_top is None else float(sym_top[5])),
+            dino_native_common_score=(
+                None if native_top is None else float(native_top[5])),
+            score_delta=(None if sym_top is None or native_top is None else
+                         float(native_top[5] - sym_top[5])),
+            sym_eood_box=(None if sym_top is None else
+                          [float(value) for value in sym_top]),
+            dino_native_box=(None if native_top is None else
+                             [float(value) for value in native_top]),
             score_threshold=float(self._test_score_thr),
-            sym_eood_geometry_preserved=True)
+            sym_eood_geometry_preserved=True,
+            conservative_takeover_enabled=bool(
+                self._conservative_selector is not None))
+        if takeover is not None:
+            audit.update(dict(
+                previous_source=takeover['previous_source'],
+                source_switched=takeover['source_switched'],
+                takeover_reason=takeover['takeover_reason'],
+                geometry_allowed=takeover['geometry_allowed'],
+                diag_change=float(takeover['diag_change']),
+                angle_change_deg=float(takeover['angle_change_deg'])))
         self.__dict__['_last_unified_fusion'] = audit
         return ranked, audit
 
     def fusion_audit_records(self):
         """Return a copy of per-frame source-attribution records."""
         return [dict(record) for record in self._fusion_audit_records]
+
+    def fusion_audit_metadata(self):
+        """Return immutable protocol provenance for the saved audit."""
+        return dict(
+            fusion_policy=self._fusion_policy,
+            score_threshold=float(self._test_score_thr),
+            conservative_takeover_enabled=bool(
+                self._conservative_selector is not None),
+            conservative_takeover_calibration=(
+                None if self._conservative_takeover_calibration is None else
+                dict(self._conservative_takeover_calibration)))
 
     def _load_from_state_dict(self, state_dict, prefix, local_metadata,
                               strict, missing_keys, unexpected_keys,
@@ -527,10 +618,14 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
         runtime = self.__dict__.get('_dino_runtime')
         if runtime is not None and runtime.get('temporal_selector') is not None:
             runtime['temporal_selector'].reset()
+        if self._conservative_selector is not None:
+            self._conservative_selector.reset()
 
     def _stabilize(self, detections, seq, frame):
         current = np.asarray(detections, dtype=np.float32).copy()
-        if not self._stabilizer_enabled or current.shape[0] == 0:
+        if not self._stabilizer_enabled:
+            return current
+        if current.shape[0] == 0:
             self._reset_temporal()
             return current
         if (self._previous_seq != seq
@@ -617,7 +712,7 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
             if self._fusion_policy == 'sym_eood_proposal_dino_roi_union':
                 dino_detections, fusion_audit = (
                     self._dino_test_with_sym_eood_proposal(
-                        feature, feature_meta, baseline))
+                        feature, feature_meta, baseline, seq, frame))
             else:
                 dino_detections = runtime['heads'].simple_test(
                     feature, feature_meta)

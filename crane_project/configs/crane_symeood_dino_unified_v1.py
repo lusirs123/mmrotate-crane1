@@ -26,20 +26,18 @@ custom_imports = dict(
     ],
     allow_failed_imports=False)
 
-project_root = '/media/omnisky/personal_files/ljj/symEOOD'
-sym_eood_config = (
-    project_root + '/crane_project/configs/crane_symeood_k1_brightaug.py')
+sym_eood_config = 'crane_project/configs/crane_symeood_k1_brightaug.py'
 formal_sym_eood_checkpoint = (
-    project_root + '/work_dirs/crane_symeood_k1_brightaug/epoch_20.pth')
+    'work_dirs/crane_symeood_k1_brightaug/epoch_20.pth')
 formal_dino_checkpoint = (
-    project_root + '/work_dirs/dino_teacher_fc_cls_interpolation_v1/'
+    'work_dirs/dino_teacher_fc_cls_interpolation_v1/'
     'source_safe_interpolated_head.pth')
 
 dino_rescue = dict(
     protocol_name='Formal SymEOOD Proposal + Frozen DINO ROI Union V1',
     dinov2=dict(
-        repo=project_root + '/third_party/dinov2',
-        checkpoint=project_root + '/pretrained/dinov2_vitl14_pretrain.pth',
+        repo='third_party/dinov2',
+        checkpoint='pretrained/dinov2_vitl14_pretrain.pth',
         model='dinov2_vitl14',
         gpus=[1, 2],
         legacy_sdpa_query_chunk=256,
@@ -99,7 +97,7 @@ model = dict(
 data = dict(
     samples_per_gpu=1,
     workers_per_gpu=2,
-    test=dict(data_root=project_root + '/crane_project/data/crane_grab/'),
+    test=dict(data_root='crane_project/data/crane_grab/'),
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=2, shuffle=False))
 
 evaluation = dict(
@@ -131,10 +129,10 @@ formal_detection_contract = dict(
     sequence_identity_routing=False,
     brightaug=True,
     s7_enabled=False,
-    temporal_takeover=False,
+    s7_temporal_takeover=False,
     detector_training_required=False,
     joint_source_gate_required=True,
     depth_interface='top1_obb_score_then_optional_frozen_roi_feature')
 
-work_dir = project_root + '/work_dirs/crane_symeood_dino_unified_v2/full_test'
+work_dir = 'work_dirs/crane_symeood_dino_unified_v2/full_test'
 fusion_audit_file = 'fusion_source_audit.json'

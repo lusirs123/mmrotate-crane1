@@ -2,12 +2,10 @@
 
 _base_ = ['./crane_symeood_dino_unified_v1.py']
 
-project_root = '/media/omnisky/personal_files/ljj/symEOOD'
-
 data = dict(
     test=dict(
         type='CraneDataset',
-        data_root=project_root + '/crane_project/data/crane_grab/',
+        data_root='crane_project/data/crane_grab/',
         ann_file='val/annfiles/',
         img_prefix='val/images/',
         pipeline=[
@@ -33,5 +31,7 @@ data = dict(
         ],
         version='le90'))
 
-work_dir = project_root + '/work_dirs/crane_symeood_dino_unified_v2/source_val'
+work_dir = (
+    'work_dirs/crane_symeood_dino_conservative_takeover_v2/'
+    'source_calibration_collect')
 fusion_audit_file = 'source_val_fusion_source_audit.json'

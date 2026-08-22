@@ -206,13 +206,11 @@ def test_formal_unified_config_keeps_symeood_and_common_dino_ranking():
     config = runpy.run_path(
         str(root / 'crane_project/configs/'
             'crane_symeood_dino_unified_v1.py'))
-    assert config['project_root'] == (
-        '/media/omnisky/personal_files/ljj/symEOOD')
     model = config['model']
     assert model['type'] == 'SymEOODDinoUnifiedDetector'
     assert model['baseline_config'].endswith(
         'crane_symeood_k1_brightaug.py')
-    assert pathlib.Path(model['baseline_config']).is_absolute()
+    assert not pathlib.Path(model['baseline_config']).is_absolute()
     assert model['fusion_policy'] == 'sym_eood_proposal_dino_roi_union'
     assert model['scope_policy'] == 'all_frames'
     assert model['scope_manifest'] is None
@@ -222,7 +220,7 @@ def test_formal_unified_config_keeps_symeood_and_common_dino_ranking():
     assert model['dino_head_checkpoint'].endswith(
         'dino_teacher_fc_cls_interpolation_v1/'
         'source_safe_interpolated_head.pth')
-    assert pathlib.Path(model['dino_head_checkpoint']).is_absolute()
+    assert not pathlib.Path(model['dino_head_checkpoint']).is_absolute()
     head = model['dino_rescue']['head']
     assert head['feature_strides'] == [14]
     assert head['roi_nms_iou_thr'] == pytest.approx(0.5)
@@ -292,6 +290,7 @@ def _unified_selector(scores):
     detector = Detector.__new__(Detector)
     nn.Module.__init__(detector)
     detector._test_score_thr = 0.05
+    detector._conservative_selector = None
     detector.__dict__['_dino_runtime'] = dict(
         heads=_UnifiedHeads(scores), labeller=_AllValidLabeller())
     return detector
@@ -323,11 +322,23 @@ def test_unified_source_val_config_uses_val_split():
     config = runpy.run_path(
         str(root / 'crane_project/configs/'
             'crane_symeood_dino_unified_source_val_v1.py'))
-    assert config['project_root'] == (
-        '/media/omnisky/personal_files/ljj/symEOOD')
     assert config['data']['test']['ann_file'] == 'val/annfiles/'
     assert config['data']['test']['img_prefix'] == 'val/images/'
-    assert pathlib.Path(config['data']['test']['data_root']).is_absolute()
+    assert not pathlib.Path(config['data']['test']['data_root']).is_absolute()
+
+
+def test_conservative_takeover_config_requires_source_calibration():
+    root = pathlib.Path(__file__).resolve().parents[1]
+    config = runpy.run_path(
+        str(root / 'crane_project/configs/'
+            'crane_symeood_dino_conservative_takeover_v2.py'))
+    takeover = config['model']['conservative_takeover']
+    assert takeover['enabled'] is True
+    assert not pathlib.Path(takeover['calibration_json']).is_absolute()
+    contract = config['formal_conservative_takeover_contract']
+    assert contract['selection_split'] == 'val'
+    assert contract['target_data_read'] is False
+    assert contract['test_parameter_search'] is False
 
 
 def test_symeood_proposal_fusion_rejects_more_than_top1():

@@ -258,10 +258,15 @@ def main():
                         source = record.get('output_source', 'unknown')
                         counts[source] = counts.get(source, 0) + 1
                     audit_path = osp.join(audit_dir, audit_name)
+                    metadata_getter = getattr(
+                        raw_model, 'fusion_audit_metadata', None)
+                    metadata = (metadata_getter()
+                                if callable(metadata_getter) else {})
                     mmcv.dump(dict(
                         protocol='source_owned_geometry_union_v2',
                         frame_count=len(audit_records),
                         output_source_counts=counts,
+                        metadata=metadata,
                         records=audit_records), audit_path)
                     print('writing fusion source audit to {}'.format(
                         audit_path))
