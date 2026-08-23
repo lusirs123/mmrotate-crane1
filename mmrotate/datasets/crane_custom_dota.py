@@ -193,6 +193,7 @@ class CraneDataset(DOTADataset):
             temporal = CraneOfflineEvaluator(
                 mode='test',
                 center_thresh_px=temporal_center_thresh_px,
+                sim_angle_center_thresh_px=thresh_sim,
                 ekf_window=temporal_ekf_window,
                 mcml_limit=temporal_mcml_limit,
                 iou_thresh=temporal_iou_thresh)

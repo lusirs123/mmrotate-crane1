@@ -327,6 +327,23 @@ def test_unified_source_val_config_uses_val_split():
     assert not pathlib.Path(config['data']['test']['data_root']).is_absolute()
 
 
+def test_fusion_audit_metadata_reports_hidden_runtime_parameters():
+    detector = _detector()
+    detector.baseline = nn.Linear(2, 1)
+    detector._fusion_policy = 'sym_eood_proposal_dino_roi_union'
+    detector._test_score_thr = 0.05
+    detector._conservative_selector = None
+    detector._conservative_takeover_calibration = None
+    detector.__dict__['_dino_runtime'] = dict(
+        dino=nn.Linear(3, 2), heads=nn.Linear(4, 3))
+    counts = detector.fusion_audit_metadata()[
+        'resource_summary']['parameter_counts']
+    assert counts['sym_eood']['total'] == 3
+    assert counts['dinov2']['total'] == 8
+    assert counts['dino_heads']['total'] == 15
+    assert counts['combined_runtime']['total'] == 26
+
+
 def test_conservative_takeover_config_requires_source_calibration():
     root = pathlib.Path(__file__).resolve().parents[1]
     config = runpy.run_path(
@@ -337,6 +354,7 @@ def test_conservative_takeover_config_requires_source_calibration():
     assert not pathlib.Path(takeover['calibration_json']).is_absolute()
     contract = config['formal_conservative_takeover_contract']
     assert contract['selection_split'] == 'val'
+    assert contract['metric_protocol_version'] == 2
     assert contract['target_data_read'] is False
     assert contract['test_parameter_search'] is False
 

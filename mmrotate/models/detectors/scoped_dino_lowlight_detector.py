@@ -221,6 +221,10 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
             if (calibration.get('protocol') !=
                     'source_calibrated_conservative_takeover_v2'):
                 raise RuntimeError('Unexpected takeover calibration protocol')
+            if int(calibration.get('metric_protocol_version', -1)) != 2:
+                raise RuntimeError(
+                    'Takeover calibration uses a stale metric protocol; '
+                    're-run source-only calibration')
             if calibration.get('selection_split') != 'val':
                 raise RuntimeError('Takeover calibration must use source val')
             if bool(calibration.get('target_data_read', True)):
@@ -569,6 +573,51 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
         """Return a copy of per-frame source-attribution records."""
         return [dict(record) for record in self._fusion_audit_records]
 
+    @staticmethod
+    def _module_parameter_counts(module):
+        total = trainable = 0
+        if module is not None and hasattr(module, 'parameters'):
+            for parameter in module.parameters():
+                count = int(parameter.numel())
+                total += count
+                if parameter.requires_grad:
+                    trainable += count
+        return dict(total=int(total), trainable=int(trainable))
+
+    def _runtime_resource_summary(self):
+        runtime = self.__dict__.get('_dino_runtime', {})
+        modules = dict(
+            sym_eood=getattr(self, 'baseline', None),
+            dinov2=runtime.get('dino'),
+            dino_heads=runtime.get('heads'))
+        parameter_counts = {
+            name: self._module_parameter_counts(module)
+            for name, module in modules.items()
+        }
+        parameter_counts['combined_runtime'] = dict(
+            total=int(sum(row['total'] for row in parameter_counts.values())),
+            trainable=int(sum(
+                row['trainable'] for row in parameter_counts.values())))
+
+        cuda_memory_mib = []
+        if torch.cuda.is_available():
+            mib = float(1024 ** 2)
+            for index in range(torch.cuda.device_count()):
+                cuda_memory_mib.append(dict(
+                    logical_gpu=int(index),
+                    device_name=torch.cuda.get_device_name(index),
+                    allocated=round(
+                        float(torch.cuda.memory_allocated(index)) / mib, 2),
+                    reserved=round(
+                        float(torch.cuda.memory_reserved(index)) / mib, 2),
+                    peak_allocated=round(float(
+                        torch.cuda.max_memory_allocated(index)) / mib, 2),
+                    peak_reserved=round(float(
+                        torch.cuda.max_memory_reserved(index)) / mib, 2)))
+        return dict(
+            parameter_counts=parameter_counts,
+            cuda_memory_mib=cuda_memory_mib)
+
     def fusion_audit_metadata(self):
         """Return immutable protocol provenance for the saved audit."""
         return dict(
@@ -578,7 +627,8 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
                 self._conservative_selector is not None),
             conservative_takeover_calibration=(
                 None if self._conservative_takeover_calibration is None else
-                dict(self._conservative_takeover_calibration)))
+                dict(self._conservative_takeover_calibration)),
+            resource_summary=self._runtime_resource_summary())
 
     def _load_from_state_dict(self, state_dict, prefix, local_metadata,
                               strict, missing_keys, unexpected_keys,

@@ -16,6 +16,7 @@ model = dict(
 
 formal_conservative_takeover_contract = dict(
     protocol='source_calibrated_conservative_takeover_v2',
+    metric_protocol_version=2,
     selection_split='val',
     target_data_read=False,
     default_lane='symeood_k1_brightaug',

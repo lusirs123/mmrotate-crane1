@@ -9,10 +9,9 @@ import os
 from pathlib import Path
 
 import numpy as np
-import cv2
-
 from crane_project.tools.eval_crane_offline import (
-    CraneOfflineEvaluator, parse_dota_txt, parse_seq_frame)
+    METRIC_PROTOCOL_VERSION, CraneOfflineEvaluator, compute_riou,
+    parse_dota_txt, parse_seq_frame)
 from crane_project.utils.conservative_takeover import (
     ConservativeTakeoverSelector)
 
@@ -47,17 +46,7 @@ def _ground_truth(record, annotation_dir):
 
 
 def _rotated_iou(first, second):
-    def rect(box):
-        return ((float(box[0]), float(box[1])),
-                (float(box[2]), float(box[3])),
-                float(np.degrees(box[4])))
-    _kind, points = cv2.rotatedRectangleIntersection(
-        rect(first), rect(second))
-    intersection = (0.0 if points is None else
-                    abs(float(cv2.contourArea(cv2.convexHull(points)))))
-    area_first = float(first[2] * first[3])
-    area_second = float(second[2] * second[3])
-    return intersection / max(area_first + area_second - intersection, 1e-6)
+    return compute_riou(first, second)
 
 
 def _evaluate(records, annotation_dir, parameters=None):
@@ -204,6 +193,7 @@ def main():
     selected = feasible[0] if feasible else None
     output = dict(
         protocol='source_calibrated_conservative_takeover_v2',
+        metric_protocol_version=METRIC_PROTOCOL_VERSION,
         selection_split='val',
         target_data_read=False,
         source_audit_json=os.fspath(source_path),

@@ -4,7 +4,7 @@ eval_crane_offline.py
 
 核心机制：
 1. 完全剥离 MMEngine 与 MMCV 依赖。
-2. 继承原版 crane_metrics.py 的所有数学计算流形与指标体系。
+2. 保留 crane_metrics.py 的指标名称，修正旋转 IoU 与时序边界实现。
 3. 动态解析 DOTA 文本并重建绝对时序。
 4. 评估结果自动保存至对应训练目录，方便跨实验对比。
 """
@@ -22,8 +22,11 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import cv2
 
+
+METRIC_PROTOCOL_VERSION = 2
+
 # =====================================================================
-# 原版工具函数（数学逻辑 100% 保持不变）
+# 通用几何与时序工具函数
 # =====================================================================
 
 def parse_seq_frame(img_path: str) -> Tuple[str, str, int]:
@@ -52,16 +55,44 @@ def obb_center(box: np.ndarray) -> np.ndarray:
     return box[:2].copy()
 
 def compute_riou(box1: np.ndarray, box2: np.ndarray) -> float:
-    # 离线环境默认降级为高效的轴对齐近似计算，避免依赖底层 CUDA 算子
-    area1   = float(box1[2]) * float(box1[3])
-    area2   = float(box2[2]) * float(box2[3])
-    cx_diff = abs(float(box1[0]) - float(box2[0]))
-    cy_diff = abs(float(box1[1]) - float(box2[1]))
-    ow = max(0.0, (float(box1[2]) + float(box2[2])) / 2 - cx_diff)
-    oh = max(0.0, (float(box1[3]) + float(box2[3])) / 2 - cy_diff)
-    inter = ow * oh
-    union = area1 + area2 - inter + 1e-6
-    return float(np.clip(inter / union, 0.0, 1.0))
+    """Compute exact CPU rotated IoU for le90 OBBs.
+
+    OpenCV keeps the offline evaluator independent of MMCV CUDA operators,
+    while still respecting orientation and unequal box sizes.  The previous
+    axis-aligned shortcut was not a valid IoU (even for contained boxes) and
+    therefore also corrupted the TDR/MCML hit flags derived from it.
+    """
+    first = np.asarray(box1, dtype=np.float64).reshape(-1)
+    second = np.asarray(box2, dtype=np.float64).reshape(-1)
+    if (first.size < 5 or second.size < 5
+            or not np.isfinite(first[:5]).all()
+            or not np.isfinite(second[:5]).all()
+            or np.any(first[2:4] <= 0.0)
+            or np.any(second[2:4] <= 0.0)):
+        return 0.0
+
+    def _rect(box):
+        return ((float(box[0]), float(box[1])),
+                (float(box[2]), float(box[3])),
+                math.degrees(float(box[4])))
+
+    area1 = float(first[2] * first[3])
+    area2 = float(second[2] * second[3])
+    kind, points = cv2.rotatedRectangleIntersection(
+        _rect(first), _rect(second))
+    if kind == cv2.INTERSECT_NONE:
+        intersection = 0.0
+    elif points is None:
+        # OpenCV may omit vertices for a numerically exact full containment.
+        intersection = min(area1, area2)
+    else:
+        hull = cv2.convexHull(np.asarray(points, dtype=np.float32))
+        intersection = abs(float(cv2.contourArea(hull)))
+        intersection = min(intersection, area1, area2)
+    union = area1 + area2 - intersection
+    if union <= 1e-6:
+        return 0.0
+    return float(np.clip(intersection / union, 0.0, 1.0))
 
 # =====================================================================
 # DOTA 文本离线解析器
@@ -111,12 +142,15 @@ class CraneOfflineEvaluator:
         depth_k: float = 1000.0,
         depth_alpha: float = -1.5,
         iou_thresh: float = 0.5,
+        sim_angle_center_thresh_px: float = 10.0,
     ) -> None:
         self.mode             = mode
         self.center_thresh_px = center_thresh_px
         self.ekf_window       = ekf_window
         self.mcml_limit       = mcml_limit
         self.angle_limit_rad  = math.radians(angle_limit_deg)
+        self.sim_angle_center_thresh_px = float(
+            sim_angle_center_thresh_px)
         self.depth_k          = depth_k
         self.depth_alpha      = depth_alpha
         self.iou_thresh       = iou_thresh
@@ -200,20 +234,25 @@ class CraneOfflineEvaluator:
         domain_buckets: Dict[str, Dict[str, list]] = defaultdict(lambda: defaultdict(list))
 
         for (domain, seq_id), frames in seq_dict.items():
-            sm = self._compute_sequence_metrics(frames)
-            b  = domain_buckets[domain]
+            # A frame-id gap denotes a new physical clip.  In particular,
+            # test/real_seq02 contains 2..180 and 960..1000; temporal windows
+            # must never bridge that discontinuity.
+            segments = self._split_contiguous_frames(frames)
+            for segment in segments:
+                sm = self._compute_sequence_metrics(segment)
+                b = domain_buckets[domain]
 
-            if domain == 'sim':
-                b['angle_errors'].extend(sm['angle_errors'])
+                if domain == 'sim':
+                    b['angle_errors'].extend(sm['angle_errors'])
 
-            b['center_hits'].extend(sm['center_hits'])
-            b['riou_vals'].extend(sm['riou_vals'])
-            b['dfr_vals'].extend(sm['dfr_vals'])
-            b['aci_vals'].extend(sm['aci_vals'])
-            b['dep_vals'].extend(sm['dep_vals'])
-            b['tdr_hits'].extend(sm['tdr_hits'])
-            b['mcml_list'].append(sm['mcml'])
-            b['mrf_vals'].extend(sm['mrf_vals'])
+                b['center_hits'].extend(sm['center_hits'])
+                b['riou_vals'].extend(sm['riou_vals'])
+                b['dfr_vals'].extend(sm['dfr_vals'])
+                b['aci_vals'].extend(sm['aci_vals'])
+                b['dep_vals'].extend(sm['dep_vals'])
+                b['tdr_hits'].extend(sm['tdr_hits'])
+                b['mcml_list'].append(sm['mcml'])
+                b['mrf_vals'].extend(sm['mrf_vals'])
 
         metrics: Dict[str, float] = {}
         all_domains = sorted(domain_buckets.keys())
@@ -229,7 +268,7 @@ class CraneOfflineEvaluator:
         return metrics
 
     # =================================================================
-    # 以下为原版 crane_metrics.py 计算与聚合逻辑的绝对复用
+    # 保留原指标名称的修正后计算与聚合逻辑
     # =================================================================
 
     def _aggregate_val(self, metrics, b, pfx):
@@ -278,8 +317,10 @@ class CraneOfflineEvaluator:
             cur_fid = int(frame['frame_id'])
 
             if gt is None:
-                hit_flags.append(True)
-                prev_frame_id = cur_fid
+                # Target-presence metrics are undefined on a negative frame.
+                # Exclude it and break temporal continuity instead of treating
+                # it as a successful detection.
+                prev_diag, prev_gamma, prev_frame_id = None, None, None
                 continue
 
             is_hit = False
@@ -288,24 +329,27 @@ class CraneOfflineEvaluator:
                 riou_vals.append(riou)
                 is_hit = riou >= self.iou_thresh
 
-                err = float(angle_diff(np.array([pred[4]]), np.array([gt[4]]))[0])
-                angle_errors.append(err)
-
                 dist = float(np.linalg.norm(obb_center(pred) - obb_center(gt)))
                 center_hits.append(float(dist < self.center_thresh_px))
+                if dist < self.sim_angle_center_thresh_px:
+                    err = float(angle_diff(
+                        np.array([pred[4]]), np.array([gt[4]]))[0])
+                    angle_errors.append(err)
+                else:
+                    angle_errors.append(math.pi / 2.0)
 
                 cur_diag  = obb_diag(pred)
                 cur_gamma = float(pred[4])
 
                 if prev_diag is not None and prev_frame_id is not None and prev_diag > 1e-6:
                     gap = cur_fid - prev_frame_id
-                    if gap > 0:
+                    if gap == 1:
                         dfr_val = abs(cur_diag - prev_diag) / (prev_diag * gap)
                         dfr_vals.append(dfr_val)
 
                 if prev_gamma is not None and prev_frame_id is not None:
                     gap = cur_fid - prev_frame_id
-                    if gap > 0:
+                    if gap == 1:
                         d_gamma = abs(float(angle_diff(np.array([cur_gamma]), np.array([prev_gamma]))[0]))
                         aci_val = 1.0 - d_gamma / (self.angle_limit_rad + 1e-9)
                         aci_vals.append(float(np.clip(aci_val, 0.0, 1.0)))
@@ -317,6 +361,12 @@ class CraneOfflineEvaluator:
                     dep_val = abs(z_est - float(plc)) / float(plc)
                     dep_vals.append(dep_val)
             else:
+                # Static metrics use all positive-GT frames.  A missing output
+                # contributes zero overlap/center recall and the maximal angle
+                # penalty, while also breaking temporal box continuity.
+                riou_vals.append(0.0)
+                center_hits.append(0.0)
+                angle_errors.append(math.pi / 2.0)
                 prev_diag, prev_gamma, prev_frame_id = None, None, cur_fid
 
             hit_flags.append(is_hit)
@@ -332,19 +382,41 @@ class CraneOfflineEvaluator:
             else:
                 cur_miss = 0
 
-        mrf_vals, in_miss, miss_end = [], False, 0
+        mrf_vals, miss_start = [], None
         for i, h in enumerate(hit_flags):
-            if not h:
-                in_miss, miss_end = True, i
-            elif in_miss:
-                mrf_vals.append(i - miss_end)
-                in_miss = False
+            if not h and miss_start is None:
+                miss_start = i
+            elif h and miss_start is not None:
+                mrf_vals.append(i - miss_start)
+                miss_start = None
 
         return {
             'angle_errors': angle_errors, 'center_hits': center_hits,
             'dfr_vals': dfr_vals, 'aci_vals': aci_vals, 'dep_vals': dep_vals,
             'riou_vals': riou_vals, 'tdr_hits': tdr_hits, 'mcml': mcml, 'mrf_vals': mrf_vals,
         }
+
+    @staticmethod
+    def _split_contiguous_frames(frames: List[dict]) -> List[List[dict]]:
+        segments = []
+        current = []
+        for frame in frames:
+            # Negative/unknown-presence frames are not part of target-present
+            # metrics and form a hard temporal boundary.
+            if frame.get('gt_box') is None:
+                if current:
+                    segments.append(current)
+                    current = []
+                continue
+            if (current and int(frame['frame_id']) !=
+                    int(current[-1]['frame_id']) + 1):
+                segments.append(current)
+                current = [frame]
+            else:
+                current.append(frame)
+        if current:
+            segments.append(current)
+        return segments
 
     def _diagnose_gaps(self, seq_dict):
         for (domain, seq_id), frames in seq_dict.items():
@@ -411,6 +483,7 @@ class CraneOfflineEvaluator:
             'config': config,
             'checkpoint': checkpoint,
             'mode': self.mode,
+            'metric_protocol_version': METRIC_PROTOCOL_VERSION,
             'metric': metrics,
         }
 
