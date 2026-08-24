@@ -55,6 +55,18 @@ def _sequence_frame(path):
     return match.group(1), int(match.group(2))
 
 
+def _original_image_shape(meta):
+    value = meta.get('ori_shape')
+    if value is None:
+        value = meta.get('img_shape')
+    if value is None or len(value) < 2:
+        raise RuntimeError('Image metadata has no valid original shape')
+    height, width = int(value[0]), int(value[1])
+    if height <= 0 or width <= 0:
+        raise RuntimeError('Image metadata has invalid original shape')
+    return height, width
+
+
 def _load_scope(path, split):
     with open(path, 'r', encoding='utf-8') as handle:
         payload = json.load(handle)
@@ -161,6 +173,7 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
                  dino_checkpoint_contract=None,
                  fusion_audit_enabled=False,
                  conservative_takeover=None,
+                 conditional_dino=None,
                  pretrained=None,
                  train_cfg=None,
                  test_cfg=None,
@@ -240,6 +253,60 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
                 path=calibration_path,
                 parameters=parameters,
                 source_gate=calibration.get('source_gate'))
+        conditional_cfg = dict(conditional_dino or {})
+        self._conditional_dino_enabled = bool(
+            conditional_cfg.get('enabled', False))
+        self._conditional_dino_calibration = None
+        self._conditional_dino_selector = None
+        if (self._conditional_dino_enabled
+                and self._conservative_takeover_enabled):
+            raise ValueError(
+                'Conditional DINO V3 and conservative takeover V2 are '
+                'mutually exclusive')
+        if (self._conditional_dino_enabled
+                and self._fusion_policy
+                != 'sym_eood_proposal_dino_roi_union'):
+            raise ValueError(
+                'Conditional DINO V3 requires unified SymEOOD-DINO fusion')
+        if self._conditional_dino_enabled:
+            calibration_path = conditional_cfg.get('calibration_json')
+            if not calibration_path:
+                raise ValueError(
+                    'Conditional DINO V3 requires calibration_json')
+            calibration_path = os.path.abspath(os.fspath(calibration_path))
+            if not os.path.isfile(calibration_path):
+                raise RuntimeError(
+                    'Conditional DINO calibration does not exist: '
+                    + calibration_path)
+            with open(calibration_path, 'r') as handle:
+                calibration = json.load(handle)
+            if (calibration.get('protocol') !=
+                    'source_calibrated_lane_isolated_conditional_dino_v3'):
+                raise RuntimeError(
+                    'Unexpected conditional DINO calibration protocol')
+            if int(calibration.get('metric_protocol_version', -1)) != 2:
+                raise RuntimeError(
+                    'Conditional DINO calibration uses a stale metric '
+                    'protocol')
+            if calibration.get('selection_split') != 'val':
+                raise RuntimeError(
+                    'Conditional DINO calibration must use source val')
+            if bool(calibration.get('target_data_read', True)):
+                raise RuntimeError('Conditional DINO calibration read target')
+            if not bool(calibration.get('eligible_for_fixed_test', False)):
+                raise RuntimeError(
+                    'Conditional DINO calibration is not fixed-test eligible')
+            parameters = dict(calibration.get('selected_parameters') or {})
+            from crane_project.utils.lane_isolated_conditional_dino import (
+                LaneIsolatedConditionalDinoSelector)
+            self._conditional_dino_selector = (
+                LaneIsolatedConditionalDinoSelector(**parameters))
+            self._conditional_dino_calibration = dict(
+                path=calibration_path,
+                parameters=parameters,
+                source_gate=calibration.get('source_gate'),
+                dino_invocation_rate=(calibration.get('selected_summary')
+                                      or {}).get('dino_invocation_rate'))
         stabilizer = dict(stabilizer or {})
         self._alpha = float(stabilizer.get('alpha', 0.25))
         if not 0.0 < self._alpha <= 1.0:
@@ -552,6 +619,14 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
                          float(native_top[5] - sym_top[5])),
             sym_eood_box=(None if sym_top is None else
                           [float(value) for value in sym_top]),
+            sym_eood_original_box=(
+                None if np.asarray(baseline).size == 0 else
+                [float(value) for value in np.asarray(
+                    baseline, dtype=np.float32).reshape(-1, 6)[0, :6]]),
+            sym_eood_original_score=(
+                None if np.asarray(baseline).size == 0 else
+                float(np.asarray(
+                    baseline, dtype=np.float32).reshape(-1, 6)[0, 5])),
             dino_native_box=(None if native_top is None else
                              [float(value) for value in native_top]),
             score_threshold=float(self._test_score_thr),
@@ -628,7 +703,18 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
             conservative_takeover_calibration=(
                 None if self._conservative_takeover_calibration is None else
                 dict(self._conservative_takeover_calibration)),
+            conditional_dino_enabled=bool(
+                getattr(self, '_conditional_dino_selector', None) is not None),
+            conditional_dino_calibration=(
+                None if getattr(
+                    self, '_conditional_dino_calibration', None) is None else
+                dict(self._conditional_dino_calibration)),
             resource_summary=self._runtime_resource_summary())
+
+    def fusion_audit_protocol(self):
+        if getattr(self, '_conditional_dino_selector', None) is not None:
+            return 'lane_isolated_conditional_dino_v3'
+        return 'source_owned_geometry_union_v2'
 
     def _load_from_state_dict(self, state_dict, prefix, local_metadata,
                               strict, missing_keys, unexpected_keys,
@@ -670,6 +756,8 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
             runtime['temporal_selector'].reset()
         if self._conservative_selector is not None:
             self._conservative_selector.reset()
+        if getattr(self, '_conditional_dino_selector', None) is not None:
+            self._conditional_dino_selector.reset()
 
     def _stabilize(self, detections, seq, frame):
         current = np.asarray(detections, dtype=np.float32).copy()
@@ -733,11 +821,83 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
         meta = img_metas[0]
         image_path = _filename(meta)
         seq, frame = _sequence_frame(image_path)
+        image_shape = _original_image_shape(meta)
         enabled = (True if self._scope_policy == 'all_frames' else
                    _in_scope(self._scope_intervals, seq, frame))
         if not enabled:
             self._reset_temporal()
             return [[baseline]]
+        conditional_selector = getattr(
+            self, '_conditional_dino_selector', None)
+        conditional_trigger = None
+        if conditional_selector is not None:
+            sym_top = None if baseline.shape[0] == 0 else baseline[0]
+            conditional_trigger = conditional_selector.begin_frame(
+                sym_top, image_shape, seq, frame)
+            if not conditional_trigger['invoke_dino']:
+                decision = conditional_selector.finish_frame(None)
+                selected_box = decision['selected']
+                selected = (baseline[:0] if selected_box is None else
+                            np.asarray(
+                                selected_box, dtype=np.float32).reshape(1, 6))
+                if self._fusion_audit_enabled:
+                    record = dict(
+                        filename=image_path,
+                        sequence=seq,
+                        frame=int(frame),
+                        image_height=int(image_shape[0]),
+                        image_width=int(image_shape[1]),
+                        dino_invoked=False,
+                        native_proposal_count=0,
+                        sym_eood_proposal_count=int(baseline.shape[0] > 0),
+                        union_proposal_count=int(baseline.shape[0] > 0),
+                        valid_candidate_count=int(baseline.shape[0] > 0),
+                        eligible_candidate_count=int(baseline.shape[0] > 0),
+                        selected_source=decision['selected_source'],
+                        raw_selected_source='not_computed',
+                        output_source=decision['selected_source'],
+                        output_score=(None if selected.shape[0] == 0 else
+                                      float(selected[0, 5])),
+                        selected_common_score=None,
+                        sym_eood_common_score=None,
+                        dino_native_common_score=None,
+                        score_delta=None,
+                        sym_eood_box=(
+                            None if baseline.shape[0] == 0 else
+                            [float(value) for value in baseline[0]]),
+                        sym_eood_original_box=(
+                            None if baseline.shape[0] == 0 else
+                            [float(value) for value in baseline[0]]),
+                        sym_eood_original_score=(
+                            None if baseline.shape[0] == 0 else
+                            float(baseline[0, 5])),
+                        dino_native_box=None,
+                        score_threshold=float(self._test_score_thr),
+                        sym_eood_geometry_preserved=True,
+                        conservative_takeover_enabled=False,
+                        conditional_dino_enabled=True,
+                        conditional_trigger_reasons=list(
+                            decision['trigger_reasons']),
+                        sym_normalized_diag=float(
+                            decision['sym_normalized_diag']),
+                        sym_diag_change=float(decision['sym_diag_change']),
+                        sym_angle_change_deg=float(
+                            decision['sym_angle_change_deg']),
+                        dino_geometry_stable=bool(
+                            decision['dino_geometry_stable']),
+                        dino_diag_change=float(
+                            decision['dino_diag_change']),
+                        dino_angle_change_deg=float(
+                            decision['dino_angle_change_deg']),
+                        measurement_valid=bool(
+                            decision['measurement_valid']),
+                        measurement_risk_reasons=list(
+                            decision['risk_reasons']),
+                        selection_reason=decision['selection_reason'])
+                    self.__dict__['_last_unified_fusion'] = dict(record)
+                    self._fusion_audit_records.append(record)
+                selected = self._stabilize(selected, seq, frame)
+                return [[selected]]
         # SymEOOD and the rotated DINO heads share the 8 GB head GPU.  The
         # calls are sequential; releasing cached SymEOOD activations before
         # the DINO head keeps the integrated path within the audited budget.
@@ -783,6 +943,47 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
                     quality_logits=pool.get('quality_logits'))
                 order = selection['order'].detach().cpu().numpy()
                 dino_detections = dino_detections[order]
+        if self._fusion_policy == 'sym_eood_proposal_dino_roi_union':
+            if conditional_selector is not None:
+                decision = conditional_selector.finish_frame(
+                    fusion_audit.get('dino_native_box'))
+                selected_box = decision['selected']
+                dino_detections = (
+                    dino_detections[:0] if selected_box is None else
+                    np.asarray(selected_box, dtype=np.float32).reshape(1, 6))
+                fusion_audit.update(dict(
+                    dino_invoked=True,
+                    selected_source=decision['selected_source'],
+                    conditional_dino_enabled=True,
+                    conditional_trigger_reasons=list(
+                        decision['trigger_reasons']),
+                    sym_normalized_diag=float(
+                        decision['sym_normalized_diag']),
+                    sym_diag_change=float(decision['sym_diag_change']),
+                    sym_angle_change_deg=float(
+                        decision['sym_angle_change_deg']),
+                    dino_geometry_stable=bool(
+                        decision['dino_geometry_stable']),
+                    dino_diag_change=float(decision['dino_diag_change']),
+                    dino_angle_change_deg=float(
+                        decision['dino_angle_change_deg']),
+                    measurement_valid=bool(decision['measurement_valid']),
+                    measurement_risk_reasons=list(decision['risk_reasons']),
+                    selection_reason=decision['selection_reason']))
+                fusion_audit['selected_common_score'] = (
+                    None if decision['selected_source'] != 'dino_native'
+                    or decision['selected'] is None else
+                    float(decision['selected'][5]))
+            else:
+                fusion_audit.update(dict(
+                    dino_invoked=True,
+                    conditional_dino_enabled=False,
+                    measurement_valid=True,
+                    measurement_risk_reasons=[]))
+            fusion_audit.update(dict(
+                image_height=int(image_shape[0]),
+                image_width=int(image_shape[1])))
+            self.__dict__['_last_unified_fusion'] = dict(fusion_audit)
         dino_detections, _stats = runtime['labeller'].filter_valid_rotated_detections(
             dino_detections, feature_meta)
         selected = (dino_detections[:1] if dino_detections.shape[0] > 0

@@ -305,6 +305,9 @@ def test_unified_selector_preserves_symeood_geometry_when_external_wins():
     assert ranked[0, 5] == pytest.approx(0.9)
     assert audit['selected_source'] == 'sym_eood'
     assert audit['sym_eood_geometry_preserved'] is True
+    assert audit['sym_eood_original_box'] == pytest.approx(
+        baseline[0].tolist())
+    assert audit['sym_eood_original_score'] == pytest.approx(0.2)
 
 
 def test_unified_selector_keeps_dino_regression_when_native_wins():
@@ -357,6 +360,68 @@ def test_conservative_takeover_config_requires_source_calibration():
     assert contract['metric_protocol_version'] == 2
     assert contract['target_data_read'] is False
     assert contract['test_parameter_search'] is False
+
+
+def test_lane_isolated_v3_configs_keep_source_and_fixed_test_separate():
+    root = pathlib.Path(__file__).resolve().parents[1]
+    source = runpy.run_path(str(
+        root / 'crane_project/configs/'
+        'crane_symeood_dino_lane_isolated_source_val_v3.py'))
+    source_contract = source['formal_lane_isolated_source_contract']
+    assert source_contract['split'] == 'val'
+    assert source_contract['expected_frames'] == 738
+    assert source_contract['target_data_read'] is False
+    fixed = runpy.run_path(str(
+        root / 'crane_project/configs/'
+        'crane_symeood_dino_lane_isolated_conditional_v3.py'))
+    conditional = fixed['model']['conditional_dino']
+    assert conditional['enabled'] is True
+    assert not pathlib.Path(conditional['calibration_json']).is_absolute()
+    contract = fixed['formal_lane_isolated_conditional_contract']
+    assert contract['selection_split'] == 'val'
+    assert contract['independent_lane_state'] is True
+    assert contract['cross_lane_geometry_rejection'] is False
+    assert contract['target_scope'] is False
+    assert contract['test_parameter_search'] is False
+
+
+def test_conditional_v3_skips_entire_dino_runtime_when_not_triggered():
+    from crane_project.utils.lane_isolated_conditional_dino import (
+        LaneIsolatedConditionalDinoSelector)
+
+    class _Baseline:
+        @staticmethod
+        def simple_test(img, img_metas, rescale=False):
+            del img, img_metas, rescale
+            return [[np.asarray(
+                [[10, 10, 40, 20, 0.0, 0.9]], dtype=np.float32)]]
+
+    detector = Detector.__new__(Detector)
+    nn.Module.__init__(detector)
+    detector.baseline = _Baseline()
+    detector._fusion_policy = 'sym_eood_proposal_dino_roi_union'
+    detector._scope_policy = 'all_frames'
+    detector._scope_intervals = None
+    detector._conditional_dino_selector = (
+        LaneIsolatedConditionalDinoSelector(
+            small_diag_ratio=0.0,
+            max_sym_diag_change=0.2,
+            max_sym_angle_change_deg=15.0,
+            max_dino_diag_change=0.2,
+            max_dino_angle_change_deg=15.0))
+    detector._fusion_audit_enabled = True
+    detector._fusion_audit_records = []
+    detector._stabilizer_enabled = False
+    detector._test_score_thr = 0.05
+    result = detector.simple_test(
+        torch.zeros((1, 3, 10, 10)),
+        [dict(
+            filename='/tmp/real_seq01_00001.jpg',
+            ori_shape=(100, 100, 3))],
+        rescale=True)
+    assert result[0][0][0, 5] == pytest.approx(0.9)
+    assert detector._fusion_audit_records[0]['dino_invoked'] is False
+    assert '_dino_runtime' not in detector.__dict__
 
 
 def test_symeood_proposal_fusion_rejects_more_than_top1():

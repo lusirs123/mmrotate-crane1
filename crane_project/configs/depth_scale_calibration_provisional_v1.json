@@ -1,0 +1,57 @@
+{
+  "calibration_id": "webots_depth_scale_provisional_v1",
+  "status": "frozen_before_fixed_dev",
+  "model": "z_cg_opt_m = k * (l_diag_plumb_px ** alpha)",
+  "target_definition": "camera optical center to grab reference center optical-axis depth",
+  "feature_definition": "virtual-plumb four-corner reprojection OBB diagonal",
+  "fit_sequence": "calibration_train_01",
+  "fit_split": "calibration_train",
+  "fit_frame_count": 550,
+  "parameters": {
+    "k": 1764.5919116475932,
+    "alpha": -1.0005117394222605
+  },
+  "fit_metrics": {
+    "mae_m": 0.005846682367892296,
+    "rmse_m": 0.007055917625615868,
+    "abs_rel": 0.00035428060538691915,
+    "max_abs_error_m": 0.01468986037366804,
+    "r2": 0.9999980827384382
+  },
+  "training_side_stress_audit": {
+    "sequence": "calibration_train_02_yaw_small_step",
+    "split": "calibration_train",
+    "frame_count": 1143,
+    "yaw_relative_range_deg": [-8.0, 8.0],
+    "theta_total_range_deg": [0.005436721083812558, 2.51358566436862],
+    "mae_m": 0.0073305621778733876,
+    "rmse_m": 0.00856169620129786,
+    "abs_rel": 0.000541670603583335,
+    "max_abs_error_m": 0.01950266624665531,
+    "absolute_residual_vs_absolute_yaw_correlation": 0.03663107881558555,
+    "absolute_residual_vs_theta_total_correlation": 0.4617376884145069,
+    "verdict": "pass_yaw_stress; swing_is_the_larger_residual_factor"
+  },
+  "preregistered_fixed_dev": {
+    "sequence": "fixed_dev_01_unseen_depth_swing",
+    "split": "fixed_dev",
+    "scenario": "unseen_continuous_depth_with_natural_swing",
+    "active_yaw_enabled": false,
+    "approximate_z_cg_opt_waypoints_m": [12.0, 21.0, 14.0, 24.0],
+    "purpose": "evaluate the frozen scale law under an unseen depth trajectory and natural swing without refitting",
+    "acceptance_gate": {
+      "mae_m_max": 0.05,
+      "rmse_m_max": 0.08,
+      "abs_rel_max": 0.005,
+      "required_runtime_truth_audit_pass_rate": 1.0
+    },
+    "refit_k_alpha_on_this_sequence": false
+  },
+  "protocol_boundaries": {
+    "pilot_used_for_fit": false,
+    "fixed_dev_used_for_fit": false,
+    "unknown_test_used_for_fit": false,
+    "real_video_has_metric_ground_truth": false,
+    "gps_is_model_input": false
+  }
+}

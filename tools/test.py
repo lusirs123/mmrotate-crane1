@@ -262,8 +262,13 @@ def main():
                         raw_model, 'fusion_audit_metadata', None)
                     metadata = (metadata_getter()
                                 if callable(metadata_getter) else {})
+                    protocol_getter = getattr(
+                        raw_model, 'fusion_audit_protocol', None)
+                    audit_protocol = (
+                        protocol_getter() if callable(protocol_getter) else
+                        'source_owned_geometry_union_v2')
                     mmcv.dump(dict(
-                        protocol='source_owned_geometry_union_v2',
+                        protocol=audit_protocol,
                         frame_count=len(audit_records),
                         output_source_counts=counts,
                         metadata=metadata,
