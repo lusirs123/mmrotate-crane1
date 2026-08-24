@@ -33,7 +33,13 @@ source_test_pipeline = [
         ]),
 ]
 
-model = dict(scope_split='source_train')
+model = dict(
+    scope_split='source_train',
+    # Keep both lanes observable on every source frame.  Explicit values are
+    # required here so the collection contract can be checked from MMConfig
+    # instead of relying on constructor defaults.
+    conditional_dino=dict(enabled=False),
+    conservative_takeover=dict(enabled=False))
 
 data = dict(
     samples_per_gpu=1,

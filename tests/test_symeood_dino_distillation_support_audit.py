@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import numpy as np
 
 from crane_project.tools import symeood_dino_distillation_support_audit as audit
@@ -5,6 +7,15 @@ from crane_project.tools import symeood_dino_distillation_support_audit as audit
 
 def _box():
     return np.asarray([10.0, 10.0, 8.0, 4.0, 0.0, 0.9])
+
+
+def test_source_collection_explicitly_disables_runtime_routing():
+    path = Path(
+        'crane_project/configs/'
+        'crane_symeood_dino_unified_source_train_distill_support_v1.py')
+    text = path.read_text()
+    assert 'conditional_dino=dict(enabled=False)' in text
+    assert 'conservative_takeover=dict(enabled=False)' in text
 
 
 def test_present_wrong_teacher_gain_is_separate_from_missing_rescue():
