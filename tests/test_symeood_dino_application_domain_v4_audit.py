@@ -139,6 +139,18 @@ def test_v4_rejects_unknown_domain_instead_of_routing_on_identity(tmp_path):
             required_frame_count=2)
 
 
+def test_v4_rejects_frame_metadata_misalignment(tmp_path):
+    records = [
+        _record('real_seq02_00001.jpg', 99, _box(), _box()),
+        _record('sim_seq09_00001.jpg', 1, _box(), _box()),
+    ]
+    payload, raw, split_root = _payload_and_split(tmp_path, records)
+    with pytest.raises(RuntimeError, match='frame metadata disagrees'):
+        audit.audit_payload(
+            payload, raw, split_root, 'fixed-target',
+            required_frame_count=2)
+
+
 def test_source_val_uses_full_metric_v2_without_fixed_target_claim(tmp_path):
     records = [
         _record('real_seq07_00001.jpg', 1, _box(), _box()),
@@ -173,3 +185,53 @@ def test_fixed_target_output_keeps_diagnostic_boundary(tmp_path):
         'sim_a_rmse_le_1_5487_deg'] is True
     assert result['decision'] == 'PASS_FIXED_TARGET_DIAGNOSTIC_GATE'
     assert result['eligible_for_unknown_sequence_claim'] is False
+
+
+def test_six_present_wrong_dino_frames_close_missing_only_holder(tmp_path):
+    records = [
+        _record(
+            'real_seq03_{:05d}.jpg'.format(frame), frame,
+            _box(), _box(cx=100.0))
+        for frame in range(1, 7)
+    ]
+    records.append(
+        _record('sim_seq09_00001.jpg', 1, _box(), _box()))
+    payload, raw, split_root = _payload_and_split(tmp_path, records)
+    result = audit.audit_payload(
+        payload, raw, split_root, 'fixed-target',
+        required_frame_count=7)
+
+    attribution = result['failure_attribution']
+    assert attribution['max_run_length'] == 6
+    assert len(attribution['over_limit_runs']) == 1
+    run = attribution['over_limit_runs'][0]
+    assert run['dino_missing_count'] == 0
+    assert run['dino_present_wrong_count'] == 6
+    assert run['sym_eood_hit_count'] == 6
+    assert run['selected_missing_count'] == 0
+    assert attribution['missing_only_observation_holder'] == {
+        'eligible_for_followup_counterfactual': False,
+        'reason': 'over_limit_run_has_no_selected_missing_frame',
+        'necessary_condition': 'failed',
+    }
+
+
+def test_failure_attribution_does_not_bridge_frame_id_gap(tmp_path):
+    records = [
+        _record(
+            'real_seq02_{:05d}.jpg'.format(frame), frame,
+            _box(), _box(cx=100.0))
+        for frame in (1, 2, 3, 10, 11, 12)
+    ]
+    records.append(
+        _record('sim_seq09_00001.jpg', 1, _box(), _box()))
+    payload, raw, split_root = _payload_and_split(tmp_path, records)
+    result = audit.audit_payload(
+        payload, raw, split_root, 'fixed-target',
+        required_frame_count=7)
+
+    attribution = result['failure_attribution']
+    assert attribution['max_run_length'] == 3
+    assert [run['length'] for run in attribution['runs']] == [3, 3]
+    assert attribution['missing_only_observation_holder']['reason'] == (
+        'no_over_limit_failure_run')

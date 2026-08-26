@@ -115,6 +115,12 @@ def _hit(box, gt):
         and compute_riou(box[:5], gt[:5]) >= 0.5)
 
 
+def _riou(box, gt):
+    if box is None:
+        return 0.0
+    return float(compute_riou(box[:5], gt[:5]))
+
+
 def _summarize(records, annotation_dir, sym_key, policy):
     temporal = []
     hit_keys = set()
@@ -167,7 +173,11 @@ def _summarize(records, annotation_dir, sym_key, policy):
             raise ValueError('Unknown policy: {}'.format(policy))
 
         frame_key = '{}|{}'.format(record['sequence'], int(record['frame']))
-        if _hit(selected, gt):
+        selected_riou = _riou(selected, gt)
+        sym_riou = _riou(sym, gt)
+        dino_riou = _riou(dino, gt)
+        selected_hit = selected_riou >= 0.5
+        if selected_hit:
             hit_keys.add(frame_key)
         selected_source_counts[source] += 1
         selected_source_counts_by_domain[domain][source] += 1
@@ -180,6 +190,15 @@ def _summarize(records, annotation_dir, sym_key, policy):
             seq_id=seq_id,
             selected_source=source,
             selection_reason=reason,
+            selected_present=selected is not None,
+            selected_riou=selected_riou,
+            selected_hit=selected_hit,
+            sym_eood_present=sym is not None,
+            sym_eood_riou=sym_riou,
+            sym_eood_hit=sym_riou >= 0.5,
+            dino_native_present=dino is not None,
+            dino_native_riou=dino_riou,
+            dino_native_hit=dino_riou >= 0.5,
             selected_box=(None if selected is None else
                           [float(value) for value in selected[:6]])))
 
@@ -192,6 +211,106 @@ def _summarize(records, annotation_dir, sym_key, policy):
             for domain, counts in selected_source_counts_by_domain.items()},
         metrics=_offline_metrics(temporal),
         decisions=decisions)
+
+
+def _summarize_miss_run(rows):
+    return dict(
+        domain=rows[0]['domain'],
+        sequence=rows[0]['sequence'],
+        seq_id=rows[0]['seq_id'],
+        start_frame=int(rows[0]['frame']),
+        end_frame=int(rows[-1]['frame']),
+        length=len(rows),
+        frame_keys=[
+            '{}|{}'.format(row['sequence'], int(row['frame']))
+            for row in rows],
+        selected_missing_count=sum(
+            not row['selected_present'] for row in rows),
+        dino_missing_count=sum(
+            not row['dino_native_present'] for row in rows),
+        dino_present_wrong_count=sum(
+            row['dino_native_present'] and not row['dino_native_hit']
+            for row in rows),
+        dino_hit_count=sum(row['dino_native_hit'] for row in rows),
+        sym_eood_missing_count=sum(
+            not row['sym_eood_present'] for row in rows),
+        sym_eood_present_wrong_count=sum(
+            row['sym_eood_present'] and not row['sym_eood_hit']
+            for row in rows),
+        sym_eood_hit_count=sum(row['sym_eood_hit'] for row in rows),
+        selected_source_counts=dict(Counter(
+            row['selected_source'] for row in rows)),
+        frames=[dict(
+            frame=int(row['frame']),
+            selected_source=row['selected_source'],
+            selected_present=bool(row['selected_present']),
+            selected_riou=float(row['selected_riou']),
+            dino_native_present=bool(row['dino_native_present']),
+            dino_native_riou=float(row['dino_native_riou']),
+            sym_eood_present=bool(row['sym_eood_present']),
+            sym_eood_riou=float(row['sym_eood_riou']))
+            for row in rows])
+
+
+def _failure_attribution(summary):
+    ordered = sorted(
+        summary['decisions'],
+        key=lambda row: (row['domain'], row['seq_id'], int(row['frame'])))
+    runs = []
+    current = []
+    previous_key = None
+    previous_frame = None
+
+    def flush():
+        if current:
+            runs.append(_summarize_miss_run(list(current)))
+            current.clear()
+
+    for row in ordered:
+        key = (row['domain'], row['seq_id'])
+        frame = int(row['frame'])
+        continuous = (
+            previous_key == key
+            and previous_frame is not None
+            and frame == previous_frame + 1)
+        if previous_key is not None and not continuous:
+            flush()
+        if row['selected_hit']:
+            flush()
+        else:
+            current.append(row)
+        previous_key = key
+        previous_frame = frame
+    flush()
+
+    runs.sort(key=lambda row: (
+        -int(row['length']), row['domain'], row['seq_id'],
+        int(row['start_frame'])))
+    over_limit = [row for row in runs if row['length'] > MCML_LIMIT]
+    if not over_limit:
+        holder = dict(
+            eligible_for_followup_counterfactual=False,
+            reason='no_over_limit_failure_run',
+            necessary_condition='not_applicable')
+    elif all(row['selected_missing_count'] > 0 for row in over_limit):
+        holder = dict(
+            eligible_for_followup_counterfactual=True,
+            reason=(
+                'every_over_limit_run_contains_a_selected_missing_frame'),
+            necessary_condition=(
+                'passed_but_not_sufficient_previous_observation_must_still_hit'))
+    else:
+        holder = dict(
+            eligible_for_followup_counterfactual=False,
+            reason='over_limit_run_has_no_selected_missing_frame',
+            necessary_condition='failed')
+    return dict(
+        run_count=len(runs),
+        max_run_length=max(
+            (int(row['length']) for row in runs), default=0),
+        runs=runs,
+        over_limit_runs=over_limit,
+        missing_only_observation_holder=holder)
 
 
 def _metric(summary, name, default):
@@ -275,9 +394,15 @@ def _validate(payload, records, split_root, evidence_role,
                 or record.get('raw_selected_source') == 'not_computed'):
             raise RuntimeError(
                 'V4 requires DINO to have been computed on every input frame')
-        domain, _seq_id, _frame = parse_seq_frame(record['filename'])
+        domain, seq_id, parsed_frame = parse_seq_frame(record['filename'])
         if domain not in ('real', 'sim'):
             raise RuntimeError('Audit contains an unknown application domain')
+        parsed_sequence = '{}_{}'.format(domain, seq_id)
+        if str(record['sequence']) != parsed_sequence:
+            raise RuntimeError(
+                'Audit sequence metadata disagrees with filename')
+        if int(record['frame']) != int(parsed_frame):
+            raise RuntimeError('Audit frame metadata disagrees with filename')
         domains[domain] += 1
         frame_key = (str(record['sequence']), int(record['frame']))
         if frame_key in seen:
@@ -319,6 +444,7 @@ def audit_payload(payload, audit_bytes, split_root, evidence_role,
     dino_baseline = _summarize(
         records, annotation_dir, sym_key, 'dino_native')
     v4 = _summarize(records, annotation_dir, sym_key, 'v4')
+    failure_attribution = _failure_attribution(v4)
     gate = _gate(v4, sym_baseline, evidence_role)
     if gate['passed']:
         decision = (
@@ -355,6 +481,7 @@ def audit_payload(payload, audit_bytes, split_root, evidence_role,
         sym_eood_baseline=sym_baseline,
         native_dino_baseline=dino_baseline,
         v4=v4,
+        failure_attribution=failure_attribution,
         v4_vs_sym_eood=_comparison(v4, sym_baseline),
         v4_vs_native_dino=_comparison(v4, dino_baseline),
         documented_gate=gate,
@@ -390,6 +517,10 @@ def main():
     print('[v4-json] vs_sym_lost={} vs_sym_gained={}'.format(
         len(result['v4_vs_sym_eood']['lost_hit_frame_keys']),
         len(result['v4_vs_sym_eood']['gained_hit_frame_keys'])))
+    print('[v4-json] failure_max_run={} holder={}'.format(
+        result['failure_attribution']['max_run_length'],
+        result['failure_attribution'][
+            'missing_only_observation_holder']))
     print('[v4-json] gate={}'.format(result['documented_gate']))
     print('[v4-json] decision={}'.format(result['decision']))
 
