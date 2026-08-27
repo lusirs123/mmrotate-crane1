@@ -52,10 +52,10 @@ model = dict(
     conservative_takeover=dict(enabled=False))
 
 data = dict(
-    _delete_=True,
     samples_per_gpu=1,
     workers_per_gpu=2,
     test=dict(
+        _delete_=True,
         type=dataset_type,
         data_root=data_root,
         ann_file=source_inventory_split + '/annfiles/',

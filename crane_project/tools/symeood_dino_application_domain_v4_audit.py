@@ -9,6 +9,10 @@ audit:
 
 Sequence and frame identifiers are retained only to reconstruct temporal
 metrics.  They are never used to choose a lane.
+
+An optional operation-phase manifest can add a separate post-hoc
+``measurement-valid`` diagnostic for fixed-target evidence.  The raw metrics,
+documented gate, detector outputs, and OBB annotations remain unchanged.
 """
 
 import argparse
@@ -29,6 +33,11 @@ from crane_project.tools.eval_crane_offline import (
 
 PROTOCOL = 'application_domain_asymmetric_primary_fusion_v4_json_audit'
 INPUT_PROTOCOL = 'source_owned_geometry_union_v2'
+MEASUREMENT_VALIDITY_PROTOCOL = 'crane_measurement_validity_v1'
+MEASUREMENT_VALIDITY_STATUS = (
+    'POST_HOC_OPERATIONAL_VALIDITY_DIAGNOSTIC')
+MEASUREMENT_VALIDITY_SELECTION_BASIS = (
+    'manual_video_operation_phase_review')
 MCML_LIMIT = 5
 FIXED_TEST_SIM_A_RMSE_REFERENCE_DEG = 1.5487
 METRIC_TOLERANCE = 1e-4
@@ -49,6 +58,12 @@ def parse_args():
         choices=sorted(ROLE_FRAME_COUNTS))
     parser.add_argument('--out-json', required=True)
     parser.add_argument('--require-frame-count', type=int)
+    parser.add_argument(
+        '--measurement-validity-json',
+        help=(
+            'Optional fixed-target-only operation-phase manifest.  It adds '
+            'a separate measurement-valid diagnostic and never overrides '
+            'the documented all-frame gate.'))
     return parser.parse_args()
 
 
@@ -313,6 +328,239 @@ def _failure_attribution(summary):
         missing_only_observation_holder=holder)
 
 
+def _canonical_json_bytes(payload):
+    return json.dumps(
+        payload, sort_keys=True, separators=(',', ':'),
+        ensure_ascii=False).encode('utf-8')
+
+
+def _validate_measurement_validity(payload, records, evidence_role):
+    if evidence_role != 'fixed-target':
+        raise RuntimeError(
+            'Measurement validity is a fixed-target diagnostic only')
+    if payload.get('protocol') != MEASUREMENT_VALIDITY_PROTOCOL:
+        raise RuntimeError(
+            'Unknown measurement-validity protocol: {}'.format(
+                payload.get('protocol')))
+    status = payload.get('status', MEASUREMENT_VALIDITY_STATUS)
+    if status != MEASUREMENT_VALIDITY_STATUS:
+        raise RuntimeError(
+            'Measurement validity status must remain {}'.format(
+                MEASUREMENT_VALIDITY_STATUS))
+    if payload.get('selection_basis') != (
+            MEASUREMENT_VALIDITY_SELECTION_BASIS):
+        raise RuntimeError(
+            'Measurement validity requires selection_basis={}'.format(
+                MEASUREMENT_VALIDITY_SELECTION_BASIS))
+
+    sequences = payload.get('sequences')
+    if not isinstance(sequences, dict):
+        raise RuntimeError(
+            'Measurement validity requires a sequences object')
+
+    observed_real_frames = {}
+    for record in records:
+        domain, _seq_id, frame = parse_seq_frame(record['filename'])
+        if domain == 'real':
+            sequence = str(record['sequence'])
+            observed_real_frames.setdefault(sequence, set()).add(int(frame))
+
+    observed_sequences = set(observed_real_frames)
+    manifest_sequences = set(sequences)
+    if manifest_sequences != observed_sequences:
+        raise RuntimeError(
+            'Measurement-validity sequences must exactly match real input; '
+            'missing={} extra={}'.format(
+                sorted(observed_sequences - manifest_sequences),
+                sorted(manifest_sequences - observed_sequences)))
+
+    invalid_reasons = {}
+    normalized_sequences = {}
+    for sequence in sorted(observed_sequences):
+        spec = sequences[sequence]
+        if not isinstance(spec, dict):
+            raise RuntimeError(
+                'Measurement-validity sequence spec must be an object')
+        if spec.get('default_valid') is not True:
+            raise RuntimeError(
+                '{} must use default_valid=true'.format(sequence))
+        intervals = spec.get('invalid_intervals', [])
+        if not isinstance(intervals, list):
+            raise RuntimeError(
+                '{} invalid_intervals must be a list'.format(sequence))
+
+        normalized_intervals = []
+        previous_end = None
+        observed_frames = observed_real_frames[sequence]
+        for interval in intervals:
+            if not isinstance(interval, dict):
+                raise RuntimeError('Invalid interval must be an object')
+            try:
+                start = int(interval['start_frame'])
+                end = int(interval['end_frame'])
+            except (KeyError, TypeError, ValueError):
+                raise RuntimeError(
+                    '{} interval requires integer start/end frames'.format(
+                        sequence))
+            reason = str(interval.get('reason', '')).strip()
+            if not reason:
+                raise RuntimeError(
+                    '{} interval requires a non-empty reason'.format(
+                        sequence))
+            if start > end:
+                raise RuntimeError(
+                    '{} interval start exceeds end'.format(sequence))
+            if previous_end is not None and start <= previous_end:
+                raise RuntimeError(
+                    '{} invalid intervals overlap'.format(sequence))
+            selected_frames = sorted(
+                frame for frame in observed_frames if start <= frame <= end)
+            if not selected_frames:
+                raise RuntimeError(
+                    '{} interval {}..{} selects no input frames'.format(
+                        sequence, start, end))
+            for frame in selected_frames:
+                invalid_reasons[(sequence, frame)] = reason
+            normalized_intervals.append(dict(
+                start_frame=start,
+                end_frame=end,
+                reason=reason,
+                selected_frame_count=len(selected_frames)))
+            previous_end = end
+
+        normalized_sequences[sequence] = dict(
+            default_valid=True,
+            invalid_intervals=normalized_intervals)
+
+    real_frame_count = sum(
+        len(frames) for frames in observed_real_frames.values())
+    if len(invalid_reasons) >= real_frame_count:
+        raise RuntimeError(
+            'Measurement validity excludes every real frame')
+    return invalid_reasons, normalized_sequences
+
+
+def _measurement_validity_audit(
+        payload, payload_bytes, records, annotation_dir, v4,
+        evidence_role):
+    invalid_reasons, normalized_sequences = (
+        _validate_measurement_validity(payload, records, evidence_role))
+    if payload_bytes is None:
+        payload_bytes = _canonical_json_bytes(payload)
+
+    decisions_by_key = {
+        (str(row['sequence']), int(row['frame'])): row
+        for row in v4['decisions']}
+    valid_temporal = []
+    valid_decisions = []
+    excluded_frames = []
+    per_sequence = {}
+
+    for record in records:
+        sequence = str(record['sequence'])
+        frame = int(record['frame'])
+        key = (sequence, frame)
+        decision = decisions_by_key[key]
+        reason = invalid_reasons.get(key)
+        sequence_summary = None
+        if decision['domain'] == 'real':
+            sequence_summary = per_sequence.setdefault(sequence, dict(
+                raw_frame_count=0,
+                measurement_valid_frame_count=0,
+                excluded_frame_count=0,
+                excluded_hit_count=0,
+                excluded_miss_count=0,
+                invalid_reason_counts=Counter()))
+            sequence_summary['raw_frame_count'] += 1
+
+        if reason is not None:
+            if sequence_summary is None:
+                raise RuntimeError(
+                    'Measurement validity may not exclude sim frames')
+            sequence_summary['excluded_frame_count'] += 1
+            sequence_summary['invalid_reason_counts'][reason] += 1
+            if decision['selected_hit']:
+                sequence_summary['excluded_hit_count'] += 1
+            else:
+                sequence_summary['excluded_miss_count'] += 1
+            excluded_frames.append(dict(
+                frame_key='{}|{}'.format(sequence, frame),
+                sequence=sequence,
+                frame=frame,
+                reason=reason,
+                selected_hit=bool(decision['selected_hit']),
+                selected_riou=float(decision['selected_riou'])))
+            continue
+
+        if sequence_summary is not None:
+            sequence_summary['measurement_valid_frame_count'] += 1
+        selected = decision['selected_box']
+        selected = (None if selected is None
+                    else np.asarray(selected, dtype=np.float64))
+        gt = _annotation(record, annotation_dir)
+        valid_temporal.append(_temporal_record(record, selected, gt))
+        valid_decisions.append(decision)
+
+    if not valid_temporal:
+        raise RuntimeError('Measurement validity leaves no evaluable frames')
+
+    for summary in per_sequence.values():
+        summary['invalid_reason_counts'] = dict(
+            summary['invalid_reason_counts'])
+        raw_count = summary['raw_frame_count']
+        summary['measurement_valid_fraction'] = (
+            float(summary['measurement_valid_frame_count']) / raw_count)
+
+    valid_metrics = _offline_metrics(valid_temporal)
+    valid_failure = _failure_attribution(dict(decisions=valid_decisions))
+    excluded_hits = sum(row['selected_hit'] for row in excluded_frames)
+    excluded_count = len(excluded_frames)
+    all_frame_count = len(records)
+    raw_real_count = sum(
+        1 for row in v4['decisions'] if row['domain'] == 'real')
+    sim_count = all_frame_count - raw_real_count
+    valid_real_count = raw_real_count - excluded_count
+    valid_real_mcml = float(valid_metrics.get(
+        'real/MCML_max(frames)', float('inf')))
+    operational_checks = dict(
+        measurement_valid_real_mcml_max_le_5=(
+            valid_real_mcml <= MCML_LIMIT),
+        original_documented_gate_not_overridden=True,
+        detector_forward_not_run=True,
+        parameter_update_not_run=True)
+
+    return dict(
+        protocol=MEASUREMENT_VALIDITY_PROTOCOL,
+        status=MEASUREMENT_VALIDITY_STATUS,
+        selection_basis=MEASUREMENT_VALIDITY_SELECTION_BASIS,
+        evidence_boundary=(
+            'separate_operational_diagnostic_not_original_gate_override'),
+        input=dict(
+            sha256=hashlib.sha256(payload_bytes).hexdigest(),
+            normalized_sequences=normalized_sequences),
+        scope=dict(
+            all_frame_count=all_frame_count,
+            sim_frame_count=sim_count,
+            raw_real_frame_count=raw_real_count,
+            measurement_valid_real_frame_count=valid_real_count,
+            measurement_invalid_real_frame_count=excluded_count,
+            measurement_valid_real_fraction=(
+                float(valid_real_count) / raw_real_count),
+            excluded_hit_count=int(excluded_hits),
+            excluded_miss_count=int(excluded_count - excluded_hits),
+            per_sequence=per_sequence),
+        metrics=valid_metrics,
+        failure_attribution=valid_failure,
+        excluded_frames=excluded_frames,
+        operational_gate=dict(
+            passed=all(operational_checks.values()),
+            checks=operational_checks,
+            mcml_limit=MCML_LIMIT),
+        original_documented_gate_overridden=False,
+        eligible_for_original_gate_override=False,
+        eligible_for_unknown_sequence_claim=False)
+
+
 def _metric(summary, name, default):
     return float(summary['metrics'].get(name, default))
 
@@ -427,7 +675,8 @@ def _validate(payload, records, split_root, evidence_role,
 
 
 def audit_payload(payload, audit_bytes, split_root, evidence_role,
-                  required_frame_count=None):
+                  required_frame_count=None, measurement_validity=None,
+                  measurement_validity_bytes=None):
     records = list(payload.get('records') or [])
     if not records:
         raise RuntimeError('All-lane audit has no records')
@@ -446,6 +695,11 @@ def audit_payload(payload, audit_bytes, split_root, evidence_role,
     v4 = _summarize(records, annotation_dir, sym_key, 'v4')
     failure_attribution = _failure_attribution(v4)
     gate = _gate(v4, sym_baseline, evidence_role)
+    measurement_validity_result = None
+    if measurement_validity is not None:
+        measurement_validity_result = _measurement_validity_audit(
+            measurement_validity, measurement_validity_bytes, records,
+            annotation_dir, v4, evidence_role)
     if gate['passed']:
         decision = (
             'PASS_SOURCE_VAL_DOCUMENTED_GATE'
@@ -485,6 +739,7 @@ def audit_payload(payload, audit_bytes, split_root, evidence_role,
         v4_vs_sym_eood=_comparison(v4, sym_baseline),
         v4_vs_native_dino=_comparison(v4, dino_baseline),
         documented_gate=gate,
+        measurement_validity=measurement_validity_result,
         eligible_for_formal_config_from_this_report_alone=False,
         eligible_for_unknown_sequence_claim=False,
         decision=decision)
@@ -503,9 +758,17 @@ def main():
     audit_path = Path(args.audit_json)
     audit_bytes = audit_path.read_bytes()
     payload = json.loads(audit_bytes)
+    measurement_validity = None
+    measurement_validity_bytes = None
+    if args.measurement_validity_json:
+        measurement_validity_path = Path(args.measurement_validity_json)
+        measurement_validity_bytes = measurement_validity_path.read_bytes()
+        measurement_validity = json.loads(measurement_validity_bytes)
     result = audit_payload(
         payload, audit_bytes, Path(args.data_root) / args.split,
-        args.evidence_role, args.require_frame_count)
+        args.evidence_role, args.require_frame_count,
+        measurement_validity=measurement_validity,
+        measurement_validity_bytes=measurement_validity_bytes)
     _write_json_atomic(args.out_json, result)
     print('[v4-json] role={}'.format(result['evidence_role']))
     print('[v4-json] frames={}'.format(result['input']['frame_count']))
@@ -522,6 +785,14 @@ def main():
         result['failure_attribution'][
             'missing_only_observation_holder']))
     print('[v4-json] gate={}'.format(result['documented_gate']))
+    if result['measurement_validity'] is not None:
+        validity = result['measurement_validity']
+        print('[v4-json] measurement_validity_scope={}'.format(
+            validity['scope']))
+        print('[v4-json] measurement_validity_metrics={}'.format(
+            validity['metrics']))
+        print('[v4-json] measurement_validity_gate={}'.format(
+            validity['operational_gate']))
     print('[v4-json] decision={}'.format(result['decision']))
 
 

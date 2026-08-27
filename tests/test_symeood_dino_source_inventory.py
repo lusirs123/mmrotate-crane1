@@ -39,6 +39,8 @@ def test_collection_config_is_unrouted_and_source_guarded():
     assert "target_data_read=False" in text
     assert "test_parameter_search=False" in text
     assert "part == 'test' or part.startswith('val')" in text
+    assert "data = dict(\n    _delete_=True" not in text
+    assert "test=dict(\n        _delete_=True" in text
 
 
 def test_inventory_keeps_micro_and_sequence_macro_separate(tmp_path):

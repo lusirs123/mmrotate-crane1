@@ -49,6 +49,17 @@ def _payload_and_split(tmp_path, records, split='test'):
     return payload, raw, split_root
 
 
+def _measurement_validity(sequences, status=None):
+    payload = {
+        'protocol': audit.MEASUREMENT_VALIDITY_PROTOCOL,
+        'selection_basis': audit.MEASUREMENT_VALIDITY_SELECTION_BASIS,
+        'sequences': sequences,
+    }
+    if status is not None:
+        payload['status'] = status
+    return payload
+
+
 def test_v4_uses_fixed_application_domain_policy_and_legacy_sym_key(tmp_path):
     records = [
         _record('real_seq02_00001.jpg', 1, _box(cx=100), _box()),
@@ -235,3 +246,119 @@ def test_failure_attribution_does_not_bridge_frame_id_gap(tmp_path):
     assert [run['length'] for run in attribution['runs']] == [3, 3]
     assert attribution['missing_only_observation_holder']['reason'] == (
         'no_over_limit_failure_run')
+
+
+def test_measurement_validity_adds_separate_gate_without_overriding_raw(
+        tmp_path):
+    records = [
+        _record(
+            'real_seq03_{:05d}.jpg'.format(frame), frame,
+            _box(), _box(cx=100.0))
+        for frame in range(1, 7)
+    ]
+    records.append(_record('sim_seq09_00001.jpg', 1, _box(), _box()))
+    payload, raw, split_root = _payload_and_split(tmp_path, records)
+    validity = _measurement_validity({
+        'real_seq03': {
+            'default_valid': True,
+            'invalid_intervals': [{
+                'start_frame': 2,
+                'end_frame': 3,
+                'reason': 'material_contact',
+            }],
+        },
+    }, status='POST_HOC_OPERATIONAL_VALIDITY_DIAGNOSTIC')
+
+    result = audit.audit_payload(
+        payload, raw, split_root, 'fixed-target',
+        required_frame_count=7,
+        measurement_validity=validity)
+
+    assert result['documented_gate']['passed'] is False
+    assert result['decision'] == 'STOP_V4_GATE_FAILED'
+    operational = result['measurement_validity']
+    assert operational['original_documented_gate_overridden'] is False
+    assert operational['eligible_for_original_gate_override'] is False
+    assert operational['operational_gate']['passed'] is True
+    assert operational['scope']['all_frame_count'] == 7
+    assert operational['scope']['sim_frame_count'] == 1
+    assert operational['scope']['raw_real_frame_count'] == 6
+    assert operational['scope']['measurement_valid_real_frame_count'] == 4
+    assert operational['scope']['measurement_invalid_real_frame_count'] == 2
+    assert operational['scope']['excluded_hit_count'] == 0
+    assert operational['scope']['excluded_miss_count'] == 2
+    assert operational['metrics']['real/MCML_max(frames)'] == 3
+    assert operational['failure_attribution']['max_run_length'] == 3
+    assert [row['frame_key'] for row in operational['excluded_frames']] == [
+        'real_seq03|2', 'real_seq03|3']
+
+
+def test_measurement_validity_counts_excluded_successes(tmp_path):
+    records = [
+        _record('real_seq02_00001.jpg', 1, _box(), _box()),
+        _record('real_seq02_00002.jpg', 2, _box(), _box()),
+        _record('sim_seq09_00001.jpg', 1, _box(), _box()),
+    ]
+    payload, raw, split_root = _payload_and_split(tmp_path, records)
+    validity = _measurement_validity({
+        'real_seq02': {
+            'default_valid': True,
+            'invalid_intervals': [{
+                'start_frame': 1,
+                'end_frame': 1,
+                'reason': 'grabbing_or_closing',
+            }],
+        },
+    })
+
+    result = audit.audit_payload(
+        payload, raw, split_root, 'fixed-target',
+        required_frame_count=3,
+        measurement_validity=validity)
+    scope = result['measurement_validity']['scope']
+    assert scope['excluded_hit_count'] == 1
+    assert scope['excluded_miss_count'] == 0
+    assert scope['per_sequence']['real_seq02'][
+        'measurement_valid_frame_count'] == 1
+
+
+def test_measurement_validity_requires_every_real_sequence(tmp_path):
+    records = [
+        _record('real_seq02_00001.jpg', 1, _box(), _box()),
+        _record('real_seq03_00001.jpg', 1, _box(), _box()),
+        _record('sim_seq09_00001.jpg', 1, _box(), _box()),
+    ]
+    payload, raw, split_root = _payload_and_split(tmp_path, records)
+    validity = _measurement_validity({
+        'real_seq03': {
+            'default_valid': True,
+            'invalid_intervals': [],
+        },
+    })
+
+    with pytest.raises(RuntimeError, match='exactly match real input'):
+        audit.audit_payload(
+            payload, raw, split_root, 'fixed-target',
+            required_frame_count=3,
+            measurement_validity=validity)
+
+
+def test_measurement_validity_rejects_source_val_masking(tmp_path):
+    records = [
+        _record('real_seq07_00001.jpg', 1, _box(), _box()),
+        _record('sim_seq10_00001.jpg', 1, _box(), _box()),
+    ]
+    payload, raw, split_root = _payload_and_split(
+        tmp_path, records, split='val')
+    validity = _measurement_validity({
+        'real_seq07': {
+            'default_valid': True,
+            'invalid_intervals': [],
+        },
+    })
+
+    with pytest.raises(RuntimeError, match='fixed-target diagnostic only'):
+        audit.audit_payload(
+            payload, raw, split_root, 'source-val',
+            required_frame_count=2,
+            measurement_validity=validity)

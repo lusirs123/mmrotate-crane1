@@ -1,0 +1,110 @@
+{
+  "schema_version": "obb_short_q2_depth_calibration_v1",
+  "calibration_id": "obb_short_q2_train03_v1",
+  "status": "frozen_before_one_time_unknown_coverage_retry",
+  "evaluation_protocol_revision": 2,
+  "target_definition": "camera optical center to grab reference center optical-axis depth z_cg_opt_m",
+  "formula": "z_hat = c * z_short * exp(beta * log(z_long / z_short)^2)",
+  "deployable_inputs": [
+    "obb_geometry.plumb_w_px",
+    "obb_geometry.plumb_h_px",
+    "obb_geometry.plumb_gamma_deg",
+    "camera.intrinsics.fx",
+    "camera.intrinsics.fy",
+    "obb_reference_geometry.long_edge_mean_m",
+    "obb_reference_geometry.short_edge_mean_m"
+  ],
+  "parameters": {
+    "c": 1.0019817081215345,
+    "beta": 24.868110217161536,
+    "b_m": 0.0
+  },
+  "fit": {
+    "sequence_id": "calibration_train_03_tilt_obb",
+    "split": "calibration_train",
+    "valid_frame_count": 981,
+    "loss": "Huber",
+    "huber_scale_m": 0.05,
+    "q_signed_min": -0.017858125543481828,
+    "q_signed_max": 0.0032899905286031747,
+    "q_p05_to_p95_span": 0.013318242668461077,
+    "theta_total_max_deg": 13.968396533738948
+  },
+  "selection_evidence": {
+    "sequence_id": "fixed_dev_01_unseen_depth_swing",
+    "protocol_role": "fixed target-dev",
+    "valid_frame_count": 893,
+    "mae_m": 0.04437564280827219,
+    "rmse_m": 0.04980501515942391,
+    "abs_rel": 0.0024639383629109306,
+    "bias_m": 0.03247060761995414,
+    "p95_abs_error_m": 0.08103076296196506,
+    "max_abs_error_m": 0.10099618406490762
+  },
+  "invalid_unknown_attempts": [
+    {
+      "sequence_id": "unknown_test_01_mixed_depth_swing",
+      "run_instance_id": "97d334ee17534488a852f934edbcde3b",
+      "verdict": "coverage_gate_failed_before_error_exposure",
+      "valid_frame_count": 868,
+      "z_cg_opt_span_m": 8.4733646327645,
+      "theta_8_inf_count": 6,
+      "theta_8_inf_required": 20,
+      "model_errors_exposed": false,
+      "reusable_for_formula_or_threshold_design": false
+    }
+  ],
+  "preregistered_unknown_test": {
+    "sequence_id": "unknown_test_02_coverage_retry",
+    "split": "unknown_test",
+    "scenario": "one_time_coverage_retry_mixed_depth_high_swing",
+    "random_seed": 20260826,
+    "nominal_capture_fps": 10.416666666666666,
+    "active_yaw_enabled": false,
+    "approximate_z_cg_opt_waypoints_m": [
+      17.5,
+      22.5,
+      14.0,
+      20.5,
+      13.5,
+      19.0
+    ],
+    "acquisition_policy": {
+      "reason": "Unknown-01 failed only the preregistered theta>=8deg coverage count before model errors were exposed",
+      "retry_index": 1,
+      "max_retry_count": 1,
+      "further_retry_allowed": false,
+      "operational_target_theta_8_inf_frames": 80,
+      "primary_motion": "natural longitudinal/lateral swing with fixed mechanical yaw",
+      "append_to_invalid_attempt_forbidden": true
+    },
+    "formula_selection_allowed": false,
+    "parameter_refit_allowed": false,
+    "threshold_tuning_allowed": false,
+    "coverage_gate": {
+      "min_valid_frames": 800,
+      "required_runtime_truth_audit_pass_rate": 1.0,
+      "min_z_cg_opt_span_m": 8.0,
+      "min_theta_bin_counts": {
+        "theta_0_3_deg": 100,
+        "theta_3_5_deg": 50,
+        "theta_5_8_deg": 30,
+        "theta_8_inf_deg": 20
+      }
+    },
+    "performance_gate": {
+      "mae_m_max": 0.08,
+      "rmse_m_max": 0.10,
+      "abs_rel_max": 0.005,
+      "p95_abs_error_m_max": 0.15
+    }
+  },
+  "evidence_boundaries": {
+    "webots_truth_only": true,
+    "gps_is_model_input": false,
+    "plc_or_encoder_input": false,
+    "detector_output_evaluated": false,
+    "real_metric_depth_claim_allowed": false,
+    "unknown_test_may_be_reused_for_formula_design": false
+  }
+}
