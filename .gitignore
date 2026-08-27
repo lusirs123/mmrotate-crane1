@@ -8,7 +8,7 @@ __pycache__/
 .vscode/
 
 # 数据文件夹，不上传
-crane_project/data/crane_grab/
+crane_project/data
 work_dirs
 
 # 日志文件
