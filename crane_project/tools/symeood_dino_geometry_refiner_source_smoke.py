@@ -133,7 +133,12 @@ def _component_contract(cfg, expected):
         no_temporal_state=(checkpoint.temporal_state is False),
         dedicated_optimizer=(
             cfg.optimizer.constructor ==
-            'GeometryRefinerOptimizerConstructor'))
+            'GeometryRefinerOptimizerConstructor'),
+        optimizer_keys_exact=(
+            set(cfg.optimizer.keys()) ==
+            {'type', 'constructor', 'lr', 'weight_decay'}),
+        optimizer_has_no_inherited_momentum=(
+            'momentum' not in cfg.optimizer))
     return dict(components=component, checks=checks,
                 passed=all(checks.values()))
 
@@ -352,6 +357,29 @@ def _run(args):
         EXPECTED_COUNTS['val'], EXPECTED_COUNTS['val_real'],
         EXPECTED_COUNTS['val_sim'])
     pipeline = _pipeline_coordinate_contract()
+
+    preflight_sections = [
+        full_contract, size_contract, full_train_report, full_val_report,
+        size_train_report, size_val_report, pipeline]
+    if not all(section['passed'] for section in preflight_sections):
+        return dict(
+            protocol='source_only_geometry_refiner_real_stack_smoke_v1',
+            evidence_boundary='source_train_and_source_val_only',
+            target_data_read=False,
+            checkpoint_written=False,
+            optimizer_steps_in_memory=0,
+            seed=args.seed,
+            configs=dict(full=os.path.abspath(args.full_config),
+                         size=os.path.abspath(args.size_config)),
+            config_contracts=dict(full=full_contract, size=size_contract),
+            datasets=dict(full_train=full_train_report,
+                          full_val=full_val_report,
+                          size_train=size_train_report,
+                          size_val=size_val_report),
+            pipeline_coordinate_contract=pipeline,
+            gpu_steps=dict(skipped='source_preflight_failed'),
+            passed=False,
+            decision='STOP_SOURCE_PREFLIGHT_FAILED')
 
     # Independent builds preserve the identical zero-init starting contract.
     size_gpu = _gpu_step(

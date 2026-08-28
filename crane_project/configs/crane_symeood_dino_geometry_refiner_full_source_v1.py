@@ -163,6 +163,7 @@ data = dict(
     test_dataloader=dict(samples_per_gpu=1, workers_per_gpu=2, shuffle=False))
 
 optimizer = dict(
+    _delete_=True,
     type='AdamW', constructor='GeometryRefinerOptimizerConstructor',
     lr=1e-4, weight_decay=1e-4)
 optimizer_config = dict(grad_clip=dict(max_norm=10, norm_type=2))

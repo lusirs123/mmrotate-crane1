@@ -70,6 +70,7 @@ def test_refiner_optimizer_is_exclusive_and_declared_by_config():
               ).read_text()
     assert 'class GeometryRefinerOptimizerConstructor' in hook
     assert 'set(optimizer_ids) != set(refiner_ids)' in hook
+    assert '_delete_=True' in config
     assert "constructor='GeometryRefinerOptimizerConstructor'" in config
 
 
@@ -97,4 +98,6 @@ def test_real_stack_smoke_keeps_source_only_boundary():
     assert "'_changed_from_resized'" in smoke
     assert 'loss.backward()' in smoke
     assert 'optimizer.step()' in smoke
+    assert 'optimizer_has_no_inherited_momentum' in smoke
+    assert "decision='STOP_SOURCE_PREFLIGHT_FAILED'" in smoke
     assert 'frozen_parameter_and_buffer_hash_unchanged' in smoke
