@@ -10,6 +10,9 @@ import pytest
 import torch
 import torch.nn as nn
 
+from crane_project.utils.dual_tower_geometry_refiner_checkpoint import (
+    compose_dual_tower_state)
+
 
 class _Registry:
     def register_module(self, *args, **kwargs):
@@ -94,10 +97,17 @@ def _load_module():
 
 MODULE = _load_module()
 Refiner = MODULE.DinoConditionedGeometryRefiner
+DualRefiner = MODULE.DinoConditionedDualTowerGeometryRefiner
 
 
 def _refiner(**kwargs):
     return Refiner(
+        in_channels=1, roi_output_size=1, fc_channels=4, num_fcs=1,
+        **kwargs)
+
+
+def _dual_refiner(**kwargs):
+    return DualRefiner(
         in_channels=1, roi_output_size=1, fc_channels=4, num_fcs=1,
         **kwargs)
 
@@ -153,3 +163,58 @@ def test_angle_loss_is_pi_periodic():
     losses = model.loss(predicted, target)
     assert losses['refiner_angle_objective'].item() == pytest.approx(0.0)
     assert losses['loss_geometry_refiner'].item() == pytest.approx(0.0)
+
+
+def test_dual_tower_zero_initialization_is_exact_dino_identity():
+    model = _dual_refiner()
+    proposal = torch.tensor([[10., 12., 8., 4., 0.2]])
+    features = [torch.zeros((1, 1, 4, 4))]
+    deltas = model(features, [proposal])
+    decoded = model.decode_and_normalize([proposal], deltas)[0]
+    assert torch.equal(deltas, torch.zeros_like(deltas))
+    assert torch.equal(decoded, proposal)
+    contract = model.component_contract()
+    assert contract['architecture'] == 'dual_tower_size_pose_v2'
+    assert contract['trainable_fc_towers_shared'] is False
+
+
+def test_dual_tower_rejects_inactive_component_configuration():
+    with pytest.raises(ValueError, match='requires center, size, and angle'):
+        _dual_refiner(refine_angle=False)
+
+
+def _parent_checkpoint(model, center, size, angle):
+    contract = dict(
+        source_train_frames=2781, source_val_frames=738,
+        target_data_read=False, source_gate_passed=False,
+        domain_routing=False, sequence_frame_routing=False,
+        temporal_state=False, representation='five_delta_xywha',
+        angle_range='le90', edge_swap=True, proj_xy=True,
+        refine_center=center, refine_size=size, refine_angle=angle)
+    return dict(
+        state_dict={
+            'geometry_refiner.' + key: value.detach().clone()
+            for key, value in model.state_dict().items()},
+        meta={'geometry_refiner_checkpoint_contract': contract})
+
+
+def test_dual_tower_forward_exactly_recomposes_parent_components():
+    torch.manual_seed(17)
+    size = _refiner(
+        refine_center=False, refine_size=True, refine_angle=False,
+        zero_init_output=False)
+    full = _refiner(zero_init_output=False)
+    dual = _dual_refiner(zero_init_output=False)
+    state, _, _ = compose_dual_tower_state(
+        _parent_checkpoint(size, False, True, False),
+        _parent_checkpoint(full, True, True, True))
+    dual.load_state_dict(state, strict=True)
+    proposal = torch.tensor([[10., 12., 8., 4., 0.2]])
+    features = [torch.zeros((1, 1, 4, 4))]
+    size_delta = size(features, [proposal])
+    full_delta = full(features, [proposal])
+    wanted = torch.cat([
+        full_delta[:, :2], size_delta[:, 2:4], full_delta[:, 4:5]],
+        dim=1)
+    actual = dual(features, [proposal])
+    assert torch.equal(actual, wanted)

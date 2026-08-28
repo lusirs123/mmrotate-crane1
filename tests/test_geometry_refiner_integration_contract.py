@@ -113,6 +113,50 @@ def test_refiner_evaluation_requires_manual_source_gate_selection():
     assert values['weight_real'] == 0.3
 
 
+def test_dual_tower_v2_is_source_val_only_and_evaluation_only():
+    path = ROOT / ('crane_project/configs/'
+                   'crane_symeood_dino_geometry_refiner_'
+                   'dual_tower_source_val_v2.py')
+    text = path.read_text()
+    assert "type='DinoConditionedDualTowerGeometryRefiner'" in text
+    assert 'evaluation_only=True' in text
+    assert "architecture='dual_tower_size_pose_v2'" in text
+    assert 'source_gate_passed=False' in text
+    assert 'target_data_read=False' in text
+    assert 'fixed_test_read=False' in text
+    assert 'domain_routing=False' in text
+    assert 'sequence_frame_routing=False' in text
+    assert 'temporal_state=False' in text
+
+
+def test_dual_tower_package_does_not_promote_source_gate():
+    path = ROOT / ('crane_project/tools/'
+                   'symeood_dino_dual_tower_v2_package.py')
+    text = path.read_text()
+    assert "source_gate_passed=False" in text
+    assert "fixed_test_read=False" in text
+    assert "eligible_for_fixed_test=False" in text
+    assert "size_state['delta_head.weight'][2:4]" not in text
+    utility_path = ROOT / ('crane_project/utils/'
+                           'dual_tower_geometry_refiner_checkpoint.py')
+    utility = utility_path.read_text()
+    assert "size_state['delta_head.weight'][2:4]" in utility
+    assert 'torch.tensor([0, 1, 4]' in utility
+
+
+def test_dual_tower_audit_requires_source_val_and_exact_components():
+    path = ROOT / ('crane_project/tools/'
+                   'symeood_dino_dual_tower_v2_audit.py')
+    text = path.read_text()
+    assert 'EXPECTED_FRAME_COUNT = 738' in text
+    assert "evidence_boundary='source_val_only'" in text
+    assert "target_data_read=False" in text
+    assert "fixed_test_read=False" in text
+    assert "eligible_for_fixed_test=False" in text
+    assert "full[0], full[1], size[2], size[3], full[4]" in text
+    assert 'expected_hybrid_equivalence' in text
+
+
 def test_batch_fallback_slices_every_fpn_level():
     trainer = (ROOT / ('mmrotate/models/detectors/'
                        'symeood_dino_geometry_refiner_trainer.py')).read_text()

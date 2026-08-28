@@ -45,6 +45,7 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
                  baseline_checkpoint,
                  geometry_refiner,
                  evidence_contract,
+                 evaluation_only=False,
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None,
@@ -67,6 +68,7 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
                     'expected {!r}, got {!r}'.format(
                         key, expected, contract.get(key)))
         self.evidence_contract = contract
+        self.evaluation_only = bool(evaluation_only)
         baseline_path = os.path.abspath(os.fspath(baseline_config))
         baseline_cfg = Config.fromfile(baseline_path)
         imports = baseline_cfg.get('custom_imports')
@@ -132,6 +134,9 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
                       gt_bboxes_ignore=None,
                       **kwargs):
         del gt_labels, gt_bboxes_ignore, kwargs
+        if self.evaluation_only:
+            raise RuntimeError(
+                'Evaluation-only geometry refiner cannot be trained')
         super().forward_train(img, img_metas)
         if len(dino_proposals) != len(gt_bboxes):
             raise RuntimeError('DINO/GT batch-size mismatch')
@@ -212,5 +217,6 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
             frozen_hash_current=current,
             frozen_hash_unchanged=(current == self._frozen_hash_at_init),
             public_init_completed=self._public_init_completed,
+            evaluation_only=self.evaluation_only,
             refiner_contract=self.geometry_refiner.component_contract(),
             evidence_contract=dict(self.evidence_contract))

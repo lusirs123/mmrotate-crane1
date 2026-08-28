@@ -15,6 +15,23 @@ from mmrotate.core import build_bbox_coder, rbbox2roi
 from mmrotate.models.builder import (ROTATED_HEADS, build_roi_extractor)
 
 
+def _build_fc_tower(input_channels, fc_channels, num_fcs):
+    layers = []
+    current_channels = int(input_channels)
+    for _ in range(int(num_fcs)):
+        layers.extend([nn.Linear(current_channels, int(fc_channels)),
+                       nn.ReLU(inplace=True)])
+        current_channels = int(fc_channels)
+    return nn.Sequential(*layers), current_channels
+
+
+def _init_fc_tower(tower):
+    for module in tower.modules():
+        if isinstance(module, nn.Linear):
+            nn.init.kaiming_uniform_(module.weight, a=1.0)
+            nn.init.zeros_(module.bias)
+
+
 def canonicalize_le90(boxes):
     """Return the equivalent ``le90`` representation with width >= height."""
     if boxes.numel() == 0:
@@ -136,21 +153,13 @@ class DinoConditionedGeometryRefiner(nn.Module):
         self.bbox_coder = build_bbox_coder(bbox_coder)
 
         flattened = int(in_channels) * int(roi_output_size) ** 2
-        layers = []
-        input_channels = flattened
-        for _ in range(int(num_fcs)):
-            layers.extend([nn.Linear(input_channels, int(fc_channels)),
-                           nn.ReLU(inplace=True)])
-            input_channels = int(fc_channels)
-        self.shared_fcs = nn.Sequential(*layers)
-        self.delta_head = nn.Linear(input_channels, 5)
+        self.shared_fcs, output_channels = _build_fc_tower(
+            flattened, fc_channels, num_fcs)
+        self.delta_head = nn.Linear(output_channels, 5)
         self._init_weights(bool(zero_init_output))
 
     def _init_weights(self, zero_init_output):
-        for module in self.shared_fcs.modules():
-            if isinstance(module, nn.Linear):
-                nn.init.kaiming_uniform_(module.weight, a=1.0)
-                nn.init.zeros_(module.bias)
+        _init_fc_tower(self.shared_fcs)
         if zero_init_output:
             nn.init.zeros_(self.delta_head.weight)
             nn.init.zeros_(self.delta_head.bias)
@@ -219,7 +228,9 @@ class DinoConditionedGeometryRefiner(nn.Module):
         if predicted_deltas.shape != target_deltas.shape:
             raise RuntimeError('Geometry refiner prediction/target mismatch')
         if predicted_deltas.numel() == 0:
-            zero = self.delta_head.weight.sum() * 0.0
+            zero = predicted_deltas.sum() * 0.0
+            for parameter in self.parameters():
+                zero = zero + parameter.sum() * 0.0
             return dict(loss_geometry_refiner=zero)
         diagnostics = {}
         total = predicted_deltas.sum() * 0.0
@@ -255,3 +266,63 @@ class DinoConditionedGeometryRefiner(nn.Module):
                                    self.active_component_mask().tolist()],
             domain_routing=False, sequence_frame_routing=False,
             temporal_state=False)
+
+
+@ROTATED_HEADS.register_module()
+class DinoConditionedDualTowerGeometryRefiner(
+        DinoConditionedGeometryRefiner):
+    """Compose an independent size tower and center-angle pose tower.
+
+    Both towers consume the same Rotated ROIAlign tensor.  Their trainable
+    fully connected layers are disjoint, preventing center/angle objectives
+    from changing the size representation that controls DFR.
+    """
+
+    def __init__(self, *args, **kwargs):
+        if any(kwargs.get(name, True) is not True for name in (
+                'refine_center', 'refine_size', 'refine_angle')):
+            raise ValueError(
+                'Dual-tower V2 requires center, size, and angle components')
+        in_channels = int(kwargs.get('in_channels', 256))
+        roi_output_size = int(kwargs.get('roi_output_size', 7))
+        fc_channels = int(kwargs.get('fc_channels', 256))
+        num_fcs = int(kwargs.get('num_fcs', 2))
+        zero_init_output = bool(kwargs.get('zero_init_output', True))
+        super().__init__(*args, **kwargs)
+        del self.shared_fcs
+        del self.delta_head
+        flattened = in_channels * roi_output_size ** 2
+        self.size_fcs, size_channels = _build_fc_tower(
+            flattened, fc_channels, num_fcs)
+        self.pose_fcs, pose_channels = _build_fc_tower(
+            flattened, fc_channels, num_fcs)
+        self.size_head = nn.Linear(size_channels, 2)
+        self.pose_head = nn.Linear(pose_channels, 3)
+        _init_fc_tower(self.size_fcs)
+        _init_fc_tower(self.pose_fcs)
+        if zero_init_output:
+            nn.init.zeros_(self.size_head.weight)
+            nn.init.zeros_(self.size_head.bias)
+            nn.init.zeros_(self.pose_head.weight)
+            nn.init.zeros_(self.pose_head.bias)
+
+    def forward(self, features, proposal_list):
+        proposals = self.canonicalize_proposals(proposal_list)
+        rois = rbbox2roi(proposals)
+        if rois.shape[0] == 0:
+            return features[0].new_zeros((0, 5))
+        flattened = self.roi_extractor(features, rois).flatten(1)
+        size = self.size_head(self.size_fcs(flattened))
+        pose = self.pose_head(self.pose_fcs(flattened))
+        deltas = torch.cat([pose[:, :2], size, pose[:, 2:3]], dim=1)
+        return self.mask_deltas(deltas)
+
+    def component_contract(self):
+        contract = super().component_contract()
+        contract.update(dict(
+            architecture='dual_tower_size_pose_v2',
+            roi_features_shared=True,
+            trainable_fc_towers_shared=False,
+            size_components=['dlogw', 'dlogh'],
+            pose_components=['dx_local', 'dy_local', 'dangle']))
+        return contract
