@@ -368,6 +368,7 @@ class DinoConditionedDualTowerGeometryRefiner(
                  train_size_tower=True,
                  train_pose_tower=True,
                  train_roi_extractor=False,
+                 evaluation_only=False,
                  **kwargs):
         if any(kwargs.get(name, True) is not True for name in (
                 'refine_center', 'refine_size', 'refine_angle')):
@@ -398,7 +399,14 @@ class DinoConditionedDualTowerGeometryRefiner(
         self.train_size_tower = bool(train_size_tower)
         self.train_pose_tower = bool(train_pose_tower)
         self.train_roi_extractor = bool(train_roi_extractor)
-        if not (self.train_size_tower or self.train_pose_tower):
+        self.evaluation_only = bool(evaluation_only)
+        if (self.evaluation_only and (
+                self.train_size_tower or self.train_pose_tower
+                or self.train_roi_extractor)):
+            raise ValueError(
+                'Evaluation-only dual tower cannot expose trainable parts')
+        if (not self.evaluation_only
+                and not (self.train_size_tower or self.train_pose_tower)):
             raise ValueError(
                 'At least one dual-tower branch must be trainable')
         self._apply_trainability_contract()
@@ -449,6 +457,7 @@ class DinoConditionedDualTowerGeometryRefiner(
             train_size_tower=self.train_size_tower,
             train_pose_tower=self.train_pose_tower,
             train_roi_extractor=self.train_roi_extractor,
+            evaluation_only=self.evaluation_only,
             size_components=['dlogw', 'dlogh'],
             pose_components=['dx_local', 'dy_local', 'dangle']))
         return contract

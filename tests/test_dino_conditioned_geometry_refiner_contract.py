@@ -187,6 +187,25 @@ def test_dual_tower_rejects_inactive_component_configuration():
         _dual_refiner(refine_angle=False)
 
 
+def test_dual_tower_allows_fully_frozen_evaluation_only_runtime():
+    model = _dual_refiner(
+        train_size_tower=False,
+        train_pose_tower=False,
+        train_roi_extractor=False,
+        evaluation_only=True)
+    assert all(not parameter.requires_grad
+               for parameter in model.parameters())
+    assert model.component_contract()['evaluation_only'] is True
+
+
+def test_dual_tower_rejects_fully_frozen_training_mode():
+    with pytest.raises(ValueError, match='branch must be trainable'):
+        _dual_refiner(
+            train_size_tower=False,
+            train_pose_tower=False,
+            train_roi_extractor=False)
+
+
 def test_dual_tower_size_finetune_freezes_pose_and_roi_parameters():
     model = _dual_refiner(
         train_size_tower=True,

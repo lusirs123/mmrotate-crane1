@@ -47,6 +47,7 @@ geometry_refiner = dict(
     train_size_tower=False,
     train_pose_tower=False,
     train_roi_extractor=False,
+    evaluation_only=True,
     center_loss_weight=0.0,
     size_loss_weight=0.0,
     angle_loss_weight=0.0,

@@ -226,6 +226,7 @@ def test_v21_fixed_test_is_one_forward_without_identity_routing():
     assert "sequence_frame_routing=False" in text
     assert "temporal_state=False" in text
     assert "evaluation_only=True" in text
+    assert text.count("evaluation_only=True") >= 2
     assert "type='DinoConditionedDualTowerGeometryRefiner'" in text
     assert 'del _handle' in text
 
