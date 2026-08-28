@@ -48,6 +48,7 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
                  evidence_contract,
                  geometry_refiner_checkpoint=None,
                  geometry_refiner_checkpoint_sha256=None,
+                 geometry_refiner_checkpoint_contract=None,
                  evaluation_only=False,
                  train_cfg=None,
                  test_cfg=None,
@@ -93,7 +94,8 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
         self.geometry_refiner = build_head(dict(geometry_refiner))
         self.geometry_refiner_initialization = self._load_refiner_checkpoint(
             geometry_refiner_checkpoint,
-            geometry_refiner_checkpoint_sha256)
+            geometry_refiner_checkpoint_sha256,
+            geometry_refiner_checkpoint_contract)
         self.CLASSES = getattr(self.baseline, 'CLASSES', ('grab',))
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
@@ -109,7 +111,8 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
                 digest.update(chunk)
         return digest.hexdigest()
 
-    def _load_refiner_checkpoint(self, checkpoint, expected_sha256):
+    def _load_refiner_checkpoint(self, checkpoint, expected_sha256,
+                                 expected_contract=None):
         if checkpoint is None:
             if expected_sha256 is not None:
                 raise ValueError(
@@ -152,6 +155,7 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
             domain_routing=False,
             sequence_frame_routing=False,
             temporal_state=False)
+        required.update(dict(expected_contract or {}))
         failures = [
             '{}={!r}'.format(key, contract.get(key))
             for key, expected in required.items()

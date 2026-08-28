@@ -196,6 +196,51 @@ def test_v21_relaxed_gate_does_not_read_or_authorize_fixed_test():
     assert 'source_gate_passed=False' in text
 
 
+def test_v21_promotion_is_the_only_source_to_fixed_test_bridge():
+    path = ROOT / ('crane_project/tools/'
+                   'symeood_dino_dual_tower_v21_promote.py')
+    text = path.read_text()
+    assert "SOURCE_GATE_PROTOCOL = (\n" not in text
+    assert "SOURCE_GATE_PROTOCOL = 'dual_tower_v21_relaxed_composite" in text
+    assert "PROMOTION_PROTOCOL = 'source_gated_dual_tower_v21" in text
+    assert "source_gate_passed=True" in text
+    assert "selected_source_epoch=int(expected_epoch)" in text
+    assert "eligible_for_one_fixed_test=True" in text
+    assert "eligible_for_unknown_sequence_claim=False" in text
+    assert "decision='ALLOW_ONE_DUAL_TOWER_V21_FIXED_TEST'" in text
+    assert "target_data_read=False" in text
+    assert "fixed_test_read=False" in text
+
+
+def test_v21_fixed_test_is_one_forward_without_identity_routing():
+    config = ROOT / ('crane_project/configs/'
+                     'crane_symeood_dino_geometry_refiner_'
+                     'dual_tower_v21_fixed_test.py')
+    text = config.read_text()
+    assert "expected_frame_count=992" in text
+    assert "expected_split='test'" in text
+    assert "ann_file='test/annfiles/'" in text
+    assert "source_gate_passed=True" in text
+    assert "selected_source_epoch=7" in text
+    assert "domain_routing=False" in text
+    assert "sequence_frame_routing=False" in text
+    assert "temporal_state=False" in text
+    assert "evaluation_only=True" in text
+    assert "type='DinoConditionedDualTowerGeometryRefiner'" in text
+
+    audit = ROOT / ('crane_project/tools/'
+                    'symeood_dino_dual_tower_v21_fixed_test_audit.py')
+    audit_text = audit.read_text()
+    assert "EXPECTED_FRAME_COUNT = 992" in audit_text
+    assert "dino_detector_rerun=False" in audit_text
+    assert "parameter_update_after_test=False" in audit_text
+    assert "epoch_reselection_after_test=False" in audit_text
+    assert "eligible_for_parameter_tuning_from_this_report=False" in audit_text
+    assert "eligible_for_unknown_sequence_claim=False" in audit_text
+    assert "real_mcml_max_le_5" in audit_text
+    assert "sim_mcml_max_le_5" in audit_text
+
+
 def test_dual_tower_package_does_not_promote_source_gate():
     path = ROOT / ('crane_project/tools/'
                    'symeood_dino_dual_tower_v2_package.py')
