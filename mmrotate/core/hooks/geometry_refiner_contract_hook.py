@@ -66,6 +66,9 @@ class GeometryRefinerContractHook(Hook):
                 'Geometry refiner trainer did not complete public init')
         if not report['frozen_hash_unchanged']:
             raise RuntimeError('Frozen SymEOOD hash changed before training')
+        if not report.get('frozen_refiner_hash_unchanged', True):
+            raise RuntimeError(
+                'Frozen geometry-refiner components changed before training')
         optimizer_ids = _optimizer_parameter_ids(runner.optimizer)
         refiner_ids = [
             id(parameter) for parameter in model.geometry_refiner.parameters()
@@ -84,12 +87,20 @@ class GeometryRefinerContractHook(Hook):
         if any(parameter.grad is not None for parameter in
                model.baseline.parameters()):
             raise RuntimeError('Frozen SymEOOD received a gradient')
+        if any(parameter.grad is not None for parameter in
+               model.geometry_refiner.parameters()
+               if not parameter.requires_grad):
+            raise RuntimeError(
+                'Frozen geometry-refiner component received a gradient')
 
     def after_run(self, runner):
         model = _unwrap(runner.model)
         report = model.verify_frozen_contract()
         if not report['frozen_hash_unchanged']:
             raise RuntimeError('Frozen SymEOOD parameters/buffers changed')
+        if not report.get('frozen_refiner_hash_unchanged', True):
+            raise RuntimeError(
+                'Frozen geometry-refiner parameters/buffers changed')
         path = os.path.join(
             runner.work_dir, 'geometry_refiner_frozen_contract.json')
         with open(path, 'w', encoding='utf-8') as handle:

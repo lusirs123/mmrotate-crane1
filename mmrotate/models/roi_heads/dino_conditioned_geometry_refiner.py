@@ -13,6 +13,7 @@ import torch.nn.functional as F
 
 from mmrotate.core import build_bbox_coder, rbbox2roi
 from mmrotate.models.builder import (ROTATED_HEADS, build_roi_extractor)
+from mmrotate.models.losses.sym_kld_calculator import sym_kld
 
 
 def _build_fc_tower(input_channels, fc_channels, num_fcs):
@@ -121,6 +122,8 @@ class DinoConditionedGeometryRefiner(nn.Module):
                  center_loss_weight=1.0,
                  size_loss_weight=1.0,
                  angle_loss_weight=1.0,
+                 decoded_geometry_loss_weight=0.0,
+                 temporal_size_loss_weight=0.0,
                  bbox_coder=None):
         super().__init__()
         self.refine_center = bool(refine_center)
@@ -132,6 +135,14 @@ class DinoConditionedGeometryRefiner(nn.Module):
         self.center_loss_weight = float(center_loss_weight)
         self.size_loss_weight = float(size_loss_weight)
         self.angle_loss_weight = float(angle_loss_weight)
+        self.decoded_geometry_loss_weight = float(
+            decoded_geometry_loss_weight)
+        self.temporal_size_loss_weight = float(temporal_size_loss_weight)
+        if self.decoded_geometry_loss_weight < 0.0:
+            raise ValueError(
+                'Decoded geometry loss weight must be non-negative')
+        if self.temporal_size_loss_weight < 0.0:
+            raise ValueError('Temporal size loss weight must be non-negative')
         roi_extractor = dict(roi_extractor or dict(
             type='RotatedSingleRoIExtractor',
             roi_layer=dict(
@@ -224,7 +235,50 @@ class DinoConditionedGeometryRefiner(nn.Module):
             offset += count
         return outputs
 
-    def loss(self, predicted_deltas, target_deltas):
+    @staticmethod
+    def _matched_gt_boxes(proposal_list, gt_box_list):
+        if proposal_list is None or gt_box_list is None:
+            raise RuntimeError(
+                'Decoded geometry loss requires proposals and GT boxes')
+        if len(proposal_list) != len(gt_box_list):
+            raise RuntimeError('Proposal/GT batch-size mismatch')
+        matched = []
+        for proposal, gt_boxes in zip(proposal_list, gt_box_list):
+            count = int(proposal.shape[0])
+            if count == 0:
+                continue
+            if count != 1 or int(gt_boxes.shape[0]) != 1:
+                raise RuntimeError(
+                    'Geometry refiner requires one proposal and one GT OBB')
+            matched.append(canonicalize_le90(gt_boxes[:, :5]))
+        if matched:
+            return torch.cat(matched, dim=0)
+        device = proposal_list[0].device if proposal_list else 'cpu'
+        return torch.zeros((0, 5), device=device)
+
+    @staticmethod
+    def _temporal_size_error_loss(predicted_deltas, target_deltas,
+                                  pair_indices):
+        if pair_indices is None or len(pair_indices) == 0:
+            return predicted_deltas.sum() * 0.0
+        pairs = torch.as_tensor(
+            pair_indices, dtype=torch.long, device=predicted_deltas.device)
+        if pairs.ndim != 2 or pairs.shape[1] != 2:
+            raise RuntimeError('Temporal pair indices must have shape [N, 2]')
+        if (pairs.numel() > 0 and
+                (int(pairs.min()) < 0 or
+                 int(pairs.max()) >= int(predicted_deltas.shape[0]))):
+            raise RuntimeError('Temporal pair index is out of bounds')
+        errors = predicted_deltas[:, 2:4] - target_deltas[:, 2:4]
+        difference = errors[pairs[:, 1]] - errors[pairs[:, 0]]
+        return F.smooth_l1_loss(difference, torch.zeros_like(difference))
+
+    def loss(self,
+             predicted_deltas,
+             target_deltas,
+             proposal_list=None,
+             gt_box_list=None,
+             temporal_pair_indices=None):
         if predicted_deltas.shape != target_deltas.shape:
             raise RuntimeError('Geometry refiner prediction/target mismatch')
         if predicted_deltas.numel() == 0:
@@ -252,6 +306,35 @@ class DinoConditionedGeometryRefiner(nn.Module):
             weighted = value * self.angle_loss_weight
             diagnostics['refiner_angle_objective'] = weighted.detach()
             total = total + weighted
+        if self.decoded_geometry_loss_weight > 0.0:
+            decoded = self.decode_and_normalize(
+                proposal_list, predicted_deltas)
+            decoded = torch.cat(
+                [item for item in decoded if item.shape[0] > 0], dim=0)
+            gt_boxes = self._matched_gt_boxes(
+                proposal_list, gt_box_list).to(decoded.device)
+            if decoded.shape != gt_boxes.shape:
+                raise RuntimeError('Decoded geometry/GT shape mismatch')
+            raw = sym_kld(decoded, gt_boxes)
+            value = (torch.sqrt(
+                1.0 + torch.nan_to_num(
+                    raw, nan=1e4, posinf=1e4, neginf=0.0)) - 1.0
+                     ).clamp(max=10.0).mean()
+            weighted = value * self.decoded_geometry_loss_weight
+            diagnostics['refiner_decoded_geometry_objective'] = (
+                weighted.detach())
+            total = total + weighted
+        if self.temporal_size_loss_weight > 0.0:
+            value = self._temporal_size_error_loss(
+                predicted_deltas, target_deltas, temporal_pair_indices)
+            weighted = value * self.temporal_size_loss_weight
+            diagnostics['refiner_temporal_size_objective'] = (
+                weighted.detach())
+            diagnostics['refiner_temporal_pair_count'] = (
+                predicted_deltas.new_tensor(
+                    0 if temporal_pair_indices is None
+                    else len(temporal_pair_indices)))
+            total = total + weighted
         diagnostics['loss_geometry_refiner'] = total
         return diagnostics
 
@@ -264,6 +347,8 @@ class DinoConditionedGeometryRefiner(nn.Module):
             refine_angle=self.refine_angle,
             active_component_mask=[bool(value) for value in
                                    self.active_component_mask().tolist()],
+            decoded_geometry_loss_weight=self.decoded_geometry_loss_weight,
+            temporal_size_loss_weight=self.temporal_size_loss_weight,
             domain_routing=False, sequence_frame_routing=False,
             temporal_state=False)
 
@@ -278,7 +363,12 @@ class DinoConditionedDualTowerGeometryRefiner(
     from changing the size representation that controls DFR.
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self,
+                 *args,
+                 train_size_tower=True,
+                 train_pose_tower=True,
+                 train_roi_extractor=False,
+                 **kwargs):
         if any(kwargs.get(name, True) is not True for name in (
                 'refine_center', 'refine_size', 'refine_angle')):
             raise ValueError(
@@ -305,6 +395,39 @@ class DinoConditionedDualTowerGeometryRefiner(
             nn.init.zeros_(self.size_head.bias)
             nn.init.zeros_(self.pose_head.weight)
             nn.init.zeros_(self.pose_head.bias)
+        self.train_size_tower = bool(train_size_tower)
+        self.train_pose_tower = bool(train_pose_tower)
+        self.train_roi_extractor = bool(train_roi_extractor)
+        if not (self.train_size_tower or self.train_pose_tower):
+            raise ValueError(
+                'At least one dual-tower branch must be trainable')
+        self._apply_trainability_contract()
+
+    @staticmethod
+    def _set_requires_grad(module, enabled):
+        for parameter in module.parameters():
+            parameter.requires_grad_(enabled)
+
+    def _apply_trainability_contract(self):
+        self._set_requires_grad(self.size_fcs, self.train_size_tower)
+        self._set_requires_grad(self.size_head, self.train_size_tower)
+        self._set_requires_grad(self.pose_fcs, self.train_pose_tower)
+        self._set_requires_grad(self.pose_head, self.train_pose_tower)
+        self._set_requires_grad(
+            self.roi_extractor, self.train_roi_extractor)
+        if not self.train_size_tower:
+            self.size_fcs.eval()
+            self.size_head.eval()
+        if not self.train_pose_tower:
+            self.pose_fcs.eval()
+            self.pose_head.eval()
+        if not self.train_roi_extractor:
+            self.roi_extractor.eval()
+
+    def train(self, mode=True):
+        super().train(mode)
+        self._apply_trainability_contract()
+        return self
 
     def forward(self, features, proposal_list):
         proposals = self.canonicalize_proposals(proposal_list)
@@ -323,6 +446,9 @@ class DinoConditionedDualTowerGeometryRefiner(
             architecture='dual_tower_size_pose_v2',
             roi_features_shared=True,
             trainable_fc_towers_shared=False,
+            train_size_tower=self.train_size_tower,
+            train_pose_tower=self.train_pose_tower,
+            train_roi_extractor=self.train_roi_extractor,
             size_components=['dlogw', 'dlogh'],
             pose_components=['dx_local', 'dy_local', 'dangle']))
         return contract

@@ -3,6 +3,7 @@
 import copy
 import hashlib
 import os
+import re
 
 import numpy as np
 import torch
@@ -45,6 +46,8 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
                  baseline_checkpoint,
                  geometry_refiner,
                  evidence_contract,
+                 geometry_refiner_checkpoint=None,
+                 geometry_refiner_checkpoint_sha256=None,
                  evaluation_only=False,
                  train_cfg=None,
                  test_cfg=None,
@@ -88,11 +91,80 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
             parameter.requires_grad_(False)
         self.baseline.eval()
         self.geometry_refiner = build_head(dict(geometry_refiner))
+        self.geometry_refiner_initialization = self._load_refiner_checkpoint(
+            geometry_refiner_checkpoint,
+            geometry_refiner_checkpoint_sha256)
         self.CLASSES = getattr(self.baseline, 'CLASSES', ('grab',))
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
         self._frozen_hash_at_init = self.frozen_parameter_hash()
+        self._frozen_refiner_hash_at_init = self.frozen_refiner_hash()
         self._public_init_completed = False
+
+    @staticmethod
+    def _file_sha256(path):
+        digest = hashlib.sha256()
+        with open(path, 'rb') as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b''):
+                digest.update(chunk)
+        return digest.hexdigest()
+
+    def _load_refiner_checkpoint(self, checkpoint, expected_sha256):
+        if checkpoint is None:
+            if expected_sha256 is not None:
+                raise ValueError(
+                    'Refiner SHA256 was provided without a checkpoint')
+            return dict(initialized_from_checkpoint=False)
+        path = os.path.abspath(os.fspath(checkpoint))
+        if not os.path.isfile(path):
+            raise RuntimeError(
+                'Geometry-refiner checkpoint does not exist: ' + path)
+        observed = self._file_sha256(path)
+        if (expected_sha256 is not None and
+                observed.lower() != str(expected_sha256).lower()):
+            raise RuntimeError(
+                'Geometry-refiner checkpoint SHA256 mismatch')
+        payload = torch.load(path, map_location='cpu')
+        state = dict(payload.get('state_dict') or payload)
+        local = {}
+        prefixes = ('module.geometry_refiner.', 'geometry_refiner.')
+        for key, value in state.items():
+            for prefix in prefixes:
+                if key.startswith(prefix):
+                    local[key[len(prefix):]] = value
+                    break
+        if not local:
+            raise RuntimeError(
+                'Geometry-refiner checkpoint contains no refiner state')
+        self.geometry_refiner.load_state_dict(local, strict=True)
+        contract = dict(payload.get('meta') or {}).get(
+            'geometry_refiner_checkpoint_contract')
+        if not isinstance(contract, dict):
+            raise RuntimeError(
+                'Geometry-refiner checkpoint has no evidence contract')
+        required = dict(
+            architecture='dual_tower_size_pose_v2',
+            source_train_frames=2781,
+            source_val_frames=738,
+            target_data_read=False,
+            fixed_test_read=False,
+            source_gate_passed=False,
+            domain_routing=False,
+            sequence_frame_routing=False,
+            temporal_state=False)
+        failures = [
+            '{}={!r}'.format(key, contract.get(key))
+            for key, expected in required.items()
+            if contract.get(key) != expected]
+        if failures:
+            raise RuntimeError(
+                'Geometry-refiner initialization contract failed: ' +
+                ', '.join(failures))
+        return dict(
+            initialized_from_checkpoint=True,
+            path=path,
+            sha256=observed,
+            contract=contract)
 
     def init_weights(self):
         """Honor MMDetection's public init lifecycle without reinitializing.
@@ -110,6 +182,9 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
         for parameter in self.baseline.parameters():
             parameter.requires_grad_(False)
         self.baseline.eval()
+        if self.frozen_refiner_hash() != self._frozen_refiner_hash_at_init:
+            raise RuntimeError(
+                'Frozen refiner components changed before public init')
         self._public_init_completed = True
 
     def train(self, mode=True):
@@ -119,6 +194,32 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
         self.baseline.eval()
         self.geometry_refiner.train(mode)
         return self
+
+    @staticmethod
+    def _source_frame_identity(meta):
+        filename = meta.get('ori_filename', meta.get('filename', ''))
+        stem = os.path.splitext(os.path.basename(os.fspath(filename)))[0]
+        match = re.match(r'^(real|sim)_(.+)_(\d+)$', stem)
+        if match is None:
+            return None
+        return match.group(1), match.group(2), int(match.group(3))
+
+    def _temporal_pair_indices(self, img_metas, proposal_list):
+        rows = []
+        offset = 0
+        for meta, proposals in zip(img_metas, proposal_list):
+            count = int(proposals.shape[0])
+            if count == 1:
+                identity = self._source_frame_identity(meta)
+                if identity is not None:
+                    rows.append((identity, offset))
+            offset += count
+        pairs = []
+        for (first, first_row), (second, second_row) in zip(rows, rows[1:]):
+            if (first[:2] == second[:2] and
+                    second[2] == first[2] + 1):
+                pairs.append((first_row, second_row))
+        return pairs
 
     def extract_feat(self, img):
         with torch.no_grad():
@@ -148,7 +249,14 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
         predicted = self.geometry_refiner(features, proposal_list)
         targets = self.geometry_refiner.encode_targets(
             proposal_list, gt_box_list)
-        losses = self.geometry_refiner.loss(predicted, targets)
+        temporal_pairs = self._temporal_pair_indices(
+            img_metas, proposal_list)
+        losses = self.geometry_refiner.loss(
+            predicted,
+            targets,
+            proposal_list=proposal_list,
+            gt_box_list=gt_box_list,
+            temporal_pair_indices=temporal_pairs)
         losses['refiner_sample_count'] = predicted.new_tensor(
             float(predicted.shape[0]))
         return losses
@@ -202,8 +310,21 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
             digest.update(np.asarray(array).tobytes())
         return digest.hexdigest()
 
+    def frozen_refiner_hash(self):
+        digest = hashlib.sha256()
+        for name, tensor in sorted(self.geometry_refiner.state_dict().items()):
+            parameter = dict(
+                self.geometry_refiner.named_parameters()).get(name)
+            if parameter is not None and parameter.requires_grad:
+                continue
+            digest.update(name.encode('utf-8'))
+            array = tensor.detach().cpu().contiguous().numpy()
+            digest.update(np.asarray(array).tobytes())
+        return digest.hexdigest()
+
     def verify_frozen_contract(self):
         current = self.frozen_parameter_hash()
+        frozen_refiner_current = self.frozen_refiner_hash()
         return dict(
             baseline_eval=not self.baseline.training,
             baseline_trainable_parameter_count=sum(
@@ -216,7 +337,13 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
             frozen_hash_at_init=self._frozen_hash_at_init,
             frozen_hash_current=current,
             frozen_hash_unchanged=(current == self._frozen_hash_at_init),
+            frozen_refiner_hash_at_init=self._frozen_refiner_hash_at_init,
+            frozen_refiner_hash_current=frozen_refiner_current,
+            frozen_refiner_hash_unchanged=(
+                frozen_refiner_current == self._frozen_refiner_hash_at_init),
             public_init_completed=self._public_init_completed,
             evaluation_only=self.evaluation_only,
+            geometry_refiner_initialization=dict(
+                self.geometry_refiner_initialization),
             refiner_contract=self.geometry_refiner.component_contract(),
             evidence_contract=dict(self.evidence_contract))

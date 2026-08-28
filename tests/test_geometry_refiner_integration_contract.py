@@ -129,6 +129,73 @@ def test_dual_tower_v2_is_source_val_only_and_evaluation_only():
     assert 'temporal_state=False' in text
 
 
+def test_dual_tower_v21_trains_only_size_with_source_pair_supervision():
+    path = ROOT / ('crane_project/configs/'
+                   'crane_symeood_dino_geometry_refiner_'
+                   'dual_tower_size_source_v21.py')
+    text = path.read_text()
+    assert "type='DinoConditionedDualTowerGeometryRefiner'" in text
+    assert 'train_size_tower=True' in text
+    assert 'train_pose_tower=False' in text
+    assert 'train_roi_extractor=False' in text
+    assert 'decoded_geometry_loss_weight=0.25' in text
+    assert 'temporal_size_loss_weight=0.20' in text
+    assert 'source_adjacent_pair_supervision=True' in text
+    assert 'inference_sequence_input=False' in text
+    assert 'shuffle=False' in text
+    assert 'target_data_read=False' in text
+    assert 'fixed_test_read=False' in text
+    assert 'source_gate_passed=False' in text
+    assert 'domain_routing=False' in text
+    assert 'sequence_frame_routing=False' in text
+    assert 'temporal_state=False' in text
+    assert 'ann_file=\'test/' not in text
+
+
+def test_v21_trainer_hashes_frozen_pose_and_builds_only_adjacent_pairs():
+    path = ROOT / ('mmrotate/models/detectors/'
+                   'symeood_dino_geometry_refiner_trainer.py')
+    text = path.read_text()
+    assert 'frozen_refiner_hash' in text
+    assert 'frozen_refiner_hash_unchanged' in text
+    assert '_temporal_pair_indices' in text
+    assert "second[2] == first[2] + 1" in text
+    assert 'temporal_pair_indices=temporal_pairs' in text
+    hook = (ROOT / ('mmrotate/core/hooks/'
+                    'geometry_refiner_contract_hook.py')).read_text()
+    assert 'Frozen geometry-refiner component received a gradient' in hook
+    assert 'frozen_refiner_hash_unchanged' in hook
+
+
+def test_v21_source_smoke_is_source_only_and_requires_real_gradients():
+    path = ROOT / ('crane_project/tools/'
+                   'symeood_dino_dual_tower_v21_source_smoke.py')
+    text = path.read_text()
+    assert "decision='STOP_DUAL_TOWER_V21_SOURCE_SMOKE_ERROR'" in text
+    assert "'ALLOW_DUAL_TOWER_V21_SOURCE_TRAINING'" in text
+    assert 'checkpoint_written=False' in text
+    assert 'target_data_read=False' in text
+    assert 'fixed_test_read=False' in text
+    assert 'loss.backward()' in text
+    assert 'optimizer.step()' in text
+    assert 'pose_gradients_none' in text
+    assert 'frozen_pose_hash_unchanged' in text
+    assert 'one_adjacent_pair_reported' in text
+    assert 'build_dataset(cfg.data.test)' not in text
+
+
+def test_v21_relaxed_gate_does_not_read_or_authorize_fixed_test():
+    path = ROOT / ('crane_project/tools/'
+                   'symeood_dino_dual_tower_v21_source_gate.py')
+    text = path.read_text()
+    assert "evidence_boundary='source_val_only'" in text
+    assert 'target_data_read=False' in text
+    assert 'fixed_test_read=False' in text
+    assert 'eligible_for_fixed_test=False' in text
+    assert "'ALLOW_DUAL_TOWER_V21_CHECKPOINT_PROMOTION'" in text
+    assert 'source_gate_passed=False' in text
+
+
 def test_dual_tower_package_does_not_promote_source_gate():
     path = ROOT / ('crane_project/tools/'
                    'symeood_dino_dual_tower_v2_package.py')

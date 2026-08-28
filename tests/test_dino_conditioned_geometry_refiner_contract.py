@@ -64,7 +64,9 @@ def _rbbox2roi(boxes):
 def _load_module():
     names = (
         'mmrotate', 'mmrotate.core', 'mmrotate.models',
-        'mmrotate.models.builder', 'mmrotate.models.roi_heads')
+        'mmrotate.models.builder', 'mmrotate.models.losses',
+        'mmrotate.models.losses.sym_kld_calculator',
+        'mmrotate.models.roi_heads')
     modules = {name: types.ModuleType(name) for name in names}
     for module in modules.values():
         module.__path__ = []
@@ -74,6 +76,8 @@ def _load_module():
     modules['mmrotate.models.builder'].ROTATED_HEADS = _Registry()
     modules['mmrotate.models.builder'].build_roi_extractor = lambda cfg: (
         _RoIExtractor(cfg['out_channels'], cfg['roi_layer']['out_size']))
+    modules['mmrotate.models.losses.sym_kld_calculator'].sym_kld = (
+        lambda pred, target: ((pred - target) ** 2).sum(dim=-1))
     old = {name: sys.modules.get(name) for name in names}
     sys.modules.update(modules)
     try:
@@ -181,6 +185,73 @@ def test_dual_tower_zero_initialization_is_exact_dino_identity():
 def test_dual_tower_rejects_inactive_component_configuration():
     with pytest.raises(ValueError, match='requires center, size, and angle'):
         _dual_refiner(refine_angle=False)
+
+
+def test_dual_tower_size_finetune_freezes_pose_and_roi_parameters():
+    model = _dual_refiner(
+        train_size_tower=True,
+        train_pose_tower=False,
+        train_roi_extractor=False)
+    assert all(parameter.requires_grad for parameter in
+               model.size_fcs.parameters())
+    assert all(parameter.requires_grad for parameter in
+               model.size_head.parameters())
+    assert all(not parameter.requires_grad for parameter in
+               model.pose_fcs.parameters())
+    assert all(not parameter.requires_grad for parameter in
+               model.pose_head.parameters())
+    contract = model.component_contract()
+    assert contract['train_size_tower'] is True
+    assert contract['train_pose_tower'] is False
+    assert contract['train_roi_extractor'] is False
+
+
+def test_decoded_geometry_and_temporal_size_losses_reach_only_size_tower():
+    torch.manual_seed(9)
+    model = _dual_refiner(
+        zero_init_output=False,
+        train_size_tower=True,
+        train_pose_tower=False,
+        decoded_geometry_loss_weight=0.25,
+        temporal_size_loss_weight=0.20)
+    features = [torch.zeros((2, 1, 4, 4))]
+    proposals = [
+        torch.tensor([[10., 12., 8., 4., 0.2]]),
+        torch.tensor([[11., 12., 8., 4., 0.2]])]
+    gt = [
+        torch.tensor([[10., 12., 10., 5., 0.2]]),
+        torch.tensor([[11., 12., 11., 5.5, 0.2]])]
+    predicted = model(features, proposals)
+    targets = model.encode_targets(proposals, gt)
+    losses = model.loss(
+        predicted, targets,
+        proposal_list=proposals,
+        gt_box_list=gt,
+        temporal_pair_indices=[(0, 1)])
+    losses['loss_geometry_refiner'].backward()
+    assert 'refiner_decoded_geometry_objective' in losses
+    assert 'refiner_temporal_size_objective' in losses
+    assert losses['refiner_temporal_pair_count'].item() == 1
+    assert all(parameter.grad is not None for parameter in
+               model.size_fcs.parameters())
+    assert all(parameter.grad is not None for parameter in
+               model.size_head.parameters())
+    assert all(parameter.grad is None for parameter in
+               model.pose_fcs.parameters())
+    assert all(parameter.grad is None for parameter in
+               model.pose_head.parameters())
+
+
+def test_temporal_size_loss_uses_error_change_not_object_motion():
+    predicted = torch.tensor([
+        [0., 0., 0.20, -0.10, 0.],
+        [0., 0., 0.35, 0.05, 0.]])
+    target = torch.tensor([
+        [0., 0., 0.10, -0.20, 0.],
+        [0., 0., 0.25, -0.05, 0.]])
+    value = Refiner._temporal_size_error_loss(
+        predicted, target, [(0, 1)])
+    assert value.item() == pytest.approx(0.0, abs=1e-8)
 
 
 def _parent_checkpoint(model, center, size, angle):
