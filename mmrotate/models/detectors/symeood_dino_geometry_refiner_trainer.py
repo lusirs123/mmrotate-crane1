@@ -18,6 +18,24 @@ from ..roi_heads.dino_conditioned_geometry_refiner import (
     map_model_obb_to_original)
 
 
+def _unwrap_single_augmentation_proposals(dino_proposals):
+    """Remove the one augmentation dimension created by test pipelines."""
+    if not isinstance(dino_proposals, (list, tuple)):
+        raise RuntimeError('DINO proposals must be a batch list')
+    nested = any(isinstance(item, (list, tuple))
+                 for item in dino_proposals)
+    if nested:
+        if len(dino_proposals) != 1:
+            raise RuntimeError(
+                'Geometry refiner supports exactly one test augmentation')
+        dino_proposals = dino_proposals[0]
+    if (not isinstance(dino_proposals, (list, tuple))
+            or any(not torch.is_tensor(item) for item in dino_proposals)):
+        raise RuntimeError(
+            'DINO proposal test structure is not augmentation-by-batch')
+    return list(dino_proposals)
+
+
 @ROTATED_DETECTORS.register_module()
 class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
     """Train only the refiner from cached DINO OBBs and frozen SymEOOD FPN."""
@@ -138,6 +156,10 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
                     **kwargs):
         del kwargs
         features = self.extract_feat(img)
+        dino_proposals = _unwrap_single_augmentation_proposals(
+            dino_proposals)
+        if len(dino_proposals) != len(img_metas):
+            raise RuntimeError('DINO proposal/meta batch-size mismatch')
         proposal_list = [item[:, :5].to(features[0].device)
                          for item in dino_proposals]
         predicted = self.geometry_refiner(features, proposal_list)

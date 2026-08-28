@@ -101,6 +101,25 @@ def test_batch_fallback_slices_every_fpn_level():
     assert expected in trainer
 
 
+def test_validation_unwraps_only_one_augmentation_dimension():
+    path = ROOT / ('mmrotate/models/detectors/'
+                   'symeood_dino_geometry_refiner_trainer.py')
+    text = path.read_text()
+    tree = ast.parse(text)
+    helper = next(
+        node for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == '_unwrap_single_augmentation_proposals')
+    assert 'is_tensor' in _called_attributes(helper)
+    assert 'supports exactly one test augmentation' in text
+    methods = _class_methods(path, 'SymEOODDinoGeometryRefinerTrainer')
+    simple_calls = [
+        node.func.id for node in ast.walk(methods['simple_test'])
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)]
+    assert '_unwrap_single_augmentation_proposals' in simple_calls
+    assert 'DINO proposal/meta batch-size mismatch' in text
+
+
 def test_trainer_public_init_preserves_loaded_frozen_checkpoint():
     path = ROOT / ('mmrotate/models/detectors/'
                    'symeood_dino_geometry_refiner_trainer.py')
