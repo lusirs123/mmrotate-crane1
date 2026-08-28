@@ -187,8 +187,13 @@ checkpoint_config = dict(
             refine_center=True, refine_size=True, refine_angle=True)))
 
 evaluation = dict(
+    _delete_=True,
     interval=1,
     metric='mAP',
+    thresh_sim=10.0,
+    thresh_real=25.0,
+    weight_sim=0.7,
+    weight_real=0.3,
     paper_temporal=True,
     temporal_center_thresh_px=15.0,
     temporal_ekf_window=10,

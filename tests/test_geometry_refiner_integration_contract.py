@@ -92,6 +92,27 @@ def test_refiner_optimizer_is_exclusive_and_declared_by_config():
     assert "constructor='GeometryRefinerOptimizerConstructor'" in config
 
 
+def test_refiner_evaluation_requires_manual_source_gate_selection():
+    path = ROOT / ('crane_project/configs/'
+                   'crane_symeood_dino_geometry_refiner_full_source_v1.py')
+    tree = ast.parse(path.read_text())
+    assignment = next(
+        node for node in tree.body
+        if isinstance(node, ast.Assign)
+        and any(isinstance(target, ast.Name) and target.id == 'evaluation'
+                for target in node.targets))
+    values = {
+        keyword.arg: ast.literal_eval(keyword.value)
+        for keyword in assignment.value.keywords}
+    assert values['_delete_'] is True
+    assert 'save_best' not in values
+    assert 'rule' not in values
+    assert values['thresh_sim'] == 10.0
+    assert values['thresh_real'] == 25.0
+    assert values['weight_sim'] == 0.7
+    assert values['weight_real'] == 0.3
+
+
 def test_batch_fallback_slices_every_fpn_level():
     trainer = (ROOT / ('mmrotate/models/detectors/'
                        'symeood_dino_geometry_refiner_trainer.py')).read_text()
@@ -159,6 +180,8 @@ def test_real_stack_smoke_keeps_source_only_boundary():
     assert 'source_val_forward_output_valid' in smoke
     assert 'optimizer_has_no_inherited_momentum' in smoke
     assert 'no_legacy_top_level_loader_args' in smoke
+    assert 'manual_source_gate_no_auto_best' in smoke
+    assert 'evaluation_thresholds_preserved' in smoke
     assert 'full_cfg = compat_cfg(full_cfg)' in smoke
     assert "decision='STOP_SOURCE_PREFLIGHT_FAILED'" in smoke
     assert 'frozen_parameter_and_buffer_hash_unchanged' in smoke

@@ -145,7 +145,15 @@ def _component_contract(cfg, expected):
         train_batch_size_is_two=(
             cfg.data.train_dataloader.samples_per_gpu == 2),
         validation_batch_size_is_one=(
-            cfg.data.val_dataloader.samples_per_gpu == 1))
+            cfg.data.val_dataloader.samples_per_gpu == 1),
+        manual_source_gate_no_auto_best=(
+            'save_best' not in cfg.evaluation and
+            'rule' not in cfg.evaluation),
+        evaluation_thresholds_preserved=(
+            cfg.evaluation.thresh_sim == 10.0 and
+            cfg.evaluation.thresh_real == 25.0 and
+            cfg.evaluation.weight_sim == 0.7 and
+            cfg.evaluation.weight_real == 0.3))
     return dict(components=component, checks=checks,
                 passed=all(checks.values()))
 
