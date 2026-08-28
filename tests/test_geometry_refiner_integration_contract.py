@@ -227,6 +227,7 @@ def test_v21_fixed_test_is_one_forward_without_identity_routing():
     assert "temporal_state=False" in text
     assert "evaluation_only=True" in text
     assert "type='DinoConditionedDualTowerGeometryRefiner'" in text
+    assert 'del _handle' in text
 
     audit = ROOT / ('crane_project/tools/'
                     'symeood_dino_dual_tower_v21_fixed_test_audit.py')

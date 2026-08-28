@@ -18,6 +18,9 @@ promotion_report_path = (
     'epoch7_source_promotion.json')
 with open(promotion_report_path, 'r', encoding='utf-8') as _handle:
     promotion_report = json.load(_handle)
+# MMCV 1.x deep-copies every non-module config global.  A closed TextIOWrapper
+# is still unpicklable, so it must not survive in the config namespace.
+del _handle
 if promotion_report.get('decision') != (
         'ALLOW_ONE_DUAL_TOWER_V21_FIXED_TEST'):
     raise RuntimeError('Dual-Tower V2.1 promotion does not authorize TEST')
