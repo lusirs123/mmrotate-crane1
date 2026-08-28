@@ -664,7 +664,8 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
         modules = dict(
             sym_eood=getattr(self, 'baseline', None),
             dinov2=runtime.get('dino'),
-            dino_heads=runtime.get('heads'))
+            dino_heads=runtime.get('heads'),
+            geometry_refiner=getattr(self, 'geometry_refiner', None))
         parameter_counts = {
             name: self._module_parameter_counts(module)
             for name, module in modules.items()
@@ -709,6 +710,15 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
                 None if getattr(
                     self, '_conditional_dino_calibration', None) is None else
                 dict(self._conditional_dino_calibration)),
+            geometry_refiner_enabled=(
+                getattr(self, 'geometry_refiner', None) is not None),
+            geometry_refiner_checkpoint_contract=(
+                None if getattr(
+                    self, '_geometry_refiner_checkpoint_contract', None)
+                is None else
+                dict(self._geometry_refiner_checkpoint_contract)),
+            runtime_forward_counts=dict(getattr(
+                self, '_runtime_forward_counts', {})),
             resource_summary=self._runtime_resource_summary())
 
     def fusion_audit_protocol(self):
@@ -810,8 +820,23 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
         if len(img_metas) != 1 or int(img.shape[0]) != 1:
             raise RuntimeError(
                 'Scoped DINO sequential inference requires batch size 1')
-        baseline_result = self.baseline.simple_test(
-            img, img_metas, rescale=rescale)
+        counts = getattr(self, '_runtime_forward_counts', None)
+        supports_feature_reuse = (
+            hasattr(self.baseline, 'extract_feat')
+            and hasattr(self.baseline, 'simple_test_from_features'))
+        if supports_feature_reuse:
+            baseline_features = self.baseline.extract_feat(img)
+            if counts is not None:
+                counts['symeood_backbone_fpn'] += 1
+            baseline_result = self.baseline.simple_test_from_features(
+                baseline_features, img_metas, rescale=rescale)
+        else:
+            if getattr(self, 'geometry_refiner', None) is not None:
+                raise RuntimeError(
+                    'Geometry refiner requires reusable SymEOOD FPN features')
+            baseline_features = None
+            baseline_result = self.baseline.simple_test(
+                img, img_metas, rescale=rescale)
         baseline = _as_array(baseline_result)
         if (self._fusion_policy == 'sym_eood_proposal_dino_roi_union'
                 and not rescale):
@@ -898,9 +923,13 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
                     self._fusion_audit_records.append(record)
                 selected = self._stabilize(selected, seq, frame)
                 return [[selected]]
-        # SymEOOD and the rotated DINO heads share the 8 GB head GPU.  The
-        # calls are sequential; releasing cached SymEOOD activations before
-        # the DINO head keeps the integrated path within the audited budget.
+        # Without a geometry refiner, release SymEOOD features exactly as the
+        # historical runtime did.  A refiner deliberately retains the frozen
+        # FPN tuple until the native DINO proposal is available; its memory
+        # impact must be measured rather than assumed away.
+        if (getattr(self, 'geometry_refiner', None) is None
+                and baseline_features is not None):
+            del baseline_features
         if torch.cuda.is_available():
             with torch.cuda.device(img.device):
                 torch.cuda.empty_cache()
@@ -912,6 +941,8 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
             image, runtime['height'], runtime['patch_size'],
             runtime['max_long_side'])
         tensor = tensor.to(runtime['dino_device'])
+        if counts is not None:
+            counts['dino'] += 1
         feature = runtime['common'].extract_patch_grid(
             runtime['dino'], tensor, runtime['patch_size'])
         del tensor
@@ -986,16 +1017,53 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
             self.__dict__['_last_unified_fusion'] = dict(fusion_audit)
         dino_detections, _stats = runtime['labeller'].filter_valid_rotated_detections(
             dino_detections, feature_meta)
-        selected = (dino_detections[:1] if dino_detections.shape[0] > 0
-                    else baseline)
+        geometry_refiner = getattr(self, 'geometry_refiner', None)
+        if geometry_refiner is not None:
+            native_box = fusion_audit.get('dino_native_box')
+            if native_box is None:
+                selected = baseline
+                output_source = 'sym_eood_fallback'
+            else:
+                from ..roi_heads.dino_conditioned_geometry_refiner import (
+                    map_model_obb_to_original,
+                    map_original_obb_to_model)
+                original = torch.as_tensor(
+                    np.asarray(native_box, dtype=np.float32)[:5],
+                    device=baseline_features[0].device).reshape(1, 5)
+                model_box = map_original_obb_to_model(original, meta)
+                with torch.no_grad():
+                    deltas = geometry_refiner(
+                        baseline_features, [model_box])
+                    refined = geometry_refiner.decode_and_normalize(
+                        [model_box], deltas, img_metas=[meta])[0]
+                    refined = map_model_obb_to_original(refined, meta)
+                score = float(native_box[5])
+                selected = np.concatenate([
+                    refined.detach().cpu().numpy().astype(np.float32),
+                    np.asarray([[score]], dtype=np.float32)], axis=1)
+                output_source = 'dino_geometry_refiner'
+                if counts is not None:
+                    counts['geometry_refiner'] += 1
+                fusion_audit.update(dict(
+                    geometry_refiner_enabled=True,
+                    geometry_refiner_input_box=[
+                        float(value) for value in native_box],
+                    geometry_refiner_output_box=[
+                        float(value) for value in selected[0]],
+                    geometry_refiner_contract=(
+                        geometry_refiner.component_contract())))
+        else:
+            selected = (dino_detections[:1]
+                        if dino_detections.shape[0] > 0 else baseline)
+            output_source = (fusion_audit['selected_source']
+                             if dino_detections.shape[0] > 0 else
+                             'sym_eood_fallback')
         if (self._fusion_policy == 'sym_eood_proposal_dino_roi_union'
                 and self._fusion_audit_enabled):
             record = dict(fusion_audit)
             record.update(dict(
                 filename=image_path, sequence=seq, frame=int(frame),
-                output_source=(fusion_audit['selected_source']
-                               if dino_detections.shape[0] > 0
-                               else 'sym_eood_fallback'),
+                output_source=output_source,
                 output_score=float(selected[0, 5])
                 if selected.shape[0] else None))
             self._fusion_audit_records.append(record)
@@ -1014,7 +1082,11 @@ class SymEOODDinoUnifiedDetector(ScopedDinoLowlightDetector):
     """All-frame SymEOOD proposal generation plus shared DINO ROI ranking."""
 
     def __init__(self, baseline_config, dino_rescue, dino_head_checkpoint,
-                 dino_checkpoint_contract=None, **kwargs):
+                 dino_checkpoint_contract=None,
+                 geometry_refiner=None,
+                 geometry_refiner_checkpoint=None,
+                 geometry_refiner_checkpoint_contract=None,
+                 **kwargs):
         if baseline_config is None:
             raise ValueError('SymEOODDinoUnifiedDetector requires SymEOOD')
         requested_policy = kwargs.pop(
@@ -1035,3 +1107,40 @@ class SymEOODDinoUnifiedDetector(ScopedDinoLowlightDetector):
             fusion_policy='sym_eood_proposal_dino_roi_union',
             scope_policy='all_frames',
             **kwargs)
+        self.geometry_refiner = None
+        self._geometry_refiner_checkpoint_contract = None
+        requested = geometry_refiner is not None
+        if requested != (geometry_refiner_checkpoint is not None):
+            raise ValueError(
+                'Geometry refiner config and checkpoint must be supplied '
+                'together')
+        if requested:
+            if getattr(self, '_conditional_dino_selector', None) is not None:
+                raise ValueError(
+                    'Geometry refiner cannot use conditional DINO routing')
+            if self._conservative_selector is not None:
+                raise ValueError(
+                    'Geometry refiner cannot use learned/rule takeover')
+            if self._stabilizer_enabled:
+                raise ValueError(
+                    'Geometry refiner runtime cannot use temporal stabilizer')
+            from ..builder import build_head
+            from crane_project.utils.geometry_refiner_checkpoint import (
+                load_source_gated_geometry_refiner_checkpoint)
+            self.geometry_refiner = build_head(dict(geometry_refiner))
+            expected_refiner_contract = dict(
+                refine_center=bool(self.geometry_refiner.refine_center),
+                refine_size=bool(self.geometry_refiner.refine_size),
+                refine_angle=bool(self.geometry_refiner.refine_angle))
+            expected_refiner_contract.update(dict(
+                geometry_refiner_checkpoint_contract or {}))
+            contract = load_source_gated_geometry_refiner_checkpoint(
+                self.geometry_refiner,
+                geometry_refiner_checkpoint,
+                expected_contract=expected_refiner_contract)
+            self._geometry_refiner_checkpoint_contract = contract
+            self.geometry_refiner.eval()
+            for parameter in self.geometry_refiner.parameters():
+                parameter.requires_grad_(False)
+        self._runtime_forward_counts = dict(
+            symeood_backbone_fpn=0, dino=0, geometry_refiner=0)

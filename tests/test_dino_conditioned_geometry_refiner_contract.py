@@ -1,0 +1,155 @@
+"""CPU-only contract tests for the shared five-delta refiner."""
+
+import importlib.util
+import math
+import pathlib
+import sys
+import types
+
+import pytest
+import torch
+import torch.nn as nn
+
+
+class _Registry:
+    def register_module(self, *args, **kwargs):
+        del args, kwargs
+        return lambda cls: cls
+
+
+class _Coder:
+    def encode(self, proposals, gt):
+        px, py, pw, ph, pa = proposals.unbind(-1)
+        gx, gy, gw, gh, ga = gt.unbind(-1)
+        dx = (torch.cos(pa) * (gx - px) + torch.sin(pa) * (gy - py)) / pw
+        dy = (-torch.sin(pa) * (gx - px) + torch.cos(pa) * (gy - py)) / ph
+        return torch.stack(
+            [dx, dy, torch.log(gw / pw), torch.log(gh / ph), ga - pa],
+            dim=-1)
+
+    def decode(self, proposals, deltas, max_shape=None):
+        del max_shape
+        px, py, pw, ph, pa = proposals.unbind(-1)
+        dx, dy, dw, dh, da = deltas.unbind(-1)
+        gx = px + dx * pw * torch.cos(pa) - dy * ph * torch.sin(pa)
+        gy = py + dx * pw * torch.sin(pa) + dy * ph * torch.cos(pa)
+        return torch.stack(
+            [gx, gy, pw * torch.exp(dw), ph * torch.exp(dh), pa + da],
+            dim=-1)
+
+
+class _RoIExtractor(nn.Module):
+    def __init__(self, out_channels=1, out_size=1):
+        super().__init__()
+        self.out_channels = out_channels
+        self.out_size = out_size
+
+    def forward(self, features, rois):
+        return features[0].new_ones(
+            (rois.shape[0], self.out_channels,
+             self.out_size, self.out_size))
+
+
+def _rbbox2roi(boxes):
+    rows = []
+    for index, item in enumerate(boxes):
+        rows.append(torch.cat([
+            item.new_full((item.shape[0], 1), index), item], dim=1))
+    return torch.cat(rows, dim=0)
+
+
+def _load_module():
+    names = (
+        'mmrotate', 'mmrotate.core', 'mmrotate.models',
+        'mmrotate.models.builder', 'mmrotate.models.roi_heads')
+    modules = {name: types.ModuleType(name) for name in names}
+    for module in modules.values():
+        module.__path__ = []
+    modules['mmrotate.core'].build_bbox_coder = lambda cfg: _Coder()
+    modules['mmrotate.core'].norm_angle = lambda value, version: value
+    modules['mmrotate.core'].rbbox2roi = _rbbox2roi
+    modules['mmrotate.models.builder'].ROTATED_HEADS = _Registry()
+    modules['mmrotate.models.builder'].build_roi_extractor = lambda cfg: (
+        _RoIExtractor(cfg['out_channels'], cfg['roi_layer']['out_size']))
+    old = {name: sys.modules.get(name) for name in names}
+    sys.modules.update(modules)
+    try:
+        root = pathlib.Path(__file__).resolve().parents[1]
+        path = root / ('mmrotate/models/roi_heads/'
+                       'dino_conditioned_geometry_refiner.py')
+        name = ('mmrotate.models.roi_heads.'
+                'dino_conditioned_geometry_refiner')
+        spec = importlib.util.spec_from_file_location(name, path)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[name] = module
+        spec.loader.exec_module(module)
+        return module
+    finally:
+        for name, previous in old.items():
+            if previous is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = previous
+
+
+MODULE = _load_module()
+Refiner = MODULE.DinoConditionedGeometryRefiner
+
+
+def _refiner(**kwargs):
+    return Refiner(
+        in_channels=1, roi_output_size=1, fc_channels=4, num_fcs=1,
+        **kwargs)
+
+
+def test_zero_initialization_is_exact_canonical_dino_identity():
+    model = _refiner()
+    proposal = torch.tensor([[10., 12., 8., 4., 0.2]])
+    features = [torch.zeros((1, 1, 4, 4))]
+    deltas = model(features, [proposal])
+    decoded = model.decode_and_normalize([proposal], deltas)[0]
+    assert torch.equal(deltas, torch.zeros_like(deltas))
+    assert torch.equal(decoded, proposal)
+
+
+def test_size_only_mask_blocks_center_and_angle_outputs_and_gradients():
+    model = _refiner(
+        refine_center=False, refine_size=True, refine_angle=False)
+    raw = torch.tensor(
+        [[1., 2., 3., 4., 5.]], requires_grad=True)
+    masked = model.mask_deltas(raw)
+    assert masked.tolist() == [[0., 0., 3., 4., 0.]]
+    masked.sum().backward()
+    assert raw.grad.tolist() == [[0., 0., 1., 1., 0.]]
+
+
+def test_edge_swap_canonicalizes_equivalent_le90_box():
+    box = torch.tensor([[5., 6., 4., 8., -0.4]])
+    canonical = MODULE.canonicalize_le90(box)
+    assert canonical[0, 2:4].tolist() == pytest.approx([8., 4.])
+    expected = ((-0.4 + math.pi / 2 + math.pi / 2) % math.pi
+                - math.pi / 2)
+    assert canonical[0, 4].item() == pytest.approx(expected)
+
+
+@pytest.mark.parametrize('direction', ['horizontal', 'vertical', 'diagonal'])
+def test_model_coordinate_mapping_round_trip_for_every_flip(direction):
+    box = torch.tensor([[30., 20., 12., 6., 0.3]])
+    meta = dict(
+        scale_factor=[2., 2., 2., 2.],
+        img_shape=(100, 160, 3),
+        flip=True,
+        flip_direction=direction)
+    mapped = MODULE.map_original_obb_to_model(box, meta)
+    restored = MODULE.map_model_obb_to_original(mapped, meta)
+    assert restored == pytest.approx(box, abs=1e-5)
+
+
+def test_angle_loss_is_pi_periodic():
+    model = _refiner()
+    predicted = torch.zeros((1, 5))
+    target = torch.zeros((1, 5))
+    target[0, 4] = math.pi
+    losses = model.loss(predicted, target)
+    assert losses['refiner_angle_objective'].item() == pytest.approx(0.0)
+    assert losses['loss_geometry_refiner'].item() == pytest.approx(0.0)

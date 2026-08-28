@@ -645,6 +645,16 @@ class SymEOOD(SingleStageDetector):
         Bbox 始终来自主头，几何完全不受影响。
         """
         feat = self.extract_feat(img)
+        return self.simple_test_from_features(
+            feat, img_metas, rescale=rescale)
+
+    def simple_test_from_features(self, feat, img_metas, rescale=False):
+        """Run the exact legacy inference heads from precomputed FPN features.
+
+        ``simple_test`` delegates here, making one feature tensor tuple usable
+        by both the unchanged SymEOOD detector path and the geometry refiner.
+        No refiner or DINO logic is permitted in this method.
+        """
 
         # Legacy: feature-level injection (only if NOT inject_aux_only)
         if (self.platform_context_injector is not None

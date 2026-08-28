@@ -17,11 +17,14 @@ from .eood import Eood
 from .sym_eood_detector import SymEOOD
 from .scoped_dino_lowlight_detector import (ScopedDinoLowlightDetector,
                                              SymEOODDinoUnifiedDetector)
+from .symeood_dino_geometry_refiner_trainer import (
+    SymEOODDinoGeometryRefinerTrainer)
 __all__ = [
     'RotatedRetinaNet', 'RotatedFasterRCNN', 'OrientedRCNN', 'RoITransformer',
     'GlidingVertex', 'ReDet', 'R3Det', 'S2ANet', 'RotatedRepPoints',
     'RotatedBaseDetector', 'RotatedTwoStageDetector',
     'RotatedSingleStageDetector', 'RotatedFCOS', "Eood",
-    'SymEOOD', 'ScopedDinoLowlightDetector', 'SymEOODDinoUnifiedDetector'
+    'SymEOOD', 'ScopedDinoLowlightDetector', 'SymEOODDinoUnifiedDetector',
+    'SymEOODDinoGeometryRefinerTrainer'
 
 ]
