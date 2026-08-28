@@ -152,6 +152,12 @@ def test_filename_parser_keeps_domain_prefix_used_by_scope_manifest():
     assert frame == 137
 
 
+def test_filename_parser_accepts_webots_frame_names():
+    seq, frame = MODULE._sequence_frame('/tmp/frame_00042.jpg')
+    assert seq == 'frame'
+    assert frame == 42
+
+
 def test_formal_config_builds_integrated_model_and_paper_metrics():
     root = pathlib.Path(__file__).resolve().parents[1]
     config = runpy.run_path(
@@ -199,6 +205,29 @@ def test_formal_native_checkpoint_contract_accepts_only_locked_baseline():
         MODULE._validate_dino_checkpoint_contract(
             _formal_native_payload(s7_enabled=True),
             _formal_native_contract())
+
+
+def test_formal_native_s14_component_config_is_pure_and_fixed():
+    root = pathlib.Path(__file__).resolve().parents[1]
+    config = runpy.run_path(
+        str(root / 'crane_project/configs/'
+            'crane_symeood_formal_dino_native_s14_v1.py'))
+    model = config['model']
+    assert model['type'] == 'FrozenDinoNativeS14Detector'
+    assert model['scope_policy'] == 'all_frames'
+    assert model['scope_manifest'] is None
+    assert model['runtime_checkpoint_in_constructor'] is True
+    assert model['stabilizer']['enabled'] is False
+    assert model['temporal_association']['enabled'] is False
+    assert 'baseline_config' not in model
+    assert model['dino_checkpoint_contract']['alpha'] == pytest.approx(0.5)
+    assert model['dino_rescue']['head']['feature_strides'] == [14]
+    assert model['dino_rescue']['head']['s7_residual'] is False
+    formal = config['formal_detection_contract']
+    assert formal['symeood_enabled'] is False
+    assert formal['brightaug_enabled'] is False
+    assert formal['s7_enabled'] is False
+    assert formal['target_scope'] is False
 
 
 def test_formal_unified_config_keeps_symeood_and_common_dino_ranking():

@@ -16,7 +16,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 import numpy as np
+from mmcv import Config
+from mmcv.utils import import_modules_from_strings
 from mmdet.apis import inference_detector, init_detector
+from mmrotate.models import build_detector
 
 import mmrotate  # noqa: F401
 
@@ -115,6 +118,52 @@ def prediction_record(image_path: Path, result: Any) -> Dict[str, Any]:
     return record
 
 
+def init_sequence_detector(
+    config_path: Path, checkpoint_path: Path, device: str
+) -> Tuple[Any, Config, str]:
+    """Initialize either a standard MMDet checkpoint or constructor runtime.
+
+    Native-S14 stores task heads and source-selection provenance in a custom
+    payload rather than an MMDetection ``state_dict``.  Its detector therefore
+    loads the checkpoint in ``__init__``.  The positional path is still
+    required and must resolve to the same file declared by the config.
+    """
+    cfg = Config.fromfile(str(config_path))
+    imports = cfg.get("custom_imports")
+    if imports:
+        import_modules_from_strings(**imports)
+    runtime_in_constructor = bool(
+        cfg.model.get("runtime_checkpoint_in_constructor", False))
+    if not runtime_in_constructor:
+        return (
+            init_detector(
+                str(config_path), str(checkpoint_path), device=device),
+            cfg,
+            "mmdetection_state_dict",
+        )
+
+    configured = Path(str(cfg.model.get("dino_head_checkpoint", "")))
+    if not configured.is_absolute():
+        configured = (Path.cwd() / configured).resolve()
+    else:
+        configured = configured.resolve()
+    if configured != checkpoint_path.resolve():
+        raise ValueError(
+            "Positional checkpoint must match model.dino_head_checkpoint: "
+            f"{checkpoint_path.resolve()} != {configured}")
+
+    model_cfg = cfg.model.copy()
+    model_cfg.pop("runtime_checkpoint_in_constructor")
+    model_cfg["pretrained"] = None
+    model_cfg["train_cfg"] = None
+    model = build_detector(model_cfg, test_cfg=cfg.get("test_cfg"))
+    model.cfg = cfg
+    model.CLASSES = tuple(cfg.get("classes", ("grab",)))
+    model.to(device)
+    model.eval()
+    return model, cfg, "constructor_checkpoint"
+
+
 def main() -> None:
     args = parse_args()
     config = args.config.resolve()
@@ -139,7 +188,8 @@ def main() -> None:
         raise ValueError("--limit must be positive")
 
     output_jsonl.parent.mkdir(parents=True, exist_ok=True)
-    model = init_detector(str(config), str(checkpoint), device=args.device)
+    model, cfg, checkpoint_loading = init_sequence_detector(
+        config, checkpoint, args.device)
 
     detected_count = 0
     with output_jsonl.open("w", encoding="utf-8") as output_file:
@@ -161,6 +211,10 @@ def main() -> None:
         "config": str(config),
         "checkpoint": str(checkpoint),
         "checkpoint_sha256": sha256_file(checkpoint),
+        "checkpoint_loading": checkpoint_loading,
+        "model_type": str(cfg.model.get("type")),
+        "formal_detection_contract": dict(
+            cfg.get("formal_detection_contract", {})),
         "device": args.device,
         "discovered_frame_count": len(all_images),
         "processed_frame_count": len(images),
@@ -169,6 +223,7 @@ def main() -> None:
         "model_selection_performed": False,
         "threshold_tuning_performed": False,
         "metric_truth_read": False,
+        "detector_outputs_modified": False,
     }
     manifest_path = output_jsonl.with_suffix(output_jsonl.suffix + ".manifest.json")
     manifest_path.write_text(

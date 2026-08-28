@@ -138,7 +138,14 @@ def _component_contract(cfg, expected):
             set(cfg.optimizer.keys()) ==
             {'type', 'constructor', 'lr', 'weight_decay'}),
         optimizer_has_no_inherited_momentum=(
-            'momentum' not in cfg.optimizer))
+            'momentum' not in cfg.optimizer),
+        no_legacy_top_level_loader_args=(
+            'samples_per_gpu' not in cfg.data and
+            'workers_per_gpu' not in cfg.data),
+        train_batch_size_is_two=(
+            cfg.data.train_dataloader.samples_per_gpu == 2),
+        validation_batch_size_is_one=(
+            cfg.data.val_dataloader.samples_per_gpu == 1))
     return dict(components=component, checks=checks,
                 passed=all(checks.values()))
 
@@ -314,6 +321,7 @@ def _run(args):
     from mmcv import Config
     from mmcv.utils import import_modules_from_strings
     from mmrotate.datasets import build_dataset
+    from mmrotate.utils.compat_config import compat_cfg
 
     if not torch.cuda.is_available():
         raise RuntimeError('CUDA is required for the real-stack smoke test')
@@ -328,6 +336,9 @@ def _run(args):
         imports = cfg.get('custom_imports')
         if imports:
             import_modules_from_strings(**imports)
+    # Exercise the same legacy-loader compatibility pass as tools/train.py.
+    full_cfg = compat_cfg(full_cfg)
+    size_cfg = compat_cfg(size_cfg)
 
     full_contract = _component_contract(
         full_cfg, dict(refine_center=True, refine_size=True,

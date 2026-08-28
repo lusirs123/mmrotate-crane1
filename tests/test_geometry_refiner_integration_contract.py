@@ -61,6 +61,19 @@ def test_locked_configs_do_not_contain_forbidden_routing_or_test_input():
     assert "ann_file='test/" not in text
     assert "expected_split='test'" not in text
 
+    tree = ast.parse(text)
+    data_assignment = next(
+        node for node in tree.body
+        if isinstance(node, ast.Assign)
+        and any(isinstance(target, ast.Name) and target.id == 'data'
+                for target in node.targets))
+    data_keys = {
+        keyword.arg for keyword in data_assignment.value.keywords}
+    assert 'samples_per_gpu' not in data_keys
+    assert 'workers_per_gpu' not in data_keys
+    assert {'train_dataloader', 'val_dataloader',
+            'test_dataloader'}.issubset(data_keys)
+
 
 def test_refiner_optimizer_is_exclusive_and_declared_by_config():
     hook = (ROOT / ('mmrotate/core/hooks/'
@@ -99,5 +112,7 @@ def test_real_stack_smoke_keeps_source_only_boundary():
     assert 'loss.backward()' in smoke
     assert 'optimizer.step()' in smoke
     assert 'optimizer_has_no_inherited_momentum' in smoke
+    assert 'no_legacy_top_level_loader_args' in smoke
+    assert 'full_cfg = compat_cfg(full_cfg)' in smoke
     assert "decision='STOP_SOURCE_PREFLIGHT_FAILED'" in smoke
     assert 'frozen_parameter_and_buffer_hash_unchanged' in smoke

@@ -49,7 +49,7 @@ def _filename(meta):
 
 def _sequence_frame(path):
     stem = os.path.splitext(os.path.basename(path))[0]
-    match = re.match(r'^((?:real|sim)_.+)_(\d+)$', stem)
+    match = re.match(r'^(.+)_(\d+)$', stem)
     if match is None:
         raise RuntimeError('Cannot parse sequence/frame from {}'.format(path))
     return match.group(1), int(match.group(2))
@@ -316,28 +316,37 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
         self._previous_seq = None
         self._previous_frame = None
 
-        if baseline_config is None:
-            raise ValueError('Scoped DINO requires a baseline detector')
-        # Keep the MMRotate detector as a registered child so its positional
-        # checkpoint loads through the standard test entry.
-        from mmcv import Config
-        from mmcv.utils import import_modules_from_strings
-        from mmrotate.models import build_detector
+        self.baseline = None
+        self.CLASSES = None
+        self._baseline_test_cfg = None
+        if baseline_config is not None:
+            # Historical fusion configurations keep the MMRotate detector as
+            # a registered child so its positional checkpoint loads through
+            # the standard test entry.  The pure native-S14 component omits
+            # this child entirely.
+            from mmcv import Config
+            from mmcv.utils import import_modules_from_strings
+            from mmrotate.models import build_detector
 
-        baseline_path = os.path.abspath(os.fspath(baseline_config))
-        baseline_cfg = Config.fromfile(baseline_path)
-        imports = baseline_cfg.get('custom_imports')
-        if imports:
-            import_modules_from_strings(**imports)
-        baseline_model_cfg = copy.deepcopy(baseline_cfg.model)
-        baseline_model_cfg.pretrained = None
-        self.baseline = build_detector(baseline_model_cfg)
-        self.CLASSES = getattr(self.baseline, 'CLASSES', None)
-        self._baseline_test_cfg = baseline_model_cfg.get('test_cfg')
-        if self._baseline_test_cfg is None:
-            raise RuntimeError('Baseline config has no model.test_cfg')
-        if int(self._baseline_test_cfg.get('max_per_img', 0)) != 1:
-            raise RuntimeError('Scoped DINO requires baseline max_per_img=1')
+            baseline_path = os.path.abspath(os.fspath(baseline_config))
+            baseline_cfg = Config.fromfile(baseline_path)
+            imports = baseline_cfg.get('custom_imports')
+            if imports:
+                import_modules_from_strings(**imports)
+            baseline_model_cfg = copy.deepcopy(baseline_cfg.model)
+            baseline_model_cfg.pretrained = None
+            self.baseline = build_detector(baseline_model_cfg)
+            self.CLASSES = getattr(self.baseline, 'CLASSES', None)
+            self._baseline_test_cfg = baseline_model_cfg.get('test_cfg')
+            if self._baseline_test_cfg is None:
+                raise RuntimeError('Baseline config has no model.test_cfg')
+            if int(self._baseline_test_cfg.get('max_per_img', 0)) != 1:
+                raise RuntimeError(
+                    'Scoped DINO requires baseline max_per_img=1')
+        if (self._fusion_policy == 'sym_eood_proposal_dino_roi_union'
+                and self.baseline is None):
+            raise ValueError(
+                'SymEOOD proposal fusion requires a baseline detector')
 
         # Lazy imports avoid a detector-registry cycle during MMRotate startup.
         from crane_project.tools import dino_teacher_common as common
@@ -731,7 +740,7 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
                               error_msgs):
         # ``tools/test.py`` supplies the original baseline checkpoint.  Map
         # its unprefixed keys into the registered child before MMDet recurses.
-        if prefix == '':
+        if prefix == '' and self.baseline is not None:
             direct = [key for key in list(state_dict)
                       if not key.startswith('baseline.')]
             for key in direct:
@@ -746,12 +755,17 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
 
     def load_state_dict(self, state_dict, strict=True):
         state_dict = state_dict.copy()
-        if not any(key.startswith('baseline.') for key in state_dict):
+        if (self.baseline is not None
+                and not any(key.startswith('baseline.') for key in state_dict)):
             state_dict = {'baseline.' + key: value
                           for key, value in state_dict.items()}
         return super().load_state_dict(state_dict, strict=strict)
 
     def extract_feat(self, img):
+        if self.baseline is None:
+            raise RuntimeError(
+                'FrozenDinoNativeS14Detector exposes detections, not '
+                'MMRotate feature tensors')
         return self.baseline.extract_feat(img)
 
     def forward_train(self, *args, **kwargs):
@@ -822,7 +836,8 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
                 'Scoped DINO sequential inference requires batch size 1')
         counts = getattr(self, '_runtime_forward_counts', None)
         supports_feature_reuse = (
-            hasattr(self.baseline, 'extract_feat')
+            self.baseline is not None
+            and hasattr(self.baseline, 'extract_feat')
             and hasattr(self.baseline, 'simple_test_from_features'))
         if supports_feature_reuse:
             baseline_features = self.baseline.extract_feat(img)
@@ -830,14 +845,21 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
                 counts['symeood_backbone_fpn'] += 1
             baseline_result = self.baseline.simple_test_from_features(
                 baseline_features, img_metas, rescale=rescale)
-        else:
+        elif self.baseline is not None:
             if getattr(self, 'geometry_refiner', None) is not None:
                 raise RuntimeError(
                     'Geometry refiner requires reusable SymEOOD FPN features')
             baseline_features = None
             baseline_result = self.baseline.simple_test(
                 img, img_metas, rescale=rescale)
-        baseline = _as_array(baseline_result)
+        else:
+            if getattr(self, 'geometry_refiner', None) is not None:
+                raise RuntimeError(
+                    'Geometry refiner requires a SymEOOD baseline')
+            baseline_features = None
+            baseline = np.zeros((0, 6), dtype=np.float32)
+        if self.baseline is not None:
+            baseline = _as_array(baseline_result)
         if (self._fusion_policy == 'sym_eood_proposal_dino_roi_union'
                 and not rescale):
             raise RuntimeError(
@@ -1075,6 +1097,42 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
         raise RuntimeError(
             'Scoped DINO sequential inference does not support test-time '
             'augmentation; use the configured single-view test pipeline')
+
+
+@ROTATED_DETECTORS.register_module(force=True)
+class FrozenDinoNativeS14Detector(ScopedDinoLowlightDetector):
+    """All-frame native-S14 DINO without SymEOOD, S7, or fallback routing."""
+
+    def __init__(self, dino_rescue, dino_head_checkpoint,
+                 dino_checkpoint_contract=None, **kwargs):
+        if kwargs.pop('baseline_config', None) is not None:
+            raise ValueError(
+                'FrozenDinoNativeS14Detector must not receive a baseline')
+        requested_policy = kwargs.pop('fusion_policy', 'dino_primary')
+        if requested_policy != 'dino_primary':
+            raise ValueError(
+                'FrozenDinoNativeS14Detector locks dino_primary policy')
+        requested_scope = kwargs.pop('scope_policy', 'all_frames')
+        if requested_scope != 'all_frames':
+            raise ValueError(
+                'FrozenDinoNativeS14Detector requires all-frame inference')
+        if kwargs.get('scope_manifest') is not None:
+            raise ValueError(
+                'FrozenDinoNativeS14Detector cannot use a target scope')
+        super().__init__(
+            baseline_config=None,
+            dino_rescue=dino_rescue,
+            dino_head_checkpoint=dino_head_checkpoint,
+            dino_checkpoint_contract=dino_checkpoint_contract,
+            fusion_policy='dino_primary',
+            scope_policy='all_frames',
+            **kwargs)
+        # MMDetection's single-image inference helper discovers the runtime
+        # device through ``next(model.parameters())``.  DINO and its heads are
+        # deliberately kept outside the registered module tree for explicit
+        # multi-GPU sharding, so retain one zero-element, non-trainable anchor.
+        self._runtime_device_anchor = torch.nn.Parameter(
+            torch.empty(0), requires_grad=False)
 
 
 @ROTATED_DETECTORS.register_module(force=True)
