@@ -16,6 +16,32 @@ _FRAME_RE = re.compile(
     r'^(?P<sequence>(?:real|sim)_seq\d+)_(?P<frame>\d+)$')
 
 
+def dino_invocation_encoding(record, box_key='dino_native_box'):
+    """Describe legacy/current encodings of an all-lane DINO forward.
+
+    Older complete all-lane audits predate ``dino_invoked`` but always carry
+    the native-box key; a null box then means a computed miss.  Explicit
+    ``False``/``0`` and ``raw_selected_source=not_computed`` remain invalid.
+    """
+    if record.get('raw_selected_source') == 'not_computed':
+        return 'explicit_not_computed'
+    if 'dino_invoked' not in record:
+        return ('legacy_implicit_complete_box_key'
+                if box_key in record else 'missing_evidence')
+    marker = record['dino_invoked']
+    if marker is True:
+        return 'boolean_true'
+    if (isinstance(marker, int) and not isinstance(marker, bool)
+            and marker == 1):
+        return 'integer_one'
+    return 'explicit_not_computed'
+
+
+def dino_record_was_computed(record, box_key='dino_native_box'):
+    return dino_invocation_encoding(record, box_key=box_key) in {
+        'boolean_true', 'integer_one', 'legacy_implicit_complete_box_key'}
+
+
 def _audit_frame_key(filename):
     stem = os.path.splitext(os.path.basename(os.fspath(filename)))[0]
     match = _FRAME_RE.match(stem)
@@ -65,13 +91,14 @@ class LoadDinoProposalFromAudit:
         self.audit_sha256 = hashlib.sha256(raw).hexdigest()
         self._boxes = {}
         for record in records:
-            if record.get('dino_invoked') is not True:
-                raise RuntimeError(
-                    'DINO must be computed on every audit input frame')
             for required in ('filename', 'sequence', 'frame', self.box_key):
                 if required not in record:
                     raise RuntimeError(
                         'DINO proposal audit record is missing ' + required)
+            if not dino_record_was_computed(
+                    record, box_key=self.box_key):
+                raise RuntimeError(
+                    'DINO must be computed on every audit input frame')
             key = _audit_frame_key(record['filename'])
             expected_key = '{}|{}'.format(
                 str(record['sequence']), int(record['frame']))

@@ -53,6 +53,9 @@ def _frame_key(filename):
 
 
 def _load_audit(path):
+    from mmrotate.datasets.pipelines.loading import (
+        dino_invocation_encoding, dino_record_was_computed)
+
     absolute = os.path.abspath(os.fspath(path))
     with open(absolute, 'r', encoding='utf-8') as handle:
         payload = json.load(handle)
@@ -60,11 +63,15 @@ def _load_audit(path):
     keys = [_frame_key(item['filename']) for item in records]
     if len(keys) != len(set(keys)):
         raise RuntimeError('Audit contains duplicate frame keys: ' + absolute)
-    if any(not item.get('dino_invoked', False) for item in records):
+    if any(not dino_record_was_computed(item) for item in records):
         raise RuntimeError('Audit contains a frame where DINO was not invoked')
     if any('dino_native_box' not in item for item in records):
         raise RuntimeError('Audit contains no dino_native_box key')
-    return absolute, set(keys)
+    encoding_counts = {}
+    for item in records:
+        encoding = dino_invocation_encoding(item)
+        encoding_counts[encoding] = encoding_counts.get(encoding, 0) + 1
+    return absolute, set(keys), encoding_counts
 
 
 def _leaf_entries(dataset, base_index=0):
@@ -82,7 +89,7 @@ def _leaf_entries(dataset, base_index=0):
 
 def _dataset_contract(dataset, audit_path, expected_count,
                       expected_real, expected_sim):
-    absolute_audit, audit_keys = _load_audit(audit_path)
+    absolute_audit, audit_keys, invocation_encodings = _load_audit(audit_path)
     entries = _leaf_entries(dataset)
     dataset_keys = [_frame_key(info['filename']) for _, info in entries]
     domains = [info.get('domain', _frame_key(info['filename']).split('_')[0])
@@ -99,6 +106,7 @@ def _dataset_contract(dataset, audit_path, expected_count,
         frame_count=len(dataset),
         domain_counts=dict(
             real=domains.count('real'), sim=domains.count('sim')),
+        dino_invocation_encoding_counts=invocation_encodings,
         checks=checks,
         passed=all(checks.values())), entries
 

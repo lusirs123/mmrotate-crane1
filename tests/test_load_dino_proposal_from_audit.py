@@ -46,17 +46,22 @@ MODULE = _load_module()
 
 
 _DEFAULT = object()
+_MISSING = object()
 
 
-def _write(tmp_path, invoked=True, box=_DEFAULT):
+def _write(tmp_path, invoked=True, box=_DEFAULT,
+           raw_selected_source=_MISSING):
     if box is _DEFAULT:
         box = [10., 20., 8., 4., 0.1, 0.8]
+    record = dict(
+        filename='/old/source/train/images/real_seq01_00001.jpg',
+        sequence='real_seq01', frame=1, dino_native_box=box)
+    if invoked is not _MISSING:
+        record['dino_invoked'] = invoked
+    if raw_selected_source is not _MISSING:
+        record['raw_selected_source'] = raw_selected_source
     payload = dict(
-        protocol='source_owned_geometry_union_v2',
-        records=[dict(
-            filename='/old/source/train/images/real_seq01_00001.jpg',
-            sequence='real_seq01', frame=1,
-            dino_invoked=invoked, dino_native_box=box)])
+        protocol='source_owned_geometry_union_v2', records=[record])
     path = tmp_path / 'audit.json'
     path.write_text(json.dumps(payload))
     return path
@@ -80,6 +85,26 @@ def test_loader_rejects_conditional_or_partially_computed_audit(tmp_path):
     with pytest.raises(RuntimeError, match='computed on every'):
         MODULE.LoadDinoProposalFromAudit(
             _write(tmp_path, invoked=False), expected_frame_count=1)
+
+    with pytest.raises(RuntimeError, match='computed on every'):
+        MODULE.LoadDinoProposalFromAudit(
+            _write(tmp_path, invoked=0), expected_frame_count=1)
+
+    with pytest.raises(RuntimeError, match='computed on every'):
+        MODULE.LoadDinoProposalFromAudit(
+            _write(
+                tmp_path, invoked=_MISSING,
+                raw_selected_source='not_computed'),
+            expected_frame_count=1)
+
+
+@pytest.mark.parametrize('invoked', [1, _MISSING])
+def test_loader_accepts_complete_legacy_invocation_encodings(
+        tmp_path, invoked):
+    loader = MODULE.LoadDinoProposalFromAudit(
+        _write(tmp_path, invoked=invoked), expected_frame_count=1)
+    results = loader(dict(filename='real_seq01_00001.jpg'))
+    assert results['dino_proposals'].shape == (1, 5)
 
 
 def test_loader_preserves_explicit_dino_missing_as_empty_proposal(tmp_path):
