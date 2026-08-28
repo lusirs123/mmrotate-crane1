@@ -101,6 +101,25 @@ def test_batch_fallback_slices_every_fpn_level():
     assert expected in trainer
 
 
+def test_trainer_public_init_preserves_loaded_frozen_checkpoint():
+    path = ROOT / ('mmrotate/models/detectors/'
+                   'symeood_dino_geometry_refiner_trainer.py')
+    methods = _class_methods(path, 'SymEOODDinoGeometryRefinerTrainer')
+    init_method = methods['init_weights']
+    calls = _called_attributes(init_method)
+    assert 'frozen_parameter_hash' in calls
+    assert 'init_weights' not in calls
+    assert 'requires_grad_' in calls
+    assert 'eval' in calls
+
+
+def test_train_entrypoint_preserves_checkpoint_contract_metadata():
+    text = (ROOT / 'tools/train.py').read_text()
+    assert "dict(cfg.checkpoint_config.get('meta') or {})" in text
+    assert 'checkpoint_meta.update' in text
+    assert 'cfg.checkpoint_config.meta = checkpoint_meta' in text
+
+
 def test_real_stack_smoke_keeps_source_only_boundary():
     path = ROOT / ('crane_project/tools/'
                    'symeood_dino_geometry_refiner_source_smoke.py')
@@ -116,6 +135,9 @@ def test_real_stack_smoke_keeps_source_only_boundary():
     assert "'_changed_from_resized'" in smoke
     assert 'loss.backward()' in smoke
     assert 'optimizer.step()' in smoke
+    assert 'raw_model.init_weights()' in smoke
+    assert 'public_init_preserved_frozen_checkpoint' in smoke
+    assert 'source_val_forward_output_valid' in smoke
     assert 'optimizer_has_no_inherited_momentum' in smoke
     assert 'no_legacy_top_level_loader_args' in smoke
     assert 'full_cfg = compat_cfg(full_cfg)' in smoke

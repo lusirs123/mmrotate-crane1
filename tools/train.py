@@ -173,9 +173,11 @@ def main():
     if cfg.checkpoint_config is not None:
         # save mmdet version, config file content and class names in
         # checkpoints as meta data
-        cfg.checkpoint_config.meta = dict(
+        checkpoint_meta = dict(cfg.checkpoint_config.get('meta') or {})
+        checkpoint_meta.update(dict(
             mmdet_version=__version__ + get_git_hash()[:7],
-            CLASSES=datasets[0].CLASSES)
+            CLASSES=datasets[0].CLASSES))
+        cfg.checkpoint_config.meta = checkpoint_meta
     # add an attribute for visualization convenience
     model.CLASSES = datasets[0].CLASSES
     train_detector(

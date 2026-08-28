@@ -61,6 +61,9 @@ class GeometryRefinerContractHook(Hook):
             raise RuntimeError('Frozen SymEOOD has trainable parameters')
         if report['refiner_trainable_parameter_count'] <= 0:
             raise RuntimeError('Geometry refiner has no trainable parameters')
+        if not report.get('public_init_completed', False):
+            raise RuntimeError(
+                'Geometry refiner trainer did not complete public init')
         if not report['frozen_hash_unchanged']:
             raise RuntimeError('Frozen SymEOOD hash changed before training')
         optimizer_ids = _optimizer_parameter_ids(runner.optimizer)

@@ -72,6 +72,25 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
         self._frozen_hash_at_init = self.frozen_parameter_hash()
+        self._public_init_completed = False
+
+    def init_weights(self):
+        """Honor MMDetection's public init lifecycle without reinitializing.
+
+        Both children are already in their final initial state here: the
+        baseline was populated from the formal checkpoint and the refiner
+        initialized itself (including its zero output layer) in ``__init__``.
+        Calling ``BaseDetector.init_weights`` would recursively overwrite the
+        frozen checkpoint before iteration zero.
+        """
+        current = self.frozen_parameter_hash()
+        if current != self._frozen_hash_at_init:
+            raise RuntimeError(
+                'Frozen SymEOOD changed before public init_weights')
+        for parameter in self.baseline.parameters():
+            parameter.requires_grad_(False)
+        self.baseline.eval()
+        self._public_init_completed = True
 
     def train(self, mode=True):
         super().train(mode)
@@ -170,5 +189,6 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
             frozen_hash_at_init=self._frozen_hash_at_init,
             frozen_hash_current=current,
             frozen_hash_unchanged=(current == self._frozen_hash_at_init),
+            public_init_completed=self._public_init_completed,
             refiner_contract=self.geometry_refiner.component_contract(),
             evidence_contract=dict(self.evidence_contract))

@@ -231,19 +231,32 @@ def _sample_pair(dataset, entries):
     return [chosen['real'], chosen['sim']]
 
 
+def _first_sample(dataset, entries):
+    for index, _info in entries:
+        item = dataset[index]
+        if item is not None:
+            return item
+    raise RuntimeError('Could not obtain a source validation sample')
+
+
 def _optimizer_ids(optimizer):
     return [id(parameter) for group in optimizer.param_groups
             for parameter in group['params']]
 
 
-def _gpu_step(cfg, dataset, entries, gpu, expected_active):
+def _gpu_step(cfg, dataset, entries, val_dataset, val_entries, gpu,
+              expected_active):
     import torch
     from mmcv.parallel import MMDataParallel, collate
     from mmcv.runner import build_optimizer
     from mmrotate.models import build_detector
 
     torch.cuda.set_device(gpu)
-    raw_model = build_detector(copy.deepcopy(cfg.model)).cuda(gpu)
+    raw_model = build_detector(copy.deepcopy(cfg.model))
+    constructor_hash = raw_model.frozen_parameter_hash()
+    raw_model.init_weights()
+    public_init_hash = raw_model.frozen_parameter_hash()
+    raw_model = raw_model.cuda(gpu)
     raw_model.train()
     optimizer = build_optimizer(raw_model, copy.deepcopy(cfg.optimizer))
     refiner_parameters = [parameter for parameter in
@@ -253,6 +266,8 @@ def _gpu_step(cfg, dataset, entries, gpu, expected_active):
     refiner_ids = [id(parameter) for parameter in refiner_parameters]
     before_hash = raw_model.frozen_parameter_hash()
     before_head = raw_model.geometry_refiner.delta_head.weight.detach().clone()
+    zero_initialized_before_step = bool(
+        torch.count_nonzero(before_head).item() == 0)
     samples = _sample_pair(dataset, entries)
     batch = collate(samples, samples_per_gpu=len(samples))
     data_container_keys = [key for key, value in batch.items()
@@ -283,8 +298,24 @@ def _gpu_step(cfg, dataset, entries, gpu, expected_active):
         row_norms[index] == 0.0 for index, active in
         enumerate(expected_active) if not active)
     optimizer.step()
-    after_hash = raw_model.frozen_parameter_hash()
+    after_step_hash = raw_model.frozen_parameter_hash()
     after_head = raw_model.geometry_refiner.delta_head.weight.detach()
+
+    raw_model.eval()
+    validation_batch = collate(
+        [_first_sample(val_dataset, val_entries)], samples_per_gpu=1)
+    with torch.no_grad():
+        validation_output = parallel(
+            return_loss=False, rescale=True, **validation_batch)
+    validation_output_valid = (
+        isinstance(validation_output, list)
+        and len(validation_output) == 1
+        and isinstance(validation_output[0], list)
+        and len(validation_output[0]) == 1)
+    validation_values = (
+        np.asarray(validation_output[0][0])
+        if validation_output_valid else np.asarray([np.nan]))
+    after_validation_hash = raw_model.frozen_parameter_hash()
     checks = dict(
         real_datacontainer_batch=(
             {'img', 'img_metas', 'gt_bboxes', 'gt_labels',
@@ -297,21 +328,31 @@ def _gpu_step(cfg, dataset, entries, gpu, expected_active):
         refiner_gradients_finite=refiner_grad_finite,
         active_delta_rows_nonzero=active_rows_nonzero,
         inactive_delta_rows_zero=inactive_rows_zero,
+        public_init_preserved_frozen_checkpoint=(
+            constructor_hash == public_init_hash),
+        zero_initialized_before_step=zero_initialized_before_step,
         frozen_parameter_and_buffer_hash_unchanged=(
-            before_hash == after_hash),
+            before_hash == after_step_hash == after_validation_hash),
         zero_initialized_head_changed=bool(
-            torch.any(after_head != before_head).item()))
+            torch.any(after_head != before_head).item()),
+        source_val_forward_output_valid=validation_output_valid,
+        source_val_forward_output_finite=bool(
+            np.isfinite(validation_values).all()))
     report = dict(
         batch_domains=['real', 'sim'],
         data_container_keys=sorted(data_container_keys),
         loss=float(loss.detach().cpu()),
         log_vars={key: float(value) for key, value in log_vars.items()},
         delta_head_row_gradient_l1=row_norms,
+        frozen_hash_at_construction=constructor_hash,
+        frozen_hash_after_public_init=public_init_hash,
         frozen_hash_before=before_hash,
-        frozen_hash_after=after_hash,
+        frozen_hash_after_step=after_step_hash,
+        frozen_hash_after_validation=after_validation_hash,
         checks=checks,
         passed=all(checks.values()))
     del parallel, raw_model, optimizer, loss, losses, batch
+    del validation_batch, validation_output
     torch.cuda.empty_cache()
     return report
 
@@ -355,7 +396,7 @@ def _run(args):
         full_train, full_cfg.source_train_audit,
         EXPECTED_COUNTS['train'], EXPECTED_COUNTS['train_real'],
         EXPECTED_COUNTS['train_sim'])
-    full_val_report, _ = _dataset_contract(
+    full_val_report, full_val_entries = _dataset_contract(
         full_val, full_cfg.source_val_audit,
         EXPECTED_COUNTS['val'], EXPECTED_COUNTS['val_real'],
         EXPECTED_COUNTS['val_sim'])
@@ -363,7 +404,7 @@ def _run(args):
         size_train, size_cfg.source_train_audit,
         EXPECTED_COUNTS['train'], EXPECTED_COUNTS['train_real'],
         EXPECTED_COUNTS['train_sim'])
-    size_val_report, _ = _dataset_contract(
+    size_val_report, size_val_entries = _dataset_contract(
         size_val, size_cfg.source_val_audit,
         EXPECTED_COUNTS['val'], EXPECTED_COUNTS['val_real'],
         EXPECTED_COUNTS['val_sim'])
@@ -394,10 +435,12 @@ def _run(args):
 
     # Independent builds preserve the identical zero-init starting contract.
     size_gpu = _gpu_step(
-        size_cfg, size_train, size_entries, args.gpu,
+        size_cfg, size_train, size_entries,
+        size_val, size_val_entries, args.gpu,
         [False, False, True, True, False])
     full_gpu = _gpu_step(
-        full_cfg, full_train, full_entries, args.gpu,
+        full_cfg, full_train, full_entries,
+        full_val, full_val_entries, args.gpu,
         [True, True, True, True, True])
     sections = [full_contract, size_contract, full_train_report,
                 full_val_report, size_train_report, size_val_report,
