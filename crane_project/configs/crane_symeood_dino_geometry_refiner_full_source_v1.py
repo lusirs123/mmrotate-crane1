@@ -143,6 +143,7 @@ source_val_dataset = dict(
     version='le90')
 
 data = dict(
+    _delete_=True,
     train=[
         dict(
             type=dataset_type, data_root=data_root,

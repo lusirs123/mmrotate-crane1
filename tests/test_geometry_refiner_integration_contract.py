@@ -69,6 +69,11 @@ def test_locked_configs_do_not_contain_forbidden_routing_or_test_input():
                 for target in node.targets))
     data_keys = {
         keyword.arg for keyword in data_assignment.value.keywords}
+    delete_keyword = next(
+        keyword for keyword in data_assignment.value.keywords
+        if keyword.arg == '_delete_')
+    assert isinstance(delete_keyword.value, ast.Constant)
+    assert delete_keyword.value.value is True
     assert 'samples_per_gpu' not in data_keys
     assert 'workers_per_gpu' not in data_keys
     assert {'train_dataloader', 'val_dataloader',
