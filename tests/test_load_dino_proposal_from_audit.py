@@ -6,6 +6,7 @@ import types
 
 import numpy as np
 import pytest
+import torch
 
 
 class _Registry:
@@ -129,6 +130,34 @@ def test_no_flip_metadata_is_explicit_for_old_mmdetection_collect():
     assert result['flip_direction'] is None
     with pytest.raises(RuntimeError, match='cannot overwrite'):
         transform(dict(flip=True, flip_direction='horizontal'))
+
+
+def test_causal_formatter_disables_image_padding_for_fixed_rank_tensors(
+        monkeypatch):
+    class DataContainer:
+        def __init__(self, data, stack=False, pad_dims=2):
+            self.data = data
+            self.stack = stack
+            self.pad_dims = pad_dims
+
+    parallel = types.ModuleType('mmcv.parallel')
+    parallel.DataContainer = DataContainer
+    pipelines = types.ModuleType('mmdet.datasets.pipelines')
+    pipelines.to_tensor = lambda value: torch.as_tensor(value)
+    monkeypatch.setitem(sys.modules, 'mmcv.parallel', parallel)
+    monkeypatch.setitem(sys.modules, 'mmdet.datasets.pipelines', pipelines)
+    transform = MODULE.FormatCausalHistoryInputs()
+    result = transform(dict(
+        causal_history_images=np.zeros((4, 8, 12, 3), dtype=np.float32),
+        causal_history_proposals=np.zeros((4, 5), dtype=np.float32),
+        causal_history_valid_mask=np.ones((4,), dtype=np.bool_),
+        causal_history_ages=np.arange(1, 5, dtype=np.int64)))
+    assert result['causal_history_images'].pad_dims == 2
+    assert result['causal_history_images'].data.shape == (4, 3, 8, 12)
+    for key in ('causal_history_proposals',
+                'causal_history_valid_mask', 'causal_history_ages'):
+        assert result[key].stack is True
+        assert result[key].pad_dims is None
 
 
 def test_causal_history_loader_is_strictly_previous_and_never_crosses_gap(

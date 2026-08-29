@@ -68,6 +68,8 @@ evidence_contract = dict(
     source_only_proposal_corruption=True)
 
 model = dict(
+    baseline_config='crane_project/configs/crane_symeood_k1.py',
+    baseline_checkpoint='work_dirs/crane_symeood_k1/epoch_24.pth',
     geometry_refiner=geometry_refiner,
     evidence_contract=evidence_contract,
     geometry_refiner_checkpoint=None,
@@ -209,6 +211,10 @@ checkpoint_config = dict(
         geometry_refiner_checkpoint_contract=dict(
             protocol='source_only_causal_history_refiner_v1',
             architecture='current_anchored_causal_history_refiner_v1',
+            frozen_baseline_variant='symeood_k1_epoch24',
+            frozen_baseline_config='crane_project/configs/crane_symeood_k1.py',
+            frozen_baseline_checkpoint=(
+                'work_dirs/crane_symeood_k1/epoch_24.pth'),
             source_train_frames=2781,
             source_val_frames=738,
             target_data_read=False,

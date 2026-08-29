@@ -185,6 +185,8 @@ def test_causal_history_source_config_is_unified_and_target_closed():
     assert 'dino_detector_forward_during_training=False' in text
     assert 'frozen_symeood_feature_forward=True' in text
     assert 'cached_dino_proposals_only=True' in text
+    assert "baseline_config='crane_project/configs/crane_symeood_k1.py'" in text
+    assert "baseline_checkpoint='work_dirs/crane_symeood_k1/epoch_24.pth'" in text
     assert 'target_data_read=False' in text
     assert 'fixed_test_read=False' in text
     assert 'domain_routing=False' in text
@@ -242,11 +244,24 @@ def test_causal_source_gate_uses_dual_reference_and_cannot_open_test():
     assert 'eligible_for_unknown_sequence_claim=False' in text
     assert 'native_dino_reference_metrics' in text
     assert 'sym_eood_reference_metrics' in text
+    assert "parser.add_argument('--sym-reference-results', required=True)" in text
     assert 'average_gain_over_native_dino' in text
     assert 'sym_eood_geometry_preservation' in text
     assert "'ALLOW_CAUSAL_HISTORY_CHECKPOINT_PROMOTION'" in text
     assert "'source-val'" in text
     assert "'fixed-target'" not in text
+
+
+def test_ordinary_k1_source_val_reference_config_never_reads_fixed_test():
+    path = ROOT / ('crane_project/configs/'
+                   'crane_symeood_k1_source_val_eval.py')
+    text = path.read_text()
+    assert "_base_ = ['./crane_symeood_k1.py']" in text
+    assert "ann_file='val/annfiles/'" in text
+    assert "img_prefix='val/images/'" in text
+    assert "ann_file='test/annfiles/'" not in text
+    assert "img_prefix='test/images/'" not in text
+    assert 'source_val_dataset' in text
 
 
 def test_v21_source_smoke_is_source_only_and_requires_real_gradients():

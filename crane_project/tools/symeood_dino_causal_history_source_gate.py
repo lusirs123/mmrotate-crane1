@@ -24,6 +24,7 @@ def parse_args():
     parser.add_argument('--candidate-results', required=True)
     parser.add_argument('--candidate-checkpoint', required=True)
     parser.add_argument('--source-val-audit', required=True)
+    parser.add_argument('--sym-reference-results', required=True)
     parser.add_argument('--data-root', default='crane_project/data/crane_grab')
     parser.add_argument('--out-json', required=True)
     parser.add_argument('--expected-candidate-sha256')
@@ -53,6 +54,10 @@ def _checkpoint_contract(path, expected_sha256=None):
     required = dict(
         protocol='source_only_causal_history_refiner_v1',
         architecture='current_anchored_causal_history_refiner_v1',
+        frozen_baseline_variant='symeood_k1_epoch24',
+        frozen_baseline_config='crane_project/configs/crane_symeood_k1.py',
+        frozen_baseline_checkpoint=(
+            'work_dirs/crane_symeood_k1/epoch_24.pth'),
         source_train_frames=2781,
         source_val_frames=738,
         target_data_read=False,
@@ -127,10 +132,13 @@ def _sym_geometry_preservation(candidate, sym):
 def main():
     args = parse_args()
     candidate_path, candidate_boxes = _load_results(args.candidate_results)
+    sym_reference_path, sym_reference_boxes = _load_results(
+        args.sym_reference_results)
     ann_dir = os.path.join(
         os.path.abspath(os.fspath(args.data_root)), 'val', 'annfiles')
     ann_dir, metadata, domain_counts = _annotations(ann_dir)
     candidate_metrics = _metrics(metadata, candidate_boxes)
+    sym_metrics = _metrics(metadata, sym_reference_boxes)
 
     audit_path = os.path.abspath(os.fspath(args.source_val_audit))
     with open(audit_path, 'rb') as handle:
@@ -140,7 +148,6 @@ def main():
         os.path.join(os.path.abspath(args.data_root), 'val'),
         'source-val')
     dino_metrics = audit['native_dino_baseline']['metrics']
-    sym_metrics = audit['sym_eood_baseline']['metrics']
     average_gain_gate = relaxed_composite_gate(
         candidate_metrics, dino_metrics,
         min_composite_gain=args.min_composite_gain,
@@ -167,6 +174,8 @@ def main():
             candidate_checkpoint_contract=checkpoint_contract,
             source_val_audit=audit_path,
             source_val_audit_sha256=_sha256(audit_path),
+            sym_reference_results=sym_reference_path,
+            sym_reference_results_sha256=_sha256(sym_reference_path),
             ann_dir=ann_dir,
             frame_count=738,
             domain_counts=domain_counts),

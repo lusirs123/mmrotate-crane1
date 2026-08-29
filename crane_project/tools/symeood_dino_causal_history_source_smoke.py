@@ -82,6 +82,10 @@ def _run(args):
         cfg.checkpoint_config.meta.geometry_refiner_checkpoint_contract)
     required_contract = dict(
         architecture='current_anchored_causal_history_refiner_v1',
+        frozen_baseline_variant='symeood_k1_epoch24',
+        frozen_baseline_config='crane_project/configs/crane_symeood_k1.py',
+        frozen_baseline_checkpoint=(
+            'work_dirs/crane_symeood_k1/epoch_24.pth'),
         source_train_frames=2781,
         source_val_frames=738,
         target_data_read=False,

@@ -429,10 +429,13 @@ class FormatCausalHistoryInputs:
             raise RuntimeError('Causal history images must have shape K,H,W,C')
         images = np.ascontiguousarray(images.transpose(0, 3, 1, 2))
         results['causal_history_images'] = DC(
-            to_tensor(images), stack=True)
+            to_tensor(images), stack=True, pad_dims=2)
         for key in ('causal_history_proposals',
                     'causal_history_valid_mask', 'causal_history_ages'):
-            results[key] = DC(to_tensor(results[key]), stack=True)
+            # These are fixed-shape Kx5/K tensors, not images.  MMCV 1.7's
+            # default pad_dims=2 asserts on ndim <= 2 during collation.
+            results[key] = DC(
+                to_tensor(results[key]), stack=True, pad_dims=None)
         return results
 
 
