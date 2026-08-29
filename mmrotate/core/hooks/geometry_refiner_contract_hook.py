@@ -3,6 +3,7 @@
 import json
 import os
 
+import torch
 from mmcv.parallel import is_module_wrapper
 from mmcv.runner.hooks import HOOKS, Hook
 from mmcv.runner.optimizer.builder import OPTIMIZER_BUILDERS, OPTIMIZERS
@@ -103,6 +104,36 @@ class GeometryRefinerContractHook(Hook):
                 'Frozen geometry-refiner parameters/buffers changed')
         path = os.path.join(
             runner.work_dir, 'geometry_refiner_frozen_contract.json')
+        with open(path, 'w', encoding='utf-8') as handle:
+            json.dump(report, handle, indent=2, ensure_ascii=False)
+            handle.write('\n')
+
+
+@HOOKS.register_module()
+class CudaPeakMemoryContractHook(Hook):
+    """Record per-rank CUDA peaks without claiming zero memory overhead."""
+
+    def before_run(self, runner):
+        del runner
+        if torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats(torch.cuda.current_device())
+
+    def after_run(self, runner):
+        if not torch.cuda.is_available():
+            return
+        device = torch.cuda.current_device()
+        report = dict(
+            rank=int(getattr(runner, 'rank', 0)),
+            visible_device_index=int(device),
+            cuda_visible_devices=os.environ.get('CUDA_VISIBLE_DEVICES'),
+            device_name=torch.cuda.get_device_name(device),
+            peak_allocated_bytes=int(
+                torch.cuda.max_memory_allocated(device)),
+            peak_reserved_bytes=int(
+                torch.cuda.max_memory_reserved(device)))
+        path = os.path.join(
+            runner.work_dir,
+            'cuda_peak_memory_rank{}.json'.format(report['rank']))
         with open(path, 'w', encoding='utf-8') as handle:
             json.dump(report, handle, indent=2, ensure_ascii=False)
             handle.write('\n')

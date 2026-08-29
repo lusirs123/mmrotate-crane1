@@ -17,7 +17,9 @@ LOWER_IS_BETTER = (
 )
 
 
-def relaxed_composite_gate(candidate, reference, min_composite_gain=0.005):
+def relaxed_composite_gate(
+        candidate, reference, min_composite_gain=0.005,
+        reference_policy='audited_dual_tower_v2_source_val'):
     """Allow average improvement while bounding every individual regression.
 
     The reference is the audited recomposed Dual-Tower V2 source-val stream.
@@ -83,7 +85,7 @@ def relaxed_composite_gate(candidate, reference, min_composite_gain=0.005):
             int(candidate['sim/MCML_max(frames)']) <= 5),
     )
     return dict(
-        reference_policy='audited_dual_tower_v2_source_val',
+        reference_policy=str(reference_policy),
         metric_directions=dict(
             higher_is_better=list(HIGHER_IS_BETTER),
             lower_is_better=list(LOWER_IS_BETTER)),

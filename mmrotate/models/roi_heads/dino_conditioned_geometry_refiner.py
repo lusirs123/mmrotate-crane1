@@ -461,3 +461,192 @@ class DinoConditionedDualTowerGeometryRefiner(
             size_components=['dlogw', 'dlogh'],
             pose_components=['dx_local', 'dy_local', 'dangle']))
         return contract
+
+
+@ROTATED_HEADS.register_module()
+class DinoConditionedCausalHistoryRefiner(DinoConditionedGeometryRefiner):
+    """Current-frame anchored refiner with rejectable causal history.
+
+    Historical appearance and geometry can only contribute a bounded residual
+    on top of the current-frame prediction.  With no valid history the result
+    is exactly the current-only branch.  Sequence/frame identifiers are not
+    accepted by this module and therefore cannot become routing features.
+    """
+
+    def __init__(self,
+                 *args,
+                 history_horizon=4,
+                 max_history_center_delta=0.35,
+                 max_history_log_size_delta=0.45,
+                 max_history_angle_delta_deg=20.0,
+                 history_gate_bias=-4.0,
+                 **kwargs):
+        self.history_horizon = int(history_horizon)
+        if self.history_horizon <= 0:
+            raise ValueError('history_horizon must be positive')
+        fc_channels = int(kwargs.get('fc_channels', 256))
+        in_channels = int(kwargs.get('in_channels', 256))
+        roi_output_size = int(kwargs.get('roi_output_size', 7))
+        num_fcs = int(kwargs.get('num_fcs', 2))
+        zero_init_output = bool(kwargs.get('zero_init_output', True))
+        super().__init__(*args, **kwargs)
+        flattened = in_channels * roi_output_size ** 2
+        self.history_fcs, history_channels = _build_fc_tower(
+            flattened, fc_channels, num_fcs)
+        self.relative_geometry_fcs = nn.Sequential(
+            nn.Linear(5, fc_channels), nn.ReLU(inplace=True),
+            nn.Linear(fc_channels, fc_channels), nn.ReLU(inplace=True))
+        self.age_embedding = nn.Embedding(
+            self.history_horizon + 1, fc_channels)
+        self.history_attention = nn.Linear(fc_channels * 3, 1)
+        self.history_fusion = nn.Sequential(
+            nn.Linear(fc_channels + history_channels, fc_channels),
+            nn.ReLU(inplace=True))
+        self.history_delta_head = nn.Linear(fc_channels, 5)
+        self.history_gate_head = nn.Linear(fc_channels, 1)
+        _init_fc_tower(self.history_fcs)
+        _init_fc_tower(self.relative_geometry_fcs)
+        nn.init.normal_(self.age_embedding.weight, std=0.01)
+        nn.init.xavier_uniform_(self.history_attention.weight)
+        nn.init.zeros_(self.history_attention.bias)
+        for module in self.history_fusion.modules():
+            if isinstance(module, nn.Linear):
+                nn.init.kaiming_uniform_(module.weight, a=1.0)
+                nn.init.zeros_(module.bias)
+        if zero_init_output:
+            nn.init.zeros_(self.history_delta_head.weight)
+            nn.init.zeros_(self.history_delta_head.bias)
+        nn.init.zeros_(self.history_gate_head.weight)
+        nn.init.constant_(self.history_gate_head.bias, float(history_gate_bias))
+        bounds = [
+            float(max_history_center_delta),
+            float(max_history_center_delta),
+            float(max_history_log_size_delta),
+            float(max_history_log_size_delta),
+            math.radians(float(max_history_angle_delta_deg))]
+        if any(value <= 0.0 for value in bounds):
+            raise ValueError('History residual bounds must be positive')
+        self.register_buffer(
+            'history_residual_bounds', torch.tensor(bounds))
+        self.history_gate_bias = float(history_gate_bias)
+
+    def _roi_hidden(self, features, proposal_list, tower):
+        rois = rbbox2roi(self.canonicalize_proposals(proposal_list))
+        if rois.shape[0] == 0:
+            return features[0].new_zeros((0, self.delta_head.in_features))
+        roi_features = self.roi_extractor(features, rois).flatten(1)
+        return tower(roi_features)
+
+    def _relative_geometry(self, current, history):
+        batch, horizon, _ = history.shape
+        current_flat = current[:, None, :].expand(
+            batch, horizon, 5).reshape(-1, 5)
+        history_flat = history.reshape(-1, 5)
+        encoded = self.bbox_coder.encode(
+            canonicalize_le90(current_flat),
+            canonicalize_le90(history_flat))
+        return torch.nan_to_num(
+            encoded, nan=0.0, posinf=4.0, neginf=-4.0
+        ).clamp(min=-4.0, max=4.0).reshape(batch, horizon, 5)
+
+    def forward_causal(self,
+                       current_features,
+                       proposal_list,
+                       history_features,
+                       history_proposals,
+                       history_valid_mask,
+                       history_ages=None):
+        batch = len(proposal_list)
+        if any(int(item.shape[0]) != 1 for item in proposal_list):
+            raise RuntimeError(
+                'Causal history refiner requires one current proposal/image')
+        if history_proposals.shape != (batch, self.history_horizon, 5):
+            raise RuntimeError('History proposal tensor has invalid shape')
+        if history_valid_mask.shape != (batch, self.history_horizon):
+            raise RuntimeError('History validity tensor has invalid shape')
+        if len(history_features) != len(current_features):
+            raise RuntimeError('Current/history FPN level mismatch')
+        if any(feature.shape[:2] != (
+                batch, self.history_horizon) for feature in history_features):
+            raise RuntimeError('History FPN tensor has invalid batch/horizon')
+        current_hidden = self._roi_hidden(
+            current_features, proposal_list, self.shared_fcs)
+        flat_history_features = [
+            feature.reshape(
+                batch * self.history_horizon, *feature.shape[2:])
+            for feature in history_features]
+        flat_history_boxes = [
+            history_proposals[index, age:age + 1]
+            for index in range(batch)
+            for age in range(self.history_horizon)]
+        history_hidden = self._roi_hidden(
+            flat_history_features, flat_history_boxes,
+            self.history_fcs).reshape(batch, self.history_horizon, -1)
+        current_boxes = torch.cat(
+            self.canonicalize_proposals(proposal_list), dim=0)
+        relative = self.relative_geometry_fcs(
+            self._relative_geometry(
+                current_boxes, history_proposals).reshape(-1, 5)
+        ).reshape(batch, self.history_horizon, -1)
+        if history_ages is None:
+            history_ages = torch.arange(
+                1, self.history_horizon + 1,
+                device=history_proposals.device)[None, :].expand(batch, -1)
+        ages = history_ages.to(dtype=torch.long).clamp(
+            min=1, max=self.history_horizon)
+        history_token = history_hidden + relative + self.age_embedding(ages)
+        current_expanded = current_hidden[:, None, :].expand(
+            -1, self.history_horizon, -1)
+        attention_input = torch.cat(
+            [current_expanded, history_token, relative], dim=-1)
+        scores = self.history_attention(attention_input).squeeze(-1)
+        valid = history_valid_mask.to(dtype=torch.bool)
+        safe_scores = scores.masked_fill(~valid, -1e4)
+        weights = torch.softmax(safe_scores, dim=1) * valid.to(scores.dtype)
+        weights = weights / weights.sum(dim=1, keepdim=True).clamp(min=1.0)
+        context = (weights[..., None] * history_token).sum(dim=1)
+        fused = self.history_fusion(torch.cat(
+            [current_hidden, context], dim=-1))
+        current_deltas = self.mask_deltas(self.delta_head(current_hidden))
+        history_deltas = torch.tanh(self.history_delta_head(fused))
+        bounds = self.history_residual_bounds.to(
+            device=history_deltas.device, dtype=history_deltas.dtype)
+        gate = torch.sigmoid(self.history_gate_head(fused))
+        any_valid = valid.any(dim=1, keepdim=True).to(gate.dtype)
+        correction = self.mask_deltas(
+            history_deltas * bounds.reshape(1, 5))
+        return current_deltas + any_valid * gate * correction
+
+    def forward(self, features, proposal_list, **kwargs):
+        if not kwargs:
+            return super().forward(features, proposal_list)
+        required = {
+            'history_features', 'history_proposals',
+            'history_valid_mask'}
+        missing = required.difference(kwargs)
+        if missing:
+            raise RuntimeError(
+                'Causal forward is missing: ' + ', '.join(sorted(missing)))
+        return self.forward_causal(
+            features, proposal_list,
+            kwargs['history_features'], kwargs['history_proposals'],
+            kwargs['history_valid_mask'], kwargs.get('history_ages'))
+
+    def component_contract(self):
+        contract = super().component_contract()
+        contract.update(dict(
+            architecture='current_anchored_causal_history_refiner_v1',
+            history_horizon=self.history_horizon,
+            strictly_causal=True,
+            current_frame_anchored=True,
+            bounded_history_residual=True,
+            rejectable_history_gate=True,
+            exact_current_only_when_no_history=True,
+            history_gate_bias=self.history_gate_bias,
+            history_residual_bounds=[
+                float(value) for value in
+                self.history_residual_bounds.detach().cpu().tolist()],
+            domain_routing=False,
+            sequence_frame_routing=False,
+            temporal_state=False))
+        return contract

@@ -120,3 +120,34 @@ def test_loader_rejects_wrong_split(tmp_path):
     with pytest.raises(RuntimeError, match='split mismatch'):
         loader(dict(
             filename='/new/source/train/images/real_seq01_00001.jpg'))
+
+
+def test_causal_history_loader_is_strictly_previous_and_never_crosses_gap(
+        tmp_path, monkeypatch):
+    records = []
+    for frame in (1, 2, 4):
+        filename = tmp_path / 'real_seq01_{:05d}.jpg'.format(frame)
+        filename.write_bytes(b'image-placeholder')
+        records.append(dict(
+            filename=str(filename), sequence='real_seq01', frame=frame,
+            dino_invoked=True,
+            dino_native_box=[10. + frame, 20., 8., 4., 0.1, 0.8]))
+    audit = tmp_path / 'history.json'
+    audit.write_text(json.dumps(dict(
+        protocol='source_owned_geometry_union_v2', records=records)))
+    monkeypatch.setattr(
+        MODULE.mmcv, 'imread',
+        lambda path, flag='color': np.ones((8, 12, 3), dtype=np.uint8),
+        raising=False)
+    loader = MODULE.LoadCausalHistoryFromAudit(
+        audit, history_horizon=3, expected_frame_count=3)
+    current = str(tmp_path / 'real_seq01_00004.jpg')
+    result = loader(dict(
+        filename=current,
+        img=np.zeros((8, 12, 3), dtype=np.uint8)))
+    assert result['causal_history_frame_keys'] == [None, 'real_seq01|2',
+                                                   'real_seq01|1']
+    assert result['causal_history_valid_mask'].tolist() == [False, True, True]
+    assert result['causal_history_ages'].tolist() == [1, 2, 3]
+    assert result['causal_history_proposals_raw'][0].tolist() == [
+        [0.0, 0.0, 1.0, 1.0, 0.0]]

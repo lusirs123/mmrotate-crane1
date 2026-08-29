@@ -37,6 +37,17 @@ def _unwrap_single_augmentation_proposals(dino_proposals):
     return list(dino_proposals)
 
 
+def _unwrap_single_augmentation_tensor(value, name):
+    if isinstance(value, (list, tuple)):
+        if len(value) != 1:
+            raise RuntimeError(
+                '{} supports exactly one test augmentation'.format(name))
+        value = value[0]
+    if not torch.is_tensor(value):
+        raise RuntimeError('{} must be a tensor'.format(name))
+    return value
+
+
 @ROTATED_DETECTORS.register_module()
 class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
     """Train only the refiner from cached DINO OBBs and frozen SymEOOD FPN."""
@@ -230,12 +241,46 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
             return tuple(feature.detach()
                          for feature in self.baseline.extract_feat(img))
 
+    def extract_causal_history_feat(self, history_images):
+        if history_images.ndim != 5:
+            raise RuntimeError(
+                'Causal history images must have shape [B,K,C,H,W]')
+        batch, horizon = history_images.shape[:2]
+        flattened = history_images.reshape(
+            batch * horizon, *history_images.shape[2:])
+        features = self.extract_feat(flattened)
+        return tuple(feature.reshape(
+            batch, horizon, *feature.shape[1:]) for feature in features)
+
+    def _causal_forward(self,
+                        features,
+                        proposal_list,
+                        history_images,
+                        history_proposals,
+                        history_valid_mask,
+                        history_ages):
+        history_images = history_images.to(features[0].device)
+        history_proposals = history_proposals.to(features[0].device)
+        history_valid_mask = history_valid_mask.to(features[0].device)
+        history_ages = history_ages.to(features[0].device)
+        history_features = self.extract_causal_history_feat(history_images)
+        return self.geometry_refiner(
+            features, proposal_list,
+            history_features=history_features,
+            history_proposals=history_proposals,
+            history_valid_mask=history_valid_mask,
+            history_ages=history_ages)
+
     def forward_train(self,
                       img,
                       img_metas,
                       gt_bboxes,
                       gt_labels,
                       dino_proposals,
+                      causal_history_images=None,
+                      causal_history_proposals=None,
+                      causal_history_valid_mask=None,
+                      causal_history_ages=None,
                       gt_bboxes_ignore=None,
                       **kwargs):
         del gt_labels, gt_bboxes_ignore, kwargs
@@ -250,11 +295,33 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
                          for item in dino_proposals]
         gt_box_list = [item[:, :5].to(features[0].device)
                        for item in gt_bboxes]
-        predicted = self.geometry_refiner(features, proposal_list)
+        causal = hasattr(self.geometry_refiner, 'forward_causal')
+        if causal:
+            causal_inputs = (
+                causal_history_images, causal_history_proposals,
+                causal_history_valid_mask, causal_history_ages)
+            if any(item is None for item in causal_inputs):
+                raise RuntimeError(
+                    'Causal refiner training requires complete history input')
+            active = [index for index, proposal in enumerate(proposal_list)
+                      if int(proposal.shape[0]) == 1]
+            if any(int(proposal.shape[0]) > 1 for proposal in proposal_list):
+                raise RuntimeError('Causal refiner accepts at most one proposal')
+            features = tuple(feature[active] for feature in features)
+            proposal_list = [proposal_list[index] for index in active]
+            gt_box_list = [gt_box_list[index] for index in active]
+            predicted = self._causal_forward(
+                features, proposal_list,
+                causal_history_images[active],
+                causal_history_proposals[active],
+                causal_history_valid_mask[active],
+                causal_history_ages[active])
+        else:
+            predicted = self.geometry_refiner(features, proposal_list)
         targets = self.geometry_refiner.encode_targets(
             proposal_list, gt_box_list)
-        temporal_pairs = self._temporal_pair_indices(
-            img_metas, proposal_list)
+        temporal_pairs = ([] if causal else self._temporal_pair_indices(
+            img_metas, proposal_list))
         losses = self.geometry_refiner.loss(
             predicted,
             targets,
@@ -269,6 +336,10 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
                     img,
                     img_metas,
                     dino_proposals,
+                    causal_history_images=None,
+                    causal_history_proposals=None,
+                    causal_history_valid_mask=None,
+                    causal_history_ages=None,
                     rescale=False,
                     **kwargs):
         del kwargs
@@ -279,12 +350,47 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
             raise RuntimeError('DINO proposal/meta batch-size mismatch')
         proposal_list = [item[:, :5].to(features[0].device)
                          for item in dino_proposals]
-        predicted = self.geometry_refiner(features, proposal_list)
-        decoded = self.geometry_refiner.decode_and_normalize(
-            proposal_list, predicted, img_metas=img_metas)
+        causal = hasattr(self.geometry_refiner, 'forward_causal')
+        if causal:
+            causal_history_images = _unwrap_single_augmentation_tensor(
+                causal_history_images, 'causal_history_images')
+            causal_history_proposals = _unwrap_single_augmentation_tensor(
+                causal_history_proposals, 'causal_history_proposals')
+            causal_history_valid_mask = _unwrap_single_augmentation_tensor(
+                causal_history_valid_mask, 'causal_history_valid_mask')
+            causal_history_ages = _unwrap_single_augmentation_tensor(
+                causal_history_ages, 'causal_history_ages')
+            history_features = self.extract_causal_history_feat(
+                causal_history_images.to(features[0].device))
+        decoded = [None] * len(proposal_list)
+        for index, proposals in enumerate(proposal_list):
+            if int(proposals.shape[0]) == 0:
+                continue
+            if int(proposals.shape[0]) != 1:
+                raise RuntimeError(
+                    'Geometry refiner accepts at most one proposal/image')
+            image_features = tuple(
+                feature[index:index + 1] for feature in features)
+            if causal:
+                image_history_features = tuple(
+                    feature[index:index + 1] for feature in history_features)
+                predicted = self.geometry_refiner(
+                    image_features, [proposals],
+                    history_features=image_history_features,
+                    history_proposals=causal_history_proposals[
+                        index:index + 1].to(features[0].device),
+                    history_valid_mask=causal_history_valid_mask[
+                        index:index + 1].to(features[0].device),
+                    history_ages=causal_history_ages[
+                        index:index + 1].to(features[0].device))
+            else:
+                predicted = self.geometry_refiner(
+                    image_features, [proposals])
+            decoded[index] = self.geometry_refiner.decode_and_normalize(
+                [proposals], predicted, img_metas=[img_metas[index]])[0]
         outputs = []
         for index, boxes in enumerate(decoded):
-            if boxes.shape[0] == 0:
+            if boxes is None or boxes.shape[0] == 0:
                 image_features = tuple(
                     feature[index:index + 1] for feature in features)
                 fallback = self.baseline.simple_test_from_features(

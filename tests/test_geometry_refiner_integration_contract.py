@@ -167,6 +167,86 @@ def test_v21_trainer_hashes_frozen_pose_and_builds_only_adjacent_pairs():
     assert 'frozen_refiner_hash_unchanged' in hook
 
 
+def test_causal_history_source_config_is_unified_and_target_closed():
+    path = ROOT / ('crane_project/configs/'
+                   'crane_symeood_dino_causal_history_refiner_source_v1.py')
+    text = path.read_text()
+    assert "type='DinoConditionedCausalHistoryRefiner'" in text
+    assert "history_horizon = 4" in text
+    assert "type='LoadCausalHistoryFromAudit'" in text
+    assert "type='PrepareCausalHistoryInputs'" in text
+    assert "type='CausalHistoryProposalAugment'" in text
+    assert "type='FormatCausalHistoryInputs'" in text
+    assert 'current_frame_anchored=True' in text
+    assert 'bounded_history_residual=True' in text
+    assert 'rejectable_history_gate=True' in text
+    assert 'history_identity_model_input=False' in text
+    assert 'fixed_target_parameter_selection=False' in text
+    assert 'dino_detector_forward_during_training=False' in text
+    assert 'frozen_symeood_feature_forward=True' in text
+    assert 'cached_dino_proposals_only=True' in text
+    assert 'target_data_read=False' in text
+    assert 'fixed_test_read=False' in text
+    assert 'domain_routing=False' in text
+    assert 'sequence_frame_routing=False' in text
+    assert "ann_file='test/" not in text
+    assert "expected_split='test'" not in text
+    assert "type='RRandomFlip'" not in text
+
+
+def test_causal_trainer_reuses_frozen_backbone_for_history_without_state():
+    path = ROOT / ('mmrotate/models/detectors/'
+                   'symeood_dino_geometry_refiner_trainer.py')
+    text = path.read_text()
+    assert 'extract_causal_history_feat' in text
+    assert 'with torch.no_grad()' in text
+    assert 'history_images.reshape' in text
+    assert "hasattr(self.geometry_refiner, 'forward_causal')" in text
+    assert 'causal_history_frame_keys' not in text
+
+
+def test_causal_source_smoke_is_source_only_and_reports_cuda_peaks():
+    path = ROOT / ('crane_project/tools/'
+                   'symeood_dino_causal_history_source_smoke.py')
+    text = path.read_text()
+    assert "'ALLOW_CAUSAL_HISTORY_SOURCE_TRAINING'" in text
+    assert "'STOP_CAUSAL_HISTORY_SOURCE_SMOKE_ERROR'" in text
+    assert 'target_data_read=False' in text
+    assert 'fixed_test_read=False' in text
+    assert 'checkpoint_written=False' in text
+    assert 'optimizer_steps_in_memory=1' in text
+    assert 'loss.backward()' in text
+    assert 'optimizer.step()' in text
+    assert 'build_dataset(cfg.data.test)' not in text
+    assert 'max_memory_allocated' in text
+    assert 'max_memory_reserved' in text
+    assert "os.environ.get('CUDA_VISIBLE_DEVICES')" in text
+    hook = ROOT / ('mmrotate/core/hooks/'
+                   'geometry_refiner_contract_hook.py')
+    hook_text = hook.read_text()
+    assert 'class CudaPeakMemoryContractHook' in hook_text
+    assert 'cuda_peak_memory_rank' in hook_text
+
+
+def test_causal_source_gate_uses_dual_reference_and_cannot_open_test():
+    path = ROOT / ('crane_project/tools/'
+                   'symeood_dino_causal_history_source_gate.py')
+    text = path.read_text()
+    assert "PROTOCOL = 'causal_history_refiner_source_gate_v1'" in text
+    assert "evidence_boundary='source_val_only'" in text
+    assert 'target_data_read=False' in text
+    assert 'fixed_test_read=False' in text
+    assert 'eligible_for_fixed_test=False' in text
+    assert 'eligible_for_unknown_sequence_claim=False' in text
+    assert 'native_dino_reference_metrics' in text
+    assert 'sym_eood_reference_metrics' in text
+    assert 'average_gain_over_native_dino' in text
+    assert 'sym_eood_geometry_preservation' in text
+    assert "'ALLOW_CAUSAL_HISTORY_CHECKPOINT_PROMOTION'" in text
+    assert "'source-val'" in text
+    assert "'fixed-target'" not in text
+
+
 def test_v21_source_smoke_is_source_only_and_requires_real_gradients():
     path = ROOT / ('crane_project/tools/'
                    'symeood_dino_dual_tower_v21_source_smoke.py')

@@ -102,6 +102,7 @@ def _load_module():
 MODULE = _load_module()
 Refiner = MODULE.DinoConditionedGeometryRefiner
 DualRefiner = MODULE.DinoConditionedDualTowerGeometryRefiner
+CausalRefiner = MODULE.DinoConditionedCausalHistoryRefiner
 
 
 def _refiner(**kwargs):
@@ -114,6 +115,12 @@ def _dual_refiner(**kwargs):
     return DualRefiner(
         in_channels=1, roi_output_size=1, fc_channels=4, num_fcs=1,
         **kwargs)
+
+
+def _causal_refiner(**kwargs):
+    return CausalRefiner(
+        in_channels=1, roi_output_size=1, fc_channels=4, num_fcs=1,
+        history_horizon=2, **kwargs)
 
 
 def test_zero_initialization_is_exact_canonical_dino_identity():
@@ -204,6 +211,62 @@ def test_dual_tower_rejects_fully_frozen_training_mode():
             train_size_tower=False,
             train_pose_tower=False,
             train_roi_extractor=False)
+
+
+def test_causal_history_no_valid_input_is_exact_current_only_output():
+    model = _causal_refiner()
+    current_features = [torch.zeros((1, 1, 4, 4))]
+    history_features = [torch.ones((1, 2, 1, 4, 4))]
+    proposals = [torch.tensor([[10., 12., 8., 4., 0.2]])]
+    history_boxes = torch.tensor([[
+        [9., 12., 8., 4., 0.2],
+        [8., 12., 8., 4., 0.2]]])
+    current = model(current_features, proposals)
+    causal = model(
+        current_features, proposals,
+        history_features=history_features,
+        history_proposals=history_boxes,
+        history_valid_mask=torch.zeros((1, 2), dtype=torch.bool),
+        history_ages=torch.tensor([[1, 2]]))
+    assert torch.equal(causal, current)
+    assert torch.equal(causal, torch.zeros_like(causal))
+
+
+def test_causal_history_residual_is_bounded_and_masked():
+    model = _causal_refiner(zero_init_output=False, history_gate_bias=20.0)
+    with torch.no_grad():
+        model.delta_head.weight.zero_()
+        model.delta_head.bias.zero_()
+        model.history_delta_head.weight.zero_()
+        model.history_delta_head.bias.fill_(100.0)
+    current_features = [torch.zeros((1, 1, 4, 4))]
+    history_features = [torch.ones((1, 2, 1, 4, 4))]
+    proposals = [torch.tensor([[10., 12., 8., 4., 0.2]])]
+    history_boxes = torch.tensor([[
+        [9., 12., 8., 4., 0.2],
+        [8., 12., 8., 4., 0.2]]])
+    output = model(
+        current_features, proposals,
+        history_features=history_features,
+        history_proposals=history_boxes,
+        history_valid_mask=torch.tensor([[True, False]]),
+        history_ages=torch.tensor([[1, 2]]))
+    bounds = model.history_residual_bounds
+    assert torch.all(output.abs() <= bounds.reshape(1, 5) + 1e-6)
+    assert torch.all(output > 0.0)
+
+
+def test_causal_history_contract_forbids_identity_routing_and_state():
+    contract = _causal_refiner().component_contract()
+    assert contract['architecture'] == (
+        'current_anchored_causal_history_refiner_v1')
+    assert contract['strictly_causal'] is True
+    assert contract['current_frame_anchored'] is True
+    assert contract['rejectable_history_gate'] is True
+    assert contract['exact_current_only_when_no_history'] is True
+    assert contract['domain_routing'] is False
+    assert contract['sequence_frame_routing'] is False
+    assert contract['temporal_state'] is False
 
 
 def test_dual_tower_size_finetune_freezes_pose_and_roi_parameters():

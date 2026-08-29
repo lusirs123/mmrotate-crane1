@@ -7,6 +7,7 @@ from .roi_extractors import RotatedSingleRoIExtractor
 from .roi_trans_roi_head import RoITransRoIHead
 from .rotate_standard_roi_head import RotatedStandardRoIHead
 from .dino_conditioned_geometry_refiner import (
+    DinoConditionedCausalHistoryRefiner,
     DinoConditionedDualTowerGeometryRefiner,
     DinoConditionedGeometryRefiner)
 
@@ -15,5 +16,6 @@ __all__ = [
     'RotatedStandardRoIHead', 'RotatedSingleRoIExtractor',
     'OrientedStandardRoIHead', 'RoITransRoIHead', 'GVRatioRoIHead',
     'DinoConditionedGeometryRefiner',
-    'DinoConditionedDualTowerGeometryRefiner'
+    'DinoConditionedDualTowerGeometryRefiner',
+    'DinoConditionedCausalHistoryRefiner'
 ]
