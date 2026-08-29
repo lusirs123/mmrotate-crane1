@@ -191,9 +191,8 @@ def test_causal_history_source_config_is_unified_and_target_closed():
     assert 'sequence_frame_routing=False' in text
     assert "ann_file='test/" not in text
     assert "expected_split='test'" not in text
-    assert "type='RRandomFlip'" in text
-    assert 'flip_ratio=0.0' in text
-    assert "direction='horizontal'" in text
+    assert "type='SetNoFlipMetadata'" in text
+    assert "type='RRandomFlip'" not in text
 
 
 def test_causal_trainer_reuses_frozen_backbone_for_history_without_state():
@@ -223,6 +222,7 @@ def test_causal_source_smoke_is_source_only_and_reports_cuda_peaks():
     assert 'max_memory_allocated' in text
     assert 'max_memory_reserved' in text
     assert "os.environ.get('CUDA_VISIBLE_DEVICES')" in text
+    assert 'explicit_no_flip_metadata' in text
     hook = ROOT / ('mmrotate/core/hooks/'
                    'geometry_refiner_contract_hook.py')
     hook_text = hook.read_text()

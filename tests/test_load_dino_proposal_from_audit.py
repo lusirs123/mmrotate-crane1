@@ -122,6 +122,15 @@ def test_loader_rejects_wrong_split(tmp_path):
             filename='/new/source/train/images/real_seq01_00001.jpg'))
 
 
+def test_no_flip_metadata_is_explicit_for_old_mmdetection_collect():
+    transform = MODULE.SetNoFlipMetadata()
+    result = transform(dict(img=np.zeros((4, 4, 3), dtype=np.uint8)))
+    assert result['flip'] is False
+    assert result['flip_direction'] is None
+    with pytest.raises(RuntimeError, match='cannot overwrite'):
+        transform(dict(flip=True, flip_direction='horizontal'))
+
+
 def test_causal_history_loader_is_strictly_previous_and_never_crosses_gap(
         tmp_path, monkeypatch):
     records = []

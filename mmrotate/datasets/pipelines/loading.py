@@ -170,6 +170,28 @@ class FormatDinoProposal:
 
 
 @ROTATED_PIPELINES.register_module()
+class SetNoFlipMetadata:
+    """Declare deterministic no-flip metadata for training pipelines.
+
+    MMDetection's default ``Collect`` metadata contract requires both keys
+    even when geometric flipping is intentionally disabled.  Writing them
+    explicitly is more robust across MMCV/MMDetection versions than relying
+    on ``RandomFlip(flip_ratio=0)`` side effects.
+    """
+
+    def __call__(self, results):
+        if results.get('flip') not in (None, False):
+            raise RuntimeError(
+                'SetNoFlipMetadata cannot overwrite an enabled flip')
+        results['flip'] = False
+        results['flip_direction'] = None
+        return results
+
+    def __repr__(self):
+        return self.__class__.__name__ + '()'
+
+
+@ROTATED_PIPELINES.register_module()
 class LoadCausalHistoryFromAudit:
     """Load strictly preceding source frames and cached DINO proposals.
 

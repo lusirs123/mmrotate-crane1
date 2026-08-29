@@ -127,6 +127,7 @@ def _run(args):
         train_sample, 'causal_history_proposals')
     history_mask = _container_tensor(
         train_sample, 'causal_history_valid_mask')
+    train_meta = _container_tensor(train_sample, 'img_metas')
     horizon = int(cfg.model.geometry_refiner.history_horizon)
     input_checks = dict(
         history_images_shape=(
@@ -134,7 +135,10 @@ def _run(args):
         history_proposals_shape=(
             tuple(history_proposals.shape) == (horizon, 5)),
         history_mask_shape=(tuple(history_mask.shape) == (horizon,)),
-        at_least_one_valid_history=bool(history_mask.any()))
+        at_least_one_valid_history=bool(history_mask.any()),
+        explicit_no_flip_metadata=(
+            train_meta.get('flip') is False
+            and train_meta.get('flip_direction') is None))
     if not all(input_checks.values()):
         raise RuntimeError('Causal history source tensor contract failed')
 

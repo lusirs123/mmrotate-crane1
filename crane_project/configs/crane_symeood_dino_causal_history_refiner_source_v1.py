@@ -90,13 +90,9 @@ train_pipeline = [
         expected_frame_count=2781,
         expected_split='source-train'),
     dict(type='RResize', img_scale=(1024, 1024)),
-    # Populate the standard flip/flip_direction metadata required by Collect
-    # while keeping current/history geometry deterministic and unchanged.
-    dict(
-        type='RRandomFlip',
-        flip_ratio=0.0,
-        direction='horizontal',
-        version='le90'),
+    # Do not rely on RandomFlip(flip_ratio=0) implementation details: older
+    # MMDetection versions may omit the required metadata keys entirely.
+    dict(type='SetNoFlipMetadata'),
     dict(
         type='RandomBrightnessContrast',
         brightness_range=(0.4, 1.0),

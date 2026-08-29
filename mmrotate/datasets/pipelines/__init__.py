@@ -3,7 +3,7 @@ from .loading import (CausalHistoryProposalAugment,
                       FormatCausalHistoryInputs, FormatDinoProposal,
                       LoadCausalHistoryFromAudit,
                       LoadDinoProposalFromAudit, LoadPatchFromImage,
-                      PrepareCausalHistoryInputs)
+                      PrepareCausalHistoryInputs, SetNoFlipMetadata)
 from .transforms import (PolyRandomRotate, RandomBrightnessContrast,
                          RMosaic, RRandomFlip, RResize, TestTimeNormalize)
 
@@ -11,6 +11,7 @@ __all__ = [
     'LoadPatchFromImage', 'LoadDinoProposalFromAudit', 'FormatDinoProposal',
     'LoadCausalHistoryFromAudit', 'PrepareCausalHistoryInputs',
     'CausalHistoryProposalAugment', 'FormatCausalHistoryInputs',
+    'SetNoFlipMetadata',
     'RResize', 'RRandomFlip', 'PolyRandomRotate',
     'RMosaic', 'RandomBrightnessContrast', 'TestTimeNormalize'
 ]
