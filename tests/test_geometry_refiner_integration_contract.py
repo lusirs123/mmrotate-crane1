@@ -191,7 +191,9 @@ def test_causal_history_source_config_is_unified_and_target_closed():
     assert 'sequence_frame_routing=False' in text
     assert "ann_file='test/" not in text
     assert "expected_split='test'" not in text
-    assert "type='RRandomFlip'" not in text
+    assert "type='RRandomFlip'" in text
+    assert 'flip_ratio=0.0' in text
+    assert "direction='horizontal'" in text
 
 
 def test_causal_trainer_reuses_frozen_backbone_for_history_without_state():
