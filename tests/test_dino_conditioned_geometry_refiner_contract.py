@@ -103,6 +103,7 @@ MODULE = _load_module()
 Refiner = MODULE.DinoConditionedGeometryRefiner
 DualRefiner = MODULE.DinoConditionedDualTowerGeometryRefiner
 CausalRefiner = MODULE.DinoConditionedCausalHistoryRefiner
+K1PhaseRefiner = MODULE.K1AnchoredCausalPhaseGeometryRefiner
 
 
 def _refiner(**kwargs):
@@ -119,6 +120,12 @@ def _dual_refiner(**kwargs):
 
 def _causal_refiner(**kwargs):
     return CausalRefiner(
+        in_channels=1, roi_output_size=1, fc_channels=4, num_fcs=1,
+        history_horizon=2, **kwargs)
+
+
+def _k1_phase_refiner(**kwargs):
+    return K1PhaseRefiner(
         in_channels=1, roi_output_size=1, fc_channels=4, num_fcs=1,
         history_horizon=2, **kwargs)
 
@@ -267,6 +274,78 @@ def test_causal_history_contract_forbids_identity_routing_and_state():
     assert contract['domain_routing'] is False
     assert contract['sequence_frame_routing'] is False
     assert contract['temporal_state'] is False
+
+
+def test_k1_phase_zero_initialization_preserves_k1_not_dino_geometry():
+    model = _k1_phase_refiner()
+    k1 = torch.tensor([[10., 12., 8., 4., 0.2]])
+    dino = torch.tensor([[15., 9., 12., 7., -0.3]])
+    features = [torch.zeros((1, 1, 4, 4))]
+    phase = model(
+        features, [k1], conditioning_proposal_list=[dino])
+    decoded = model.decode_and_normalize([k1], phase)[0]
+    assert phase.shape == (1, 6)
+    assert torch.equal(phase, torch.zeros_like(phase))
+    assert torch.equal(decoded, k1)
+
+
+def test_k1_phase_no_history_is_exact_current_only():
+    model = _k1_phase_refiner()
+    features = [torch.zeros((1, 1, 4, 4))]
+    history_features = [torch.ones((1, 2, 1, 4, 4))]
+    k1 = [torch.tensor([[10., 12., 8., 4., 0.2]])]
+    dino = [torch.tensor([[11., 12., 9., 4., 0.1]])]
+    history_boxes = torch.tensor([[[9., 12., 8., 4., 0.2],
+                                   [8., 12., 8., 4., 0.2]]])
+    current = model(features, k1, conditioning_proposal_list=dino)
+    causal = model(
+        features, k1, conditioning_proposal_list=dino,
+        history_features=history_features,
+        history_proposals=history_boxes,
+        history_valid_mask=torch.zeros((1, 2), dtype=torch.bool),
+        history_ages=torch.tensor([[1, 2]]))
+    assert torch.equal(causal, current)
+
+
+def test_k1_phase_target_uses_double_angle_periodicity():
+    model = _k1_phase_refiner()
+    proposal = [torch.tensor([[10., 12., 8., 4., 0.2]])]
+    gt = [torch.tensor([[10., 12., 8., 4., 0.2 + math.pi]])]
+    target = model.encode_targets(proposal, gt)
+    assert target[0, 4].item() == pytest.approx(0.0, abs=1e-5)
+    assert target[0, 5].item() == pytest.approx(0.0, abs=1e-5)
+
+
+def test_k1_phase_contract_is_unified_bounded_and_route_free():
+    contract = _k1_phase_refiner().component_contract()
+    assert contract['architecture'] == 'k1_anchored_causal_phase_refiner_v2'
+    assert contract['current_k1_geometry_anchor'] is True
+    assert contract['native_dino_anchor_fallback'] is True
+    assert contract['continuous_double_angle_phase'] is True
+    assert contract['bounded_current_residual'] is True
+    assert contract['same_forward_all_domains'] is True
+    assert contract['domain_routing'] is False
+    assert contract['sequence_frame_routing'] is False
+    assert contract['temporal_state'] is False
+
+
+def test_k1_phase_zero_identity_has_finite_nonzero_output_head_gradient():
+    model = _k1_phase_refiner(decoded_geometry_loss_weight=0.1)
+    k1 = [torch.tensor([[10., 12., 8., 4., 0.2]])]
+    dino = [torch.tensor([[11., 11., 10., 5., 0.1]])]
+    gt = [torch.tensor([[10.5, 12.2, 8.8, 4.4, 0.3]])]
+    features = [torch.zeros((1, 1, 4, 4))]
+    predicted = model(
+        features, k1, conditioning_proposal_list=dino)
+    targets = model.encode_targets(k1, gt)
+    loss = model.loss(
+        predicted, targets, proposal_list=k1,
+        gt_box_list=gt)['loss_geometry_refiner']
+    loss.backward()
+    gradient = model.delta_head.weight.grad
+    assert gradient is not None
+    assert torch.isfinite(gradient).all()
+    assert torch.count_nonzero(gradient).item() > 0
 
 
 def test_dual_tower_size_finetune_freezes_pose_and_roi_parameters():

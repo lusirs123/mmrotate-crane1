@@ -650,3 +650,297 @@ class DinoConditionedCausalHistoryRefiner(DinoConditionedGeometryRefiner):
             sequence_frame_routing=False,
             temporal_state=False))
         return contract
+
+
+@ROTATED_HEADS.register_module()
+class K1AnchoredCausalPhaseGeometryRefiner(
+        DinoConditionedCausalHistoryRefiner):
+    """Preserve current K1 geometry while using DINO/history as context.
+
+    The decoded box is anchored to the current frozen-K1 prediction whenever
+    it exists.  A native-DINO box is only the anchor fallback; it otherwise
+    supplies a second current-frame RoI token and the coordinate reference for
+    strictly causal history.  Angle output uses a continuous double-angle
+    phase vector ``(sin(2 da), cos(2 da)-1)``.  Therefore an all-zero output is
+    an exact identity correction without evaluating ``atan2(0, 0)``.
+    """
+
+    def __init__(self, *args, conditioning_gate_bias=-2.0, **kwargs):
+        max_current_center_delta = float(
+            kwargs.pop('max_current_center_delta', 0.12))
+        max_current_log_size_delta = float(
+            kwargs.pop('max_current_log_size_delta', 0.18))
+        max_current_angle_delta_deg = float(
+            kwargs.pop('max_current_angle_delta_deg', 12.0))
+        in_channels = int(kwargs.get('in_channels', 256))
+        roi_output_size = int(kwargs.get('roi_output_size', 7))
+        fc_channels = int(kwargs.get('fc_channels', 256))
+        num_fcs = int(kwargs.get('num_fcs', 2))
+        zero_init_output = bool(kwargs.get('zero_init_output', True))
+        super().__init__(*args, **kwargs)
+
+        # Replace the scalar-angle current head with a continuous phase head.
+        output_channels = int(self.delta_head.in_features)
+        self.delta_head = nn.Linear(output_channels, 6)
+        if zero_init_output:
+            nn.init.zeros_(self.delta_head.weight)
+            nn.init.zeros_(self.delta_head.bias)
+
+        flattened = in_channels * roi_output_size ** 2
+        self.conditioning_fcs, conditioning_channels = _build_fc_tower(
+            flattened, fc_channels, num_fcs)
+        self.conditioning_fusion = nn.Sequential(
+            nn.Linear(output_channels + conditioning_channels, fc_channels),
+            nn.ReLU(inplace=True))
+        self.conditioning_gate_head = nn.Linear(fc_channels, 1)
+        _init_fc_tower(self.conditioning_fcs)
+        _init_fc_tower(self.conditioning_fusion)
+        nn.init.zeros_(self.conditioning_gate_head.weight)
+        nn.init.constant_(
+            self.conditioning_gate_head.bias, float(conditioning_gate_bias))
+        self.conditioning_gate_bias = float(conditioning_gate_bias)
+        current_bounds = [
+            max_current_center_delta, max_current_center_delta,
+            max_current_log_size_delta, max_current_log_size_delta,
+            math.radians(max_current_angle_delta_deg)]
+        if any(value <= 0.0 for value in current_bounds):
+            raise ValueError('Current residual bounds must be positive')
+        self.register_buffer(
+            'current_residual_bounds', torch.tensor(current_bounds))
+
+    @staticmethod
+    def _phase_to_five(deltas):
+        if deltas.ndim != 2 or deltas.shape[1] != 6:
+            raise RuntimeError('Phase deltas must have shape [N, 6]')
+        sin_value = deltas[:, 4]
+        cos_value = 1.0 + deltas[:, 5]
+        angle = 0.5 * torch.atan2(sin_value, cos_value)
+        return torch.cat([deltas[:, :4], angle[:, None]], dim=1)
+
+    @staticmethod
+    def _five_to_phase(deltas):
+        if deltas.ndim != 2 or deltas.shape[1] != 5:
+            raise RuntimeError('Five deltas must have shape [N, 5]')
+        double_angle = 2.0 * deltas[:, 4]
+        return torch.cat([
+            deltas[:, :4],
+            torch.sin(double_angle)[:, None],
+            (torch.cos(double_angle) - 1.0)[:, None]], dim=1)
+
+    def _mask_phase_deltas(self, deltas):
+        values = [self.refine_center, self.refine_center,
+                  self.refine_size, self.refine_size,
+                  self.refine_angle, self.refine_angle]
+        mask = deltas.new_tensor(values).reshape(1, 6)
+        return deltas * mask
+
+    def _bound_current_phase(self, raw_phase):
+        raw_phase = self._mask_phase_deltas(raw_phase)
+        raw_five = self._phase_to_five(raw_phase)
+        bounds = self.current_residual_bounds.to(
+            device=raw_five.device, dtype=raw_five.dtype)
+        bounded = torch.tanh(raw_five / bounds.reshape(1, 5)) * bounds
+        return self._mask_phase_deltas(self._five_to_phase(bounded))
+
+    def _current_hidden(self, features, anchor_list,
+                        conditioning_proposal_list):
+        anchor_hidden = self._roi_hidden(
+            features, anchor_list, self.shared_fcs)
+        conditioning_hidden = self._roi_hidden(
+            features, conditioning_proposal_list, self.conditioning_fcs)
+        if anchor_hidden.shape != conditioning_hidden.shape:
+            raise RuntimeError('Anchor/conditioning RoI count mismatch')
+        fused = self.conditioning_fusion(torch.cat(
+            [anchor_hidden, conditioning_hidden], dim=1))
+        gate = torch.sigmoid(self.conditioning_gate_head(fused))
+        return anchor_hidden + gate * fused
+
+    def forward_causal(self,
+                       current_features,
+                       proposal_list,
+                       history_features,
+                       history_proposals,
+                       history_valid_mask,
+                       history_ages=None,
+                       conditioning_proposal_list=None):
+        batch = len(proposal_list)
+        if conditioning_proposal_list is None:
+            conditioning_proposal_list = proposal_list
+        if len(conditioning_proposal_list) != batch:
+            raise RuntimeError('Conditioning proposal batch-size mismatch')
+        if (any(int(item.shape[0]) != 1 for item in proposal_list)
+                or any(int(item.shape[0]) != 1
+                       for item in conditioning_proposal_list)):
+            raise RuntimeError(
+                'K1-anchored refiner requires one anchor and one '
+                'conditioning proposal/image')
+        if history_proposals.shape != (batch, self.history_horizon, 5):
+            raise RuntimeError('History proposal tensor has invalid shape')
+        if history_valid_mask.shape != (batch, self.history_horizon):
+            raise RuntimeError('History validity tensor has invalid shape')
+        if len(history_features) != len(current_features):
+            raise RuntimeError('Current/history FPN level mismatch')
+        if any(feature.shape[:2] != (
+                batch, self.history_horizon) for feature in history_features):
+            raise RuntimeError('History FPN tensor has invalid batch/horizon')
+
+        current_hidden = self._current_hidden(
+            current_features, proposal_list, conditioning_proposal_list)
+        flat_history_features = [
+            feature.reshape(
+                batch * self.history_horizon, *feature.shape[2:])
+            for feature in history_features]
+        flat_history_boxes = [
+            history_proposals[index, age:age + 1]
+            for index in range(batch)
+            for age in range(self.history_horizon)]
+        history_hidden = self._roi_hidden(
+            flat_history_features, flat_history_boxes,
+            self.history_fcs).reshape(batch, self.history_horizon, -1)
+        conditioning_boxes = torch.cat(
+            self.canonicalize_proposals(conditioning_proposal_list), dim=0)
+        relative = self.relative_geometry_fcs(
+            self._relative_geometry(
+                conditioning_boxes, history_proposals).reshape(-1, 5)
+        ).reshape(batch, self.history_horizon, -1)
+        if history_ages is None:
+            history_ages = torch.arange(
+                1, self.history_horizon + 1,
+                device=history_proposals.device)[None, :].expand(batch, -1)
+        ages = history_ages.to(dtype=torch.long).clamp(
+            min=1, max=self.history_horizon)
+        history_token = history_hidden + relative + self.age_embedding(ages)
+        current_expanded = current_hidden[:, None, :].expand(
+            -1, self.history_horizon, -1)
+        scores = self.history_attention(torch.cat(
+            [current_expanded, history_token, relative], dim=-1)).squeeze(-1)
+        valid = history_valid_mask.to(dtype=torch.bool)
+        weights = torch.softmax(
+            scores.masked_fill(~valid, -1e4), dim=1) * valid.to(scores.dtype)
+        weights = weights / weights.sum(dim=1, keepdim=True).clamp(min=1.0)
+        context = (weights[..., None] * history_token).sum(dim=1)
+        fused = self.history_fusion(torch.cat(
+            [current_hidden, context], dim=-1))
+
+        current_phase = self._bound_current_phase(
+            self.delta_head(current_hidden))
+        current_five = self.mask_deltas(self._phase_to_five(current_phase))
+        history_raw = torch.tanh(self.history_delta_head(fused))
+        bounds = self.history_residual_bounds.to(
+            device=history_raw.device, dtype=history_raw.dtype)
+        gate = torch.sigmoid(self.history_gate_head(fused))
+        any_valid = valid.any(dim=1, keepdim=True).to(gate.dtype)
+        correction = self.mask_deltas(history_raw * bounds.reshape(1, 5))
+        combined = current_five + any_valid * gate * correction
+        return self._mask_phase_deltas(self._five_to_phase(combined))
+
+    def forward(self, features, proposal_list, **kwargs):
+        conditioning = kwargs.pop(
+            'conditioning_proposal_list', proposal_list)
+        if not kwargs:
+            hidden = self._current_hidden(
+                features, proposal_list, conditioning)
+            return self._bound_current_phase(self.delta_head(hidden))
+        required = {
+            'history_features', 'history_proposals',
+            'history_valid_mask'}
+        missing = required.difference(kwargs)
+        if missing:
+            raise RuntimeError(
+                'Causal forward is missing: ' + ', '.join(sorted(missing)))
+        return self.forward_causal(
+            features, proposal_list,
+            kwargs['history_features'], kwargs['history_proposals'],
+            kwargs['history_valid_mask'], kwargs.get('history_ages'),
+            conditioning_proposal_list=conditioning)
+
+    def encode_targets(self, proposal_list, gt_box_list):
+        five = super().encode_targets(proposal_list, gt_box_list)
+        return self._mask_phase_deltas(self._five_to_phase(five))
+
+    def decode_and_normalize(self, proposal_list, deltas, img_metas=None):
+        five = self.mask_deltas(self._phase_to_five(
+            self._mask_phase_deltas(deltas)))
+        return DinoConditionedGeometryRefiner.decode_and_normalize(
+            self, proposal_list, five, img_metas=img_metas)
+
+    def loss(self,
+             predicted_deltas,
+             target_deltas,
+             proposal_list=None,
+             gt_box_list=None,
+             temporal_pair_indices=None):
+        if predicted_deltas.shape != target_deltas.shape:
+            raise RuntimeError('Phase refiner prediction/target mismatch')
+        if predicted_deltas.numel() == 0:
+            zero = predicted_deltas.sum() * 0.0
+            for parameter in self.parameters():
+                zero = zero + parameter.sum() * 0.0
+            return dict(loss_geometry_refiner=zero)
+        predicted_five = self.mask_deltas(
+            self._phase_to_five(predicted_deltas))
+        target_five = self.mask_deltas(self._phase_to_five(target_deltas))
+        diagnostics = {}
+        total = predicted_deltas.sum() * 0.0
+        if self.refine_center:
+            value = F.smooth_l1_loss(
+                predicted_five[:, :2], target_five[:, :2])
+            weighted = value * self.center_loss_weight
+            diagnostics['refiner_center_objective'] = weighted.detach()
+            total = total + weighted
+        if self.refine_size:
+            value = F.smooth_l1_loss(
+                predicted_five[:, 2:4], target_five[:, 2:4])
+            weighted = value * self.size_loss_weight
+            diagnostics['refiner_size_objective'] = weighted.detach()
+            total = total + weighted
+        if self.refine_angle:
+            predicted_vector = torch.stack([
+                predicted_deltas[:, 4], 1.0 + predicted_deltas[:, 5]],
+                dim=1)
+            target_vector = torch.stack([
+                target_deltas[:, 4], 1.0 + target_deltas[:, 5]], dim=1)
+            predicted_vector = F.normalize(predicted_vector, dim=1, eps=1e-6)
+            target_vector = F.normalize(target_vector, dim=1, eps=1e-6)
+            value = F.smooth_l1_loss(predicted_vector, target_vector)
+            weighted = value * self.angle_loss_weight
+            diagnostics['refiner_phase_angle_objective'] = weighted.detach()
+            total = total + weighted
+        if self.decoded_geometry_loss_weight > 0.0:
+            decoded = self.decode_and_normalize(
+                proposal_list, predicted_deltas)
+            decoded = torch.cat(
+                [item for item in decoded if item.shape[0] > 0], dim=0)
+            gt_boxes = self._matched_gt_boxes(
+                proposal_list, gt_box_list).to(decoded.device)
+            raw = sym_kld(decoded, gt_boxes)
+            value = (torch.sqrt(1.0 + torch.nan_to_num(
+                raw, nan=1e4, posinf=1e4, neginf=0.0)) - 1.0
+                     ).clamp(max=10.0).mean()
+            weighted = value * self.decoded_geometry_loss_weight
+            diagnostics['refiner_decoded_geometry_objective'] = (
+                weighted.detach())
+            total = total + weighted
+        diagnostics['loss_geometry_refiner'] = total
+        return diagnostics
+
+    def component_contract(self):
+        contract = super().component_contract()
+        contract.update(dict(
+            architecture='k1_anchored_causal_phase_refiner_v2',
+            representation='six_delta_xywh_sin2a_cos2a_residual',
+            current_k1_geometry_anchor=True,
+            native_dino_anchor_fallback=True,
+            native_dino_current_conditioning=True,
+            continuous_double_angle_phase=True,
+            zero_phase_is_exact_identity=True,
+            bounded_current_residual=True,
+            current_residual_bounds=[
+                float(value) for value in
+                self.current_residual_bounds.detach().cpu().tolist()],
+            conditioning_gate_bias=self.conditioning_gate_bias,
+            same_forward_all_domains=True,
+            domain_routing=False,
+            sequence_frame_routing=False,
+            temporal_state=False))
+        return contract

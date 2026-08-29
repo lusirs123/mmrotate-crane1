@@ -68,11 +68,13 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
         del pretrained
         super().__init__(init_cfg=init_cfg)
         contract = dict(evidence_contract or {})
+        frozen_k1_head_forward = bool(
+            contract.get('frozen_symeood_detection_head_forward', False))
         required = dict(
             source_train_frames=2781,
             source_val_frames=738,
             target_data_read=False,
-            detector_forward_during_training=False,
+            detector_forward_during_training=frozen_k1_head_forward,
             domain_routing=False,
             sequence_frame_routing=False,
             temporal_state=False)
@@ -103,6 +105,9 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
             parameter.requires_grad_(False)
         self.baseline.eval()
         self.geometry_refiner = build_head(dict(geometry_refiner))
+        refiner_contract = self.geometry_refiner.component_contract()
+        self.uses_k1_geometry_anchor = bool(
+            refiner_contract.get('current_k1_geometry_anchor', False))
         self.geometry_refiner_initialization = self._load_refiner_checkpoint(
             geometry_refiner_checkpoint,
             geometry_refiner_checkpoint_sha256,
@@ -157,7 +162,8 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
             raise RuntimeError(
                 'Geometry-refiner checkpoint has no evidence contract')
         required = dict(
-            architecture='dual_tower_size_pose_v2',
+            architecture=self.geometry_refiner.component_contract().get(
+                'architecture'),
             source_train_frames=2781,
             source_val_frames=738,
             target_data_read=False,
@@ -252,24 +258,58 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
         return tuple(feature.reshape(
             batch, horizon, *feature.shape[1:]) for feature in features)
 
+    @staticmethod
+    def _top_single_class_proposal(result, device, dtype):
+        """Convert an MMRotate bbox result into its highest-score OBB."""
+        if not isinstance(result, (list, tuple)):
+            raise RuntimeError('Frozen K1 result must be a class-wise list')
+        candidates = []
+        for class_result in result:
+            tensor = torch.as_tensor(
+                class_result, device=device, dtype=dtype)
+            if tensor.numel() == 0:
+                continue
+            if tensor.ndim != 2 or tensor.shape[1] < 6:
+                raise RuntimeError('Frozen K1 result has invalid shape')
+            candidates.append(tensor[:, :6])
+        if not candidates:
+            return torch.zeros((0, 5), device=device, dtype=dtype)
+        candidates = torch.cat(candidates, dim=0)
+        best = int(torch.argmax(candidates[:, 5]).item())
+        return candidates[best:best + 1, :5]
+
+    def _k1_results_and_proposals(self, features, img_metas, rescale=False):
+        """Reuse frozen FPN features for K1 output and geometry anchors."""
+        with torch.no_grad():
+            results = self.baseline.simple_test_from_features(
+                features, img_metas, rescale=rescale)
+        proposals = [self._top_single_class_proposal(
+            result, features[0].device, features[0].dtype)
+            for result in results]
+        return results, proposals
+
     def _causal_forward(self,
                         features,
                         proposal_list,
                         history_images,
                         history_proposals,
                         history_valid_mask,
-                        history_ages):
+                        history_ages,
+                        conditioning_proposal_list=None):
         history_images = history_images.to(features[0].device)
         history_proposals = history_proposals.to(features[0].device)
         history_valid_mask = history_valid_mask.to(features[0].device)
         history_ages = history_ages.to(features[0].device)
         history_features = self.extract_causal_history_feat(history_images)
-        return self.geometry_refiner(
-            features, proposal_list,
+        kwargs = dict(
             history_features=history_features,
             history_proposals=history_proposals,
             history_valid_mask=history_valid_mask,
             history_ages=history_ages)
+        if conditioning_proposal_list is not None:
+            kwargs['conditioning_proposal_list'] = (
+                conditioning_proposal_list)
+        return self.geometry_refiner(features, proposal_list, **kwargs)
 
     def forward_train(self,
                       img,
@@ -291,8 +331,18 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
         if len(dino_proposals) != len(gt_bboxes):
             raise RuntimeError('DINO/GT batch-size mismatch')
         features = self.extract_feat(img)
-        proposal_list = [item[:, :5].to(features[0].device)
-                         for item in dino_proposals]
+        dino_proposal_list = [item[:, :5].to(features[0].device)
+                              for item in dino_proposals]
+        if self.uses_k1_geometry_anchor:
+            _, k1_proposal_list = self._k1_results_and_proposals(
+                features, img_metas, rescale=False)
+            proposal_list = [
+                k1 if int(k1.shape[0]) == 1 else dino
+                for k1, dino in zip(k1_proposal_list, dino_proposal_list)]
+            conditioning_proposal_list = dino_proposal_list
+        else:
+            proposal_list = dino_proposal_list
+            conditioning_proposal_list = None
         gt_box_list = [item[:, :5].to(features[0].device)
                        for item in gt_bboxes]
         causal = hasattr(self.geometry_refiner, 'forward_causal')
@@ -303,19 +353,26 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
             if any(item is None for item in causal_inputs):
                 raise RuntimeError(
                     'Causal refiner training requires complete history input')
-            active = [index for index, proposal in enumerate(proposal_list)
-                      if int(proposal.shape[0]) == 1]
+            active = [
+                index for index, proposal in enumerate(proposal_list)
+                if (int(proposal.shape[0]) == 1
+                    and (conditioning_proposal_list is None or int(
+                        conditioning_proposal_list[index].shape[0]) == 1))]
             if any(int(proposal.shape[0]) > 1 for proposal in proposal_list):
                 raise RuntimeError('Causal refiner accepts at most one proposal')
             features = tuple(feature[active] for feature in features)
             proposal_list = [proposal_list[index] for index in active]
             gt_box_list = [gt_box_list[index] for index in active]
+            if conditioning_proposal_list is not None:
+                conditioning_proposal_list = [
+                    conditioning_proposal_list[index] for index in active]
             predicted = self._causal_forward(
                 features, proposal_list,
                 causal_history_images[active],
                 causal_history_proposals[active],
                 causal_history_valid_mask[active],
-                causal_history_ages[active])
+                causal_history_ages[active],
+                conditioning_proposal_list=conditioning_proposal_list)
         else:
             predicted = self.geometry_refiner(features, proposal_list)
         targets = self.geometry_refiner.encode_targets(
@@ -348,8 +405,17 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
             dino_proposals)
         if len(dino_proposals) != len(img_metas):
             raise RuntimeError('DINO proposal/meta batch-size mismatch')
-        proposal_list = [item[:, :5].to(features[0].device)
-                         for item in dino_proposals]
+        dino_proposal_list = [item[:, :5].to(features[0].device)
+                              for item in dino_proposals]
+        if self.uses_k1_geometry_anchor:
+            k1_results, k1_proposal_list = self._k1_results_and_proposals(
+                features, img_metas, rescale=False)
+            proposal_list = [
+                k1 if int(k1.shape[0]) == 1 else dino
+                for k1, dino in zip(k1_proposal_list, dino_proposal_list)]
+        else:
+            k1_results = None
+            proposal_list = dino_proposal_list
         causal = hasattr(self.geometry_refiner, 'forward_causal')
         if causal:
             causal_history_images = _unwrap_single_augmentation_tensor(
@@ -364,6 +430,11 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
                 causal_history_images.to(features[0].device))
         decoded = [None] * len(proposal_list)
         for index, proposals in enumerate(proposal_list):
+            if (self.uses_k1_geometry_anchor
+                    and int(dino_proposal_list[index].shape[0]) == 0):
+                # Formal fallback: no DINO means the frozen K1 output is
+                # returned exactly, without a history-only correction.
+                continue
             if int(proposals.shape[0]) == 0:
                 continue
             if int(proposals.shape[0]) != 1:
@@ -376,6 +447,8 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
                     feature[index:index + 1] for feature in history_features)
                 predicted = self.geometry_refiner(
                     image_features, [proposals],
+                    conditioning_proposal_list=[
+                        dino_proposal_list[index]],
                     history_features=image_history_features,
                     history_proposals=causal_history_proposals[
                         index:index + 1].to(features[0].device),
@@ -391,6 +464,18 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
         outputs = []
         for index, boxes in enumerate(decoded):
             if boxes is None or boxes.shape[0] == 0:
+                if k1_results is not None:
+                    if rescale:
+                        image_features = tuple(
+                            feature[index:index + 1]
+                            for feature in features)
+                        fallback = self.baseline.simple_test_from_features(
+                            image_features, [img_metas[index]],
+                            rescale=True)[0]
+                        outputs.append(fallback)
+                    else:
+                        outputs.append(k1_results[index])
+                    continue
                 image_features = tuple(
                     feature[index:index + 1] for feature in features)
                 fallback = self.baseline.simple_test_from_features(

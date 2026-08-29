@@ -252,6 +252,55 @@ def test_causal_source_gate_uses_dual_reference_and_cannot_open_test():
     assert "'fixed-target'" not in text
 
 
+def test_k1_anchored_phase_v2_is_source_only_unified_and_bounded():
+    path = ROOT / (
+        'crane_project/configs/'
+        'crane_symeood_dino_k1_anchored_causal_phase_refiner_source_v2.py')
+    text = path.read_text()
+    assert "type='K1AnchoredCausalPhaseGeometryRefiner'" in text
+    assert "frozen_baseline_config='crane_project/configs/crane_symeood_k1.py'" in text
+    assert 'current_k1_geometry_anchor=True' in text
+    assert 'native_dino_anchor_fallback=True' in text
+    assert 'native_dino_current_conditioning=True' in text
+    assert 'same_forward_all_domains=True' in text
+    assert 'continuous_double_angle_phase=True' in text
+    assert 'bounded_current_residual=True' in text
+    assert "representation='six_delta_xywh_sin2a_cos2a_residual'" in text
+    assert 'domain_routing=False' in text
+    assert 'sequence_frame_routing=False' in text
+    assert 'target_data_read=False' in text
+    assert 'fixed_test_read=False' in text
+    assert "ann_file='test/" not in text
+    assert "expected_split='test'" not in text
+    assert 'lr=2e-5' in text
+
+
+def test_k1_anchor_is_generated_from_shared_frozen_features():
+    path = ROOT / ('mmrotate/models/detectors/'
+                   'symeood_dino_geometry_refiner_trainer.py')
+    text = path.read_text()
+    assert 'self.uses_k1_geometry_anchor' in text
+    assert 'def _k1_results_and_proposals' in text
+    assert 'self.baseline.simple_test_from_features' in text
+    assert 'conditioning_proposal_list' in text
+    assert 'Formal fallback: no DINO means the frozen K1 output' in text
+    assert 'self.baseline.extract_feat(img)' in text
+
+
+def test_causal_smoke_and_gate_accept_v2_without_opening_test():
+    smoke = (ROOT / ('crane_project/tools/'
+                     'symeood_dino_causal_history_source_smoke.py')).read_text()
+    gate = (ROOT / ('crane_project/tools/'
+                    'symeood_dino_causal_history_source_gate.py')).read_text()
+    assert 'ALLOW_K1_ANCHORED_CAUSAL_PHASE_SOURCE_TRAINING' in smoke
+    assert 'phase_head_gradient_nonzero' in smoke
+    assert 'conditioning_head_gradients_finite' in smoke
+    assert 'build_dataset(cfg.data.test)' not in smoke
+    assert 'k1_anchored_causal_phase_refiner_source_gate_v2' in gate
+    assert 'ALLOW_K1_ANCHORED_CAUSAL_PHASE_CHECKPOINT_PROMOTION' in gate
+    assert 'eligible_for_fixed_test=False' in gate
+
+
 def test_ordinary_k1_source_val_reference_config_never_reads_fixed_test():
     path = ROOT / ('crane_project/configs/'
                    'crane_symeood_k1_source_val_eval.py')

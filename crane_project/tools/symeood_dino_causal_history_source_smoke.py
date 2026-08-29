@@ -17,6 +17,7 @@ import numpy as np
 
 
 PROTOCOL = 'source_only_causal_history_refiner_smoke_v1'
+V2_PROTOCOL = 'source_only_k1_anchored_causal_phase_refiner_smoke_v2'
 
 
 def parse_args():
@@ -80,8 +81,12 @@ def _run(args):
     cfg = compat_cfg(cfg)
     checkpoint_contract = dict(
         cfg.checkpoint_config.meta.geometry_refiner_checkpoint_contract)
+    architecture = checkpoint_contract.get('architecture')
+    v2 = architecture == 'k1_anchored_causal_phase_refiner_v2'
     required_contract = dict(
-        architecture='current_anchored_causal_history_refiner_v1',
+        architecture=(
+            'k1_anchored_causal_phase_refiner_v2' if v2 else
+            'current_anchored_causal_history_refiner_v1'),
         frozen_baseline_variant='symeood_k1_epoch24',
         frozen_baseline_config='crane_project/configs/crane_symeood_k1.py',
         frozen_baseline_checkpoint=(
@@ -96,6 +101,19 @@ def _run(args):
         temporal_state=False,
         history_identity_model_input=False,
         fixed_target_parameter_selection=False)
+    if v2:
+        required_contract.update(dict(
+            detector_forward_during_training=True,
+            frozen_symeood_detection_head_forward=True,
+            frozen_symeood_detection_from_shared_features=True,
+            current_k1_geometry_anchor=True,
+            native_dino_anchor_fallback=True,
+            native_dino_current_conditioning=True,
+            same_forward_all_domains=True,
+            bounded_current_residual=True,
+            continuous_double_angle_phase=True,
+            zero_phase_is_exact_identity=True,
+            representation='six_delta_xywh_sin2a_cos2a_residual'))
     contract_checks = {
         key: checkpoint_contract.get(key) == expected
         for key, expected in required_contract.items()}
@@ -105,12 +123,13 @@ def _run(args):
         no_test_audit=("expected_split='test'" not in config_text),
         single_source_forward=(
             cfg.model.geometry_refiner.type ==
-            'DinoConditionedCausalHistoryRefiner'),
+            ('K1AnchoredCausalPhaseGeometryRefiner' if v2 else
+             'DinoConditionedCausalHistoryRefiner')),
         train_batch_one=(
             cfg.data.train_dataloader.samples_per_gpu == 1)))
     if not all(contract_checks.values()):
         return dict(
-            protocol=PROTOCOL,
+            protocol=V2_PROTOCOL if v2 else PROTOCOL,
             evidence_boundary='source_train_and_source_val_only',
             target_data_read=False,
             fixed_test_read=False,
@@ -175,6 +194,18 @@ def _run(args):
         and torch.count_nonzero(
             raw_model.geometry_refiner.history_delta_head.weight.grad).item()
         > 0)
+    phase_head_gradient_nonzero = bool(
+        not v2 or (
+            raw_model.geometry_refiner.delta_head.weight.grad is not None
+            and torch.count_nonzero(
+                raw_model.geometry_refiner.delta_head.weight.grad).item()
+            > 0))
+    conditioning_head_gradients_finite = bool(
+        not v2 or any(
+            parameter.grad is not None
+            and torch.isfinite(parameter.grad).all().item()
+            for parameter in
+            raw_model.geometry_refiner.conditioning_fusion.parameters()))
     optimizer.step()
     frozen_after_step = raw_model.frozen_parameter_hash()
 
@@ -194,11 +225,13 @@ def _run(args):
         baseline_gradients_none=baseline_grad_none,
         trainable_gradients_finite=trainable_gradients_finite,
         history_head_gradient_nonzero=history_head_gradient_nonzero,
+        phase_head_gradient_nonzero=phase_head_gradient_nonzero,
+        conditioning_head_gradients_finite=conditioning_head_gradients_finite,
         frozen_baseline_unchanged=(
             frozen_before == frozen_after_step == frozen_after_val),
         source_val_forward_valid=bool(output_valid))
     return dict(
-        protocol=PROTOCOL,
+        protocol=V2_PROTOCOL if v2 else PROTOCOL,
         evidence_boundary='source_train_and_source_val_only',
         target_data_read=False,
         fixed_test_read=False,
@@ -222,24 +255,30 @@ def _run(args):
         checks=checks,
         passed=all(checks.values()),
         decision=(
-            'ALLOW_CAUSAL_HISTORY_SOURCE_TRAINING'
+            ('ALLOW_K1_ANCHORED_CAUSAL_PHASE_SOURCE_TRAINING'
+             if v2 else 'ALLOW_CAUSAL_HISTORY_SOURCE_TRAINING')
             if all(checks.values()) else
-            'STOP_CAUSAL_HISTORY_SOURCE_SMOKE_FAILED'))
+            ('STOP_K1_ANCHORED_CAUSAL_PHASE_SOURCE_SMOKE_FAILED'
+             if v2 else 'STOP_CAUSAL_HISTORY_SOURCE_SMOKE_FAILED')))
 
 
 def main():
     args = parse_args()
+    requested_v2 = 'k1_anchored_causal_phase' in os.path.basename(args.config)
     try:
         report = _run(args)
     except Exception as error:
         report = dict(
-            protocol=PROTOCOL,
+            protocol=V2_PROTOCOL if requested_v2 else PROTOCOL,
             evidence_boundary='source_train_and_source_val_only',
             target_data_read=False,
             fixed_test_read=False,
             checkpoint_written=False,
             passed=False,
-            decision='STOP_CAUSAL_HISTORY_SOURCE_SMOKE_ERROR',
+            decision=(
+                'STOP_K1_ANCHORED_CAUSAL_PHASE_SOURCE_SMOKE_ERROR'
+                if requested_v2 else
+                'STOP_CAUSAL_HISTORY_SOURCE_SMOKE_ERROR'),
             error_type=type(error).__name__,
             error=str(error),
             traceback=traceback.format_exc())

@@ -9,7 +9,8 @@ from .rotate_standard_roi_head import RotatedStandardRoIHead
 from .dino_conditioned_geometry_refiner import (
     DinoConditionedCausalHistoryRefiner,
     DinoConditionedDualTowerGeometryRefiner,
-    DinoConditionedGeometryRefiner)
+    DinoConditionedGeometryRefiner,
+    K1AnchoredCausalPhaseGeometryRefiner)
 
 __all__ = [
     'RotatedBBoxHead', 'RotatedConvFCBBoxHead', 'RotatedShared2FCBBoxHead',
@@ -17,5 +18,6 @@ __all__ = [
     'OrientedStandardRoIHead', 'RoITransRoIHead', 'GVRatioRoIHead',
     'DinoConditionedGeometryRefiner',
     'DinoConditionedDualTowerGeometryRefiner',
-    'DinoConditionedCausalHistoryRefiner'
+    'DinoConditionedCausalHistoryRefiner',
+    'K1AnchoredCausalPhaseGeometryRefiner'
 ]
