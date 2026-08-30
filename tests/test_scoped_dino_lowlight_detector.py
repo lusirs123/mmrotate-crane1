@@ -230,6 +230,70 @@ def test_formal_native_s14_component_config_is_pure_and_fixed():
     assert formal['target_scope'] is False
 
 
+def test_pure_dino_simple_test_does_not_require_fusion_audit(monkeypatch):
+    class _Common:
+        @staticmethod
+        def resize_and_normalize_bgr(image, height, patch_size,
+                                     max_long_side):
+            del image, height, patch_size, max_long_side
+            return torch.zeros((1, 3, 14, 14)), dict(scale_factor=1.0)
+
+        @staticmethod
+        def extract_patch_grid(dino, tensor, patch_size):
+            del dino, tensor, patch_size
+            return torch.zeros((1, 1, 1, 1))
+
+    class _Heads:
+        _last_temporal_pool = None
+
+        @staticmethod
+        def simple_test(feature, feature_meta):
+            del feature, feature_meta
+            return np.asarray(
+                [[10, 20, 30, 12, 0.1, 0.9]], dtype=np.float32)
+
+    class _Labeller:
+        @staticmethod
+        def feature_meta(image_path, dino_meta):
+            del image_path
+            return dino_meta
+
+        @staticmethod
+        def filter_valid_rotated_detections(detections, feature_meta):
+            del feature_meta
+            return detections, dict()
+
+    detector = Detector.__new__(Detector)
+    nn.Module.__init__(detector)
+    detector.baseline = None
+    detector._fusion_policy = 'dino_primary'
+    detector._scope_policy = 'all_frames'
+    detector._scope_intervals = None
+    detector._conditional_dino_selector = None
+    detector._stabilizer_enabled = False
+    detector._previous_box = None
+    detector._previous_seq = None
+    detector._previous_frame = None
+    detector.__dict__['_dino_runtime'] = dict(
+        common=_Common(), dino=object(), heads=_Heads(),
+        labeller=_Labeller(), height=600, patch_size=14,
+        max_long_side=1333, dino_device=torch.device('cpu'),
+        head_device=torch.device('cpu'), temporal_selector=None)
+    monkeypatch.setattr(
+        MODULE.cv2, 'imread',
+        lambda path, mode: np.zeros((32, 32, 3), dtype=np.uint8))
+
+    result = detector.simple_test(
+        torch.zeros((1, 3, 32, 32)),
+        [dict(filename='/tmp/frame_00000.jpg',
+              ori_shape=(32, 32, 3))],
+        rescale=True)
+
+    assert result[0][0].shape == (1, 6)
+    assert result[0][0][0].tolist() == pytest.approx(
+        [10, 20, 30, 12, 0.1, 0.9])
+
+
 def test_formal_unified_config_keeps_symeood_and_common_dino_ranking():
     root = pathlib.Path(__file__).resolve().parents[1]
     config = runpy.run_path(

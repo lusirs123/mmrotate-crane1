@@ -1077,9 +1077,17 @@ class ScopedDinoLowlightDetector(RotatedBaseDetector):
         else:
             selected = (dino_detections[:1]
                         if dino_detections.shape[0] > 0 else baseline)
-            output_source = (fusion_audit['selected_source']
-                             if dino_detections.shape[0] > 0 else
-                             'sym_eood_fallback')
+            if self._fusion_policy == 'sym_eood_proposal_dino_roi_union':
+                output_source = (fusion_audit['selected_source']
+                                 if dino_detections.shape[0] > 0 else
+                                 'sym_eood_fallback')
+            else:
+                # Pure native-DINO inference has no fusion audit and no
+                # SymEOOD fallback.  An empty result is an explicit missing
+                # observation, as locked by the formal component contract.
+                output_source = ('dino_native'
+                                 if dino_detections.shape[0] > 0 else
+                                 'missing_observation')
         if (self._fusion_policy == 'sym_eood_proposal_dino_roi_union'
                 and self._fusion_audit_enabled):
             record = dict(fusion_audit)
