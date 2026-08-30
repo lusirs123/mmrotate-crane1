@@ -272,7 +272,7 @@ def test_k1_anchored_phase_v2_is_source_only_unified_and_bounded():
     assert 'fixed_test_read=False' in text
     assert "ann_file='test/" not in text
     assert "expected_split='test'" not in text
-    assert 'lr=2e-5' in text
+    assert 'lr=5e-5' in text
 
 
 def test_k1_anchor_is_generated_from_shared_frozen_features():

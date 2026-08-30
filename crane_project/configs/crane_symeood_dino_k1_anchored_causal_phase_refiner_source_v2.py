@@ -75,14 +75,14 @@ model = dict(
     geometry_refiner_checkpoint_contract=None,
     evaluation_only=False)
 
-# A smaller learning rate is deliberate: V2 starts exactly from the strong K1
-# geometry and learns only bounded corrections.  It is not a continuation of
-# the failed V1 checkpoint.
+# Match causal-history V1 so the primary comparison isolates the K1 anchor and
+# continuous phase representation.  This remains an independent zero-start
+# run and does not continue from any V1 checkpoint.
 optimizer = dict(
     _delete_=True,
     type='AdamW',
     constructor='GeometryRefinerOptimizerConstructor',
-    lr=2e-5,
+    lr=5e-5,
     weight_decay=1e-4)
 lr_config = dict(
     policy='step', warmup='linear', warmup_iters=200,
