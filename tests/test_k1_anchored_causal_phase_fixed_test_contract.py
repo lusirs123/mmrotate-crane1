@@ -56,6 +56,7 @@ def test_fixed_test_config_uses_cached_current_and_causal_history_only():
     assert "expected_split='test'" in text
     assert "ann_file='test/annfiles/'" in text
     assert 'evaluation_only=True' in text
+    assert 'geometry_refiner_checkpoint_contract=dict(\n        _delete_=True,' in text
     assert 'selected_source_epoch=10' in text
     assert 'domain_routing=False' in text
     assert 'sequence_frame_routing=False' in text

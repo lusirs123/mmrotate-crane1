@@ -46,6 +46,7 @@ model = dict(
     geometry_refiner_checkpoint=promoted_checkpoint,
     geometry_refiner_checkpoint_sha256=promoted_checkpoint_sha256,
     geometry_refiner_checkpoint_contract=dict(
+        _delete_=True,
         protocol='source_gated_k1_anchored_causal_phase_refiner_v2',
         source_gate_passed=True, selected_source_epoch=10,
         selection_policy='min_worst_mcml_then_max_combined_riou_v1',
