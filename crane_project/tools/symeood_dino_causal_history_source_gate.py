@@ -14,10 +14,14 @@ from crane_project.tools.symeood_dino_dual_tower_v2_audit import (
     _annotations, _load_results, _metrics)
 from crane_project.utils.geometry_refiner_source_gate import (
     relaxed_composite_gate)
+from crane_project.utils.depth_interface_geometry_gate import (
+    depth_interface_geometry_gate)
 
 
 PROTOCOL = 'causal_history_refiner_source_gate_v1'
 V2_PROTOCOL = 'k1_anchored_causal_phase_refiner_source_gate_v2'
+V3_PROTOCOL = (
+    'k1_retentive_causal_phase_refiner_source_gate_v3_geometry_v1')
 
 
 def parse_args():
@@ -54,12 +58,17 @@ def _checkpoint_contract(path, expected_sha256=None):
         raise RuntimeError('Candidate checkpoint has no refiner contract')
     architecture = contract.get('architecture')
     v2 = architecture == 'k1_anchored_causal_phase_refiner_v2'
+    v3 = architecture == 'k1_retentive_causal_phase_refiner_v3'
     required = dict(
         protocol=(
-            'source_only_k1_anchored_causal_phase_refiner_v2' if v2 else
+            ('source_only_k1_retentive_causal_phase_refiner_v3' if v3 else
+             'source_only_k1_anchored_causal_phase_refiner_v2')
+            if (v2 or v3) else
             'source_only_causal_history_refiner_v1'),
         architecture=(
-            'k1_anchored_causal_phase_refiner_v2' if v2 else
+            ('k1_retentive_causal_phase_refiner_v3' if v3 else
+             'k1_anchored_causal_phase_refiner_v2')
+            if (v2 or v3) else
             'current_anchored_causal_history_refiner_v1'),
         frozen_baseline_variant='symeood_k1_epoch24',
         frozen_baseline_config='crane_project/configs/crane_symeood_k1.py',
@@ -86,7 +95,7 @@ def _checkpoint_contract(path, expected_sha256=None):
         exact_current_only_when_no_history=True,
         source_only_proposal_corruption=True,
         fixed_target_parameter_selection=False)
-    if v2:
+    if v2 or v3:
         required.update(dict(
             detector_forward_during_training=True,
             frozen_symeood_detection_head_forward=True,
@@ -99,6 +108,18 @@ def _checkpoint_contract(path, expected_sha256=None):
             continuous_double_angle_phase=True,
             zero_phase_is_exact_identity=True,
             representation='six_delta_xywh_sin2a_cos2a_residual'))
+    if v3:
+        required.update(dict(
+            continuous_k1_retention=True,
+            retention_loss_weight=0.25,
+            source_adjacent_pair_supervision=True,
+            adjacent_pair_identity_model_input=False,
+            temporal_size_error_consistency=True,
+            temporal_size_loss_weight=0.20,
+            inference_sequence_input=False,
+            single_gpu_adjacent_pair_training=True,
+            train_samples_per_gpu=2,
+            train_shuffle=False))
     failures = [
         '{}={!r} expected {!r}'.format(key, contract.get(key), expected)
         for key, expected in required.items()
@@ -106,7 +127,7 @@ def _checkpoint_contract(path, expected_sha256=None):
     if failures:
         raise RuntimeError(
             'Candidate checkpoint contract failed: ' + '; '.join(failures))
-    return absolute, observed, contract, v2
+    return absolute, observed, contract, v2, v3
 
 
 def _sym_geometry_preservation(candidate, sym):
@@ -174,14 +195,17 @@ def main():
         reference_policy='native_dino_source_val')
     geometry_preservation = _sym_geometry_preservation(
         candidate_metrics, sym_metrics)
-    checkpoint_path, checkpoint_hash, checkpoint_contract, v2 = (
+    depth_interface_geometry = depth_interface_geometry_gate(
+        metadata, candidate_boxes, sym_reference_boxes)
+    checkpoint_path, checkpoint_hash, checkpoint_contract, v2, v3 = (
         _checkpoint_contract(
             args.candidate_checkpoint,
             args.expected_candidate_sha256))
     passed = bool(
-        average_gain_gate['passed'] and geometry_preservation['passed'])
+        average_gain_gate['passed'] and geometry_preservation['passed']
+        and depth_interface_geometry['passed'])
     report = dict(
-        protocol=V2_PROTOCOL if v2 else PROTOCOL,
+        protocol=V3_PROTOCOL if v3 else V2_PROTOCOL if v2 else PROTOCOL,
         metric_protocol_version=2,
         evidence_boundary='source_val_only',
         target_data_read=False,
@@ -204,12 +228,15 @@ def main():
         candidate_metrics=candidate_metrics,
         average_gain_over_native_dino=average_gain_gate,
         sym_eood_geometry_preservation=geometry_preservation,
+        depth_interface_geometry_gate=depth_interface_geometry,
         passed=passed,
         eligible_for_checkpoint_promotion=passed,
         eligible_for_fixed_test=False,
         eligible_for_unknown_sequence_claim=False,
         decision=(
-            ('ALLOW_K1_ANCHORED_CAUSAL_PHASE_CHECKPOINT_PROMOTION'
+            ('ALLOW_K1_RETENTIVE_CAUSAL_PHASE_CHECKPOINT_PROMOTION'
+             if v3 else
+             'ALLOW_K1_ANCHORED_CAUSAL_PHASE_CHECKPOINT_PROMOTION'
              if v2 else 'ALLOW_CAUSAL_HISTORY_CHECKPOINT_PROMOTION')
             if passed else 'STOP_CAUSAL_HISTORY_SOURCE_GATE_FAILED'))
     output = os.path.abspath(args.out_json)

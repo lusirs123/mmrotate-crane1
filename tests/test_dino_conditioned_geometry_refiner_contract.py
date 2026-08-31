@@ -104,6 +104,7 @@ Refiner = MODULE.DinoConditionedGeometryRefiner
 DualRefiner = MODULE.DinoConditionedDualTowerGeometryRefiner
 CausalRefiner = MODULE.DinoConditionedCausalHistoryRefiner
 K1PhaseRefiner = MODULE.K1AnchoredCausalPhaseGeometryRefiner
+K1RetentiveRefiner = MODULE.K1RetentiveCausalPhaseGeometryRefiner
 
 
 def _refiner(**kwargs):
@@ -126,6 +127,12 @@ def _causal_refiner(**kwargs):
 
 def _k1_phase_refiner(**kwargs):
     return K1PhaseRefiner(
+        in_channels=1, roi_output_size=1, fc_channels=4, num_fcs=1,
+        history_horizon=2, **kwargs)
+
+
+def _k1_retentive_refiner(**kwargs):
+    return K1RetentiveRefiner(
         in_channels=1, roi_output_size=1, fc_channels=4, num_fcs=1,
         history_horizon=2, **kwargs)
 
@@ -413,6 +420,34 @@ def test_temporal_size_loss_uses_error_change_not_object_motion():
     value = Refiner._temporal_size_error_loss(
         predicted, target, [(0, 1)])
     assert value.item() == pytest.approx(0.0, abs=1e-8)
+
+
+def test_k1_retentive_v3_activates_pair_error_and_continuous_retention():
+    model = _k1_retentive_refiner(
+        temporal_size_loss_weight=0.20,
+        retention_loss_weight=0.25)
+    proposals = [
+        torch.tensor([[10., 12., 8., 4., 0.2]]),
+        torch.tensor([[11., 12., 8., 4., 0.2]])]
+    gt = [
+        torch.tensor([[10., 12., 8.5, 4.2, 0.2]]),
+        torch.tensor([[11., 12., 8.6, 4.3, 0.2]])]
+    targets = model.encode_targets(proposals, gt)
+    predicted = torch.zeros_like(targets, requires_grad=True)
+    losses = model.loss(
+        predicted, targets, proposal_list=proposals, gt_box_list=gt,
+        temporal_pair_indices=[(0, 1)])
+    assert 'refiner_temporal_size_objective' in losses
+    assert 'refiner_continuous_retention_objective' in losses
+    assert losses['refiner_temporal_pair_count'].item() == 1
+    losses['loss_geometry_refiner'].backward()
+    assert predicted.grad is not None
+    assert torch.isfinite(predicted.grad).all()
+    contract = model.component_contract()
+    assert contract['architecture'] == 'k1_retentive_causal_phase_refiner_v3'
+    assert contract['continuous_k1_retention'] is True
+    assert contract['source_adjacent_pair_error_consistency'] is True
+    assert contract['inference_sequence_input'] is False
 
 
 def _parent_checkpoint(model, center, size, angle):

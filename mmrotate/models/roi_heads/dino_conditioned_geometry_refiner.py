@@ -124,6 +124,7 @@ class DinoConditionedGeometryRefiner(nn.Module):
                  angle_loss_weight=1.0,
                  decoded_geometry_loss_weight=0.0,
                  temporal_size_loss_weight=0.0,
+                 retention_loss_weight=0.0,
                  bbox_coder=None):
         super().__init__()
         self.refine_center = bool(refine_center)
@@ -138,11 +139,14 @@ class DinoConditionedGeometryRefiner(nn.Module):
         self.decoded_geometry_loss_weight = float(
             decoded_geometry_loss_weight)
         self.temporal_size_loss_weight = float(temporal_size_loss_weight)
+        self.retention_loss_weight = float(retention_loss_weight)
         if self.decoded_geometry_loss_weight < 0.0:
             raise ValueError(
                 'Decoded geometry loss weight must be non-negative')
         if self.temporal_size_loss_weight < 0.0:
             raise ValueError('Temporal size loss weight must be non-negative')
+        if self.retention_loss_weight < 0.0:
+            raise ValueError('Retention loss weight must be non-negative')
         roi_extractor = dict(roi_extractor or dict(
             type='RotatedSingleRoIExtractor',
             roi_layer=dict(
@@ -273,6 +277,31 @@ class DinoConditionedGeometryRefiner(nn.Module):
         difference = errors[pairs[:, 1]] - errors[pairs[:, 0]]
         return F.smooth_l1_loss(difference, torch.zeros_like(difference))
 
+    def _continuous_retention_loss(self, predicted_five,
+                                   proposal_list, gt_box_list):
+        """Keep accurate source anchors unchanged without a hard router.
+
+        The detached continuous weight is derived only from source GT.  It is
+        not an inference input and contains no domain/sequence/frame identity.
+        Accurate anchors receive strong identity regularization; inaccurate
+        anchors remain free to move under the geometry objective.
+        """
+        proposals = torch.cat([
+            item for item in self.canonicalize_proposals(proposal_list)
+            if item.shape[0] > 0], dim=0)
+        gt_boxes = self._matched_gt_boxes(
+            proposal_list, gt_box_list).to(proposals.device)
+        if proposals.shape != gt_boxes.shape:
+            raise RuntimeError('Retention proposal/GT shape mismatch')
+        raw = torch.nan_to_num(
+            sym_kld(proposals, gt_boxes),
+            nan=16.0, posinf=16.0, neginf=0.0).clamp(min=0.0, max=16.0)
+        quality = torch.exp(-torch.sqrt(raw + 1e-9)).detach()
+        per_sample = F.smooth_l1_loss(
+            predicted_five, torch.zeros_like(predicted_five),
+            reduction='none').mean(dim=1)
+        return (per_sample * quality).sum() / quality.sum().clamp(min=1e-6)
+
     def loss(self,
              predicted_deltas,
              target_deltas,
@@ -335,6 +364,13 @@ class DinoConditionedGeometryRefiner(nn.Module):
                     0 if temporal_pair_indices is None
                     else len(temporal_pair_indices)))
             total = total + weighted
+        if self.retention_loss_weight > 0.0:
+            value = self._continuous_retention_loss(
+                predicted_deltas, proposal_list, gt_box_list)
+            weighted = value * self.retention_loss_weight
+            diagnostics['refiner_continuous_retention_objective'] = (
+                weighted.detach())
+            total = total + weighted
         diagnostics['loss_geometry_refiner'] = total
         return diagnostics
 
@@ -349,6 +385,7 @@ class DinoConditionedGeometryRefiner(nn.Module):
                                    self.active_component_mask().tolist()],
             decoded_geometry_loss_weight=self.decoded_geometry_loss_weight,
             temporal_size_loss_weight=self.temporal_size_loss_weight,
+            retention_loss_weight=self.retention_loss_weight,
             domain_routing=False, sequence_frame_routing=False,
             temporal_state=False)
 
@@ -921,6 +958,24 @@ class K1AnchoredCausalPhaseGeometryRefiner(
             diagnostics['refiner_decoded_geometry_objective'] = (
                 weighted.detach())
             total = total + weighted
+        if self.temporal_size_loss_weight > 0.0:
+            value = self._temporal_size_error_loss(
+                predicted_five, target_five, temporal_pair_indices)
+            weighted = value * self.temporal_size_loss_weight
+            diagnostics['refiner_temporal_size_objective'] = (
+                weighted.detach())
+            diagnostics['refiner_temporal_pair_count'] = (
+                predicted_deltas.new_tensor(
+                    0 if temporal_pair_indices is None
+                    else len(temporal_pair_indices)))
+            total = total + weighted
+        if self.retention_loss_weight > 0.0:
+            value = self._continuous_retention_loss(
+                predicted_five, proposal_list, gt_box_list)
+            weighted = value * self.retention_loss_weight
+            diagnostics['refiner_continuous_retention_objective'] = (
+                weighted.detach())
+            total = total + weighted
         diagnostics['loss_geometry_refiner'] = total
         return diagnostics
 
@@ -940,6 +995,24 @@ class K1AnchoredCausalPhaseGeometryRefiner(
                 self.current_residual_bounds.detach().cpu().tolist()],
             conditioning_gate_bias=self.conditioning_gate_bias,
             same_forward_all_domains=True,
+            domain_routing=False,
+            sequence_frame_routing=False,
+            temporal_state=False))
+        return contract
+
+
+@ROTATED_HEADS.register_module()
+class K1RetentiveCausalPhaseGeometryRefiner(
+        K1AnchoredCausalPhaseGeometryRefiner):
+    """V3 contract: continuous K1 retention plus source-pair consistency."""
+
+    def component_contract(self):
+        contract = super().component_contract()
+        contract.update(dict(
+            architecture='k1_retentive_causal_phase_refiner_v3',
+            continuous_k1_retention=True,
+            source_adjacent_pair_error_consistency=True,
+            inference_sequence_input=False,
             domain_routing=False,
             sequence_frame_routing=False,
             temporal_state=False))

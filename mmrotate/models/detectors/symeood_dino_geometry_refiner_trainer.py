@@ -361,6 +361,7 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
             if any(int(proposal.shape[0]) > 1 for proposal in proposal_list):
                 raise RuntimeError('Causal refiner accepts at most one proposal')
             features = tuple(feature[active] for feature in features)
+            active_img_metas = [img_metas[index] for index in active]
             proposal_list = [proposal_list[index] for index in active]
             gt_box_list = [gt_box_list[index] for index in active]
             if conditioning_proposal_list is not None:
@@ -375,10 +376,11 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
                 conditioning_proposal_list=conditioning_proposal_list)
         else:
             predicted = self.geometry_refiner(features, proposal_list)
+            active_img_metas = img_metas
         targets = self.geometry_refiner.encode_targets(
             proposal_list, gt_box_list)
-        temporal_pairs = ([] if causal else self._temporal_pair_indices(
-            img_metas, proposal_list))
+        temporal_pairs = self._temporal_pair_indices(
+            active_img_metas, proposal_list)
         losses = self.geometry_refiner.loss(
             predicted,
             targets,

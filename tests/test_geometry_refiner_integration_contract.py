@@ -247,9 +247,36 @@ def test_causal_source_gate_uses_dual_reference_and_cannot_open_test():
     assert "parser.add_argument('--sym-reference-results', required=True)" in text
     assert 'average_gain_over_native_dino' in text
     assert 'sym_eood_geometry_preservation' in text
+    assert 'depth_interface_geometry_gate' in text
+    assert 'depth_interface_geometry' in text
     assert "'ALLOW_CAUSAL_HISTORY_CHECKPOINT_PROMOTION'" in text
     assert "'source-val'" in text
     assert "'fixed-target'" not in text
+
+
+def test_depth_interface_gate_is_source_val_relative_and_q_bounded():
+    path = ROOT / ('crane_project/utils/'
+                   'depth_interface_geometry_gate.py')
+    text = path.read_text()
+    assert 'target/fixed-dev' in text
+    assert 'q=log((predicted_long/predicted_short)' in text
+    assert "gated_scopes=['all', 'sim']" in text
+    assert "real_scope_role='reported_only" in text
+    assert "q_reference_p99_expansion=0.02" in text
+    assert "q_envelope_exceedance_max=0.01" in text
+
+
+def test_v3_source_selector_cannot_authorize_fixed_or_unknown_test():
+    path = ROOT / ('crane_project/tools/'
+                   'symeood_dino_k1_retentive_source_select.py')
+    text = path.read_text()
+    assert 'source_val_only' in text
+    assert 'target_data_read=False' in text
+    assert 'fixed_test_read=False' in text
+    assert 'eligible_for_fixed_test=False' in text
+    assert 'eligible_for_unknown_sequence_claim=False' in text
+    assert 'depth_interface_geometry_gate' in text
+    assert 'fixed-target' not in text
 
 
 def test_k1_anchored_phase_v2_is_source_only_unified_and_bounded():
@@ -273,6 +300,45 @@ def test_k1_anchored_phase_v2_is_source_only_unified_and_bounded():
     assert "ann_file='test/" not in text
     assert "expected_split='test'" not in text
     assert 'lr=5e-5' in text
+
+
+def test_k1_retentive_phase_v3_uses_source_pairs_without_runtime_identity():
+    path = ROOT / (
+        'crane_project/configs/'
+        'crane_symeood_dino_k1_retentive_causal_phase_refiner_source_v3.py')
+    text = path.read_text()
+    assert "type='K1RetentiveCausalPhaseGeometryRefiner'" in text
+    assert 'continuous_k1_retention=True' in text
+    assert 'retention_loss_weight=0.25' in text
+    assert 'source_adjacent_pair_supervision=True' in text
+    assert 'temporal_size_error_consistency=True' in text
+    assert 'temporal_size_loss_weight=0.20' in text
+    assert 'samples_per_gpu=2' in text
+    assert 'shuffle=False' in text
+    assert 'single_gpu_adjacent_pair_training=True' in text
+    assert 'adjacent_pair_identity_model_input=False' in text
+    assert 'inference_sequence_input=False' in text
+    assert 'target_data_read=False' in text
+    assert 'fixed_test_read=False' in text
+    assert 'domain_routing=False' in text
+    assert 'sequence_frame_routing=False' in text
+    assert 'temporal_state=False' in text
+    assert "ann_file='test/" not in text
+    assert "expected_split='test'" not in text
+    assert 'lr=5e-5' in text
+
+
+def test_v3_trainer_applies_pairs_to_causal_loss_and_smoke_requires_pair():
+    trainer = (ROOT / ('mmrotate/models/detectors/'
+                       'symeood_dino_geometry_refiner_trainer.py')).read_text()
+    smoke = (ROOT / ('crane_project/tools/'
+                     'symeood_dino_causal_history_source_smoke.py')).read_text()
+    assert 'active_img_metas' in trainer
+    assert 'temporal_pairs = self._temporal_pair_indices' in trainer
+    assert '_adjacent_pair_with_history' in smoke
+    assert 'refiner_temporal_pair_count' in smoke
+    assert 'refiner_continuous_retention_objective' in smoke
+    assert 'ALLOW_K1_RETENTIVE_CAUSAL_PHASE_SOURCE_TRAINING' in smoke
 
 
 def test_k1_anchor_is_generated_from_shared_frozen_features():
