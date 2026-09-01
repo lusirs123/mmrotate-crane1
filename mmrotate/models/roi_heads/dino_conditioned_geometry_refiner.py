@@ -702,7 +702,8 @@ class K1AnchoredCausalPhaseGeometryRefiner(
     an exact identity correction without evaluating ``atan2(0, 0)``.
     """
 
-    def __init__(self, *args, conditioning_gate_bias=-2.0, **kwargs):
+    def __init__(self, *args, conditioning_gate_bias=-2.0,
+                 inference_component_mode='full', **kwargs):
         max_current_center_delta = float(
             kwargs.pop('max_current_center_delta', 0.12))
         max_current_log_size_delta = float(
@@ -736,6 +737,13 @@ class K1AnchoredCausalPhaseGeometryRefiner(
         nn.init.constant_(
             self.conditioning_gate_head.bias, float(conditioning_gate_bias))
         self.conditioning_gate_bias = float(conditioning_gate_bias)
+        allowed_modes = {
+            'full', 'current_only', 'center_only', 'k1_identity'}
+        if inference_component_mode not in allowed_modes:
+            raise ValueError(
+                'Unsupported inference_component_mode: {}'.format(
+                    inference_component_mode))
+        self.inference_component_mode = str(inference_component_mode)
         current_bounds = [
             max_current_center_delta, max_current_center_delta,
             max_current_log_size_delta, max_current_log_size_delta,
@@ -744,6 +752,25 @@ class K1AnchoredCausalPhaseGeometryRefiner(
             raise ValueError('Current residual bounds must be positive')
         self.register_buffer(
             'current_residual_bounds', torch.tensor(current_bounds))
+
+    def _apply_inference_component_mode(self, five_deltas):
+        """Apply a parameter-free evaluation ablation to five-delta output.
+
+        The switch never changes trained parameters or feature extraction.  It
+        only determines which already-predicted residual components may reach
+        the shared decoder.  This keeps trainer/runtime decoding identical and
+        makes component attribution exact.
+        """
+        mode = self.inference_component_mode
+        if mode == 'full' or mode == 'current_only':
+            return five_deltas
+        if mode == 'center_only':
+            mask = five_deltas.new_tensor(
+                [1.0, 1.0, 0.0, 0.0, 0.0]).reshape(1, 5)
+            return five_deltas * mask
+        if mode == 'k1_identity':
+            return torch.zeros_like(five_deltas)
+        raise RuntimeError('Invalid inference component mode')
 
     @staticmethod
     def _phase_to_five(deltas):
@@ -868,7 +895,11 @@ class K1AnchoredCausalPhaseGeometryRefiner(
         gate = torch.sigmoid(self.history_gate_head(fused))
         any_valid = valid.any(dim=1, keepdim=True).to(gate.dtype)
         correction = self.mask_deltas(history_raw * bounds.reshape(1, 5))
-        combined = current_five + any_valid * gate * correction
+        if self.inference_component_mode == 'current_only':
+            combined = current_five
+        else:
+            combined = current_five + any_valid * gate * correction
+        combined = self._apply_inference_component_mode(combined)
         return self._mask_phase_deltas(self._five_to_phase(combined))
 
     def forward(self, features, proposal_list, **kwargs):
@@ -877,7 +908,10 @@ class K1AnchoredCausalPhaseGeometryRefiner(
         if not kwargs:
             hidden = self._current_hidden(
                 features, proposal_list, conditioning)
-            return self._bound_current_phase(self.delta_head(hidden))
+            current = self._bound_current_phase(self.delta_head(hidden))
+            five = self._apply_inference_component_mode(
+                self.mask_deltas(self._phase_to_five(current)))
+            return self._mask_phase_deltas(self._five_to_phase(five))
         required = {
             'history_features', 'history_proposals',
             'history_valid_mask'}
@@ -994,6 +1028,7 @@ class K1AnchoredCausalPhaseGeometryRefiner(
                 float(value) for value in
                 self.current_residual_bounds.detach().cpu().tolist()],
             conditioning_gate_bias=self.conditioning_gate_bias,
+            inference_component_mode=self.inference_component_mode,
             same_forward_all_domains=True,
             domain_routing=False,
             sequence_frame_routing=False,

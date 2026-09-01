@@ -314,6 +314,56 @@ def test_k1_phase_no_history_is_exact_current_only():
     assert torch.equal(causal, current)
 
 
+def test_k1_component_current_only_removes_history_correction():
+    model = _k1_phase_refiner(
+        zero_init_output=False, history_gate_bias=20.0,
+        inference_component_mode='current_only')
+    with torch.no_grad():
+        model.delta_head.weight.zero_()
+        model.delta_head.bias.zero_()
+        model.history_delta_head.weight.zero_()
+        model.history_delta_head.bias.fill_(100.0)
+    features = [torch.zeros((1, 1, 4, 4))]
+    history_features = [torch.ones((1, 2, 1, 4, 4))]
+    k1 = [torch.tensor([[10., 12., 8., 4., 0.2]])]
+    dino = [torch.tensor([[11., 12., 9., 4., 0.1]])]
+    output = model(
+        features, k1, conditioning_proposal_list=dino,
+        history_features=history_features,
+        history_proposals=torch.tensor([[[9., 12., 8., 4., 0.2],
+                                         [8., 12., 8., 4., 0.2]]]),
+        history_valid_mask=torch.tensor([[True, True]]),
+        history_ages=torch.tensor([[1, 2]]))
+    assert torch.equal(output, torch.zeros_like(output))
+
+
+def test_k1_component_center_only_masks_size_and_angle_exactly():
+    model = _k1_phase_refiner(
+        zero_init_output=False, inference_component_mode='center_only')
+    raw = torch.tensor([[0.1, -0.2, 0.3, -0.4, 0.5, -0.1]])
+    five = model._phase_to_five(raw)
+    masked = model._apply_inference_component_mode(five)
+    assert masked[:, :2] == pytest.approx(five[:, :2])
+    assert torch.equal(masked[:, 2:], torch.zeros_like(masked[:, 2:]))
+
+
+def test_k1_component_identity_is_exact_anchor_and_mode_is_validated():
+    model = _k1_phase_refiner(
+        zero_init_output=False, inference_component_mode='k1_identity')
+    k1 = torch.tensor([[10., 12., 8., 4., 0.2]])
+    output = model(
+        [torch.zeros((1, 1, 4, 4))], [k1],
+        conditioning_proposal_list=[torch.tensor(
+            [[15., 8., 12., 7., -0.3]])])
+    decoded = model.decode_and_normalize([k1], output)[0]
+    assert torch.equal(output, torch.zeros_like(output))
+    assert torch.equal(decoded, k1)
+    assert model.component_contract()['inference_component_mode'] == (
+        'k1_identity')
+    with pytest.raises(ValueError, match='inference_component_mode'):
+        _k1_phase_refiner(inference_component_mode='unsupported')
+
+
 def test_k1_phase_target_uses_double_angle_periodicity():
     model = _k1_phase_refiner()
     proposal = [torch.tensor([[10., 12., 8., 4., 0.2]])]

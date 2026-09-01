@@ -40,6 +40,7 @@ promoted_checkpoint_sha256 = str(promoted['checkpoint_sha256'])
 
 geometry_refiner = dict(
     zero_init_output=False,
+    inference_component_mode='full',
     center_loss_weight=0.0,
     size_loss_weight=0.0,
     angle_loss_weight=0.0,

@@ -44,3 +44,16 @@ def test_v3_fixed_test_uses_promoted_epoch9_and_cached_inputs():
     assert 'temporal_state=False' in text
     assert 'test_used_for_model_selection=False' in text
     assert 'parameter_update_after_test=False' in text
+    assert "inference_component_mode='full'" in text
+
+
+def test_v3_source_component_config_is_evaluation_only_and_test_free():
+    text = (ROOT / ('crane_project/configs/'
+                    'crane_symeood_dino_k1_retentive_component_'
+                    'source_val.py')).read_text()
+    assert "inference_component_mode='full'" in text
+    assert 'selected_source_epoch=9' in text
+    assert 'evaluation_only=True' in text
+    assert 'source_val' in text
+    assert "ann_file='test/annfiles/'" not in text
+    assert 'parameter_update_after_test=False' in text
