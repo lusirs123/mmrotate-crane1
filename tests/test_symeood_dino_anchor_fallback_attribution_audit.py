@@ -144,6 +144,31 @@ def test_component_contract_rejects_non_identity_k1_mode(tmp_path):
             required_frame_count=2)
 
 
+def test_component_contract_accepts_float32_resize_roundtrip_noise(tmp_path):
+    rows = [
+        dict(filename='real_seq03_00001.jpg', gt=_box(),
+             k1=_box(), dino=_box()),
+        dict(filename='sim_seq09_00001.jpg', gt=_box(),
+             k1=_box(), dino=_box()),
+    ]
+    payload, raw, split, streams = _fixture(tmp_path, rows)
+    # Model-space decoding followed by inverse resize is not bit-exact.  This
+    # sub-pixel perturbation must remain an identity, while the large shift in
+    # the preceding test must still be rejected.
+    streams['k1_identity'][2][0] = _box(cx=10.001, cy=9.999)
+    streams['center_only'][2][0] = _box(cx=10.001, cy=9.999)
+    streams['full'][2][0] = _box(cx=10.001, cy=9.999)
+
+    result = audit.audit_payload(
+        payload, raw, split, 'fixed-target', streams,
+        required_frame_count=2)
+
+    assert result['component_mode_contract']['passed'] is True
+    assert result['component_mode_contract']['tolerance'] == {
+        'center_px': audit.IDENTITY_CENTER_TOLERANCE_PX,
+        'minimum_riou': audit.IDENTITY_RIOU_MIN}
+
+
 def test_causal_geometry_fallback_retains_history_across_missing_run(
         tmp_path):
     rows = [

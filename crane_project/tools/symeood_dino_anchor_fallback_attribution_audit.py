@@ -37,7 +37,13 @@ ROLE_FRAME_COUNTS = dict(base.ROLE_FRAME_COUNTS)
 MODE_NAMES = ('full', 'current_only', 'center_only', 'k1_identity')
 ANGLE_LIMIT_DEG = 35.0
 IOU_THRESHOLD = 0.5
-IDENTITY_TOLERANCE = 1e-4
+# Identity-mode boxes make a model-space -> original-image round trip.  That
+# path is not bit-exact for sequences whose resize scale is non-integral, so a
+# 1e-4 pixel comparison incorrectly rejects an otherwise identical OBB.  Keep
+# the contract tight enough to reject a shifted/wrong stream while allowing
+# ordinary float32 resize/decode noise.
+IDENTITY_CENTER_TOLERANCE_PX = 0.05
+IDENTITY_RIOU_MIN = 0.999
 
 
 def parse_args():
@@ -160,12 +166,24 @@ def _hit(box, gt):
     return bool(_riou(box, gt) >= IOU_THRESHOLD)
 
 
-def _box_equivalent(first, second, tolerance=IDENTITY_TOLERANCE):
+def _box_equivalence(first, second):
     if first is None or second is None:
-        return first is None and second is None
-    if np.linalg.norm(first[:2] - second[:2]) > tolerance:
-        return False
-    return compute_riou(first[:5], second[:5]) >= 1.0 - tolerance
+        matched = first is None and second is None
+        return dict(
+            matched=matched, presence_match=matched,
+            center_error_px=None, riou=None)
+    center_error = float(np.linalg.norm(first[:2] - second[:2]))
+    riou = float(compute_riou(first[:5], second[:5]))
+    return dict(
+        matched=(center_error <= IDENTITY_CENTER_TOLERANCE_PX
+                 and riou >= IDENTITY_RIOU_MIN),
+        presence_match=True,
+        center_error_px=center_error,
+        riou=riou)
+
+
+def _box_equivalent(first, second):
+    return bool(_box_equivalence(first, second)['matched'])
 
 
 def _source_for_identity(k1, dino):
@@ -244,21 +262,29 @@ def _component_contract(rows):
         expected_identity = (
             row['k1'] if row['k1'] is not None else row['dino'])
         checks['frame_count'] += 1
-        if _box_equivalent(identity, expected_identity):
+        identity_equivalence = _box_equivalence(
+            identity, expected_identity)
+        if identity_equivalence['matched']:
             checks['identity_matches_k1_else_dino'] += 1
         else:
-            failures.append('{}:identity'.format(row['frame_key']))
+            failures.append(dict(
+                frame_key=row['frame_key'], check='identity',
+                **identity_equivalence))
         if full is None or center is None:
             if full is None and center is None:
                 checks['full_center_presence_match'] += 1
             else:
                 failures.append('{}:full_center_presence'.format(
                     row['frame_key']))
-        elif np.linalg.norm(full[:2] - center[:2]) <= IDENTITY_TOLERANCE:
+        elif (np.linalg.norm(full[:2] - center[:2]) <=
+              IDENTITY_CENTER_TOLERANCE_PX):
             checks['full_center_coordinates_match'] += 1
         else:
-            failures.append('{}:full_center_coordinates'.format(
-                row['frame_key']))
+            failures.append(dict(
+                frame_key=row['frame_key'],
+                check='full_center_coordinates',
+                center_error_px=float(np.linalg.norm(
+                    full[:2] - center[:2]))))
         if center is None or identity is None:
             if center is None and identity is None:
                 checks['center_identity_presence_match'] += 1
@@ -273,7 +299,9 @@ def _component_contract(rows):
             failures.append('{}:center_identity_size_angle'.format(
                 row['frame_key']))
     return dict(
-        tolerance=IDENTITY_TOLERANCE,
+        tolerance=dict(
+            center_px=IDENTITY_CENTER_TOLERANCE_PX,
+            minimum_riou=IDENTITY_RIOU_MIN),
         counts=dict(checks),
         failure_count=len(failures),
         first_failures=failures[:20],
