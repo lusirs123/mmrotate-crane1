@@ -105,6 +105,8 @@ DualRefiner = MODULE.DinoConditionedDualTowerGeometryRefiner
 CausalRefiner = MODULE.DinoConditionedCausalHistoryRefiner
 K1PhaseRefiner = MODULE.K1AnchoredCausalPhaseGeometryRefiner
 K1RetentiveRefiner = MODULE.K1RetentiveCausalPhaseGeometryRefiner
+SymmetricDualRefiner = (
+    MODULE.SymmetricDualCandidateCausalPhaseGeometryRefiner)
 
 
 def _refiner(**kwargs):
@@ -133,6 +135,12 @@ def _k1_phase_refiner(**kwargs):
 
 def _k1_retentive_refiner(**kwargs):
     return K1RetentiveRefiner(
+        in_channels=1, roi_output_size=1, fc_channels=4, num_fcs=1,
+        history_horizon=2, **kwargs)
+
+
+def _symmetric_dual_refiner(**kwargs):
+    return SymmetricDualRefiner(
         in_channels=1, roi_output_size=1, fc_channels=4, num_fcs=1,
         history_horizon=2, **kwargs)
 
@@ -498,6 +506,31 @@ def test_k1_retentive_v3_activates_pair_error_and_continuous_retention():
     assert contract['continuous_k1_retention'] is True
     assert contract['source_adjacent_pair_error_consistency'] is True
     assert contract['inference_sequence_input'] is False
+
+
+def test_symmetric_dual_candidate_anchor_is_unrouted_and_presence_safe():
+    model = _symmetric_dual_refiner(retention_loss_weight=0.0)
+    k1 = torch.tensor([[10., 20., 8., 4., math.radians(10.)]])
+    dino = torch.tensor([[14., 22., 18., 6., math.radians(30.)]])
+    empty = torch.zeros((0, 5))
+    anchors, conditioning = model.compose_symmetric_anchor(
+        [k1, k1, empty, empty], [dino, empty, dino, empty])
+    assert anchors[0][0, :2].tolist() == pytest.approx([12., 21.])
+    assert anchors[0][0, 2].item() == pytest.approx(
+        math.sqrt(8. * 18.))
+    assert math.degrees(anchors[0][0, 4].item()) == pytest.approx(20.)
+    assert torch.equal(anchors[1], MODULE.canonicalize_le90(k1))
+    assert torch.equal(anchors[2], MODULE.canonicalize_le90(dino))
+    assert anchors[3].shape == (0, 5)
+    assert all(torch.equal(anchor, condition) for anchor, condition in zip(
+        anchors[1:], conditioning[1:]))
+    contract = model.component_contract()
+    assert contract['current_k1_geometry_anchor'] is False
+    assert contract['native_dino_anchor_fallback'] is False
+    assert contract['symmetric_dual_candidate_anchor'] is True
+    assert contract['candidate_blend_weight'] == 0.5
+    assert contract['candidate_blend_learned'] is False
+    assert contract['candidate_selection_router'] is False
 
 
 def _parent_checkpoint(model, center, size, angle):

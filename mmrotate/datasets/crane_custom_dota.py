@@ -20,7 +20,12 @@ class CraneDataset(DOTADataset):
     CLASSES = ('grab',)
 
     def load_annotations(self, ann_folder):
-        ann_files = glob.glob(os.path.join(ann_folder, '*.txt'))
+        # ``._*`` files are AppleDouble metadata sidecars created when a
+        # dataset is copied from macOS to a non-Apple filesystem.  They are
+        # not images/annotations and must never become training samples.
+        ann_files = [
+            path for path in glob.glob(os.path.join(ann_folder, '*.txt'))
+            if not os.path.basename(path).startswith('._')]
         data_infos = []
 
         for ann_file in sorted(ann_files):

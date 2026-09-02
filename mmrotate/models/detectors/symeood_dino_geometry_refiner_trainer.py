@@ -70,8 +70,13 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
         contract = dict(evidence_contract or {})
         frozen_k1_head_forward = bool(
             contract.get('frozen_symeood_detection_head_forward', False))
+        source_train_frames = contract.get('source_train_frames')
+        if (not isinstance(source_train_frames, int)
+                or isinstance(source_train_frames, bool)
+                or source_train_frames <= 0):
+            raise ValueError(
+                'Geometry-refiner source_train_frames must be positive')
         required = dict(
-            source_train_frames=2781,
             source_val_frames=738,
             target_data_read=False,
             detector_forward_during_training=frozen_k1_head_forward,
@@ -108,6 +113,8 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
         refiner_contract = self.geometry_refiner.component_contract()
         self.uses_k1_geometry_anchor = bool(
             refiner_contract.get('current_k1_geometry_anchor', False))
+        self.uses_symmetric_dual_candidate_anchor = bool(
+            refiner_contract.get('symmetric_dual_candidate_anchor', False))
         self.geometry_refiner_initialization = self._load_refiner_checkpoint(
             geometry_refiner_checkpoint,
             geometry_refiner_checkpoint_sha256,
@@ -164,7 +171,8 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
         required = dict(
             architecture=self.geometry_refiner.component_contract().get(
                 'architecture'),
-            source_train_frames=2781,
+            source_train_frames=self.evidence_contract[
+                'source_train_frames'],
             source_val_frames=738,
             target_data_read=False,
             fixed_test_read=False,
@@ -333,13 +341,20 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
         features = self.extract_feat(img)
         dino_proposal_list = [item[:, :5].to(features[0].device)
                               for item in dino_proposals]
-        if self.uses_k1_geometry_anchor:
+        if (self.uses_k1_geometry_anchor
+                or self.uses_symmetric_dual_candidate_anchor):
             _, k1_proposal_list = self._k1_results_and_proposals(
                 features, img_metas, rescale=False)
-            proposal_list = [
-                k1 if int(k1.shape[0]) == 1 else dino
-                for k1, dino in zip(k1_proposal_list, dino_proposal_list)]
-            conditioning_proposal_list = dino_proposal_list
+            if self.uses_symmetric_dual_candidate_anchor:
+                proposal_list, conditioning_proposal_list = (
+                    self.geometry_refiner.compose_symmetric_anchor(
+                        k1_proposal_list, dino_proposal_list))
+            else:
+                proposal_list = [
+                    k1 if int(k1.shape[0]) == 1 else dino
+                    for k1, dino in zip(
+                        k1_proposal_list, dino_proposal_list)]
+                conditioning_proposal_list = dino_proposal_list
         else:
             proposal_list = dino_proposal_list
             conditioning_proposal_list = None
@@ -409,15 +424,24 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
             raise RuntimeError('DINO proposal/meta batch-size mismatch')
         dino_proposal_list = [item[:, :5].to(features[0].device)
                               for item in dino_proposals]
-        if self.uses_k1_geometry_anchor:
+        if (self.uses_k1_geometry_anchor
+                or self.uses_symmetric_dual_candidate_anchor):
             k1_results, k1_proposal_list = self._k1_results_and_proposals(
                 features, img_metas, rescale=False)
-            proposal_list = [
-                k1 if int(k1.shape[0]) == 1 else dino
-                for k1, dino in zip(k1_proposal_list, dino_proposal_list)]
+            if self.uses_symmetric_dual_candidate_anchor:
+                proposal_list, conditioning_proposal_list = (
+                    self.geometry_refiner.compose_symmetric_anchor(
+                        k1_proposal_list, dino_proposal_list))
+            else:
+                proposal_list = [
+                    k1 if int(k1.shape[0]) == 1 else dino
+                    for k1, dino in zip(
+                        k1_proposal_list, dino_proposal_list)]
+                conditioning_proposal_list = dino_proposal_list
         else:
             k1_results = None
             proposal_list = dino_proposal_list
+            conditioning_proposal_list = dino_proposal_list
         causal = hasattr(self.geometry_refiner, 'forward_causal')
         if causal:
             causal_history_images = _unwrap_single_augmentation_tensor(
@@ -450,7 +474,7 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
                 predicted = self.geometry_refiner(
                     image_features, [proposals],
                     conditioning_proposal_list=[
-                        dino_proposal_list[index]],
+                        conditioning_proposal_list[index]],
                     history_features=image_history_features,
                     history_proposals=causal_history_proposals[
                         index:index + 1].to(features[0].device),

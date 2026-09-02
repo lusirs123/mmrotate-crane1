@@ -254,6 +254,46 @@ def test_causal_source_gate_uses_dual_reference_and_cannot_open_test():
     assert "'fixed-target'" not in text
 
 
+def test_seq11_e1_is_exactly_59_unique_aux_frames_without_test():
+    path = ROOT / (
+        'crane_project/configs/'
+        'crane_symeood_dino_k1_retentive_causal_phase_refiner_'
+        'source_v3_seq11.py')
+    text = path.read_text()
+    assert "aux_source_split = 'extra_source_real_seq11_pilot_k1p9'" in text
+    assert 'source_train_frames=2840' in text
+    assert 'original_source_train_frames=2781' in text
+    assert 'auxiliary_source_frames=59' in text
+    assert 'auxiliary_source_sparse_history=True' in text
+    assert 'auxiliary_source_router_claim=False' in text
+    assert 'appledouble_sidecars_are_samples=False' in text
+    assert "ann_file='test/" not in text
+    assert "expected_split='test'" not in text
+    smoke = (ROOT / ('crane_project/tools/'
+                     'symeood_dino_causal_history_source_smoke.py')).read_text()
+    assert 'aux_sample = train_dataset[2781]' in smoke
+    assert 'auxiliary_source_sample_valid' in smoke
+
+
+def test_symmetric_e2_removes_hard_k1_anchor_without_routing():
+    path = ROOT / (
+        'crane_project/configs/'
+        'crane_symeood_dino_symmetric_dual_candidate_'
+        'causal_phase_source_e2_seq11.py')
+    text = path.read_text()
+    assert "type='SymmetricDualCandidateCausalPhaseGeometryRefiner'" in text
+    assert 'current_k1_geometry_anchor=False' in text
+    assert 'native_dino_anchor_fallback=False' in text
+    assert 'symmetric_dual_candidate_anchor=True' in text
+    assert 'candidate_blend_weight=0.5' in text
+    assert 'candidate_blend_learned=False' in text
+    assert 'candidate_selection_router=False' in text
+    assert 'same_forward_all_domains=True' in text
+    assert 'domain_routing=False' in text
+    assert 'sequence_frame_routing=False' in text
+    assert 'fixed_target_parameter_selection=False' in text
+
+
 def test_depth_interface_gate_is_source_val_relative_and_q_bounded():
     path = ROOT / ('crane_project/utils/'
                    'depth_interface_geometry_gate.py')

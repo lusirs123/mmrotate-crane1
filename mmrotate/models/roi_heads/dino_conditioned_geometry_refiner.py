@@ -1052,3 +1052,77 @@ class K1RetentiveCausalPhaseGeometryRefiner(
             sequence_frame_routing=False,
             temporal_state=False))
         return contract
+
+
+@ROTATED_HEADS.register_module()
+class SymmetricDualCandidateCausalPhaseGeometryRefiner(
+        K1AnchoredCausalPhaseGeometryRefiner):
+    """Use an equal-weight K1/DINO OBB anchor without a hard takeover route.
+
+    When both frozen candidates exist, their centers and log-sizes are
+    averaged and their le90 angles are interpolated on the pi-periodic
+    manifold.  A sole available candidate is retained.  The learned residual
+    head and causal history then operate on that common anchor.  Candidate
+    presence is only an availability condition; no domain, sequence, frame,
+    score threshold, or discrete source-selection label enters the model.
+    """
+
+    @staticmethod
+    def _blend_pair(first, second):
+        first = canonicalize_le90(first[:, :5])
+        second = canonicalize_le90(second[:, :5])
+        output = first.clone()
+        output[:, :2] = 0.5 * (first[:, :2] + second[:, :2])
+        output[:, 2:4] = torch.exp(0.5 * (
+            torch.log(first[:, 2:4].clamp(min=1e-6))
+            + torch.log(second[:, 2:4].clamp(min=1e-6))))
+        difference = torch.remainder(
+            second[:, 4] - first[:, 4] + math.pi / 2.0,
+            math.pi) - math.pi / 2.0
+        output[:, 4] = first[:, 4] + 0.5 * difference
+        return canonicalize_le90(output)
+
+    def compose_symmetric_anchor(self, k1_list, dino_list):
+        if len(k1_list) != len(dino_list):
+            raise RuntimeError('K1/DINO candidate batch-size mismatch')
+        anchors = []
+        conditioning = []
+        for k1, dino in zip(k1_list, dino_list):
+            k1_count = int(k1.shape[0])
+            dino_count = int(dino.shape[0])
+            if k1_count > 1 or dino_count > 1:
+                raise RuntimeError(
+                    'Symmetric candidate fusion accepts at most one box/lane')
+            if k1_count == 1 and dino_count == 1:
+                anchor = self._blend_pair(k1, dino)
+                condition = dino
+            elif k1_count == 1:
+                anchor = canonicalize_le90(k1[:, :5])
+                condition = anchor
+            elif dino_count == 1:
+                anchor = canonicalize_le90(dino[:, :5])
+                condition = anchor
+            else:
+                anchor = k1.new_zeros((0, 5))
+                condition = anchor
+            anchors.append(anchor)
+            conditioning.append(condition)
+        return anchors, conditioning
+
+    def component_contract(self):
+        contract = super().component_contract()
+        contract.update(dict(
+            architecture='symmetric_dual_candidate_causal_phase_refiner_e2_v1',
+            current_k1_geometry_anchor=False,
+            native_dino_anchor_fallback=False,
+            native_dino_current_conditioning=True,
+            symmetric_dual_candidate_anchor=True,
+            candidate_blend_weight=0.5,
+            candidate_blend_learned=False,
+            candidate_selection_router=False,
+            candidate_presence_fallback_only=True,
+            same_forward_all_domains=True,
+            domain_routing=False,
+            sequence_frame_routing=False,
+            temporal_state=False))
+        return contract

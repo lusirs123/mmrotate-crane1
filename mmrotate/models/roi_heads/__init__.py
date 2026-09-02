@@ -10,7 +10,9 @@ from .dino_conditioned_geometry_refiner import (
     DinoConditionedCausalHistoryRefiner,
     DinoConditionedDualTowerGeometryRefiner,
     DinoConditionedGeometryRefiner,
-    K1AnchoredCausalPhaseGeometryRefiner)
+    K1AnchoredCausalPhaseGeometryRefiner,
+    K1RetentiveCausalPhaseGeometryRefiner,
+    SymmetricDualCandidateCausalPhaseGeometryRefiner)
 
 __all__ = [
     'RotatedBBoxHead', 'RotatedConvFCBBoxHead', 'RotatedShared2FCBBoxHead',
@@ -19,5 +21,7 @@ __all__ = [
     'DinoConditionedGeometryRefiner',
     'DinoConditionedDualTowerGeometryRefiner',
     'DinoConditionedCausalHistoryRefiner',
-    'K1AnchoredCausalPhaseGeometryRefiner'
+    'K1AnchoredCausalPhaseGeometryRefiner',
+    'K1RetentiveCausalPhaseGeometryRefiner',
+    'SymmetricDualCandidateCausalPhaseGeometryRefiner'
 ]

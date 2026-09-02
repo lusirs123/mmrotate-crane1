@@ -19,6 +19,7 @@ import numpy as np
 PROTOCOL = 'source_only_causal_history_refiner_smoke_v1'
 V2_PROTOCOL = 'source_only_k1_anchored_causal_phase_refiner_smoke_v2'
 V3_PROTOCOL = 'source_only_k1_retentive_causal_phase_refiner_smoke_v3'
+E2_PROTOCOL = 'source_only_symmetric_dual_candidate_refiner_smoke_e2_v1'
 
 
 def parse_args():
@@ -116,16 +117,21 @@ def _run(args):
     architecture = checkpoint_contract.get('architecture')
     v2 = architecture == 'k1_anchored_causal_phase_refiner_v2'
     v3 = architecture == 'k1_retentive_causal_phase_refiner_v3'
+    e2 = architecture == 'symmetric_dual_candidate_causal_phase_refiner_e2_v1'
+    pair_training = v3 or e2
+    source_train_frames = int(checkpoint_contract.get(
+        'source_train_frames', 0))
     required_contract = dict(
         architecture=(
-            ('k1_retentive_causal_phase_refiner_v3' if v3 else
-             'k1_anchored_causal_phase_refiner_v2') if (v2 or v3) else
+            ('symmetric_dual_candidate_causal_phase_refiner_e2_v1' if e2 else
+             'k1_retentive_causal_phase_refiner_v3' if v3 else
+             'k1_anchored_causal_phase_refiner_v2') if (v2 or v3 or e2) else
             'current_anchored_causal_history_refiner_v1'),
         frozen_baseline_variant='symeood_k1_epoch24',
         frozen_baseline_config='crane_project/configs/crane_symeood_k1.py',
         frozen_baseline_checkpoint=(
             'work_dirs/crane_symeood_k1/epoch_24.pth'),
-        source_train_frames=2781,
+        source_train_frames=source_train_frames,
         source_val_frames=738,
         target_data_read=False,
         fixed_test_read=False,
@@ -135,23 +141,23 @@ def _run(args):
         temporal_state=False,
         history_identity_model_input=False,
         fixed_target_parameter_selection=False)
-    if v2 or v3:
+    if v2 or v3 or e2:
         required_contract.update(dict(
             detector_forward_during_training=True,
             frozen_symeood_detection_head_forward=True,
             frozen_symeood_detection_from_shared_features=True,
-            current_k1_geometry_anchor=True,
-            native_dino_anchor_fallback=True,
             native_dino_current_conditioning=True,
             same_forward_all_domains=True,
             bounded_current_residual=True,
             continuous_double_angle_phase=True,
             zero_phase_is_exact_identity=True,
             representation='six_delta_xywh_sin2a_cos2a_residual'))
-    if v3:
+    if v2 or v3:
         required_contract.update(dict(
-            continuous_k1_retention=True,
-            retention_loss_weight=0.25,
+            current_k1_geometry_anchor=True,
+            native_dino_anchor_fallback=True))
+    if pair_training:
+        required_contract.update(dict(
             source_adjacent_pair_supervision=True,
             adjacent_pair_identity_model_input=False,
             temporal_size_error_consistency=True,
@@ -160,25 +166,56 @@ def _run(args):
             single_gpu_adjacent_pair_training=True,
             train_samples_per_gpu=2,
             train_shuffle=False))
+    if v3:
+        required_contract.update(dict(
+            continuous_k1_retention=True,
+            retention_loss_weight=0.25))
+    if e2:
+        required_contract.update(dict(
+            current_k1_geometry_anchor=False,
+            native_dino_anchor_fallback=False,
+            symmetric_dual_candidate_anchor=True,
+            candidate_blend_weight=0.5,
+            candidate_blend_learned=False,
+            candidate_selection_router=False,
+            candidate_presence_fallback_only=True,
+            continuous_k1_retention=False,
+            retention_loss_weight=0.0))
+    auxiliary_source = source_train_frames == 2840
+    if auxiliary_source:
+        required_contract.update(dict(
+            original_source_train_frames=2781,
+            auxiliary_source_frames=59,
+            auxiliary_source_sequence='real_seq11',
+            auxiliary_source_independent_sequence_claim=False,
+            auxiliary_source_router_claim=False,
+            auxiliary_source_sparse_history=True,
+            appledouble_sidecars_are_samples=False))
     contract_checks = {
         key: checkpoint_contract.get(key) == expected
         for key, expected in required_contract.items()}
+    contract_checks['positive_source_train_frames'] = (
+        source_train_frames > 0)
     config_text = open(args.config, 'r', encoding='utf-8').read()
     contract_checks.update(dict(
         no_test_annotation=("ann_file='test/" not in config_text),
         no_test_audit=("expected_split='test'" not in config_text),
         single_source_forward=(
             cfg.model.geometry_refiner.type ==
-            ('K1RetentiveCausalPhaseGeometryRefiner' if v3 else
+            ('SymmetricDualCandidateCausalPhaseGeometryRefiner' if e2 else
+             'K1RetentiveCausalPhaseGeometryRefiner' if v3 else
              'K1AnchoredCausalPhaseGeometryRefiner' if v2 else
              'DinoConditionedCausalHistoryRefiner')),
         train_batch_contract=(
-            cfg.data.train_dataloader.samples_per_gpu == (2 if v3 else 1)),
+            cfg.data.train_dataloader.samples_per_gpu == (
+                2 if pair_training else 1)),
         train_shuffle_contract=(
-            bool(cfg.data.train_dataloader.shuffle) is (False if v3 else True))))
+            bool(cfg.data.train_dataloader.shuffle) is (
+                False if pair_training else True))))
     if not all(contract_checks.values()):
         return dict(
-            protocol=V3_PROTOCOL if v3 else V2_PROTOCOL if v2 else PROTOCOL,
+            protocol=(E2_PROTOCOL if e2 else V3_PROTOCOL if v3 else
+                      V2_PROTOCOL if v2 else PROTOCOL),
             evidence_boundary='source_train_and_source_val_only',
             target_data_read=False,
             fixed_test_read=False,
@@ -189,9 +226,10 @@ def _run(args):
 
     train_dataset = build_dataset(cfg.data.train)
     val_dataset = build_dataset(cfg.data.val)
-    if len(train_dataset) != 2781 or len(val_dataset) != 738:
+    if (len(train_dataset) != source_train_frames
+            or len(val_dataset) != 738):
         raise RuntimeError('Source dataset frame-count contract failed')
-    if v3:
+    if pair_training:
         first_train_sample, train_sample, first_train_index, train_index = (
             _adjacent_pair_with_history(train_dataset))
         train_samples = [first_train_sample, train_sample]
@@ -200,6 +238,7 @@ def _run(args):
         first_train_index = None
         train_samples = [train_sample]
     val_sample, val_index = _first_sample(val_dataset)
+    aux_sample = train_dataset[2781] if auxiliary_source else None
     history_images = _container_tensor(
         train_sample, 'causal_history_images')
     history_proposals = _container_tensor(
@@ -207,6 +246,10 @@ def _run(args):
     history_mask = _container_tensor(
         train_sample, 'causal_history_valid_mask')
     train_meta = _container_tensor(train_sample, 'img_metas')
+    aux_meta = (None if aux_sample is None else
+                _container_tensor(aux_sample, 'img_metas'))
+    aux_dino = (None if aux_sample is None else
+                _container_tensor(aux_sample, 'dino_proposals'))
     horizon = int(cfg.model.geometry_refiner.history_horizon)
     input_checks = dict(
         history_images_shape=(
@@ -217,7 +260,18 @@ def _run(args):
         at_least_one_valid_history=bool(history_mask.any()),
         explicit_no_flip_metadata=(
             train_meta.get('flip') is False
-            and train_meta.get('flip_direction') is None))
+            and train_meta.get('flip_direction') is None),
+        auxiliary_source_sample_valid=(
+            not auxiliary_source or (
+                aux_meta is not None
+                and os.path.basename(aux_meta.get(
+                    'ori_filename', aux_meta.get('filename', ''))).startswith(
+                        'real_seq11_')
+                and not os.path.basename(aux_meta.get(
+                    'ori_filename', aux_meta.get('filename', ''))).startswith(
+                        '._')
+                and aux_dino is not None
+                and tuple(aux_dino.shape) in ((0, 5), (1, 5)))))
     if not all(input_checks.values()):
         raise RuntimeError('Causal history source tensor contract failed')
 
@@ -234,7 +288,8 @@ def _run(args):
                  raw_model.geometry_refiner.parameters()
                  if parameter.requires_grad]
     parallel = MMDataParallel(raw_model, device_ids=[args.gpu])
-    batch = collate(train_samples, samples_per_gpu=(2 if v3 else 1))
+    batch = collate(
+        train_samples, samples_per_gpu=(2 if pair_training else 1))
     optimizer.zero_grad()
     losses = parallel(return_loss=True, **batch)
     loss, log_vars = raw_model._parse_losses(losses)
@@ -251,13 +306,13 @@ def _run(args):
             raw_model.geometry_refiner.history_delta_head.weight.grad).item()
         > 0)
     phase_head_gradient_nonzero = bool(
-        not (v2 or v3) or (
+        not (v2 or v3 or e2) or (
             raw_model.geometry_refiner.delta_head.weight.grad is not None
             and torch.count_nonzero(
                 raw_model.geometry_refiner.delta_head.weight.grad).item()
             > 0))
     conditioning_head_gradients_finite = bool(
-        not (v2 or v3) or any(
+        not (v2 or v3 or e2) or any(
             parameter.grad is not None
             and torch.isfinite(parameter.grad).all().item()
             for parameter in
@@ -284,7 +339,7 @@ def _run(args):
         phase_head_gradient_nonzero=phase_head_gradient_nonzero,
         conditioning_head_gradients_finite=conditioning_head_gradients_finite,
         adjacent_pair_objective_active=(
-            not v3 or (
+            not pair_training or (
                 float(log_vars.get('refiner_temporal_pair_count', 0.0)) == 1.0
                 and 'refiner_temporal_size_objective' in log_vars)),
         retention_objective_active=(
@@ -294,7 +349,8 @@ def _run(args):
             frozen_before == frozen_after_step == frozen_after_val),
         source_val_forward_valid=bool(output_valid))
     return dict(
-        protocol=V3_PROTOCOL if v3 else V2_PROTOCOL if v2 else PROTOCOL,
+        protocol=(E2_PROTOCOL if e2 else V3_PROTOCOL if v3 else
+                  V2_PROTOCOL if v2 else PROTOCOL),
         evidence_boundary='source_train_and_source_val_only',
         target_data_read=False,
         fixed_test_read=False,
@@ -322,11 +378,15 @@ def _run(args):
         decision=(
             ('ALLOW_K1_RETENTIVE_CAUSAL_PHASE_SOURCE_TRAINING'
              if v3 else
+             'ALLOW_SYMMETRIC_DUAL_CANDIDATE_SOURCE_TRAINING'
+             if e2 else
              'ALLOW_K1_ANCHORED_CAUSAL_PHASE_SOURCE_TRAINING'
              if v2 else 'ALLOW_CAUSAL_HISTORY_SOURCE_TRAINING')
             if all(checks.values()) else
             ('STOP_K1_RETENTIVE_CAUSAL_PHASE_SOURCE_SMOKE_FAILED'
              if v3 else
+             'STOP_SYMMETRIC_DUAL_CANDIDATE_SOURCE_SMOKE_FAILED'
+             if e2 else
              'STOP_K1_ANCHORED_CAUSAL_PHASE_SOURCE_SMOKE_FAILED'
              if v2 else 'STOP_CAUSAL_HISTORY_SOURCE_SMOKE_FAILED')))
 
@@ -335,11 +395,13 @@ def main():
     args = parse_args()
     requested_v2 = 'k1_anchored_causal_phase' in os.path.basename(args.config)
     requested_v3 = 'k1_retentive_causal_phase' in os.path.basename(args.config)
+    requested_e2 = 'symmetric_dual_candidate' in os.path.basename(args.config)
     try:
         report = _run(args)
     except Exception as error:
         report = dict(
-            protocol=(V3_PROTOCOL if requested_v3 else
+            protocol=(E2_PROTOCOL if requested_e2 else
+                      V3_PROTOCOL if requested_v3 else
                       V2_PROTOCOL if requested_v2 else PROTOCOL),
             evidence_boundary='source_train_and_source_val_only',
             target_data_read=False,
@@ -349,6 +411,8 @@ def main():
             decision=(
                 'STOP_K1_RETENTIVE_CAUSAL_PHASE_SOURCE_SMOKE_ERROR'
                 if requested_v3 else
+                'STOP_SYMMETRIC_DUAL_CANDIDATE_SOURCE_SMOKE_ERROR'
+                if requested_e2 else
                 'STOP_K1_ANCHORED_CAUSAL_PHASE_SOURCE_SMOKE_ERROR'
                 if requested_v2 else
                 'STOP_CAUSAL_HISTORY_SOURCE_SMOKE_ERROR'),

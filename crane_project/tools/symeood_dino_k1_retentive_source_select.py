@@ -10,6 +10,17 @@ import re
 
 SOURCE_GATE_PROTOCOL = (
     'k1_retentive_causal_phase_refiner_source_gate_v3_geometry_v1')
+SOURCE_GATE_PROTOCOLS = (
+    SOURCE_GATE_PROTOCOL,
+    'k1_retentive_causal_phase_refiner_source_gate_v3_seq11_e1',
+    'symmetric_dual_candidate_causal_phase_refiner_source_gate_e2_v1_seq11')
+SELECTION_PROTOCOL_BY_GATE = {
+    SOURCE_GATE_PROTOCOL:
+        'k1_retentive_causal_phase_refiner_source_selection_v3',
+    SOURCE_GATE_PROTOCOLS[1]:
+        'k1_retentive_causal_phase_refiner_source_selection_v3_seq11_e1',
+    SOURCE_GATE_PROTOCOLS[2]:
+        'symmetric_dual_candidate_source_selection_e2_v1_seq11'}
 SELECTION_PROTOCOL = (
     'k1_retentive_causal_phase_refiner_source_selection_v3')
 SELECTION_POLICY = 'passing_only_min_mcml_max_riou_min_dfr_earliest_v1'
@@ -18,6 +29,9 @@ SELECTION_POLICY = 'passing_only_min_mcml_max_riou_min_dfr_earliest_v1'
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--source-gates', nargs='+', required=True)
+    parser.add_argument(
+        '--source-gate-protocol', choices=SOURCE_GATE_PROTOCOLS,
+        default=SOURCE_GATE_PROTOCOL)
     parser.add_argument('--out-json', required=True)
     return parser.parse_args()
 
@@ -33,13 +47,13 @@ def _epoch(path):
     return int(match.group(1))
 
 
-def _read_gate(path):
+def _read_gate(path, source_gate_protocol=SOURCE_GATE_PROTOCOL):
     absolute = os.path.abspath(os.fspath(path))
     with open(absolute, 'rb') as handle:
         raw = handle.read()
     gate = json.loads(raw.decode('utf-8'))
     required = dict(
-        protocol=SOURCE_GATE_PROTOCOL,
+        protocol=source_gate_protocol,
         evidence_boundary='source_val_only',
         target_data_read=False,
         fixed_test_read=False,
@@ -93,10 +107,10 @@ def _rank(row):
         int(row['epoch']))
 
 
-def select(source_gates):
+def select(source_gates, source_gate_protocol=SOURCE_GATE_PROTOCOL):
     if len(source_gates) != 10:
-        raise RuntimeError('V3 selection requires exactly ten source gates')
-    rows = [_read_gate(path) for path in source_gates]
+        raise RuntimeError('Source selection requires exactly ten gates')
+    rows = [_read_gate(path, source_gate_protocol) for path in source_gates]
     if sorted(row['epoch'] for row in rows) != list(range(1, 11)):
         raise RuntimeError('Source gates must cover epochs 1..10 exactly')
     eligible = [row for row in rows if row['passed']]
@@ -104,10 +118,11 @@ def select(source_gates):
         raise RuntimeError('No V3 epoch passed the complete source gate')
     selected = min(eligible, key=_rank)
     return dict(
-        protocol=SELECTION_PROTOCOL,
+        protocol=SELECTION_PROTOCOL_BY_GATE[source_gate_protocol],
         evidence_boundary='source_val_only',
         target_data_read=False,
         fixed_test_read=False,
+        source_gate_protocol=source_gate_protocol,
         selection_policy=SELECTION_POLICY,
         evaluated_epochs=list(range(1, 11)),
         passing_epochs=sorted(row['epoch'] for row in eligible),
@@ -132,7 +147,7 @@ def select(source_gates):
 
 def main():
     args = parse_args()
-    report = select(args.source_gates)
+    report = select(args.source_gates, args.source_gate_protocol)
     output = os.path.abspath(os.fspath(args.out_json))
     os.makedirs(os.path.dirname(output), exist_ok=True)
     with open(output, 'w', encoding='utf-8') as handle:
