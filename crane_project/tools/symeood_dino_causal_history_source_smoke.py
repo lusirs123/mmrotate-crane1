@@ -181,7 +181,8 @@ def _run(args):
             candidate_presence_fallback_only=True,
             continuous_k1_retention=False,
             retention_loss_weight=0.0))
-    auxiliary_source = source_train_frames == 2840
+    auxiliary_source = source_train_frames in (2829, 2840)
+    auxiliary_blocksplit = source_train_frames == 2829
     if auxiliary_source:
         required_contract.update(dict(
             original_source_train_frames=2781,
@@ -191,6 +192,18 @@ def _run(args):
             auxiliary_source_router_claim=False,
             auxiliary_source_sparse_history=True,
             appledouble_sidecars_are_samples=False))
+    if auxiliary_blocksplit:
+        required_contract.update(dict(
+            protocol='source_only_k1_retentive_v3_seq11_blocksplit_e1_v2',
+            auxiliary_source_train_frames=48,
+            auxiliary_source_val_frames=11,
+            auxiliary_train_val_overlap=0,
+            auxiliary_validation_temporal_metrics=False,
+            auxiliary_split_manifest=(
+                'crane_project/data_contracts/'
+                'real_seq11_pilot_k1p9_blocksplit_v1.json'),
+            auxiliary_split_manifest_sha256=(
+                '2f827e0b23b41a93394e063178caa0fc23f51a104b934f4f48835b1fe728e99a')))
     contract_checks = {
         key: checkpoint_contract.get(key) == expected
         for key, expected in required_contract.items()}
@@ -359,6 +372,9 @@ def _run(args):
         seed=int(args.seed),
         train_frame_count=len(train_dataset),
         source_val_frame_count=len(val_dataset),
+        auxiliary_source_train_frame_count=(
+            48 if auxiliary_blocksplit else 59 if auxiliary_source else 0),
+        auxiliary_source_val_frame_count=(11 if auxiliary_blocksplit else 0),
         selected_train_index=int(train_index),
         selected_previous_train_index=(
             None if first_train_index is None else int(first_train_index)),

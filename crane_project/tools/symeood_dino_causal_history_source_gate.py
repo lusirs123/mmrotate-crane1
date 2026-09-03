@@ -26,6 +26,8 @@ V3_SEQ11_PROTOCOL = (
     'k1_retentive_causal_phase_refiner_source_gate_v3_seq11_e1')
 E2_PROTOCOL = (
     'symmetric_dual_candidate_causal_phase_refiner_source_gate_e2_v1_seq11')
+SEQ11_BLOCKSPLIT_LEGACY_PROTOCOL = (
+    'k1_retentive_seq11_blocksplit_legacy_source_gate_v2')
 
 
 def parse_args():
@@ -65,8 +67,15 @@ def _checkpoint_contract(path, expected_sha256=None):
     v3 = architecture == 'k1_retentive_causal_phase_refiner_v3'
     e2 = architecture == 'symmetric_dual_candidate_causal_phase_refiner_e2_v1'
     seq11 = int(contract.get('auxiliary_source_frames', 0)) == 59
-    expected_source_train_frames = 2840 if seq11 else 2781
+    blocksplit = bool(
+        seq11
+        and int(contract.get('auxiliary_source_train_frames', 0)) == 48
+        and int(contract.get('auxiliary_source_val_frames', 0)) == 11)
+    expected_source_train_frames = (
+        2829 if blocksplit else 2840 if seq11 else 2781)
     expected_protocol = (
+        'source_only_k1_retentive_v3_seq11_blocksplit_e1_v2'
+        if (v3 and blocksplit) else
         'source_only_symmetric_dual_candidate_e2_v1_seq11' if e2 else
         'source_only_k1_retentive_v3_plus_seq11_e1' if (v3 and seq11) else
         'source_only_k1_retentive_causal_phase_refiner_v3' if v3 else
@@ -160,6 +169,17 @@ def _checkpoint_contract(path, expected_sha256=None):
             auxiliary_source_router_claim=False,
             auxiliary_source_sparse_history=True,
             appledouble_sidecars_are_samples=False))
+    if blocksplit:
+        required.update(dict(
+            auxiliary_source_train_frames=48,
+            auxiliary_source_val_frames=11,
+            auxiliary_train_val_overlap=0,
+            auxiliary_validation_temporal_metrics=False,
+            auxiliary_split_manifest=(
+                'crane_project/data_contracts/'
+                'real_seq11_pilot_k1p9_blocksplit_v1.json'),
+            auxiliary_split_manifest_sha256=(
+                '2f827e0b23b41a93394e063178caa0fc23f51a104b934f4f48835b1fe728e99a')))
     failures = [
         '{}={!r} expected {!r}'.format(key, contract.get(key), expected)
         for key, expected in required.items()
@@ -167,7 +187,7 @@ def _checkpoint_contract(path, expected_sha256=None):
     if failures:
         raise RuntimeError(
             'Candidate checkpoint contract failed: ' + '; '.join(failures))
-    return absolute, observed, contract, v2, v3, e2, seq11
+    return absolute, observed, contract, v2, v3, e2, seq11, blocksplit
 
 
 def _sym_geometry_preservation(candidate, sym):
@@ -210,6 +230,63 @@ def _sym_geometry_preservation(candidate, sym):
         passed=all(checks.values()))
 
 
+def _seq11_blocksplit_legacy_preservation(candidate, sym):
+    """Pre-registered detection/control non-regression for the old 738 set.
+
+    Detailed depth-interface statistics remain in the report as diagnostics;
+    depth is postponed and therefore they are not an all-fields hard veto in
+    this protocol version.
+    """
+    checks = dict(
+        real_center_drop_le_1pp=(
+            float(candidate['real/R_center(%)']) >=
+            float(sym['real/R_center(%)']) - 1.0),
+        sim_center_drop_le_1pp=(
+            float(candidate['sim/R_center(%)']) >=
+            float(sym['sim/R_center(%)']) - 1.0),
+        real_riou_drop_le_0p01=(
+            float(candidate['real/mean_RIoU']) >=
+            float(sym['real/mean_RIoU']) - 0.01),
+        sim_riou_drop_le_0p01=(
+            float(candidate['sim/mean_RIoU']) >=
+            float(sym['sim/mean_RIoU']) - 0.01),
+        real_dfr_increase_le_0p25pp=(
+            float(candidate['real/DFR(%/frame)']) <=
+            float(sym['real/DFR(%/frame)']) + 0.25),
+        sim_dfr_increase_le_0p25pp=(
+            float(candidate['sim/DFR(%/frame)']) <=
+            float(sym['sim/DFR(%/frame)']) + 0.25),
+        real_aci_drop_le_0p003=(
+            float(candidate['real/ACI']) >=
+            float(sym['real/ACI']) - 0.003),
+        sim_aci_drop_le_0p003=(
+            float(candidate['sim/ACI']) >=
+            float(sym['sim/ACI']) - 0.003),
+        sim_a_rmse_not_worse=(
+            float(candidate['sim/A-RMSE(deg)']) <=
+            float(sym['sim/A-RMSE(deg)'])),
+        real_tdr_drop_le_1pp=(
+            float(candidate['real/TDR_w10(%)']) >=
+            float(sym['real/TDR_w10(%)']) - 1.0),
+        sim_tdr_drop_le_1pp=(
+            float(candidate['sim/TDR_w10(%)']) >=
+            float(sym['sim/TDR_w10(%)']) - 1.0),
+        real_mcml_not_worse=(
+            int(candidate['real/MCML_max(frames)']) <=
+            int(sym['real/MCML_max(frames)'])),
+        sim_mcml_not_worse=(
+            int(candidate['sim/MCML_max(frames)']) <=
+            int(sym['sim/MCML_max(frames)'])))
+    return dict(
+        reference='formal_k1_source_val_738',
+        guardrails=dict(
+            center_drop_pp=1.0, mean_riou_drop=0.01,
+            dfr_increase_pp_per_frame=0.25, aci_drop=0.003,
+            sim_a_rmse_increase_deg=0.0, tdr_drop_pp=1.0,
+            mcml_policy='not_worse_than_k1'),
+        checks=checks, passed=all(checks.values()))
+
+
 def main():
     args = parse_args()
     candidate_path, candidate_boxes = _load_results(args.candidate_results)
@@ -238,7 +315,7 @@ def main():
     depth_interface_geometry = depth_interface_geometry_gate(
         metadata, candidate_boxes, sym_reference_boxes)
     (checkpoint_path, checkpoint_hash, checkpoint_contract,
-     v2, v3, e2, seq11) = (
+     v2, v3, e2, seq11, blocksplit) = (
         _checkpoint_contract(
             args.candidate_checkpoint,
             args.expected_candidate_sha256))

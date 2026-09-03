@@ -275,6 +275,32 @@ def test_seq11_e1_is_exactly_59_unique_aux_frames_without_test():
     assert 'auxiliary_source_sample_valid' in smoke
 
 
+def test_seq11_blocksplit_e1_uses_48_train_and_11_mechanism_val():
+    config = ROOT / (
+        'crane_project/configs/'
+        'crane_symeood_dino_k1_retentive_causal_phase_refiner_'
+        'source_v3_seq11_blocksplit.py')
+    text = config.read_text()
+    assert 'source_train_frames=2829' in text
+    assert 'auxiliary_source_train_frames=48' in text
+    assert 'auxiliary_source_val_frames=11' in text
+    assert 'auxiliary_train_val_overlap=0' in text
+    assert 'auxiliary_validation_temporal_metrics=False' in text
+    assert "ann_file='test/" not in text
+    assert "expected_split='test'" not in text
+    assert 'source_only_k1_retentive_v3_seq11_blocksplit_e1_v2' in text
+    aux_gate = ROOT / (
+        'crane_project/tools/symeood_dino_seq11_aux_mechanism_gate.py')
+    gate_text = aux_gate.read_text()
+    assert "temporal_metrics_computed=False" in gate_text
+    assert "eligible_for_fixed_test=False" in gate_text
+    assert 'k1_present_wrong_dino_hit_count' in gate_text
+    smoke = (ROOT / ('crane_project/tools/'
+                     'symeood_dino_causal_history_source_smoke.py')).read_text()
+    assert 'source_train_frames in (2829, 2840)' in smoke
+    assert 'auxiliary_source_train_frame_count' in smoke
+
+
 def test_symmetric_e2_removes_hard_k1_anchor_without_routing():
     path = ROOT / (
         'crane_project/configs/'

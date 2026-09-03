@@ -1,0 +1,29 @@
+{
+  "protocol": "real_seq11_auxiliary_temporal_block_split_v1",
+  "sequence": "real_seq11",
+  "source_split": "extra_source_real_seq11_pilot_k1p9",
+  "sampling_note": "Thirty global samples plus three sparse one-fps windows; this is not a contiguous-video temporal benchmark.",
+  "all_frame_count": 59,
+  "aux_train_frame_count": 48,
+  "aux_val_frame_count": 11,
+  "holdout_rule": {
+    "kind": "closed_source_frame_interval_with_near_neighbor_buffer",
+    "start_frame": 6586,
+    "end_frame": 6811,
+    "reason": "Hold out the complete third sampling window and the adjacent uniform frame 6710; never random-split near-duplicate video samples."
+  },
+  "aux_train_frames": [
+    125, 424, 724, 1023, 1322, 1622, 1921,
+    2120, 2145, 2170, 2195, 2220, 2245, 2270, 2295, 2320, 2345,
+    2519, 2819, 3118, 3417, 3717, 4016,
+    4315, 4353, 4378, 4403, 4428, 4453, 4478, 4503, 4528, 4553,
+    4578, 4615, 4914, 5213, 5513, 5812, 6111, 6411,
+    7009, 7308, 7608, 7907, 8206, 8506, 8805
+  ],
+  "aux_val_frames": [
+    6586, 6611, 6636, 6661, 6686, 6710, 6711, 6736, 6761, 6786, 6811
+  ],
+  "temporal_metrics_authorized": false,
+  "independent_sequence_claim_authorized": false,
+  "fixed_test_use_authorized": false
+}
