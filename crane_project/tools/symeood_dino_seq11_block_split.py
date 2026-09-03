@@ -63,7 +63,10 @@ def _read_json(path):
 
 
 def _stem(sequence, frame):
-    return '{}_{:05d}'.format(sequence, int(frame))
+    # The pilot preserves original video frame ids with six decimal digits,
+    # for example real_seq11_000125.jpg.  This differs from some legacy crane
+    # splits that use five digits, so the width is part of this data contract.
+    return '{}_{:06d}'.format(sequence, int(frame))
 
 
 def _manifest(path):
@@ -208,8 +211,17 @@ def materialize(args):
         source_root / 'annfiles', {'.txt'})
     wanted = contract['train_stems'] | contract['val_stems']
     if set(images) != wanted or set(annotations) != wanted:
+        mismatch = dict(
+            expected_count=len(wanted),
+            image_count=len(images),
+            annotation_count=len(annotations),
+            missing_images=sorted(wanted - set(images))[:20],
+            extra_images=sorted(set(images) - wanted)[:20],
+            missing_annotations=sorted(wanted - set(annotations))[:20],
+            extra_annotations=sorted(set(annotations) - wanted)[:20])
         raise RuntimeError(
-            'Original seq11 files do not exactly match manifest')
+            'Original seq11 files do not exactly match manifest: {}'.format(
+                mismatch))
 
     audit_path, audit_raw, audit_payload = _read_json(args.audit_json)
     audit_index = _record_index(audit_payload)

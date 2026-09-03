@@ -37,7 +37,7 @@ def _manifest(path, train_frames, val_frames):
 
 
 def _record(root, frame, dino_box=None):
-    stem = 'real_seq11_{:05d}'.format(frame)
+    stem = 'real_seq11_{:06d}'.format(frame)
     return dict(
         filename=str(root / 'images' / (stem + '.jpg')),
         sequence='real_seq11', frame=frame, dino_invoked=True,
@@ -55,7 +55,7 @@ def test_materializer_creates_disjoint_filtered_views(tmp_path):
     manifest = tmp_path / 'manifest.json'
     _manifest(manifest, train_frames, val_frames)
     for frame in train_frames + val_frames:
-        stem = 'real_seq11_{:05d}'.format(frame)
+        stem = 'real_seq11_{:06d}'.format(frame)
         (source / 'images' / (stem + '.jpg')).write_bytes(
             b'image' + bytes([frame]))
         _dota_annotation(source / 'annfiles' / (stem + '.txt'))
@@ -82,9 +82,9 @@ def test_materializer_creates_disjoint_filtered_views(tmp_path):
     assert len(train_audit['records']) == 2
     assert len(val_audit['records']) == 2
     assert {Path(row['filename']).stem for row in train_audit['records']} == {
-        'real_seq11_00001', 'real_seq11_00002'}
+        'real_seq11_000001', 'real_seq11_000002'}
     assert {Path(row['filename']).stem for row in val_audit['records']} == {
-        'real_seq11_00010', 'real_seq11_00011'}
+        'real_seq11_000010', 'real_seq11_000011'}
 
 
 def _result(box):
@@ -108,7 +108,7 @@ def test_aux_gate_uses_formal_k1_and_never_temporal_metrics(
     records = []
     candidate_results, k1_results = [], []
     for index, frame in enumerate(frames):
-        stem = 'real_seq11_{:05d}'.format(frame)
+        stem = 'real_seq11_{:06d}'.format(frame)
         _dota_annotation(split / 'annfiles' / (stem + '.txt'))
         (split / 'images' / (stem + '.jpg')).write_bytes(b'jpg')
         records.append(_record(split, frame, dino_box=gt + [0.9]))
