@@ -185,8 +185,12 @@ def test_causal_history_source_config_is_unified_and_target_closed():
     assert 'dino_detector_forward_during_training=False' in text
     assert 'frozen_symeood_feature_forward=True' in text
     assert 'cached_dino_proposals_only=True' in text
-    assert "baseline_config='crane_project/configs/crane_symeood_k1.py'" in text
-    assert "baseline_checkpoint='work_dirs/crane_symeood_k1/epoch_24.pth'" in text
+    assert (
+        "baseline_config='crane_project/configs/crane_symeood_k1.py'"
+        in text)
+    assert (
+        "baseline_checkpoint='work_dirs/crane_symeood_k1/epoch_24.pth'"
+        in text)
     assert 'target_data_read=False' in text
     assert 'fixed_test_read=False' in text
     assert 'domain_routing=False' in text
@@ -244,7 +248,9 @@ def test_causal_source_gate_uses_dual_reference_and_cannot_open_test():
     assert 'eligible_for_unknown_sequence_claim=False' in text
     assert 'native_dino_reference_metrics' in text
     assert 'sym_eood_reference_metrics' in text
-    assert "parser.add_argument('--sym-reference-results', required=True)" in text
+    assert (
+        "parser.add_argument('--sym-reference-results', required=True)"
+        in text)
     assert 'average_gain_over_native_dino' in text
     assert 'sym_eood_geometry_preservation' in text
     assert 'depth_interface_geometry_gate' in text
@@ -269,10 +275,27 @@ def test_seq11_e1_is_exactly_59_unique_aux_frames_without_test():
     assert 'appledouble_sidecars_are_samples=False' in text
     assert "ann_file='test/" not in text
     assert "expected_split='test'" not in text
-    smoke = (ROOT / ('crane_project/tools/'
-                     'symeood_dino_causal_history_source_smoke.py')).read_text()
+    smoke = (
+        ROOT / ('crane_project/tools/'
+                'symeood_dino_causal_history_source_smoke.py')).read_text()
     assert 'aux_sample = train_dataset[2781]' in smoke
     assert 'auxiliary_source_sample_valid' in smoke
+
+
+def test_seq11_e1_fixed_target_is_endpoint_diagnostic_not_final_claim():
+    path = ROOT / (
+        'crane_project/configs/'
+        'crane_symeood_dino_k1_retentive_causal_phase_refiner_'
+        'source_v3_seq11_e1_fixed_target_diagnostic.py')
+    text = path.read_text()
+    assert "'source_v3_seq11.py'" in text
+    assert "evidence_role = 'fixed-target-development-diagnostic'" in text
+    assert "candidate_epoch_policy = 'fixed_training_endpoint_epoch10'" in text
+    assert 'source_training_frame_count = 2840' in text
+    assert 'auxiliary_source_frame_count = 59' in text
+    assert 'test_used_for_epoch_selection = False' in text
+    assert 'eligible_for_unbiased_final_test_claim = False' in text
+    assert "expected_frame_count=992, expected_split='test'" in text
 
 
 def test_seq11_blocksplit_e1_uses_48_train_and_11_mechanism_val():
@@ -295,9 +318,13 @@ def test_seq11_blocksplit_e1_uses_48_train_and_11_mechanism_val():
     assert "temporal_metrics_computed=False" in gate_text
     assert "eligible_for_fixed_test=False" in gate_text
     assert 'k1_present_wrong_dino_hit_count' in gate_text
-    smoke = (ROOT / ('crane_project/tools/'
-                     'symeood_dino_causal_history_source_smoke.py')).read_text()
-    assert 'source_train_frames in (2829, 2840)' in smoke
+    smoke = (
+        ROOT / ('crane_project/tools/'
+                'symeood_dino_causal_history_source_smoke.py')).read_text()
+    assert (
+        "contract_protocol == "
+        "'source_only_k1_retentive_v3_seq11_blockcv_v1'" in smoke)
+    assert 'auxiliary_cv or auxiliary_blocksplit' in smoke
     assert 'auxiliary_source_train_frame_count' in smoke
 
 
@@ -351,7 +378,9 @@ def test_k1_anchored_phase_v2_is_source_only_unified_and_bounded():
         'crane_symeood_dino_k1_anchored_causal_phase_refiner_source_v2.py')
     text = path.read_text()
     assert "type='K1AnchoredCausalPhaseGeometryRefiner'" in text
-    assert "frozen_baseline_config='crane_project/configs/crane_symeood_k1.py'" in text
+    assert (
+        "frozen_baseline_config='crane_project/configs/crane_symeood_k1.py'"
+        in text)
     assert 'current_k1_geometry_anchor=True' in text
     assert 'native_dino_anchor_fallback=True' in text
     assert 'native_dino_current_conditioning=True' in text
@@ -397,8 +426,9 @@ def test_k1_retentive_phase_v3_uses_source_pairs_without_runtime_identity():
 def test_v3_trainer_applies_pairs_to_causal_loss_and_smoke_requires_pair():
     trainer = (ROOT / ('mmrotate/models/detectors/'
                        'symeood_dino_geometry_refiner_trainer.py')).read_text()
-    smoke = (ROOT / ('crane_project/tools/'
-                     'symeood_dino_causal_history_source_smoke.py')).read_text()
+    smoke = (
+        ROOT / ('crane_project/tools/'
+                'symeood_dino_causal_history_source_smoke.py')).read_text()
     assert 'active_img_metas' in trainer
     assert 'temporal_pairs = self._temporal_pair_indices' in trainer
     assert '_adjacent_pair_with_history' in smoke
@@ -420,8 +450,9 @@ def test_k1_anchor_is_generated_from_shared_frozen_features():
 
 
 def test_causal_smoke_and_gate_accept_v2_without_opening_test():
-    smoke = (ROOT / ('crane_project/tools/'
-                     'symeood_dino_causal_history_source_smoke.py')).read_text()
+    smoke = (
+        ROOT / ('crane_project/tools/'
+                'symeood_dino_causal_history_source_smoke.py')).read_text()
     gate = (ROOT / ('crane_project/tools/'
                     'symeood_dino_causal_history_source_gate.py')).read_text()
     assert 'ALLOW_K1_ANCHORED_CAUSAL_PHASE_SOURCE_TRAINING' in smoke

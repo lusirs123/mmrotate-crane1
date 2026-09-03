@@ -1,0 +1,48 @@
+{
+  "protocol": "real_seq11_auxiliary_three_window_block_cv_v1",
+  "sequence": "real_seq11",
+  "source_split": "extra_source_real_seq11_pilot_k1p9",
+  "sampling_note": "Three pre-existing one-fps windows are exhaustively held out one at a time. Uniform samples outside the buffered windows remain auxiliary training support and are not OOF evidence.",
+  "all_frame_count": 59,
+  "fold_count": 3,
+  "oof_frame_count": 33,
+  "always_train_frame_count": 26,
+  "fold_validation_overlap_count": 0,
+  "folds": [
+    {
+      "fold_id": 1,
+      "validation_rule": "complete_window_01",
+      "validation_frames": [
+        2120, 2145, 2170, 2195, 2220,
+        2245, 2270, 2295, 2320, 2345
+      ],
+      "validation_frame_count": 10,
+      "training_frame_count": 49
+    },
+    {
+      "fold_id": 2,
+      "validation_rule": "complete_window_02_with_near_neighbor_uniform_buffer",
+      "validation_frames": [
+        4315, 4353, 4378, 4403, 4428, 4453,
+        4478, 4503, 4528, 4553, 4578, 4615
+      ],
+      "validation_frame_count": 12,
+      "training_frame_count": 47
+    },
+    {
+      "fold_id": 3,
+      "validation_rule": "complete_window_03_with_adjacent_uniform_buffer",
+      "validation_frames": [
+        6586, 6611, 6636, 6661, 6686, 6710,
+        6711, 6736, 6761, 6786, 6811
+      ],
+      "validation_frame_count": 11,
+      "training_frame_count": 48,
+      "preserved_prior_diagnostic": "The prior 48/11 support audit is retained and reported as Fold 3; it is not deleted or reclassified."
+    }
+  ],
+  "temporal_metrics_authorized_on_sparse_oof": false,
+  "independent_sequence_claim_authorized": false,
+  "fixed_test_use_authorized": false,
+  "fold_selection_from_observed_performance_authorized": false
+}

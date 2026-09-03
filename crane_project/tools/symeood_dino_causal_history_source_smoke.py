@@ -181,8 +181,14 @@ def _run(args):
             candidate_presence_fallback_only=True,
             continuous_k1_retention=False,
             retention_loss_weight=0.0))
-    auxiliary_source = source_train_frames in (2829, 2840)
-    auxiliary_blocksplit = source_train_frames == 2829
+    contract_protocol = checkpoint_contract.get('protocol')
+    auxiliary_cv = (
+        contract_protocol == 'source_only_k1_retentive_v3_seq11_blockcv_v1')
+    auxiliary_blocksplit = (
+        contract_protocol
+        == 'source_only_k1_retentive_v3_seq11_blocksplit_e1_v2')
+    auxiliary_source = bool(
+        auxiliary_cv or auxiliary_blocksplit or source_train_frames == 2840)
     if auxiliary_source:
         required_contract.update(dict(
             original_source_train_frames=2781,
@@ -203,7 +209,31 @@ def _run(args):
                 'crane_project/data_contracts/'
                 'real_seq11_pilot_k1p9_blocksplit_v1.json'),
             auxiliary_split_manifest_sha256=(
-                '2f827e0b23b41a93394e063178caa0fc23f51a104b934f4f48835b1fe728e99a')))
+                '2f827e0b23b41a93394e063178caa0fc23f51a104b934f4f48835b1fe728e'
+                '99a')))
+    cv_train_count = 0
+    cv_val_count = 0
+    if auxiliary_cv:
+        cv_fold = int(checkpoint_contract.get('auxiliary_cv_fold', -1))
+        cv_counts = {1: (49, 10), 2: (47, 12), 3: (48, 11)}
+        if cv_fold in cv_counts:
+            cv_train_count, cv_val_count = cv_counts[cv_fold]
+        required_contract.update(dict(
+            protocol='source_only_k1_retentive_v3_seq11_blockcv_v1',
+            source_train_frames=2781 + cv_train_count,
+            auxiliary_source_train_frames=cv_train_count,
+            auxiliary_source_val_frames=cv_val_count,
+            auxiliary_cv_protocol=(
+                'real_seq11_auxiliary_three_window_block_cv_v1'),
+            auxiliary_cv_fold=cv_fold,
+            auxiliary_train_val_overlap=0,
+            auxiliary_validation_temporal_metrics=False,
+            auxiliary_cv_manifest=(
+                'crane_project/data_contracts/'
+                'real_seq11_pilot_k1p9_three_window_block_cv_v1.json'),
+            auxiliary_cv_manifest_sha256=(
+                '09474f2145803498b4651dd0ea4431de15402a3c74ba230214a7a9e0a651'
+                'f7ac')))
     contract_checks = {
         key: checkpoint_contract.get(key) == expected
         for key, expected in required_contract.items()}
@@ -308,7 +338,8 @@ def _run(args):
     loss, log_vars = raw_model._parse_losses(losses)
     loss.backward()
     baseline_grad_none = all(
-        parameter.grad is None for parameter in raw_model.baseline.parameters())
+        parameter.grad is None
+        for parameter in raw_model.baseline.parameters())
     gradients = [parameter.grad for parameter in trainable]
     trainable_gradients_finite = all(
         gradient is not None and torch.isfinite(gradient).all().item()
@@ -373,8 +404,14 @@ def _run(args):
         train_frame_count=len(train_dataset),
         source_val_frame_count=len(val_dataset),
         auxiliary_source_train_frame_count=(
+            cv_train_count if auxiliary_cv else
             48 if auxiliary_blocksplit else 59 if auxiliary_source else 0),
-        auxiliary_source_val_frame_count=(11 if auxiliary_blocksplit else 0),
+        auxiliary_source_val_frame_count=(
+            cv_val_count if auxiliary_cv else
+            11 if auxiliary_blocksplit else 0),
+        auxiliary_cv_fold=(
+            int(checkpoint_contract.get('auxiliary_cv_fold'))
+            if auxiliary_cv else None),
         selected_train_index=int(train_index),
         selected_previous_train_index=(
             None if first_train_index is None else int(first_train_index)),
