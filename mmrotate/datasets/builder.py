@@ -41,6 +41,11 @@ def build_dataset(cfg, default_args=None):
         cp_cfg['dataset'] = build_dataset(cp_cfg['dataset'])
         cp_cfg.pop('type')
         dataset = MultiImageMixDataset(**cp_cfg)
+    elif cfg['type'] == 'FixedRatioPairReplayDataset':
+        from .fixed_ratio_pair_replay import FixedRatioPairReplayDataset
+        cp_cfg = copy.deepcopy(cfg)
+        cp_cfg.pop('type')
+        dataset = FixedRatioPairReplayDataset(**cp_cfg)
     elif isinstance(cfg.get('ann_file'), (list, tuple)):
         dataset = _concat_dataset(cfg, default_args)
     else:

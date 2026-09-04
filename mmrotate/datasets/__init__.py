@@ -7,7 +7,8 @@ from .sar import SARDataset  # noqa: F401, F403
 from .diorr import DIORRDataset
 
 from .crane_custom_dota import CraneDataset
+from .fixed_ratio_pair_replay import FixedRatioPairReplayDataset
 
 __all__ = ['SARDataset', 'DOTADataset', 'build_dataset', 'HRSCDataset', 'DIORRDataset',
-           'CraneDataset'
+           'CraneDataset', 'FixedRatioPairReplayDataset'
            ]

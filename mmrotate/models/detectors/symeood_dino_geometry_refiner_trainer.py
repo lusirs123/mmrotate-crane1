@@ -7,6 +7,7 @@ import re
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from mmcv import Config
 from mmcv.runner import load_checkpoint
 from mmcv.utils import import_modules_from_strings
@@ -60,6 +61,7 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
                  geometry_refiner_checkpoint=None,
                  geometry_refiner_checkpoint_sha256=None,
                  geometry_refiner_checkpoint_contract=None,
+                 base_teacher_retention_loss_weight=0.0,
                  evaluation_only=False,
                  train_cfg=None,
                  test_cfg=None,
@@ -119,11 +121,27 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
             geometry_refiner_checkpoint,
             geometry_refiner_checkpoint_sha256,
             geometry_refiner_checkpoint_contract)
+        self.base_teacher_retention_loss_weight = float(
+            base_teacher_retention_loss_weight)
+        if self.base_teacher_retention_loss_weight < 0.0:
+            raise ValueError('Teacher retention weight cannot be negative')
+        self.teacher_geometry_refiner = None
+        if self.base_teacher_retention_loss_weight > 0.0:
+            if not self.geometry_refiner_initialization.get(
+                    'initialized_from_checkpoint', False):
+                raise ValueError(
+                    'Base-V3 teacher retention requires checkpoint init')
+            self.teacher_geometry_refiner = copy.deepcopy(
+                self.geometry_refiner)
+            for parameter in self.teacher_geometry_refiner.parameters():
+                parameter.requires_grad_(False)
+            self.teacher_geometry_refiner.eval()
         self.CLASSES = getattr(self.baseline, 'CLASSES', ('grab',))
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
         self._frozen_hash_at_init = self.frozen_parameter_hash()
         self._frozen_refiner_hash_at_init = self.frozen_refiner_hash()
+        self._teacher_refiner_hash_at_init = self.teacher_refiner_hash()
         self._public_init_completed = False
 
     @staticmethod
@@ -222,6 +240,8 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
         # and every frozen SymEOOD module in inference mode unconditionally.
         self.baseline.eval()
         self.geometry_refiner.train(mode)
+        if self.teacher_geometry_refiner is not None:
+            self.teacher_geometry_refiner.eval()
         return self
 
     @staticmethod
@@ -303,12 +323,17 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
                         history_proposals,
                         history_valid_mask,
                         history_ages,
-                        conditioning_proposal_list=None):
+                        conditioning_proposal_list=None,
+                        refiner=None,
+                        history_features=None):
+        refiner = self.geometry_refiner if refiner is None else refiner
         history_images = history_images.to(features[0].device)
         history_proposals = history_proposals.to(features[0].device)
         history_valid_mask = history_valid_mask.to(features[0].device)
         history_ages = history_ages.to(features[0].device)
-        history_features = self.extract_causal_history_feat(history_images)
+        if history_features is None:
+            history_features = self.extract_causal_history_feat(
+                history_images)
         kwargs = dict(
             history_features=history_features,
             history_proposals=history_proposals,
@@ -317,7 +342,36 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
         if conditioning_proposal_list is not None:
             kwargs['conditioning_proposal_list'] = (
                 conditioning_proposal_list)
-        return self.geometry_refiner(features, proposal_list, **kwargs)
+        return refiner(features, proposal_list, **kwargs)
+
+    @staticmethod
+    def _phase_teacher_retention_loss(student, teacher):
+        """Keep the Base-V3 response on replayed original source frames."""
+        if student.shape != teacher.shape or student.ndim != 2:
+            raise RuntimeError('Student/teacher phase output mismatch')
+        if student.shape[1] != 6:
+            raise RuntimeError('Teacher retention requires six phase deltas')
+        linear = F.smooth_l1_loss(student[:, :4], teacher[:, :4])
+        student_angle = F.normalize(torch.stack([
+            student[:, 4], 1.0 + student[:, 5]], dim=1), dim=1, eps=1e-6)
+        teacher_angle = F.normalize(torch.stack([
+            teacher[:, 4], 1.0 + teacher[:, 5]], dim=1), dim=1, eps=1e-6)
+        angle = F.smooth_l1_loss(student_angle, teacher_angle)
+        return linear + angle
+
+    @staticmethod
+    def _replay_auxiliary_mask(value, batch_size, device):
+        if value is None:
+            raise RuntimeError(
+                'Teacher retention requires source replay provenance')
+        if not torch.is_tensor(value):
+            value = torch.as_tensor(value)
+        value = value.to(device=device).reshape(-1)
+        if value.numel() != batch_size:
+            raise RuntimeError('Source replay provenance batch mismatch')
+        if not torch.logical_or(value == 0, value == 1).all():
+            raise RuntimeError('Source replay provenance must be binary')
+        return value.to(dtype=torch.bool)
 
     def forward_train(self,
                       img,
@@ -329,6 +383,7 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
                       causal_history_proposals=None,
                       causal_history_valid_mask=None,
                       causal_history_ages=None,
+                      source_replay_is_auxiliary=None,
                       gt_bboxes_ignore=None,
                       **kwargs):
         del gt_labels, gt_bboxes_ignore, kwargs
@@ -339,6 +394,11 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
         if len(dino_proposals) != len(gt_bboxes):
             raise RuntimeError('DINO/GT batch-size mismatch')
         features = self.extract_feat(img)
+        replay_auxiliary = None
+        if self.teacher_geometry_refiner is not None:
+            replay_auxiliary = self._replay_auxiliary_mask(
+                source_replay_is_auxiliary, len(img_metas),
+                features[0].device)
         dino_proposal_list = [item[:, :5].to(features[0].device)
                               for item in dino_proposals]
         if (self.uses_k1_geometry_anchor
@@ -382,13 +442,20 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
             if conditioning_proposal_list is not None:
                 conditioning_proposal_list = [
                     conditioning_proposal_list[index] for index in active]
+            if replay_auxiliary is not None:
+                replay_auxiliary = replay_auxiliary[active]
+            active_history_images = causal_history_images[active]
+            active_history_proposals = causal_history_proposals[active]
+            active_history_valid_mask = causal_history_valid_mask[active]
+            active_history_ages = causal_history_ages[active]
+            history_features = self.extract_causal_history_feat(
+                active_history_images.to(features[0].device))
             predicted = self._causal_forward(
                 features, proposal_list,
-                causal_history_images[active],
-                causal_history_proposals[active],
-                causal_history_valid_mask[active],
-                causal_history_ages[active],
-                conditioning_proposal_list=conditioning_proposal_list)
+                active_history_images, active_history_proposals,
+                active_history_valid_mask, active_history_ages,
+                conditioning_proposal_list=conditioning_proposal_list,
+                history_features=history_features)
         else:
             predicted = self.geometry_refiner(features, proposal_list)
             active_img_metas = img_metas
@@ -404,6 +471,49 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
             temporal_pair_indices=temporal_pairs)
         losses['refiner_sample_count'] = predicted.new_tensor(
             float(predicted.shape[0]))
+        if self.teacher_geometry_refiner is not None:
+            original = ~replay_auxiliary
+            if bool(original.any()):
+                original_indices = torch.nonzero(
+                    original, as_tuple=False).reshape(-1)
+                original_index_list = original_indices.detach().cpu().tolist()
+                teacher_features = tuple(
+                    feature[original_indices] for feature in features)
+                teacher_proposals = [
+                    proposal_list[index] for index in original_index_list]
+                teacher_conditioning = None
+                if conditioning_proposal_list is not None:
+                    teacher_conditioning = [
+                        conditioning_proposal_list[index]
+                        for index in original_index_list]
+                with torch.no_grad():
+                    if causal:
+                        teacher_history_features = tuple(
+                            feature[original_indices]
+                            for feature in history_features)
+                        teacher_output = self._causal_forward(
+                            teacher_features, teacher_proposals,
+                            active_history_images[original_indices],
+                            active_history_proposals[original_indices],
+                            active_history_valid_mask[original_indices],
+                            active_history_ages[original_indices],
+                            conditioning_proposal_list=teacher_conditioning,
+                            refiner=self.teacher_geometry_refiner,
+                            history_features=teacher_history_features)
+                    else:
+                        teacher_output = self.teacher_geometry_refiner(
+                            teacher_features, teacher_proposals)
+                value = self._phase_teacher_retention_loss(
+                    predicted[original_indices], teacher_output)
+            else:
+                value = predicted.sum() * 0.0
+            weighted = value * self.base_teacher_retention_loss_weight
+            losses['refiner_base_v3_teacher_retention_objective'] = (
+                weighted.detach())
+            losses['refiner_base_v3_teacher_sample_count'] = (
+                predicted.new_tensor(float(original.sum().item())))
+            losses['loss_geometry_refiner'] = (
+                losses['loss_geometry_refiner'] + weighted)
         return losses
 
     def simple_test(self,
@@ -543,9 +653,22 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
             digest.update(np.asarray(array).tobytes())
         return digest.hexdigest()
 
+    def teacher_refiner_hash(self):
+        if self.teacher_geometry_refiner is None:
+            return None
+        digest = hashlib.sha256()
+        for name, tensor in sorted(
+                self.teacher_geometry_refiner.state_dict().items()):
+            digest.update(name.encode('utf-8'))
+            array = tensor.detach().cpu().contiguous().numpy()
+            digest.update(np.asarray(array).tobytes())
+        return digest.hexdigest()
+
     def verify_frozen_contract(self):
         current = self.frozen_parameter_hash()
         frozen_refiner_current = self.frozen_refiner_hash()
+        teacher_current = self.teacher_refiner_hash()
+        teacher_initial = getattr(self, '_teacher_refiner_hash_at_init', None)
         return dict(
             baseline_eval=not self.baseline.training,
             baseline_trainable_parameter_count=sum(
@@ -562,6 +685,19 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
             frozen_refiner_hash_current=frozen_refiner_current,
             frozen_refiner_hash_unchanged=(
                 frozen_refiner_current == self._frozen_refiner_hash_at_init),
+            teacher_refiner_enabled=(
+                self.teacher_geometry_refiner is not None),
+            teacher_refiner_eval=(
+                self.teacher_geometry_refiner is None
+                or not self.teacher_geometry_refiner.training),
+            teacher_refiner_trainable_parameter_count=sum(
+                int(parameter.numel()) for parameter in
+                ([] if self.teacher_geometry_refiner is None else
+                 self.teacher_geometry_refiner.parameters())
+                if parameter.requires_grad),
+            teacher_refiner_hash_at_init=teacher_initial,
+            teacher_refiner_hash_current=teacher_current,
+            teacher_refiner_hash_unchanged=(teacher_current == teacher_initial),
             public_init_completed=self._public_init_completed,
             evaluation_only=self.evaluation_only,
             geometry_refiner_initialization=dict(

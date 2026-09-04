@@ -70,6 +70,13 @@ class GeometryRefinerContractHook(Hook):
         if not report.get('frozen_refiner_hash_unchanged', True):
             raise RuntimeError(
                 'Frozen geometry-refiner components changed before training')
+        if report.get('teacher_refiner_enabled', False):
+            if not report.get('teacher_refiner_eval', False):
+                raise RuntimeError('Base-V3 teacher entered train mode')
+            if report.get('teacher_refiner_trainable_parameter_count') != 0:
+                raise RuntimeError('Base-V3 teacher has trainable parameters')
+            if not report.get('teacher_refiner_hash_unchanged', False):
+                raise RuntimeError('Base-V3 teacher changed before training')
         optimizer_ids = _optimizer_parameter_ids(runner.optimizer)
         refiner_ids = [
             id(parameter) for parameter in model.geometry_refiner.parameters()
@@ -93,6 +100,13 @@ class GeometryRefinerContractHook(Hook):
                if not parameter.requires_grad):
             raise RuntimeError(
                 'Frozen geometry-refiner component received a gradient')
+        teacher = getattr(model, 'teacher_geometry_refiner', None)
+        if teacher is not None:
+            if teacher.training:
+                raise RuntimeError('Base-V3 teacher entered train mode')
+            if any(parameter.grad is not None
+                   for parameter in teacher.parameters()):
+                raise RuntimeError('Base-V3 teacher received a gradient')
 
     def after_run(self, runner):
         model = _unwrap(runner.model)
@@ -102,6 +116,8 @@ class GeometryRefinerContractHook(Hook):
         if not report.get('frozen_refiner_hash_unchanged', True):
             raise RuntimeError(
                 'Frozen geometry-refiner parameters/buffers changed')
+        if not report.get('teacher_refiner_hash_unchanged', True):
+            raise RuntimeError('Base-V3 teacher parameters/buffers changed')
         path = os.path.join(
             runner.work_dir, 'geometry_refiner_frozen_contract.json')
         with open(path, 'w', encoding='utf-8') as handle:
@@ -137,3 +153,17 @@ class CudaPeakMemoryContractHook(Hook):
         with open(path, 'w', encoding='utf-8') as handle:
             json.dump(report, handle, indent=2, ensure_ascii=False)
             handle.write('\n')
+
+
+@HOOKS.register_module()
+class FixedRatioReplayEpochHook(Hook):
+    """Rotate deterministic replay offsets between source epochs."""
+
+    priority = 'VERY_HIGH'
+
+    def before_train_epoch(self, runner):
+        dataset = getattr(runner.data_loader, 'dataset', None)
+        if dataset is None or not hasattr(dataset, 'set_epoch'):
+            raise RuntimeError(
+                'Fixed-ratio replay training requires set_epoch dataset')
+        dataset.set_epoch(int(runner.epoch))

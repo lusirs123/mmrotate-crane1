@@ -20,6 +20,7 @@ PROTOCOL = 'source_only_causal_history_refiner_smoke_v1'
 V2_PROTOCOL = 'source_only_k1_anchored_causal_phase_refiner_smoke_v2'
 V3_PROTOCOL = 'source_only_k1_retentive_causal_phase_refiner_smoke_v3'
 E2_PROTOCOL = 'source_only_symmetric_dual_candidate_refiner_smoke_e2_v1'
+V4_PROTOCOL = 'source_only_k1_retentive_seq11_v2_replay_smoke_v4'
 
 
 def parse_args():
@@ -88,6 +89,34 @@ def _first_sample(dataset):
         if sample is not None:
             return sample, index
     raise RuntimeError('No source-val sample is available')
+
+
+def _replay_flag(sample):
+    value = _container_tensor(sample, 'source_replay_is_auxiliary')
+    return int(value.reshape(-1)[0].item())
+
+
+def _auxiliary_adjacent_pair(dataset, original_batches, limit=256):
+    cycle = int(original_batches) + 1
+    for pair_number in range(int(limit)):
+        batch_index = int(original_batches) + pair_number * cycle
+        first_index = batch_index * 2
+        second_index = first_index + 1
+        if second_index >= len(dataset):
+            break
+        first, second = dataset[first_index], dataset[second_index]
+        if first is None or second is None:
+            continue
+        first_identity, second_identity = _identity(first), _identity(second)
+        history_mask = _container_tensor(
+            second, 'causal_history_valid_mask')
+        if (first_identity is not None and second_identity is not None
+                and _replay_flag(first) == _replay_flag(second) == 1
+                and first_identity[0] == second_identity[0]
+                and second_identity[1] == first_identity[1] + 1
+                and bool(history_mask.any())):
+            return first, second, first_index, second_index
+    raise RuntimeError('No auxiliary replay pair has valid causal history')
 
 
 def _run(args):
@@ -182,14 +211,17 @@ def _run(args):
             continuous_k1_retention=False,
             retention_loss_weight=0.0))
     contract_protocol = checkpoint_contract.get('protocol')
+    v4 = contract_protocol == 'source_only_k1_retentive_v4_seq11_v2_replay'
+    pair_training = pair_training or v4
     auxiliary_cv = (
         contract_protocol == 'source_only_k1_retentive_v3_seq11_blockcv_v1')
     auxiliary_blocksplit = (
         contract_protocol
         == 'source_only_k1_retentive_v3_seq11_blocksplit_e1_v2')
     auxiliary_source = bool(
-        auxiliary_cv or auxiliary_blocksplit or source_train_frames == 2840)
-    if auxiliary_source:
+        auxiliary_cv or auxiliary_blocksplit or v4
+        or source_train_frames == 2840)
+    if auxiliary_source and not v4:
         required_contract.update(dict(
             original_source_train_frames=2781,
             auxiliary_source_frames=59,
@@ -211,6 +243,31 @@ def _run(args):
             auxiliary_split_manifest_sha256=(
                 '2f827e0b23b41a93394e063178caa0fc23f51a104b934f4f48835b1fe728e'
                 '99a')))
+    if v4:
+        required_contract.update(dict(
+            protocol='source_only_k1_retentive_v4_seq11_v2_replay',
+            original_source_train_frames=2781,
+            auxiliary_source_all_frames=251,
+            auxiliary_source_train_frames=203,
+            auxiliary_source_val_frames=48,
+            auxiliary_source_sequence='real_seq11',
+            auxiliary_train_val_overlap=0,
+            auxiliary_annotation_k0=1.9,
+            auxiliary_target_geometry='top_beam_only',
+            base_v3_teacher_retention=True,
+            base_v3_teacher_retention_loss_weight=0.25,
+            original_source_replay=True,
+            original_batches_per_auxiliary_batch=14,
+            auxiliary_batches_per_cycle=1,
+            fixed_optimizer_steps=True,
+            optimizer_steps_per_epoch=1391,
+            training_epochs=10,
+            total_optimizer_steps=13910,
+            auxiliary_source_independent_sequence_claim=False,
+            auxiliary_source_router_claim=False,
+            auxiliary_validation_role='same_video_mechanism_only',
+            appledouble_sidecars_are_samples=False,
+            auxiliary_adjacent_pair_supervision=True))
     cv_train_count = 0
     cv_val_count = 0
     if auxiliary_cv:
@@ -257,7 +314,8 @@ def _run(args):
                 False if pair_training else True))))
     if not all(contract_checks.values()):
         return dict(
-            protocol=(E2_PROTOCOL if e2 else V3_PROTOCOL if v3 else
+            protocol=(V4_PROTOCOL if v4 else
+                      E2_PROTOCOL if e2 else V3_PROTOCOL if v3 else
                       V2_PROTOCOL if v2 else PROTOCOL),
             evidence_boundary='source_train_and_source_val_only',
             target_data_read=False,
@@ -269,9 +327,19 @@ def _run(args):
 
     train_dataset = build_dataset(cfg.data.train)
     val_dataset = build_dataset(cfg.data.val)
-    if (len(train_dataset) != source_train_frames
+    expected_train_length = (
+        int(checkpoint_contract.get('optimizer_steps_per_epoch')) * 2
+        if v4 else source_train_frames)
+    if (len(train_dataset) != expected_train_length
             or len(val_dataset) != 738):
         raise RuntimeError('Source dataset frame-count contract failed')
+    replay_coverage = None
+    if v4:
+        replay_coverage = train_dataset.coverage_contract(
+            checkpoint_contract['training_epochs'])
+        if (not replay_coverage['full_original_coverage']
+                or not replay_coverage['full_auxiliary_coverage']):
+            raise RuntimeError('Fixed-ratio replay does not cover all source')
     if pair_training:
         first_train_sample, train_sample, first_train_index, train_index = (
             _adjacent_pair_with_history(train_dataset))
@@ -281,7 +349,14 @@ def _run(args):
         first_train_index = None
         train_samples = [train_sample]
     val_sample, val_index = _first_sample(val_dataset)
-    aux_sample = train_dataset[2781] if auxiliary_source else None
+    aux_pair = None
+    if v4:
+        aux_pair = _auxiliary_adjacent_pair(
+            train_dataset,
+            checkpoint_contract['original_batches_per_auxiliary_batch'])
+        aux_sample = aux_pair[0]
+    else:
+        aux_sample = train_dataset[2781] if auxiliary_source else None
     history_images = _container_tensor(
         train_sample, 'causal_history_images')
     history_proposals = _container_tensor(
@@ -324,6 +399,7 @@ def _run(args):
     raw_model = build_detector(copy.deepcopy(cfg.model))
     raw_model.init_weights()
     frozen_before = raw_model.frozen_parameter_hash()
+    teacher_before = raw_model.teacher_refiner_hash()
     raw_model = raw_model.cuda(args.gpu)
     raw_model.train()
     optimizer = build_optimizer(raw_model, copy.deepcopy(cfg.optimizer))
@@ -337,6 +413,12 @@ def _run(args):
     losses = parallel(return_loss=True, **batch)
     loss, log_vars = raw_model._parse_losses(losses)
     loss.backward()
+    aux_log_vars = None
+    if v4:
+        aux_batch = collate(list(aux_pair[:2]), samples_per_gpu=2)
+        aux_losses = parallel(return_loss=True, **aux_batch)
+        aux_loss, aux_log_vars = raw_model._parse_losses(aux_losses)
+        aux_loss.backward()
     baseline_grad_none = all(
         parameter.grad is None
         for parameter in raw_model.baseline.parameters())
@@ -363,6 +445,7 @@ def _run(args):
             raw_model.geometry_refiner.conditioning_fusion.parameters()))
     optimizer.step()
     frozen_after_step = raw_model.frozen_parameter_hash()
+    teacher_after_step = raw_model.teacher_refiner_hash()
 
     raw_model.eval()
     val_batch = collate([val_sample], samples_per_gpu=1)
@@ -373,10 +456,13 @@ def _run(args):
         and isinstance(output[0], list) and len(output[0]) == 1
         and np.isfinite(np.asarray(output[0][0])).all())
     frozen_after_val = raw_model.frozen_parameter_hash()
+    teacher_after_val = raw_model.teacher_refiner_hash()
     allocated = int(torch.cuda.max_memory_allocated(args.gpu))
     reserved = int(torch.cuda.max_memory_reserved(args.gpu))
     checks = dict(
         finite_loss=bool(torch.isfinite(loss).item()),
+        finite_auxiliary_loss=(
+            not v4 or bool(torch.isfinite(aux_loss).item())),
         baseline_gradients_none=baseline_grad_none,
         trainable_gradients_finite=trainable_gradients_finite,
         history_head_gradient_nonzero=history_head_gradient_nonzero,
@@ -389,11 +475,30 @@ def _run(args):
         retention_objective_active=(
             not v3 or
             'refiner_continuous_retention_objective' in log_vars),
+        base_v3_teacher_objective_active=(
+            not v4 or (
+                'refiner_base_v3_teacher_retention_objective' in log_vars
+                and float(log_vars.get(
+                    'refiner_base_v3_teacher_sample_count', 0.0)) == 2.0
+                and float(aux_log_vars.get(
+                    'refiner_base_v3_teacher_sample_count', -1.0)) == 0.0)),
+        auxiliary_adjacent_pair_objective_active=(
+            not v4 or (
+                float(aux_log_vars.get(
+                    'refiner_temporal_pair_count', 0.0)) == 1.0)),
+        teacher_refiner_frozen=(
+            not v4 or (
+                raw_model.teacher_geometry_refiner is not None
+                and not raw_model.teacher_geometry_refiner.training
+                and teacher_before == teacher_after_step == teacher_after_val
+                and all(parameter.grad is None for parameter in
+                        raw_model.teacher_geometry_refiner.parameters()))),
         frozen_baseline_unchanged=(
             frozen_before == frozen_after_step == frozen_after_val),
         source_val_forward_valid=bool(output_valid))
     return dict(
-        protocol=(E2_PROTOCOL if e2 else V3_PROTOCOL if v3 else
+        protocol=(V4_PROTOCOL if v4 else
+                  E2_PROTOCOL if e2 else V3_PROTOCOL if v3 else
                   V2_PROTOCOL if v2 else PROTOCOL),
         evidence_boundary='source_train_and_source_val_only',
         target_data_read=False,
@@ -401,14 +506,16 @@ def _run(args):
         checkpoint_written=False,
         optimizer_steps_in_memory=1,
         seed=int(args.seed),
-        train_frame_count=len(train_dataset),
+        train_frame_count=source_train_frames,
+        scheduled_train_sample_count=len(train_dataset),
         source_val_frame_count=len(val_dataset),
         auxiliary_source_train_frame_count=(
             cv_train_count if auxiliary_cv else
+            203 if v4 else
             48 if auxiliary_blocksplit else 59 if auxiliary_source else 0),
         auxiliary_source_val_frame_count=(
             cv_val_count if auxiliary_cv else
-            11 if auxiliary_blocksplit else 0),
+            48 if v4 else 11 if auxiliary_blocksplit else 0),
         auxiliary_cv_fold=(
             int(checkpoint_contract.get('auxiliary_cv_fold'))
             if auxiliary_cv else None),
@@ -418,6 +525,7 @@ def _run(args):
         selected_val_index=int(val_index),
         contract_checks=contract_checks,
         input_checks=input_checks,
+        replay_coverage=replay_coverage,
         gpu=dict(
             requested_visible_index=int(args.gpu),
             cuda_visible_devices=os.environ.get('CUDA_VISIBLE_DEVICES'),
@@ -426,18 +534,23 @@ def _run(args):
             peak_reserved_bytes=reserved),
         loss=float(loss.detach().cpu()),
         log_vars={key: float(value) for key, value in log_vars.items()},
+        auxiliary_log_vars=(
+            None if aux_log_vars is None else
+            {key: float(value) for key, value in aux_log_vars.items()}),
         checks=checks,
         passed=all(checks.values()),
         decision=(
-            ('ALLOW_K1_RETENTIVE_CAUSAL_PHASE_SOURCE_TRAINING'
-             if v3 else
+            ('ALLOW_K1_RETENTIVE_SEQ11_V2_REPLAY_SOURCE_TRAINING'
+             if v4 else
+             'ALLOW_K1_RETENTIVE_CAUSAL_PHASE_SOURCE_TRAINING' if v3 else
              'ALLOW_SYMMETRIC_DUAL_CANDIDATE_SOURCE_TRAINING'
              if e2 else
              'ALLOW_K1_ANCHORED_CAUSAL_PHASE_SOURCE_TRAINING'
              if v2 else 'ALLOW_CAUSAL_HISTORY_SOURCE_TRAINING')
             if all(checks.values()) else
-            ('STOP_K1_RETENTIVE_CAUSAL_PHASE_SOURCE_SMOKE_FAILED'
-             if v3 else
+            ('STOP_K1_RETENTIVE_SEQ11_V2_REPLAY_SOURCE_SMOKE_FAILED'
+             if v4 else
+             'STOP_K1_RETENTIVE_CAUSAL_PHASE_SOURCE_SMOKE_FAILED' if v3 else
              'STOP_SYMMETRIC_DUAL_CANDIDATE_SOURCE_SMOKE_FAILED'
              if e2 else
              'STOP_K1_ANCHORED_CAUSAL_PHASE_SOURCE_SMOKE_FAILED'
@@ -448,12 +561,14 @@ def main():
     args = parse_args()
     requested_v2 = 'k1_anchored_causal_phase' in os.path.basename(args.config)
     requested_v3 = 'k1_retentive_causal_phase' in os.path.basename(args.config)
+    requested_v4 = 'source_v4_seq11_v2_replay' in os.path.basename(args.config)
     requested_e2 = 'symmetric_dual_candidate' in os.path.basename(args.config)
     try:
         report = _run(args)
     except Exception as error:
         report = dict(
-            protocol=(E2_PROTOCOL if requested_e2 else
+            protocol=(V4_PROTOCOL if requested_v4 else
+                      E2_PROTOCOL if requested_e2 else
                       V3_PROTOCOL if requested_v3 else
                       V2_PROTOCOL if requested_v2 else PROTOCOL),
             evidence_boundary='source_train_and_source_val_only',
@@ -462,6 +577,8 @@ def main():
             checkpoint_written=False,
             passed=False,
             decision=(
+                'STOP_K1_RETENTIVE_SEQ11_V2_REPLAY_SOURCE_SMOKE_ERROR'
+                if requested_v4 else
                 'STOP_K1_RETENTIVE_CAUSAL_PHASE_SOURCE_SMOKE_ERROR'
                 if requested_v3 else
                 'STOP_SYMMETRIC_DUAL_CANDIDATE_SOURCE_SMOKE_ERROR'
