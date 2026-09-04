@@ -379,7 +379,9 @@ checkpoint_config = dict(
             refine_center=True, refine_size=True, refine_angle=True)))
 
 custom_hooks = [
-    dict(type='FixedRatioReplayEpochHook'),
+    # ``priority`` is consumed by MMCV's Runner before hook construction.
+    # Defining it on the Hook class itself is forbidden by MMCV 1.x.
+    dict(type='FixedRatioReplayEpochHook', priority='VERY_HIGH'),
     dict(type='GeometryRefinerContractHook'),
     dict(type='CudaPeakMemoryContractHook')]
 

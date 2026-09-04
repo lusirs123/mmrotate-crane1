@@ -83,3 +83,11 @@ def test_trainer_has_frozen_teacher_and_masked_retention():
     assert 'teacher_refiner_hash_unchanged' in trainer
     assert 'Base-V3 teacher received a gradient' in hook
     assert 'class FixedRatioReplayEpochHook' in hook
+    replay_class = hook.split('class FixedRatioReplayEpochHook', 1)[1]
+    assert "priority = 'VERY_HIGH'" not in replay_class
+    config = (ROOT / (
+        'crane_project/configs/'
+        'crane_symeood_dino_k1_retentive_causal_phase_refiner_'
+        'source_v4_seq11_v2_replay.py')).read_text()
+    assert ("dict(type='FixedRatioReplayEpochHook', priority='VERY_HIGH')"
+            in config)

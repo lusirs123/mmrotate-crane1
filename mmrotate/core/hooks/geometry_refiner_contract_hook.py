@@ -159,8 +159,6 @@ class CudaPeakMemoryContractHook(Hook):
 class FixedRatioReplayEpochHook(Hook):
     """Rotate deterministic replay offsets between source epochs."""
 
-    priority = 'VERY_HIGH'
-
     def before_train_epoch(self, runner):
         dataset = getattr(runner.data_loader, 'dataset', None)
         if dataset is None or not hasattr(dataset, 'set_epoch'):
