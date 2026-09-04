@@ -87,6 +87,61 @@ def test_materializer_creates_disjoint_filtered_views(tmp_path):
         'real_seq11_000010', 'real_seq11_000011'}
 
 
+def test_v2_manifest_materializes_data_only_and_ignores_appledouble(tmp_path):
+    data_root = tmp_path / 'data'
+    source = data_root / 'source_v2'
+    (source / 'images').mkdir(parents=True)
+    (source / 'annfiles').mkdir()
+    train_stems = ['real_seq11_000001', 'real_seq11_000002']
+    val_stems = ['real_seq11_000010', 'real_seq11_000011']
+    for stem in train_stems + val_stems:
+        (source / 'images' / (stem + '.jpg')).write_bytes(
+            ('image-' + stem).encode())
+        _dota_annotation(source / 'annfiles' / (stem + '.txt'))
+        (source / 'images' / ('._' + stem + '.jpg')).write_bytes(b'sidecar')
+        (source / 'annfiles' / ('._' + stem + '.txt')).write_bytes(b'sidecar')
+    manifest = tmp_path / 'manifest_v2.json'
+    manifest.write_text(json.dumps(dict(
+        protocol=splitter.PROTOCOL_V2,
+        sequence='real_seq11',
+        target_geometry='top_beam_only',
+        k0=1.9,
+        file_naming='real_seq11_XXXXXX',
+        all_frame_count=4,
+        split_policy='whole_contiguous_windows_no_frame_randomization',
+        train_frame_count=2,
+        aux_val_frame_count=2,
+        train_stems=train_stems,
+        aux_val_stems=val_stems,
+        evidence_boundary=dict(
+            not_independent_sequence=True,
+            official_source_val_738_remains_separate=True,
+            fixed_test_role=False))))
+    args = argparse.Namespace(
+        data_root=str(data_root), source_split='source_v2',
+        train_split='train_v2', val_split='aux_val_v2',
+        audit_json=None, train_audit_json=None, val_audit_json=None,
+        split_manifest=str(manifest),
+        out_json=str(tmp_path / 'data_only_report.json'), mode='hardlink')
+
+    report = splitter.materialize(args)
+
+    assert report['input_manifest_protocol'] == splitter.PROTOCOL_V2
+    assert report['aux_train_frame_count'] == 2
+    assert report['aux_val_frame_count'] == 2
+    assert report['ignored_appledouble_image_count'] == 4
+    assert report['ignored_appledouble_annotation_count'] == 4
+    assert report['filtered_audits_written'] is False
+    assert report['eligible_for_auxiliary_blocksplit_training'] is False
+    assert report['decision'] == (
+        'SEQ11_BLOCKSPLIT_DATA_MATERIALIZED_AUDIT_REQUIRED')
+    assert {p.stem for p in (data_root / 'train_v2' / 'images').iterdir()} == {
+        'real_seq11_000001', 'real_seq11_000002'}
+    assert {p.stem for p in
+            (data_root / 'aux_val_v2' / 'annfiles').iterdir()} == {
+        'real_seq11_000010', 'real_seq11_000011'}
+
+
 def _result(box):
     array = np.zeros((0, 6), dtype=np.float32) if box is None else np.asarray(
         [list(box) + [0.9]], dtype=np.float32)
