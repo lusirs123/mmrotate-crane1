@@ -36,6 +36,9 @@ def test_v4_config_is_audited_source_only_and_fixed_budget():
     assert 'auxiliary_source_val_frames=48' in text
     assert 'auxiliary_train_val_overlap=0' in text
     assert "type='FixedRatioPairReplayDataset'" in text
+    assert 'def _safe_data_root_child(value, role):' in text
+    assert "child in {'train', 'train_sim', 'val', 'test'}" in text
+    assert "startswith('extra_source_real_seq11_')" not in text
     assert 'original_batches_per_auxiliary_batch = 14' in text
     assert 'optimizer_steps_per_epoch = 1391' in text
     assert 'training_epochs = 10' in text

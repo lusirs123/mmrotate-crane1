@@ -50,14 +50,66 @@ val_contract_path = blocksplit_root + '/aux_val_contract.json'
 split_manifest = (
     data_root + 'extra_source_real_seq11_pilot_k1p9_v2/split_manifest.json')
 
+
+def _safe_data_root_child(value, role):
+    """Normalize one materialized split to a safe data-root child name.
+
+    The splitter accepts a leaf name, a repository-relative path, or an
+    absolute path.  Its report intentionally preserves exactly what the user
+    passed, so requiring a particular textual prefix rejects otherwise valid
+    materializations.  Training only needs the canonical child name, while
+    the audit hashes and frame-count contracts below establish its identity.
+    """
+    raw = os.fspath(value).strip()
+    if not raw:
+        raise RuntimeError('seq11-v2 {} split name is empty'.format(role))
+    root = os.path.abspath(os.path.normpath(data_root))
+    if os.path.isabs(raw):
+        candidate = os.path.abspath(os.path.normpath(raw))
+        try:
+            inside_root = os.path.commonpath([root, candidate]) == root
+        except ValueError:
+            inside_root = False
+        if not inside_root:
+            raise RuntimeError(
+                'seq11-v2 {} split is outside data root: {!r}'.format(
+                    role, raw))
+        relative = os.path.relpath(candidate, root)
+    else:
+        normalized = os.path.normpath(raw)
+        normalized_root = os.path.normpath(data_root)
+        if normalized.startswith(normalized_root + os.sep):
+            relative = os.path.relpath(normalized, normalized_root)
+        else:
+            relative = normalized
+    parts = [part for part in relative.split(os.sep) if part]
+    if (len(parts) != 1 or parts[0] in {'.', '..'}
+            or parts[0].startswith('._')):
+        raise RuntimeError(
+            'seq11-v2 {} split must be one direct data-root child: {!r}'
+            .format(role, raw))
+    child = parts[0]
+    if child in {'train', 'train_sim', 'val', 'test'}:
+        raise RuntimeError(
+            'seq11-v2 {} split may not reuse a canonical dataset split: {!r}'
+            .format(role, child))
+    return child
+
+
 split_report, split_report_sha256 = _read_json_contract(
     split_report_path, 'ALLOW_SEQ11_BLOCKSPLIT_SOURCE_TRAINING')
-aux_train_split = str(split_report.get('train_split', ''))
-aux_val_split = str(split_report.get('val_split', ''))
-if (not aux_train_split.startswith('extra_source_real_seq11_')
-        or not aux_val_split.startswith('extra_source_real_seq11_')
-        or aux_train_split == aux_val_split):
-    raise RuntimeError('seq11-v2 materialized split names are unsafe')
+aux_source_split = _safe_data_root_child(
+    split_report.get('source_split', ''), 'source')
+aux_train_split = _safe_data_root_child(
+    split_report.get('train_split', ''), 'train')
+aux_val_split = _safe_data_root_child(
+    split_report.get('val_split', ''), 'validation')
+if (aux_source_split != 'extra_source_real_seq11_pilot_k1p9_v2'
+        or len({aux_source_split, aux_train_split, aux_val_split}) != 3):
+    raise RuntimeError(
+        'seq11-v2 source/train/validation split identities are unsafe: '
+        'source={!r}, train={!r}, validation={!r}'.format(
+            aux_source_split, aux_train_split, aux_val_split))
 full_contract, full_contract_sha256 = _read_json_contract(
     full_contract_path, 'ALLOW_AUXILIARY_SOURCE_TRAINING_INPUT')
 train_contract, train_contract_sha256 = _read_json_contract(
@@ -83,8 +135,12 @@ if (split_report.get('filtered_audits_written') is not True
         or val_contract.get('audit_sha256') !=
         split_report.get('val_audit_sha256')):
     raise RuntimeError('seq11-v2 audit provenance chain is inconsistent')
-if (train_contract.get('source_split') != aux_train_split
-        or val_contract.get('source_split') != aux_val_split):
+if (_safe_data_root_child(
+        train_contract.get('source_split', ''), 'train contract') !=
+        aux_train_split
+        or _safe_data_root_child(
+            val_contract.get('source_split', ''), 'validation contract') !=
+        aux_val_split):
     raise RuntimeError('seq11-v2 auxiliary contract split names are invalid')
 
 promotion_report_path = (
