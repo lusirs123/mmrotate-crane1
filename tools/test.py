@@ -1,5 +1,6 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import argparse
+import hashlib
 import os
 import os.path as osp
 import time
@@ -18,6 +19,106 @@ from mmdet.datasets import build_dataloader, replace_ImageToTensor
 from mmrotate.datasets import build_dataset
 from mmrotate.models import build_detector
 from mmrotate.utils import compat_cfg, setup_multi_processes
+
+
+def _validate_declared_checkpoint(cfg, checkpoint_path, checkpoint=None):
+    """Enforce an optional config-level checkpoint identity contract.
+
+    Normal evaluation configs do not declare these fields and retain the
+    original tools/test.py behaviour.  Paired diagnostics can declare a
+    canonical path, training protocol, and source-frame count so that an arm
+    label cannot silently be evaluated with the other arm's weights.
+    """
+    expected_path = cfg.get('expected_checkpoint', None)
+    if expected_path is not None:
+        expected_realpath = osp.realpath(osp.abspath(osp.expanduser(
+            os.fspath(expected_path))))
+        observed_realpath = osp.realpath(osp.abspath(osp.expanduser(
+            os.fspath(checkpoint_path))))
+        if observed_realpath != expected_realpath:
+            raise RuntimeError(
+                'Checkpoint path does not match config contract: '
+                f'observed={observed_realpath!r}, '
+                f'expected={expected_realpath!r}')
+
+    if checkpoint is None:
+        return
+
+    expected_protocol = cfg.get('expected_checkpoint_protocol', None)
+    expected_frames = cfg.get(
+        'expected_checkpoint_source_train_frames', None)
+    expected_target_read = cfg.get(
+        'expected_checkpoint_target_data_read', None)
+    expected_fixed_test_read = cfg.get(
+        'expected_checkpoint_fixed_test_read', None)
+    if (expected_protocol is None and expected_frames is None
+            and expected_target_read is None
+            and expected_fixed_test_read is None):
+        return
+    contract = dict(checkpoint.get('meta') or {}).get(
+        'geometry_refiner_checkpoint_contract')
+    if not isinstance(contract, dict):
+        raise RuntimeError(
+            'Checkpoint has no geometry_refiner_checkpoint_contract')
+    failures = []
+    if (expected_protocol is not None
+            and contract.get('protocol') != expected_protocol):
+        failures.append(
+            'protocol={!r} expected {!r}'.format(
+                contract.get('protocol'), expected_protocol))
+    if (expected_frames is not None
+            and contract.get('source_train_frames') != expected_frames):
+        failures.append(
+            'source_train_frames={!r} expected {!r}'.format(
+                contract.get('source_train_frames'), expected_frames))
+    if (expected_target_read is not None
+            and contract.get('target_data_read') is not expected_target_read):
+        failures.append(
+            'target_data_read={!r} expected {!r}'.format(
+                contract.get('target_data_read'), expected_target_read))
+    if (expected_fixed_test_read is not None and
+            contract.get('fixed_test_read') is not expected_fixed_test_read):
+        failures.append(
+            'fixed_test_read={!r} expected {!r}'.format(
+                contract.get('fixed_test_read'), expected_fixed_test_read))
+    if failures:
+        raise RuntimeError(
+            'Checkpoint metadata does not match config contract: '
+            + '; '.join(failures))
+
+
+def _sha256_file(path):
+    digest = hashlib.sha256()
+    with open(path, 'rb') as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _checkpoint_eval_record(cfg, args, checkpoint, metric):
+    """Build a provenance-rich evaluation record for paired diagnostics."""
+    contract = dict(checkpoint.get('meta') or {}).get(
+        'geometry_refiner_checkpoint_contract')
+    return dict(
+        config=osp.realpath(osp.abspath(args.config)),
+        checkpoint=osp.realpath(osp.abspath(args.checkpoint)),
+        checkpoint_sha256=_sha256_file(args.checkpoint),
+        metric=metric,
+        evidence_role=cfg.get('evidence_role', None),
+        comparison_design=cfg.get('comparison_design', None),
+        diagnostic_arm=cfg.get('diagnostic_arm', None),
+        candidate_epoch_policy=cfg.get('candidate_epoch_policy', None),
+        source_training_frame_count=cfg.get(
+            'source_training_frame_count', None),
+        auxiliary_source_frame_count=cfg.get(
+            'auxiliary_source_frame_count', None),
+        test_used_for_epoch_selection=cfg.get(
+            'test_used_for_epoch_selection', None),
+        eligible_for_unbiased_final_test_claim=cfg.get(
+            'eligible_for_unbiased_final_test_claim', None),
+        eligible_for_unknown_sequence_claim=cfg.get(
+            'eligible_for_unknown_sequence_claim', None),
+        checkpoint_contract=contract)
 
 
 def parse_args():
@@ -121,6 +222,8 @@ def main():
     if args.cfg_options is not None:
         cfg.merge_from_dict(args.cfg_options)
 
+    _validate_declared_checkpoint(cfg, args.checkpoint)
+
     cfg = compat_cfg(cfg)
 
     if args.format_only and cfg.mp_start_method != 'spawn':
@@ -218,6 +321,7 @@ def main():
     if fp16_cfg is not None:
         wrap_fp16_model(model)
     checkpoint = load_checkpoint(model, args.checkpoint, map_location='cpu')
+    _validate_declared_checkpoint(cfg, args.checkpoint, checkpoint)
     if args.fuse_conv_bn:
         model = fuse_conv_bn(model)
     # old versions did not save class info in checkpoints, this walkaround is
@@ -292,7 +396,8 @@ def main():
             eval_kwargs.update(dict(metric=args.eval, **kwargs))
             metric = dataset.evaluate(outputs, **eval_kwargs)
             print(metric)
-            metric_dict = dict(config=args.config, checkpoint=args.checkpoint, metric=metric)
+            metric_dict = _checkpoint_eval_record(
+                cfg, args, checkpoint, metric)
             if args.work_dir is not None and rank == 0:
                 mmcv.dump(metric_dict, json_file)
                 comparison_file = osp.join(args.work_dir, args.comparison_file)

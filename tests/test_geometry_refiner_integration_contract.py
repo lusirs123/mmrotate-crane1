@@ -282,20 +282,53 @@ def test_seq11_e1_is_exactly_59_unique_aux_frames_without_test():
     assert 'auxiliary_source_sample_valid' in smoke
 
 
-def test_seq11_e1_fixed_target_is_endpoint_diagnostic_not_final_claim():
+def test_seq11_fixed_target_is_paired_endpoint_diagnostic_not_final_claim():
     path = ROOT / (
         'crane_project/configs/'
         'crane_symeood_dino_k1_retentive_causal_phase_refiner_'
         'source_v3_seq11_e1_fixed_target_diagnostic.py')
     text = path.read_text()
-    assert "'source_v3_seq11.py'" in text
+    assert "'source_v3.py'" in text
+    assert "'V3_SEQ11_DIAGNOSTIC_ARM', 'seq11_e1'" in text
+    assert "diagnostic_arm not in diagnostic_arms" in text
+    assert "base_v3=dict(" in text
+    assert "seq11_e1=dict(" in text
     assert "evidence_role = 'fixed-target-development-diagnostic'" in text
+    assert "comparison_design = 'paired_v3_epoch10_training_data_only'" in text
     assert "candidate_epoch_policy = 'fixed_training_endpoint_epoch10'" in text
-    assert 'source_training_frame_count = 2840' in text
-    assert 'auxiliary_source_frame_count = 59' in text
+    assert 'source_training_frame_count=2781' in text
+    assert 'source_training_frame_count=2840' in text
+    assert 'auxiliary_source_frame_count=0' in text
+    assert 'auxiliary_source_frame_count=59' in text
+    assert 'source_only_k1_retentive_causal_phase_refiner_v3' in text
+    assert 'source_only_k1_retentive_v3_plus_seq11_e1' in text
+    assert ('expected_checkpoint_source_train_frames = '
+            'source_training_frame_count') in text
+    assert 'expected_checkpoint_target_data_read = False' in text
+    assert 'expected_checkpoint_fixed_test_read = False' in text
     assert 'test_used_for_epoch_selection = False' in text
     assert 'eligible_for_unbiased_final_test_claim = False' in text
     assert "expected_frame_count=992, expected_split='test'" in text
+
+    test_entry = (ROOT / 'tools/test.py').read_text()
+    assert 'def _validate_declared_checkpoint(' in test_entry
+    assert 'Checkpoint path does not match config contract' in test_entry
+    assert 'geometry_refiner_checkpoint_contract' in test_entry
+    assert "contract.get('protocol') != expected_protocol" in test_entry
+    assert (
+        "contract.get('source_train_frames') != expected_frames"
+        in test_entry)
+    assert (
+        "contract.get('target_data_read') is not expected_target_read"
+        in test_entry)
+    assert (
+        "contract.get('fixed_test_read') is not expected_fixed_test_read"
+        in test_entry)
+    assert 'def _checkpoint_eval_record(' in test_entry
+    assert 'checkpoint_sha256=_sha256_file(args.checkpoint)' in test_entry
+    assert "diagnostic_arm=cfg.get('diagnostic_arm', None)" in test_entry
+    assert test_entry.count(
+        '_validate_declared_checkpoint(cfg, args.checkpoint') == 2
 
 
 def test_seq11_blocksplit_e1_uses_48_train_and_11_mechanism_val():
