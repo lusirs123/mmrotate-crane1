@@ -1,0 +1,89 @@
+{
+  "protocol": "real_seq11_k1_dino_base_v3_three_way_baseline_v1",
+  "status": "preregistered_before_base_v3_full251_inference",
+  "purpose": "Determine whether the frozen Base V3 refiner adds measured value beyond deterministic K1-present-else-DINO fallback before designing any seq11-v2 training.",
+  "evidence_boundary": "same_video_source_only_baseline_diagnostic",
+  "dataset": {
+    "sequence": "real_seq11",
+    "frame_count": 251,
+    "annotation_k0": 1.9,
+    "target_geometry": "top_beam_only",
+    "unknown_sequence_evidence": false
+  },
+  "methods": [
+    {
+      "id": "ordinary_k1",
+      "definition": "formal ordinary K1 epoch24 output"
+    },
+    {
+      "id": "deterministic_k1_else_dino",
+      "definition": "use K1 whenever K1 is present; use cached native-S14 DINO only when K1 is absent",
+      "learned_fusion": false
+    },
+    {
+      "id": "base_v3_epoch9_refiner",
+      "definition": "frozen source-promoted Base V3 epoch9 with its unchanged shared forward and causal four-frame history",
+      "source_training_frames": 2781,
+      "seq11_training_frames": 0
+    }
+  ],
+  "identity_requirements": [
+    "formal K1 result identity",
+    "251-frame runtime order manifest",
+    "DINO cache identity",
+    "all-lane audit SHA256",
+    "Base V3 promotion and checkpoint SHA256",
+    "Base V3 runtime result receipt",
+    "annotation SHA256 per frame"
+  ],
+  "metric_protocol": {
+    "riou_hit_threshold": 0.5,
+    "real_center_threshold_px": 25.0,
+    "aci_angle_limit_deg": 35.0,
+    "static_pool": "all 251 frames",
+    "rescue_denominator": "K1 missing or present-wrong and DINO hit",
+    "both_bad_excluded_from_rescue_denominator": true,
+    "old_correct_lost_denominator": "formal K1 hit frames",
+    "metric_pair_edge": "same sequence and original frame number difference exactly one",
+    "reset_at_original_frame_gap": true,
+    "missing_prediction_breaks_continuity": true,
+    "dfr_aci_aggregation": "sum block numerators and denominators, then divide once",
+    "pair_coverage_required": true,
+    "mcml_mean_name": "MCML_segment_max_mean",
+    "terminal_failure_included_in_mcml": true,
+    "both_bad_reports": [
+      "false_output_count",
+      "high_confidence_false_output_count",
+      "confidence_unavailable_false_output_count",
+      "longest_false_output_run",
+      "unavailable_count",
+      "abstention_count"
+    ]
+  },
+  "interpretation": {
+    "deterministic_fallback_is_required_baseline": true,
+    "joint_review_fields": [
+      "rescue",
+      "old_correct_lost",
+      "mean_RIoU",
+      "valid_pair_fraction",
+      "DFR",
+      "ACI",
+      "MCML",
+      "both_bad_behavior"
+    ],
+    "single_metric_promotion": false,
+    "automatic_cv_training_authorization": false,
+    "next_decision": "Use the result to decide whether a narrower missing-rescue CV is scientifically justified; retain the dual-mechanism V2 STOP unchanged."
+  },
+  "execution": {
+    "optimizer_steps": 0,
+    "training": false,
+    "target_data_read": false,
+    "fixed_test_read": false,
+    "official_source_val_738_read": false
+  },
+  "target_data_read": false,
+  "fixed_test_read": false,
+  "three_fold_training_authorized": false
+}

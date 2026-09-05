@@ -141,6 +141,9 @@ def _result_identity_record(cfg, args, dataset, outputs):
             result_index=index,
             frame_key=osp.splitext(osp.basename(filename))[0],
             dataset_filename=os.fspath(filename)))
+    evidence_contract = cfg.get('formal_k1_full251_contract', None)
+    if evidence_contract is None:
+        evidence_contract = cfg.get('source_only_result_contract', {})
     return dict(
         protocol='mmdet_runtime_result_order_identity_v1',
         config=osp.realpath(osp.abspath(args.config)),
@@ -152,10 +155,48 @@ def _result_identity_record(cfg, args, dataset, outputs):
         result_count=len(outputs),
         dataset_type=dataset.__class__.__name__,
         runtime_dataset_order=rows,
-        target_data_read=cfg.get('formal_k1_full251_contract', {}).get(
-            'target_data_read', None),
-        fixed_test_read=cfg.get('formal_k1_full251_contract', {}).get(
-            'fixed_test_read', None))
+        evidence_contract=dict(evidence_contract),
+        target_data_read=evidence_contract.get('target_data_read', None),
+        fixed_test_read=evidence_contract.get('fixed_test_read', None))
+
+
+def _runtime_audit_record(cfg, args, model, outputs):
+    """Record single-run CUDA peaks and model-owned forward counters."""
+    raw_model = model.module if hasattr(model, 'module') else model
+    counter = getattr(raw_model, 'runtime_forward_counts', None)
+    evidence_contract = cfg.get('formal_k1_full251_contract', None)
+    if evidence_contract is None:
+        evidence_contract = cfg.get('source_only_result_contract', {})
+    runtime_inputs = {}
+    for name, path in dict(cfg.get('runtime_input_files', {})).items():
+        absolute = osp.realpath(osp.abspath(osp.expanduser(os.fspath(path))))
+        if not osp.isfile(absolute):
+            raise RuntimeError('Missing declared runtime input: ' + absolute)
+        runtime_inputs[str(name)] = dict(
+            path=absolute, sha256=_sha256_file(absolute),
+            size_bytes=osp.getsize(absolute))
+    cuda = dict(available=torch.cuda.is_available())
+    if torch.cuda.is_available():
+        device = torch.cuda.current_device()
+        cuda.update(dict(
+            logical_device=int(device),
+            cuda_visible_devices=os.environ.get('CUDA_VISIBLE_DEVICES'),
+            device_name=torch.cuda.get_device_name(device),
+            peak_allocated_bytes=int(torch.cuda.max_memory_allocated(device)),
+            peak_reserved_bytes=int(torch.cuda.max_memory_reserved(device))))
+    return dict(
+        protocol='mmdet_runtime_inference_resource_audit_v1',
+        config=osp.realpath(osp.abspath(args.config)),
+        config_sha256=_sha256_file(args.config),
+        checkpoint=osp.realpath(osp.abspath(args.checkpoint)),
+        checkpoint_sha256=_sha256_file(args.checkpoint),
+        result_count=len(outputs),
+        runtime_input_files=runtime_inputs,
+        forward_counts=(dict(counter()) if callable(counter) else None),
+        cuda=cuda,
+        evidence_contract=dict(evidence_contract),
+        target_data_read=evidence_contract.get('target_data_read', None),
+        fixed_test_read=evidence_contract.get('fixed_test_read', None))
 
 
 def parse_args():
@@ -171,6 +212,9 @@ def parse_args():
     parser.add_argument(
         '--result-identity-out',
         help='write a JSON receipt binding results to runtime dataset order')
+    parser.add_argument(
+        '--runtime-audit-out',
+        help='write CUDA peak memory and model forward-count evidence')
     parser.add_argument(
         '--fuse-conv-bn',
         action='store_true',
@@ -371,6 +415,8 @@ def main():
     else:
         model.CLASSES = dataset.CLASSES
 
+    if torch.cuda.is_available() and args.runtime_audit_out:
+        torch.cuda.reset_peak_memory_stats(torch.cuda.current_device())
     if not distributed:
         model = MMDataParallel(model, device_ids=cfg.gpu_ids)
         outputs = single_gpu_test(model, data_loader, args.show, args.show_dir,
@@ -438,6 +484,18 @@ def main():
                 with open(receipt_path, 'wb') as stream:
                     stream.write(raw)
             print('writing result identity to {}'.format(receipt_path))
+        if args.runtime_audit_out:
+            runtime_audit = _runtime_audit_record(cfg, args, model, outputs)
+            runtime_path = osp.realpath(osp.abspath(args.runtime_audit_out))
+            mmcv.mkdir_or_exist(osp.dirname(runtime_path))
+            if osp.exists(runtime_path):
+                raise RuntimeError(
+                    'Refusing to overwrite runtime audit: ' + runtime_path)
+            with open(runtime_path, 'w', encoding='utf-8') as stream:
+                json.dump(runtime_audit, stream, indent=2,
+                          ensure_ascii=False)
+                stream.write('\n')
+            print('writing runtime audit to {}'.format(runtime_path))
         kwargs = {} if args.eval_options is None else args.eval_options
         if args.format_only:
             dataset.format_results(outputs, **kwargs)

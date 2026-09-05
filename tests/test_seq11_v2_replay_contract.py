@@ -315,3 +315,61 @@ def test_server_inventory_is_fail_closed_and_never_reads_fixed_test():
     assert "promotion.get('target_data_read') is False" in inventory
     assert "promotion.get('fixed_test_read') is False" in inventory
     assert 'STOP_SEQ11_V2_SERVER_INPUT_INVENTORY_FAILED' in inventory
+
+
+def test_seq11_v2_three_way_baseline_is_source_only_and_preregistered():
+    config = (ROOT / (
+        'crane_project/configs/'
+        'crane_symeood_dino_k1_retentive_causal_phase_refiner_'
+        'base_v3_seq11_v2_full251_eval.py')).read_text()
+    tool = (ROOT / (
+        'crane_project/tools/'
+        'symeood_dino_seq11_v2_baseline_compare.py')).read_text()
+    contract_path = ROOT / (
+        'crane_project/data_contracts/'
+        'real_seq11_k1_dino_base_v3_three_way_baseline_v1.json')
+    contract = json.loads(contract_path.read_text())
+
+    assert 'expected_frame_count=251' in config
+    assert "expected_checkpoint_source_train_frames = 2781" in config
+    assert "expected_checkpoint_target_data_read = False" in config
+    assert "expected_checkpoint_fixed_test_read = False" in config
+    assert "evaluation_only=True" in config
+    assert "optimizer_steps=0" in config
+    assert "ann_file='test/" not in config
+    assert "expected_split='test'" not in config
+
+    assert 'deterministic_k1_else_dino' in tool
+    assert 'base_v3_epoch9_refiner' in tool
+    assert 'contiguous_gt_pair_count' in tool
+    assert 'valid_pair_fraction' in tool
+    assert 'MCML_segment_max_mean' in tool
+    assert 'unrecovered_terminal_run_length' in tool
+    assert 'both_bad_excluded_from_rescue_denominator=True' in tool
+    assert 'no_automatic_cv_training_authorization=True' in tool
+    assert "eligible_for_three_fold_training=False" in tool
+
+    assert contract['three_fold_training_authorized'] is False
+    assert contract['execution']['training'] is False
+    assert contract['execution']['target_data_read'] is False
+    assert contract['execution']['fixed_test_read'] is False
+    assert contract['metric_protocol'][
+        'both_bad_excluded_from_rescue_denominator'] is True
+    assert contract['interpretation'][
+        'automatic_cv_training_authorization'] is False
+
+
+def test_result_identity_receipt_supports_generic_source_only_contract():
+    source = (ROOT / 'tools/test.py').read_text()
+
+    assert "cfg.get('formal_k1_full251_contract', None)" in source
+    assert "cfg.get('source_only_result_contract', {})" in source
+    assert 'evidence_contract=dict(evidence_contract)' in source
+    assert "evidence_contract.get('target_data_read', None)" in source
+    assert "evidence_contract.get('fixed_test_read', None)" in source
+    assert "--runtime-audit-out" in source
+    assert "mmdet_runtime_inference_resource_audit_v1" in source
+    assert "torch.cuda.max_memory_allocated" in source
+    assert "torch.cuda.max_memory_reserved" in source
+    assert "runtime_forward_counts" in source
+    assert "runtime_input_files" in source
