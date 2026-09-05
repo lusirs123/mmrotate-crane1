@@ -106,6 +106,9 @@ def test_seq11_v2_aux_evaluation_is_read_only_and_uses_48_frames():
     assert "paper_temporal=False" in reference
     assert "split_report.get('val_split', '')" in candidate
     assert "split_report.get('val_split', '')" in reference
+    assert 'split_report = _read_json(split_report_path)' in candidate
+    assert 'split_report = _read_json(split_report_path)' in reference
+    assert 'as _handle' not in candidate + reference
     assert "ann_file='test/" not in candidate + reference
     assert 'optimizer' not in candidate
     assert 'optimizer' not in reference

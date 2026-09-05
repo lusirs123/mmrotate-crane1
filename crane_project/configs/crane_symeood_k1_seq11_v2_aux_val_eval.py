@@ -33,8 +33,14 @@ def _data_root_child(value):
     return parts[0]
 
 
-with open(split_report_path, 'r', encoding='utf-8') as _handle:
-    split_report = json.load(_handle)
+def _read_json(path):
+    # Keep TextIOWrapper out of MMCV's module-level config namespace.  MMCV
+    # 1.x deep-copies every retained config value after importing this file.
+    with open(path, 'r', encoding='utf-8') as handle:
+        return json.load(handle)
+
+
+split_report = _read_json(split_report_path)
 if (split_report.get('decision') !=
         'ALLOW_SEQ11_BLOCKSPLIT_SOURCE_TRAINING'
         or split_report.get('aux_val_frame_count') != 48
@@ -72,4 +78,3 @@ evaluation = dict(
     thresh_sim=10.0, thresh_real=25.0)
 load_from = None
 resume_from = None
-
