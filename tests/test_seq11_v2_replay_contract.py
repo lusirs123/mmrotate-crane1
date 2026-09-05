@@ -91,3 +91,21 @@ def test_trainer_has_frozen_teacher_and_masked_retention():
         'source_v4_seq11_v2_replay.py')).read_text()
     assert ("dict(type='FixedRatioReplayEpochHook', priority='VERY_HIGH')"
             in config)
+
+
+def test_seq11_v2_aux_evaluation_is_read_only_and_uses_48_frames():
+    candidate = (ROOT / (
+        'crane_project/configs/'
+        'crane_symeood_dino_k1_retentive_causal_phase_refiner_'
+        'source_v4_seq11_v2_aux_val.py')).read_text()
+    reference = (ROOT / (
+        'crane_project/configs/'
+        'crane_symeood_k1_seq11_v2_aux_val_eval.py')).read_text()
+    assert 'expected_frame_count=48' in candidate
+    assert "paper_temporal=False" in candidate
+    assert "paper_temporal=False" in reference
+    assert "split_report.get('val_split', '')" in candidate
+    assert "split_report.get('val_split', '')" in reference
+    assert "ann_file='test/" not in candidate + reference
+    assert 'optimizer' not in candidate
+    assert 'optimizer' not in reference
