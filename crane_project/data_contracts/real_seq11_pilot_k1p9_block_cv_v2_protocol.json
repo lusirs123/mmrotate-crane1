@@ -1,0 +1,112 @@
+{
+  "protocol": "real_seq11_k1p9_251_event_block_cv_v2",
+  "status": "preregistered_before_fold_training",
+  "evidence_boundary": "same_video_source_only_oof_mechanism_evidence",
+  "dataset": {
+    "sequence": "real_seq11",
+    "frame_count": 251,
+    "target_geometry": "top_beam_only",
+    "annotation_k0": 1.9,
+    "fold_count": 3,
+    "fold_assignment_unit": "maximal_contiguous_difficult_event",
+    "random_frame_split": false
+  },
+  "history_protocol": {
+    "history_horizon": 4,
+    "history_dependency_edges": "directed edges from each current frame to existing loader-readable frame-1 through frame-4",
+    "sorted_sample_adjacency_is_history": false,
+    "validation_core": "OOF metric frames",
+    "context_halo": "at least four available sequence positions before and after each validation core plus every realized loader dependency",
+    "training_exclusion": "validation core union context halo",
+    "halo_is_metric_input": false,
+    "halo_is_metric_frame": false
+  },
+  "metric_pair_protocol": {
+    "metric_pair_edges": "same sequence, same fold, same validation block, original frame number difference exactly one",
+    "sorted_sample_adjacency_is_metric_pair": false,
+    "reset_at_validation_core_boundary": true,
+    "reset_at_original_frame_gap": true,
+    "cross_fold_pairs": false,
+    "cross_checkpoint_pairs": false,
+    "missing_prediction_breaks_continuity": true,
+    "required_coverage_fields": [
+      "contiguous_gt_pair_count",
+      "valid_prediction_pair_count",
+      "dfr_valid_pair_count",
+      "aci_valid_pair_count",
+      "valid_pair_fraction",
+      "missing_prediction_count"
+    ],
+    "pooled_dfr_aci_aggregation": "sum block numerators and denominators, then divide once"
+  },
+  "mcml_protocol": {
+    "legacy_mcml_mean_exact_name": "MCML_segment_max_mean",
+    "legacy_mcml_mean_definition": "arithmetic mean of each continuous validation segment maximum miss length",
+    "failure_run_length_mean_is_separate": true,
+    "required_additional_fields": [
+      "failure_run_length_mean",
+      "failure_run_count",
+      "unrecovered_terminal_run_length"
+    ],
+    "terminal_failure_included_in_mcml": true,
+    "mrf_includes_only_recovered_runs": true
+  },
+  "support_protocol": {
+    "categories": [
+      "k1_hit",
+      "k1_missing_dino_hit",
+      "k1_present_wrong_dino_hit",
+      "both_bad"
+    ],
+    "both_bad_excluded_from_dino_rescue_denominator": true,
+    "both_bad_required_reports": [
+      "frame_count",
+      "continuous_events",
+      "high_confidence_false_output_count",
+      "longest_false_output_run",
+      "unavailable_count",
+      "abstention_count"
+    ],
+    "pooled_k1_missing_dino_hit_min": 12,
+    "pooled_k1_present_wrong_dino_hit_min": 6,
+    "k1_missing_dino_hit_event_min": 6,
+    "k1_present_wrong_dino_hit_event_min": 3,
+    "per_fold_k1_missing_dino_hit_min": 3,
+    "per_fold_k1_present_wrong_dino_hit_min": 1,
+    "per_fold_each_rescue_event_min": 1,
+    "insufficient_support_action": "stop without lowering thresholds"
+  },
+  "candidate_gate": {
+    "worst_fold_valid_pair_fraction_min": 0.7,
+    "worst_fold_mcml_max": 5,
+    "pooled_old_correct_lost_max": 0,
+    "ranking_order": [
+      "original_2781_and_base_v3_retention_pass",
+      "per_fold_and_pooled_rescue_support_pass",
+      "worst_fold_mcml_and_valid_pair_coverage",
+      "pooled_riou_descending",
+      "pooled_dfr_ascending",
+      "pooled_aci_descending",
+      "earlier_epoch"
+    ],
+    "threshold_change_after_candidate_results": false
+  },
+  "training_protocol": {
+    "fold_initialization": "Base V3 promoted epoch9 independently for every fold",
+    "fold_checkpoint_chaining": false,
+    "v4_epoch10_initialization": false,
+    "original_source_replay_frames": 2781,
+    "optimizer_steps_per_epoch": 1391,
+    "replay_schedule_protocol": "fixed_ratio_pair_replay_schedule_v2",
+    "scheduled_original_steps_per_epoch": 1299,
+    "scheduled_auxiliary_steps_per_epoch": 92,
+    "base_v3_teacher_retention_loss_weight": 0.25,
+    "oof_epoch_role": "select final training duration N",
+    "final_training": "initialize Base V3 independently and train all 251 frames for exactly N epochs",
+    "official_source_val_738_role": "single pass-fail non-regression gate after final training",
+    "source_val_epoch_reselection": false
+  },
+  "target_data_read": false,
+  "fixed_test_read": false,
+  "fold_training_authorized": false
+}

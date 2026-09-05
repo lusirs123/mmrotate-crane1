@@ -12,7 +12,8 @@ from crane_project.tools.symeood_dino_replay_schedule_audit import (
 from crane_project.tools.symeood_dino_seq11_formal_k1_identity import (
     audit as formal_k1_identity_audit)
 from crane_project.utils.fixed_ratio_replay_schedule import (
-    enumerate_replay_schedule, replay_schedule_contract)
+    LEGACY_REPLAY_SCHEDULE_PROTOCOL, enumerate_replay_schedule,
+    legacy_replay_schedule_contract, replay_schedule_contract)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -71,12 +72,15 @@ def test_replay_wrapper_keeps_each_pair_on_one_lane():
     methods = {node.name for node in cls.body
                if isinstance(node, ast.FunctionDef)}
     assert {'_route', '__getitem__', 'set_epoch', 'replay_contract',
-            'coverage_contract'} <= methods
+            'coverage_contract',
+            'replay_route_for_optimizer_step'} <= methods
     text = path.read_text()
     assert 'batch = index // self.samples_per_batch' in text
     assert 'route_replay_batch(' in text
     assert "sample['source_replay_is_auxiliary']" in text
     assert 'epoch_offset = self.epoch * samples_per_epoch' in text
+    assert 'replay_schedule_protocol=LEGACY_REPLAY_SCHEDULE_PROTOCOL' in text
+    assert 'Unknown replay schedule protocol' in text
 
 
 def test_replay_schedule_enumerates_exact_1391_route():
@@ -90,6 +94,12 @@ def test_replay_schedule_enumerates_exact_1391_route():
     assert contract['scheduled_original_steps'] == 1299
     assert contract['scheduled_auxiliary_steps'] == 92
     assert contract['enumerated_total_steps'] == 1391
+    legacy = legacy_replay_schedule_contract(1391, 14)
+    assert legacy['protocol'] == LEGACY_REPLAY_SCHEDULE_PROTOCOL
+    assert legacy['scheduled_original_steps'] == 1298
+    assert legacy['scheduled_auxiliary_steps'] == 93
+    assert legacy['enumerated_original_steps'] == 1299
+    assert legacy['enumerated_auxiliary_steps'] == 92
 
 
 def test_replay_schedule_audit_checks_offsets_coverage_and_determinism():
@@ -126,8 +136,12 @@ def test_trainer_has_frozen_teacher_and_masked_retention():
     assert 'original = ~replay_auxiliary' in trainer
     assert 'refiner_base_v3_teacher_retention_objective' in trainer
     assert 'teacher_refiner_hash_unchanged' in trainer
+    assert "'train_forward'" in trainer
+    assert 'def runtime_forward_counts(self):' in trainer
     assert 'Base-V3 teacher received a gradient' in hook
     assert 'class FixedRatioReplayEpochHook' in hook
+    assert 'fixed_ratio_replay_runtime_audit_v2' in hook
+    assert "report['forward_counts']" in hook
     replay_class = hook.split('class FixedRatioReplayEpochHook', 1)[1]
     assert "priority = 'VERY_HIGH'" not in replay_class
     config = (ROOT / (
@@ -200,22 +214,39 @@ def test_formal_k1_identity_binds_results_to_exact_frame_order(tmp_path):
         config=str(config), checkpoint=str(checkpoint),
         checkpoint_sha256=checkpoint_sha, metric={'mAP': 1.0})]))
     source_manifest = tmp_path / 'split_manifest.json'
-    source_manifest.write_text(json.dumps({'frame_count': 251}))
     source_root = tmp_path / 'data' / 'source'
     images = source_root / 'images'
     annotations = source_root / 'annfiles'
     images.mkdir(parents=True)
     annotations.mkdir()
+    stems = []
     for frame in range(251):
         stem = 'real_seq11_{:06d}'.format(frame)
+        stems.append(stem)
         (images / (stem + '.jpg')).write_bytes(b'image')
         (annotations / (stem + '.txt')).write_text('annotation')
     results = tmp_path / 'results.pkl'
     results.write_bytes(pickle.dumps([[[]] for _ in range(251)]))
+    source_manifest.write_text(json.dumps(dict(
+        protocol='real_seq11_source_k1p9_block_manifest_v2',
+        all_frame_count=251, train_stems=stems, aux_val_stems=[])))
+    inference_receipt = tmp_path / 'inference_receipt.json'
+    inference_receipt.write_text(json.dumps(dict(
+        protocol='mmdet_runtime_result_order_identity_v1',
+        config_sha256=hashlib.sha256(config.read_bytes()).hexdigest(),
+        checkpoint_sha256=checkpoint_sha,
+        results_sha256=hashlib.sha256(results.read_bytes()).hexdigest(),
+        result_count=251,
+        runtime_dataset_order=[dict(
+            result_index=index, frame_key=stem,
+            dataset_filename=stem + '.jpg')
+            for index, stem in enumerate(stems)],
+        target_data_read=False, fixed_test_read=False)))
     args = argparse.Namespace(
         results=str(results), checkpoint=str(checkpoint), config=str(config),
         base_k1_config=str(base_k1_config),
         evaluation_summary=str(evaluation_summary),
+        inference_receipt=str(inference_receipt),
         source_manifest=str(source_manifest), data_root=str(tmp_path / 'data'),
         source_split='source',
         frame_order_json=str(tmp_path / 'frame_order.json'),
@@ -227,6 +258,48 @@ def test_formal_k1_identity_binds_results_to_exact_frame_order(tmp_path):
     assert report['frame_count'] == 251
     assert report['missing_prediction_count'] == 251
     assert report['inputs']['frame_order_manifest_sha256']
+    assert report['checks']['runtime_dataset_order_bound'] is True
+
+
+def test_v2_cv_protocol_preregisters_isolation_metrics_and_stop_gates():
+    path = ROOT / (
+        'crane_project/data_contracts/'
+        'real_seq11_pilot_k1p9_block_cv_v2_protocol.json')
+    payload = json.loads(path.read_text())
+    assert payload['fold_training_authorized'] is False
+    assert payload['history_protocol']['history_horizon'] == 4
+    assert payload['metric_pair_protocol']['cross_fold_pairs'] is False
+    assert payload['metric_pair_protocol'][
+        'pooled_dfr_aci_aggregation'].startswith('sum block numerators')
+    assert payload['mcml_protocol'][
+        'legacy_mcml_mean_exact_name'] == 'MCML_segment_max_mean'
+    assert payload['support_protocol'][
+        'both_bad_excluded_from_dino_rescue_denominator'] is True
+    assert payload['support_protocol'][
+        'per_fold_k1_present_wrong_dino_hit_min'] == 1
+    assert payload['training_protocol'][
+        'replay_schedule_protocol'] == 'fixed_ratio_pair_replay_schedule_v2'
+    assert payload['target_data_read'] is False
+    assert payload['fixed_test_read'] is False
+
+
+def test_v2_identity_and_dependency_tools_fail_closed_before_training():
+    dino = (ROOT / (
+        'crane_project/tools/'
+        'symeood_dino_seq11_dino_cache_identity.py')).read_text()
+    history = (ROOT / (
+        'crane_project/tools/'
+        'symeood_dino_seq11_history_dependency_audit.py')).read_text()
+    support = (ROOT / (
+        'crane_project/tools/'
+        'symeood_dino_seq11_block_cv_support_audit.py')).read_text()
+    assert 'dino_forward_count_251' in dino
+    assert 'source_manifest_exact_set' in dino
+    assert 'history_dependency_edges' in history
+    assert "frame - age" in history
+    assert 'metric_pair_candidates' in history
+    assert 'STOP_SEQ11_V2_MECHANISM_SUPPORT_INSUFFICIENT' in support
+    assert "eligible_for_three_fold_training=False" in support
 
 
 def test_server_inventory_is_fail_closed_and_never_reads_fixed_test():

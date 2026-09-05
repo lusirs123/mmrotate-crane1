@@ -1,9 +1,12 @@
 """Pure scheduling helpers for deterministic fixed-ratio source replay."""
 
 import hashlib
+import math
 
 
 REPLAY_SCHEDULE_PROTOCOL = 'fixed_ratio_pair_replay_schedule_v2'
+LEGACY_REPLAY_SCHEDULE_PROTOCOL = (
+    'fixed_ratio_pair_replay_schedule_legacy_ceil_contract_v1')
 
 
 def route_replay_batch(batch_index, original_batches_per_auxiliary_batch):
@@ -53,3 +56,35 @@ def replay_schedule_contract(optimizer_steps_per_epoch,
         scheduled_auxiliary_steps=int(auxiliary),
         enumerated_total_steps=int(original + auxiliary),
         schedule_sha256=hashlib.sha256(serialized).hexdigest())
+
+
+def legacy_replay_schedule_contract(optimizer_steps_per_epoch,
+                                    original_batches_per_auxiliary_batch):
+    """Describe the historical ceil-count contract used by V4 checkpoints.
+
+    The route itself was always enumerated by :func:`route_replay_batch`.
+    Historical code used a ceil-based auxiliary count only for reporting and
+    the next epoch's child offset.  Keeping that behavior behind an explicit
+    protocol preserves old checkpoint reproducibility without carrying it
+    into V2 CV runs.
+    """
+    steps = int(optimizer_steps_per_epoch)
+    original_batches = int(original_batches_per_auxiliary_batch)
+    if steps <= 0 or original_batches <= 0:
+        raise ValueError('legacy replay parameters must be positive')
+    cycle = original_batches + 1
+    auxiliary = int(math.ceil(float(steps) / float(cycle)))
+    original = steps - auxiliary
+    actual = replay_schedule_contract(steps, original_batches)
+    return dict(
+        protocol=LEGACY_REPLAY_SCHEDULE_PROTOCOL,
+        route_semantics='historical_route_with_ceil_offset_contract',
+        optimizer_steps_per_epoch=steps,
+        original_batches_per_auxiliary_batch=original_batches,
+        auxiliary_batches_per_cycle=1,
+        scheduled_original_steps=original,
+        scheduled_auxiliary_steps=auxiliary,
+        enumerated_original_steps=actual['scheduled_original_steps'],
+        enumerated_auxiliary_steps=actual['scheduled_auxiliary_steps'],
+        enumerated_total_steps=steps,
+        schedule_sha256=actual['schedule_sha256'])

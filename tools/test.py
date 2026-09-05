@@ -1,6 +1,7 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import argparse
 import hashlib
+import json
 import os
 import os.path as osp
 import time
@@ -121,6 +122,42 @@ def _checkpoint_eval_record(cfg, args, checkpoint, metric):
         checkpoint_contract=contract)
 
 
+def _result_identity_record(cfg, args, dataset, outputs):
+    """Bind serialized results to the exact runtime dataset order."""
+    if args.out is None:
+        raise RuntimeError('--result-identity-out requires --out')
+    data_infos = getattr(dataset, 'data_infos', None)
+    if not isinstance(data_infos, list) or len(data_infos) != len(outputs):
+        raise RuntimeError(
+            'Dataset order cannot be bound to result rows: data_infos={} '
+            'outputs={}'.format(
+                None if data_infos is None else len(data_infos), len(outputs)))
+    rows = []
+    for index, info in enumerate(data_infos):
+        filename = info.get('filename')
+        if not filename:
+            raise RuntimeError('Dataset row has no filename at {}'.format(index))
+        rows.append(dict(
+            result_index=index,
+            frame_key=osp.splitext(osp.basename(filename))[0],
+            dataset_filename=os.fspath(filename)))
+    return dict(
+        protocol='mmdet_runtime_result_order_identity_v1',
+        config=osp.realpath(osp.abspath(args.config)),
+        config_sha256=_sha256_file(args.config),
+        checkpoint=osp.realpath(osp.abspath(args.checkpoint)),
+        checkpoint_sha256=_sha256_file(args.checkpoint),
+        results=osp.realpath(osp.abspath(args.out)),
+        results_sha256=_sha256_file(args.out),
+        result_count=len(outputs),
+        dataset_type=dataset.__class__.__name__,
+        runtime_dataset_order=rows,
+        target_data_read=cfg.get('formal_k1_full251_contract', {}).get(
+            'target_data_read', None),
+        fixed_test_read=cfg.get('formal_k1_full251_contract', {}).get(
+            'fixed_test_read', None))
+
+
 def parse_args():
     """Parse parameters."""
     parser = argparse.ArgumentParser(
@@ -131,6 +168,9 @@ def parse_args():
         '--work-dir',
         help='the directory to save the file containing evaluation metrics')
     parser.add_argument('--out', help='output result file in pickle format')
+    parser.add_argument(
+        '--result-identity-out',
+        help='write a JSON receipt binding results to runtime dataset order')
     parser.add_argument(
         '--fuse-conv-bn',
         action='store_true',
@@ -382,6 +422,22 @@ def main():
         if args.out:
             print(f'\nwriting results to {args.out}')
             mmcv.dump(outputs, args.out)
+        if args.result_identity_out:
+            receipt = _result_identity_record(cfg, args, dataset, outputs)
+            receipt_path = osp.realpath(osp.abspath(args.result_identity_out))
+            mmcv.mkdir_or_exist(osp.dirname(receipt_path))
+            raw = (json.dumps(receipt, indent=2, ensure_ascii=False)
+                   + '\n').encode('utf-8')
+            if osp.exists(receipt_path):
+                with open(receipt_path, 'rb') as stream:
+                    if stream.read() != raw:
+                        raise RuntimeError(
+                            'Refusing to overwrite different result identity: '
+                            + receipt_path)
+            else:
+                with open(receipt_path, 'wb') as stream:
+                    stream.write(raw)
+            print('writing result identity to {}'.format(receipt_path))
         kwargs = {} if args.eval_options is None else args.eval_options
         if args.format_only:
             dataset.format_results(outputs, **kwargs)

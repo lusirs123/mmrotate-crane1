@@ -8,7 +8,9 @@ from mmcv.parallel import DataContainer as DC
 from mmdet.datasets import DATASETS
 
 from crane_project.utils.fixed_ratio_replay_schedule import (
-    replay_schedule_contract, route_replay_batch)
+    LEGACY_REPLAY_SCHEDULE_PROTOCOL, REPLAY_SCHEDULE_PROTOCOL,
+    legacy_replay_schedule_contract, replay_schedule_contract,
+    route_replay_batch)
 
 
 @DATASETS.register_module()
@@ -24,7 +26,8 @@ class FixedRatioPairReplayDataset:
 
     def __init__(self, original_dataset, auxiliary_dataset,
                  samples_per_batch=2, original_batches_per_auxiliary_batch=14,
-                 optimizer_steps_per_epoch=1391):
+                 optimizer_steps_per_epoch=1391,
+                 replay_schedule_protocol=LEGACY_REPLAY_SCHEDULE_PROTOCOL):
         # Import lazily to avoid a builder import cycle at module load time.
         from .builder import build_dataset
 
@@ -34,6 +37,7 @@ class FixedRatioPairReplayDataset:
         self.original_batches_per_auxiliary_batch = int(
             original_batches_per_auxiliary_batch)
         self.optimizer_steps_per_epoch = int(optimizer_steps_per_epoch)
+        self.replay_schedule_protocol = str(replay_schedule_protocol)
         if self.samples_per_batch != 2:
             raise ValueError(
                 'FixedRatioPairReplayDataset requires pair batches of two')
@@ -43,7 +47,14 @@ class FixedRatioPairReplayDataset:
             raise ValueError('optimizer_steps_per_epoch must be positive')
         if len(self.original_dataset) < 2 or len(self.auxiliary_dataset) < 2:
             raise ValueError('Both replay datasets require at least two rows')
-        self._replay_schedule_contract = replay_schedule_contract(
+        if self.replay_schedule_protocol == REPLAY_SCHEDULE_PROTOCOL:
+            contract_builder = replay_schedule_contract
+        elif self.replay_schedule_protocol == LEGACY_REPLAY_SCHEDULE_PROTOCOL:
+            contract_builder = legacy_replay_schedule_contract
+        else:
+            raise ValueError('Unknown replay schedule protocol: {}'.format(
+                self.replay_schedule_protocol))
+        self._replay_schedule_contract = contract_builder(
             self.optimizer_steps_per_epoch,
             self.original_batches_per_auxiliary_batch)
         self.CLASSES = getattr(
@@ -84,6 +95,12 @@ class FixedRatioPairReplayDataset:
         if epoch < 0:
             raise ValueError('Replay epoch cannot be negative')
         self.epoch = epoch
+
+    def replay_route_for_optimizer_step(self, step):
+        """Expose the declared route for runtime hook accounting."""
+        auxiliary, lane_batch = route_replay_batch(
+            int(step), self.original_batches_per_auxiliary_batch)
+        return dict(auxiliary=bool(auxiliary), lane_batch=int(lane_batch))
 
     def __getitem__(self, index):
         dataset, child_index, auxiliary = self._route(index)

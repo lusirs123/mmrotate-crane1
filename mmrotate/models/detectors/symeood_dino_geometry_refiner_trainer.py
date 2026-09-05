@@ -143,6 +143,12 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
         self._frozen_refiner_hash_at_init = self.frozen_refiner_hash()
         self._teacher_refiner_hash_at_init = self.teacher_refiner_hash()
         self._public_init_completed = False
+        self._runtime_forward_counts = dict(
+            train_forward=0, inference_forward=0,
+            frozen_k1_backbone_fpn_forward=0,
+            frozen_k1_backbone_fpn_image_count=0,
+            frozen_k1_detection_head_forward=0,
+            dino_detector_forward=0)
 
     @staticmethod
     def _file_sha256(path):
@@ -271,6 +277,9 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
         return pairs
 
     def extract_feat(self, img):
+        self._runtime_forward_counts['frozen_k1_backbone_fpn_forward'] += 1
+        self._runtime_forward_counts[
+            'frozen_k1_backbone_fpn_image_count'] += int(img.shape[0])
         with torch.no_grad():
             return tuple(feature.detach()
                          for feature in self.baseline.extract_feat(img))
@@ -308,6 +317,7 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
 
     def _k1_results_and_proposals(self, features, img_metas, rescale=False):
         """Reuse frozen FPN features for K1 output and geometry anchors."""
+        self._runtime_forward_counts['frozen_k1_detection_head_forward'] += 1
         with torch.no_grad():
             results = self.baseline.simple_test_from_features(
                 features, img_metas, rescale=rescale)
@@ -390,6 +400,7 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
         if self.evaluation_only:
             raise RuntimeError(
                 'Evaluation-only geometry refiner cannot be trained')
+        self._runtime_forward_counts['train_forward'] += 1
         super().forward_train(img, img_metas)
         if len(dino_proposals) != len(gt_bboxes):
             raise RuntimeError('DINO/GT batch-size mismatch')
@@ -527,6 +538,7 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
                     rescale=False,
                     **kwargs):
         del kwargs
+        self._runtime_forward_counts['inference_forward'] += 1
         features = self.extract_feat(img)
         dino_proposals = _unwrap_single_augmentation_proposals(
             dino_proposals)
@@ -704,3 +716,7 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
                 self.geometry_refiner_initialization),
             refiner_contract=self.geometry_refiner.component_contract(),
             evidence_contract=dict(self.evidence_contract))
+
+    def runtime_forward_counts(self):
+        """Return explicit detector/component forward counters for evidence."""
+        return dict(self._runtime_forward_counts)

@@ -147,6 +147,10 @@ class CudaPeakMemoryContractHook(Hook):
                 torch.cuda.max_memory_allocated(device)),
             peak_reserved_bytes=int(
                 torch.cuda.max_memory_reserved(device)))
+        model = _unwrap(runner.model)
+        counter = getattr(model, 'runtime_forward_counts', None)
+        report['forward_counts'] = (
+            counter() if callable(counter) else None)
         path = os.path.join(
             runner.work_dir,
             'cuda_peak_memory_rank{}.json'.format(report['rank']))
@@ -159,9 +163,52 @@ class CudaPeakMemoryContractHook(Hook):
 class FixedRatioReplayEpochHook(Hook):
     """Rotate deterministic replay offsets between source epochs."""
 
+    def before_run(self, runner):
+        self.epoch_rows = []
+
     def before_train_epoch(self, runner):
         dataset = getattr(runner.data_loader, 'dataset', None)
         if dataset is None or not hasattr(dataset, 'set_epoch'):
             raise RuntimeError(
                 'Fixed-ratio replay training requires set_epoch dataset')
         dataset.set_epoch(int(runner.epoch))
+        self.current = dict(epoch=int(runner.epoch), original_steps=0,
+                            auxiliary_steps=0, optimizer_steps=0)
+
+    def after_train_iter(self, runner):
+        dataset = runner.data_loader.dataset
+        route = dataset.replay_route_for_optimizer_step(int(runner.inner_iter))
+        key = 'auxiliary_steps' if route['auxiliary'] else 'original_steps'
+        self.current[key] += 1
+        self.current['optimizer_steps'] += 1
+
+    def after_train_epoch(self, runner):
+        dataset = runner.data_loader.dataset
+        contract = dataset.replay_contract()
+        expected = dict(
+            original_steps=contract.get(
+                'enumerated_original_steps',
+                contract['scheduled_original_steps']),
+            auxiliary_steps=contract.get(
+                'enumerated_auxiliary_steps',
+                contract['scheduled_auxiliary_steps']),
+            optimizer_steps=contract['optimizer_steps_per_epoch'])
+        if any(self.current[key] != value for key, value in expected.items()):
+            raise RuntimeError(
+                'Observed replay route differs from schedule contract: {} != {}'
+                .format(self.current, expected))
+        self.epoch_rows.append(dict(self.current))
+        report = dict(
+            protocol='fixed_ratio_replay_runtime_audit_v2',
+            replay_schedule_protocol=contract['protocol'],
+            schedule_sha256=contract['schedule_sha256'],
+            offset_contract_steps=dict(
+                original=contract['scheduled_original_steps'],
+                auxiliary=contract['scheduled_auxiliary_steps']),
+            epochs=list(self.epoch_rows),
+            target_data_read=False, fixed_test_read=False)
+        path = os.path.join(runner.work_dir,
+                            'replay_schedule_runtime_audit.json')
+        with open(path, 'w', encoding='utf-8') as handle:
+            json.dump(report, handle, indent=2, ensure_ascii=False)
+            handle.write('\n')

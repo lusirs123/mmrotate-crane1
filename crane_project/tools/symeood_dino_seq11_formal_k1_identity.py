@@ -9,9 +9,11 @@ import pickle
 import re
 from pathlib import Path
 
+import numpy as np
 
-PROTOCOL = 'formal_k1_seq11_v2_full251_identity_v1'
-FRAME_ORDER_PROTOCOL = 'seq11_v2_full251_frame_order_manifest_v1'
+
+PROTOCOL = 'formal_k1_seq11_v2_full251_identity_v2'
+FRAME_ORDER_PROTOCOL = 'seq11_v2_full251_frame_order_manifest_v2'
 EXPECTED_CONFIG = 'crane_symeood_k1_seq11_v2_full251_eval.py'
 EXPECTED_CHECKPOINT = 'epoch_24.pth'
 
@@ -23,6 +25,7 @@ def parse_args():
     parser.add_argument('--config', required=True)
     parser.add_argument('--base-k1-config', required=True)
     parser.add_argument('--evaluation-summary', required=True)
+    parser.add_argument('--inference-receipt', required=True)
     parser.add_argument('--source-manifest', required=True)
     parser.add_argument('--data-root', default='crane_project/data/crane_grab')
     parser.add_argument(
@@ -97,6 +100,11 @@ def _validate_results(path, expected_count):
             raise RuntimeError(
                 'Formal K1 frame {} must contain at most one OBB'.format(
                     index))
+        detections = np.asarray(result[0], dtype=np.float64).reshape(shape)
+        if not np.isfinite(detections).all():
+            raise RuntimeError('Non-finite K1 output at index {}'.format(index))
+        if shape[0] == 1 and np.any(detections[0, 2:4] <= 0.0):
+            raise RuntimeError('Invalid K1 OBB size at index {}'.format(index))
         missing += int(shape[0] == 0)
     return absolute, missing
 
@@ -107,6 +115,7 @@ def audit(args):
     checkpoint = Path(args.checkpoint).resolve()
     source_manifest = Path(args.source_manifest).resolve()
     evaluation_summary = Path(args.evaluation_summary).resolve()
+    inference_receipt = Path(args.inference_receipt).resolve()
     if config.name != EXPECTED_CONFIG:
         raise RuntimeError('Unexpected formal K1 config: ' + config.name)
     if checkpoint.name != EXPECTED_CHECKPOINT:
@@ -115,6 +124,7 @@ def audit(args):
         raise RuntimeError('Unexpected base K1 config: ' + base_k1_config.name)
     for required in (
             config, base_k1_config, checkpoint, evaluation_summary,
+            inference_receipt,
             source_manifest):
         if not required.is_file():
             raise RuntimeError('Missing identity input: ' + os.fspath(required))
@@ -136,7 +146,30 @@ def audit(args):
     annotations = _visible_index(source_root / 'annfiles', {'.txt'})
     if set(images) != set(annotations) or len(images) != 251:
         raise RuntimeError('Formal K1 frame set must contain 251 image/label pairs')
-    stems = sorted(images)
+    with open(source_manifest, 'r', encoding='utf-8') as handle:
+        source_manifest_payload = json.load(handle)
+    declared_stems = set(source_manifest_payload.get('train_stems') or [])
+    declared_stems.update(source_manifest_payload.get('aux_val_stems') or [])
+    if (source_manifest_payload.get('protocol') !=
+            'real_seq11_source_k1p9_block_manifest_v2'
+            or int(source_manifest_payload.get('all_frame_count', -1)) != 251
+            or declared_stems != set(images)):
+        raise RuntimeError('Source manifest does not bind the 251-frame set')
+    with open(inference_receipt, 'r', encoding='utf-8') as handle:
+        receipt = json.load(handle)
+    results_absolute = os.path.abspath(os.fspath(args.results))
+    receipt_rows = receipt.get('runtime_dataset_order') or []
+    stems = [row.get('frame_key') for row in receipt_rows]
+    if (receipt.get('protocol') != 'mmdet_runtime_result_order_identity_v1'
+            or receipt.get('result_count') != 251
+            or len(stems) != 251 or len(set(stems)) != 251
+            or set(stems) != set(images)
+            or receipt.get('results_sha256') != _sha256_file(results_absolute)
+            or receipt.get('checkpoint_sha256') != _sha256_file(checkpoint)
+            or receipt.get('config_sha256') != _sha256_file(config)
+            or receipt.get('target_data_read') is not False
+            or receipt.get('fixed_test_read') is not False):
+        raise RuntimeError('Runtime inference receipt identity mismatch')
     pattern = re.compile(r'^real_seq11_(\d{6})$')
     if not all(pattern.match(stem) for stem in stems):
         raise RuntimeError('Unexpected seq11-v2 frame naming')
@@ -168,7 +201,8 @@ def audit(args):
         protocol=FRAME_ORDER_PROTOCOL,
         source_split=args.source_split,
         frame_count=len(frame_rows),
-        ordering='lexicographic_visible_annotation_stem',
+        ordering='runtime_dataset_order_from_inference_receipt',
+        inference_receipt_sha256=_sha256_file(inference_receipt),
         appledouble_sidecars_are_samples=False,
         frames=frame_rows,
         target_data_read=False,
@@ -179,6 +213,8 @@ def audit(args):
         frame_count_251=len(frame_rows) == 251,
         image_annotation_sets_equal=set(images) == set(annotations),
         result_count_matches_frame_order=True,
+        runtime_dataset_order_bound=True,
+        source_manifest_frame_set_bound=True,
         evaluation_summary_matches_checkpoint=True,
         ordinary_k1_epoch24=True,
         original_image_coordinate_system=True,
@@ -198,6 +234,8 @@ def audit(args):
             base_k1_config_sha256=_sha256_file(base_k1_config),
             evaluation_summary=os.fspath(evaluation_summary),
             evaluation_summary_sha256=_sha256_file(evaluation_summary),
+            inference_receipt=os.fspath(inference_receipt),
+            inference_receipt_sha256=_sha256_file(inference_receipt),
             source_manifest=os.fspath(source_manifest),
             source_manifest_sha256=_sha256_file(source_manifest),
             frame_order_manifest=frame_path,
