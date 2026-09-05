@@ -7,6 +7,9 @@ import torch
 from mmcv.parallel import DataContainer as DC
 from mmdet.datasets import DATASETS
 
+from crane_project.utils.fixed_ratio_replay_schedule import (
+    replay_schedule_contract, route_replay_batch)
+
 
 @DATASETS.register_module()
 class FixedRatioPairReplayDataset:
@@ -40,6 +43,9 @@ class FixedRatioPairReplayDataset:
             raise ValueError('optimizer_steps_per_epoch must be positive')
         if len(self.original_dataset) < 2 or len(self.auxiliary_dataset) < 2:
             raise ValueError('Both replay datasets require at least two rows')
+        self._replay_schedule_contract = replay_schedule_contract(
+            self.optimizer_steps_per_epoch,
+            self.original_batches_per_auxiliary_batch)
         self.CLASSES = getattr(
             self.original_dataset, 'CLASSES',
             getattr(self.auxiliary_dataset, 'CLASSES', None))
@@ -57,19 +63,12 @@ class FixedRatioPairReplayDataset:
             raise IndexError(index)
         batch = index // self.samples_per_batch
         within_batch = index % self.samples_per_batch
-        cycle = self.original_batches_per_auxiliary_batch + 1
-        cycle_index = batch % cycle
-        cycle_number = batch // cycle
-        if cycle_index == self.original_batches_per_auxiliary_batch:
+        auxiliary, pair_number = route_replay_batch(
+            batch, self.original_batches_per_auxiliary_batch)
+        if auxiliary:
             dataset = self.auxiliary_dataset
-            auxiliary = True
-            pair_number = cycle_number
         else:
             dataset = self.original_dataset
-            auxiliary = False
-            pair_number = (cycle_number
-                           * self.original_batches_per_auxiliary_batch
-                           + cycle_index)
         contract = self.replay_contract()
         samples_per_epoch = self.samples_per_batch * (
             contract['scheduled_auxiliary_steps'] if auxiliary else
@@ -107,19 +106,11 @@ class FixedRatioPairReplayDataset:
             'FixedRatioPairReplayDataset is training-only and not evaluable')
 
     def replay_contract(self):
-        cycle = self.original_batches_per_auxiliary_batch + 1
-        auxiliary_steps = self.optimizer_steps_per_epoch // cycle
-        if self.optimizer_steps_per_epoch % cycle:
-            auxiliary_steps += 1
-        return dict(
+        contract = dict(self._replay_schedule_contract)
+        contract.update(dict(
             samples_per_batch=self.samples_per_batch,
-            original_batches_per_auxiliary_batch=(
-                self.original_batches_per_auxiliary_batch),
-            auxiliary_batches_per_cycle=1,
-            optimizer_steps_per_epoch=self.optimizer_steps_per_epoch,
-            scheduled_auxiliary_steps=auxiliary_steps,
-            scheduled_original_steps=(
-                self.optimizer_steps_per_epoch - auxiliary_steps))
+            actual_route_enumerated=True))
+        return contract
 
     def coverage_contract(self, training_epochs):
         saved_epoch = self.epoch
@@ -135,7 +126,14 @@ class FixedRatioPairReplayDataset:
                         child_index)
         finally:
             self.set_epoch(saved_epoch)
+        schedule = self.replay_contract()
         return dict(
+            replay_schedule_protocol=schedule['protocol'],
+            schedule_sha256=schedule['schedule_sha256'],
+            scheduled_original_steps_per_epoch=(
+                schedule['scheduled_original_steps']),
+            scheduled_auxiliary_steps_per_epoch=(
+                schedule['scheduled_auxiliary_steps']),
             training_epochs=int(training_epochs),
             original_unique_covered=len(original_seen),
             original_unique_total=len(self.original_dataset),

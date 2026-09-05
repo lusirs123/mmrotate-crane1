@@ -1,7 +1,18 @@
 """Static contracts for the seq11-v2 replay stage."""
 
 import ast
+import argparse
+import hashlib
+import json
+import pickle
 from pathlib import Path
+
+from crane_project.tools.symeood_dino_replay_schedule_audit import (
+    audit as replay_audit)
+from crane_project.tools.symeood_dino_seq11_formal_k1_identity import (
+    audit as formal_k1_identity_audit)
+from crane_project.utils.fixed_ratio_replay_schedule import (
+    enumerate_replay_schedule, replay_schedule_contract)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -63,9 +74,43 @@ def test_replay_wrapper_keeps_each_pair_on_one_lane():
             'coverage_contract'} <= methods
     text = path.read_text()
     assert 'batch = index // self.samples_per_batch' in text
-    assert 'cycle = self.original_batches_per_auxiliary_batch + 1' in text
+    assert 'route_replay_batch(' in text
     assert "sample['source_replay_is_auxiliary']" in text
     assert 'epoch_offset = self.epoch * samples_per_epoch' in text
+
+
+def test_replay_schedule_enumerates_exact_1391_route():
+    routes = enumerate_replay_schedule(1391, 14)
+    contract = replay_schedule_contract(1391, 14)
+
+    assert len(routes) == 1391
+    assert sum(not auxiliary for auxiliary, _ in routes) == 1299
+    assert sum(auxiliary for auxiliary, _ in routes) == 92
+    assert contract['protocol'] == 'fixed_ratio_pair_replay_schedule_v2'
+    assert contract['scheduled_original_steps'] == 1299
+    assert contract['scheduled_auxiliary_steps'] == 92
+    assert contract['enumerated_total_steps'] == 1391
+
+
+def test_replay_schedule_audit_checks_offsets_coverage_and_determinism():
+    args = argparse.Namespace(
+        optimizer_steps_per_epoch=1391,
+        original_batches_per_auxiliary_batch=14,
+        samples_per_batch=2,
+        training_epochs=10,
+        original_sample_count=2781,
+        auxiliary_sample_count=251,
+        out_json='unused.json')
+
+    report = replay_audit(args)
+
+    assert report['passed'] is True
+    assert report['checks']['exact_1391_route'] is True
+    assert report['checks']['deterministic_reenumeration'] is True
+    assert report['coverage']['original_unique_count'] == 2781
+    assert report['coverage']['auxiliary_unique_count'] == 251
+    assert report['per_epoch'][1]['original_sample_offset'] == 1299 * 2
+    assert report['per_epoch'][1]['auxiliary_sample_offset'] == 92 * 2
 
 
 def test_trainer_has_frozen_teacher_and_masked_retention():
@@ -112,3 +157,88 @@ def test_seq11_v2_aux_evaluation_is_read_only_and_uses_48_frames():
     assert "ann_file='test/" not in candidate + reference
     assert 'optimizer' not in candidate
     assert 'optimizer' not in reference
+
+
+def test_formal_k1_full251_config_is_source_only_and_identity_bound():
+    config = (ROOT / (
+        'crane_project/configs/'
+        'crane_symeood_k1_seq11_v2_full251_eval.py')).read_text()
+    identity = (ROOT / (
+        'crane_project/tools/'
+        'symeood_dino_seq11_formal_k1_identity.py')).read_text()
+
+    assert "expected_checkpoint = 'work_dirs/crane_symeood_k1/epoch_24.pth'" in config
+    assert "expected_frame_count=251" in config
+    assert "prediction_coordinate_system='original_image_pixels'" in config
+    assert "obb_convention='le90'" in config
+    assert 'target_data_read=False' in config
+    assert 'fixed_test_read=False' in config
+    assert "ann_file='test/" not in config
+    assert 'FRAME_ORDER_PROTOCOL' in identity
+    assert 'results_sha256=_sha256_file(results_path)' in identity
+    assert 'checkpoint_sha256=checkpoint_sha' in identity
+    assert 'config_sha256=_sha256_file(config)' in identity
+    assert 'source_manifest_sha256=_sha256_file(source_manifest)' in identity
+
+
+def test_formal_k1_identity_binds_results_to_exact_frame_order(tmp_path):
+    config = tmp_path / 'crane_symeood_k1_seq11_v2_full251_eval.py'
+    config.write_text('\n'.join((
+        "expected_checkpoint = 'work_dirs/crane_symeood_k1/epoch_24.pth'",
+        'expected_frame_count=251',
+        "prediction_coordinate_system='original_image_pixels'",
+        "obb_convention='le90'",
+        'target_data_read=False',
+        'fixed_test_read=False')))
+    checkpoint = tmp_path / 'epoch_24.pth'
+    checkpoint.write_bytes(b'formal-k1')
+    base_k1_config = tmp_path / 'crane_symeood_k1.py'
+    base_k1_config.write_text('model = dict(type="EOODDetector")')
+    checkpoint_sha = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+    evaluation_summary = tmp_path / 'checkpoint_eval_summary.json'
+    evaluation_summary.write_text(json.dumps([dict(
+        config=str(config), checkpoint=str(checkpoint),
+        checkpoint_sha256=checkpoint_sha, metric={'mAP': 1.0})]))
+    source_manifest = tmp_path / 'split_manifest.json'
+    source_manifest.write_text(json.dumps({'frame_count': 251}))
+    source_root = tmp_path / 'data' / 'source'
+    images = source_root / 'images'
+    annotations = source_root / 'annfiles'
+    images.mkdir(parents=True)
+    annotations.mkdir()
+    for frame in range(251):
+        stem = 'real_seq11_{:06d}'.format(frame)
+        (images / (stem + '.jpg')).write_bytes(b'image')
+        (annotations / (stem + '.txt')).write_text('annotation')
+    results = tmp_path / 'results.pkl'
+    results.write_bytes(pickle.dumps([[[]] for _ in range(251)]))
+    args = argparse.Namespace(
+        results=str(results), checkpoint=str(checkpoint), config=str(config),
+        base_k1_config=str(base_k1_config),
+        evaluation_summary=str(evaluation_summary),
+        source_manifest=str(source_manifest), data_root=str(tmp_path / 'data'),
+        source_split='source',
+        frame_order_json=str(tmp_path / 'frame_order.json'),
+        out_json=str(tmp_path / 'identity.json'))
+
+    report = formal_k1_identity_audit(args)
+
+    assert report['passed'] is True
+    assert report['frame_count'] == 251
+    assert report['missing_prediction_count'] == 251
+    assert report['inputs']['frame_order_manifest_sha256']
+
+
+def test_server_inventory_is_fail_closed_and_never_reads_fixed_test():
+    inventory = (ROOT / (
+        'crane_project/tools/'
+        'symeood_dino_seq11_v2_server_input_inventory.py')).read_text()
+
+    assert 'visible_image_count_251' in inventory
+    assert 'original_source_count_2781' in inventory
+    assert 'official_source_val_count_738' in inventory
+    assert 'base_v3_checkpoint_hash_matches_promotion' in inventory
+    assert "payload.get('fixed_test_read') is True" in inventory
+    assert "promotion.get('target_data_read') is False" in inventory
+    assert "promotion.get('fixed_test_read') is False" in inventory
+    assert 'STOP_SEQ11_V2_SERVER_INPUT_INVENTORY_FAILED' in inventory
