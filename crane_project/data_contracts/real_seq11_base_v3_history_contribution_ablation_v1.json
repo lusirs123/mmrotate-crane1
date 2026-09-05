@@ -1,0 +1,78 @@
+{
+  "protocol": "real_seq11_base_v3_history_contribution_ablation_v1",
+  "status": "preregistered_before_current_only_inference",
+  "purpose": "Measure the output contribution of the Base V3 history residual after the frozen three-way baseline comparison.",
+  "evidence_boundary": "same_video_source_only_frozen_checkpoint_component_ablation",
+  "paired_design": {
+    "history_on": "Base V3 epoch9 full inference_component_mode",
+    "history_off": "the same Base V3 epoch9 checkpoint with inference_component_mode=current_only on every frame",
+    "same_checkpoint": true,
+    "same_251_frames": true,
+    "same_frame_order": true,
+    "same_current_image": true,
+    "same_k1_anchor": true,
+    "same_cached_dino_conditioning": true,
+    "history_tensors_loaded_in_both_arms": true,
+    "history_output_contribution_in_current_only_arm": false,
+    "domain_routing": false,
+    "sequence_frame_routing": false
+  },
+  "metric_protocol": {
+    "inherit_from": "real_seq11_k1_dino_base_v3_three_way_baseline_v1",
+    "static_pool": "all 251 frames",
+    "metric_pair_edge": "same sequence and original frame number difference exactly one",
+    "reset_at_original_frame_gap": true,
+    "missing_prediction_breaks_continuity": true,
+    "pair_coverage_required": true,
+    "both_bad_excluded_from_rescue_denominator": true,
+    "terminal_failure_included_in_mcml": true
+  },
+  "required_analysis": {
+    "paired_fields": [
+      "rescue",
+      "old_correct_lost",
+      "mean_RIoU",
+      "valid_pair_fraction",
+      "DFR",
+      "ACI",
+      "MCML",
+      "both_bad_behavior"
+    ],
+    "key_frames": [
+      "every frame whose hit status differs between deterministic fallback and full Base V3",
+      "every frame whose hit status differs between current-only and full Base V3",
+      "largest absolute current-only versus full RIoU changes"
+    ],
+    "geometry_fields": [
+      "RIoU",
+      "center_error_px",
+      "diagonal_ratio_to_gt",
+      "angle_error_deg"
+    ],
+    "overlay_boxes": [
+      "GT",
+      "K1",
+      "DINO",
+      "deterministic fallback",
+      "Base V3 current-only",
+      "Base V3 full"
+    ]
+  },
+  "interpretation": {
+    "history_claim_requires_paired_improvement": true,
+    "current_only_and_full_equal_on_no_valid_history_is_expected": true,
+    "two_known_rescue_regressions_without_history_do_not_measure_history": true,
+    "single_metric_promotion": false,
+    "automatic_cv_training_authorization": false
+  },
+  "execution": {
+    "optimizer_steps": 0,
+    "training": false,
+    "official_source_val_738_read": false,
+    "target_data_read": false,
+    "fixed_test_read": false
+  },
+  "target_data_read": false,
+  "fixed_test_read": false,
+  "three_fold_training_authorized": false
+}

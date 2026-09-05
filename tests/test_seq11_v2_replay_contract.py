@@ -373,3 +373,53 @@ def test_result_identity_receipt_supports_generic_source_only_contract():
     assert "torch.cuda.max_memory_reserved" in source
     assert "runtime_forward_counts" in source
     assert "runtime_input_files" in source
+
+
+def test_base_v3_history_contribution_ablation_is_uniform_and_read_only():
+    from mmcv import Config
+
+    config_path = ROOT / (
+        'crane_project/configs/'
+        'crane_symeood_dino_k1_retentive_causal_phase_refiner_'
+        'base_v3_seq11_v2_full251_current_only_eval.py')
+    config = config_path.read_text()
+    tool = (ROOT / (
+        'crane_project/tools/'
+        'symeood_dino_seq11_v2_history_contribution_audit.py')).read_text()
+    contract = json.loads((ROOT / (
+        'crane_project/data_contracts/'
+        'real_seq11_base_v3_history_contribution_ablation_v1.json')).read_text())
+    refiner = (ROOT / (
+        'mmrotate/models/roi_heads/'
+        'dino_conditioned_geometry_refiner.py')).read_text()
+
+    assert "geometry_refiner=dict(inference_component_mode='current_only')" in config
+    assert 'history_output_contribution=False' in config
+    assert 'same_setting_all_frames=True' in config
+    assert 'domain_routing=False' in config
+    assert 'sequence_frame_routing=False' in config
+    assert 'optimizer_steps=0' in config
+    assert 'fixed_test_read=False' in config
+    assert "ann_file='test/" not in config
+    assert "expected_split='test'" not in config
+    merged = Config.fromfile(str(config_path))
+    assert merged.model.geometry_refiner.inference_component_mode == 'current_only'
+    assert merged.model.evaluation_only is True
+    assert merged.source_only_result_contract.optimizer_steps == 0
+    assert merged.source_only_result_contract.fixed_test_read is False
+    assert "if self.inference_component_mode == 'current_only':" in refiner
+    assert 'combined = current_five' in refiner
+
+    assert 'no_valid_history_invariance' in tool
+    assert 'valid_history_count' in tool
+    assert 'full_minus_current_only_riou' in tool
+    assert 'geometry_overlay.png' in tool
+    assert 'eligible_for_three_fold_training=False' in tool
+    assert contract['paired_design']['same_checkpoint'] is True
+    assert contract['paired_design'][
+        'history_output_contribution_in_current_only_arm'] is False
+    assert contract['interpretation'][
+        'automatic_cv_training_authorization'] is False
+    assert contract['execution']['training'] is False
+    assert contract['execution']['fixed_test_read'] is False
+    assert contract['three_fold_training_authorized'] is False
