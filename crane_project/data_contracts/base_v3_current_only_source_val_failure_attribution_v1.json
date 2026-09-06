@@ -1,0 +1,44 @@
+{
+  "protocol": "base_v3_current_only_source_val_failure_attribution_contract_v1",
+  "status": "post_gate_explanatory_audit_frozen_before_attribution_output",
+  "purpose": "Explain the already failed current-only source-val gate without changing its decision or selecting a new model.",
+  "evidence_boundary": "official_source_val_738_existing_predictions_plus_seq11_existing_audit",
+  "inputs": {
+    "current_only": "existing 738-frame results bound by the failed gate",
+    "full_base_v3": "existing epoch9 result stream bound by the immutable promotion source gate",
+    "ordinary_k1": "existing source-val epoch24 results",
+    "native_dino": "existing source-val all-lane audit",
+    "seq11_history": "existing strict V2 history-contribution report"
+  },
+  "metric_decomposition": {
+    "riou_hit_threshold": 0.5,
+    "source_center_threshold_px": 15.0,
+    "sim_angle_center_threshold_px": 10.0,
+    "sim_angle_penalty_deg": 90.0,
+    "angle_periodicity": "le90_pi_periodic",
+    "mcml_boundary": "same domain, same sequence, original frame difference exactly one",
+    "missing_prediction_breaks_temporal_continuity": true
+  },
+  "selection": {
+    "include_every_full_hit_current_only_miss": true,
+    "include_top_positive_sim_angle_squared_error_contributors": 12,
+    "include_seq11_full_vs_current_only_hit_changes": true
+  },
+  "allowed_outputs": [
+    "per-frame error decomposition",
+    "failure-run inventory",
+    "source-val overlays",
+    "cross-dataset interpretation table"
+  ],
+  "prohibited_uses": {
+    "threshold_tuning": true,
+    "epoch_selection": true,
+    "checkpoint_promotion": true,
+    "training_authorization": true,
+    "fixed_test_authorization": true
+  },
+  "training": false,
+  "optimizer_steps": 0,
+  "target_data_read": false,
+  "fixed_test_read": false
+}

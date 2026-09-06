@@ -6,6 +6,7 @@ import builtins
 import hashlib
 import io
 import json
+import math
 import pickle
 from pathlib import Path
 
@@ -599,3 +600,61 @@ def test_current_only_source_val_config_resolves_without_parent_locals(
         'current_only')
     assert merged.data.test.ann_file == 'val/annfiles/'
     assert merged.source_only_result_contract.fixed_test_read is False
+
+
+def test_current_only_failure_attribution_metric_decomposition():
+    import numpy as np
+
+    from crane_project.tools import (
+        symeood_dino_current_only_source_val_attribution as attribution)
+
+    gt = np.asarray([100.0, 100.0, 40.0, 20.0, 0.0])
+    direct = attribution._angle_geometry(
+        np.asarray([102.0, 100.0, 40.0, 20.0, math.radians(5.0)]), gt)
+    penalized = attribution._angle_geometry(
+        np.asarray([111.0, 100.0, 40.0, 20.0, 0.0]), gt)
+    missing = attribution._angle_geometry(None, gt)
+    assert direct['angle_metric_state'] == 'direct_periodic_angle_error'
+    assert direct['angle_metric_error_deg'] == pytest.approx(5.0)
+    assert penalized['angle_metric_state'] == 'center_error_penalty'
+    assert penalized['angle_metric_error_deg'] == 90.0
+    assert missing['angle_metric_state'] == 'missing_prediction_penalty'
+    assert missing['angle_metric_squared_error_deg2'] == 8100.0
+    summary = attribution._angle_method_summary([
+        dict(candidate=direct), dict(candidate=penalized),
+        dict(candidate=missing)], 'candidate')
+    assert summary['direct_angle_frame_count'] == 1
+    assert summary['center_penalty_frame_count'] == 1
+    assert summary['missing_penalty_frame_count'] == 1
+    assert summary['direct_angle_rmse_deg'] == pytest.approx(5.0)
+    assert summary['penalty_squared_error_deg2'] == 16200.0
+
+
+def test_current_only_failure_attribution_preserves_boundaries_and_role():
+    from crane_project.tools import (
+        symeood_dino_current_only_source_val_attribution as attribution)
+
+    def row(frame, hit, sequence='seq01'):
+        return dict(
+            frame_key='sim_{}_{}'.format(sequence, frame),
+            domain='sim', sequence=sequence, frame=frame,
+            current_only=dict(riou_hit=hit))
+
+    rows = [row(1, False), row(2, False), row(4, False),
+            row(1, False, sequence='seq02')]
+    runs = attribution._failure_runs(rows, 'current_only')
+    assert [item['length'] for item in runs] == [2, 1, 1]
+
+    contract = json.loads((ROOT / (
+        'crane_project/data_contracts/'
+        'base_v3_current_only_source_val_failure_attribution_v1.json'
+    )).read_text())
+    source = (ROOT / (
+        'crane_project/tools/'
+        'symeood_dino_current_only_source_val_attribution.py')).read_text()
+    assert contract['prohibited_uses']['training_authorization'] is True
+    assert contract['prohibited_uses']['fixed_test_authorization'] is True
+    assert contract['metric_decomposition'][
+        'sim_angle_center_threshold_px'] == 10.0
+    assert 'seq11_dataset_has_diagnostic_value=True' in source
+    assert 'CURRENT_ONLY_FAILURE_ATTRIBUTION_READY_' in source
