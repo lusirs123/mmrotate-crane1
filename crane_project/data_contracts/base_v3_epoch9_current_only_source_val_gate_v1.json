@@ -1,0 +1,57 @@
+{
+  "protocol": "base_v3_epoch9_current_only_source_val_gate_contract_v1",
+  "status": "preregistered_before_current_only_official_source_val_inference",
+  "purpose": "Decide once whether uniform current-only inference preserves the formal Base V3 source evidence on the official 738-frame source-val set.",
+  "candidate": {
+    "checkpoint": "Base V3 promoted epoch9",
+    "inference_component_mode": "current_only",
+    "same_setting_real_sim": true,
+    "training": false,
+    "epoch_selection": false
+  },
+  "reference": {
+    "checkpoint": "the same Base V3 promoted epoch9",
+    "inference_component_mode": "full",
+    "metrics_source": "the immutable epoch9 source-gate report bound by the promotion report"
+  },
+  "absolute_formal_gate": {
+    "native_dino_min_composite_gain": 0.005,
+    "reuse_v3_sym_geometry_preservation": true,
+    "reuse_depth_interface_geometry_gate": true
+  },
+  "relative_non_regression": {
+    "real_center_drop_pp_max": 0.0,
+    "sim_center_drop_pp_max": 0.0,
+    "real_mean_riou_drop_max": 0.01,
+    "sim_mean_riou_drop_max": 0.01,
+    "real_dfr_increase_pp_per_frame_max": 0.25,
+    "sim_dfr_increase_pp_per_frame_max": 0.25,
+    "real_aci_drop_max": 0.003,
+    "sim_aci_drop_max": 0.003,
+    "sim_a_rmse_increase_deg_max": 0.0,
+    "real_tdr_drop_pp_max": 1.0,
+    "sim_tdr_drop_pp_max": 1.0,
+    "real_mcml_policy": "not_worse",
+    "sim_mcml_policy": "not_worse"
+  },
+  "decision_policy": {
+    "all_absolute_and_relative_checks_required": true,
+    "failure_allows_alternate_epoch_selection": false,
+    "failure_allows_threshold_change": false,
+    "official_source_val_used_for_ranking": false,
+    "automatic_fixed_test_authorization": false
+  },
+  "required_runtime_evidence": {
+    "result_count": 738,
+    "cuda_visible_devices": "0",
+    "inference_forward_count": 738,
+    "dino_detector_forward_count": 0,
+    "peak_allocated_recorded": true,
+    "peak_reserved_recorded": true,
+    "effective_model_mode": "current_only",
+    "merged_config_recorded": true,
+    "cli_cfg_options": null
+  },
+  "target_data_read": false,
+  "fixed_test_read": false
+}

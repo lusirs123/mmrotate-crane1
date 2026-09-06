@@ -1,0 +1,54 @@
+{
+  "protocol": "real_seq11_base_v3_history_contribution_ablation_v2",
+  "status": "preregistered_before_hardened_current_only_inference",
+  "purpose": "Reissue the frozen Base V3 full-versus-current-only audit with fail-closed invariance, locked metrics, and runtime effective-config evidence.",
+  "evidence_boundary": "same_video_source_only_frozen_checkpoint_component_ablation",
+  "inherits_scientific_design_from": "real_seq11_base_v3_history_contribution_ablation_v1",
+  "paired_design": {
+    "same_checkpoint": true,
+    "same_251_frames": true,
+    "same_frame_order": true,
+    "same_current_image": true,
+    "same_k1_anchor": true,
+    "same_cached_dino_conditioning": true,
+    "history_tensors_loaded_in_both_arms": true,
+    "history_output_contribution_in_current_only_arm": false,
+    "same_setting_all_frames": true,
+    "domain_routing": false,
+    "sequence_frame_routing": false
+  },
+  "metric_protocol": {
+    "inherit_exact_values_from_three_way_report": true,
+    "iou_threshold": 0.5,
+    "center_threshold_px": 25.0,
+    "angle_limit_deg": 35.0,
+    "high_confidence_threshold": 0.5,
+    "reject_cli_parameter_drift": true,
+    "scores_are_calibrated_probabilities": false
+  },
+  "hard_fail_checks": {
+    "runtime_audit_protocol": "mmdet_runtime_inference_resource_audit_v2",
+    "current_only_runtime_mode": true,
+    "merged_runtime_config_recorded": true,
+    "no_valid_history_output_tolerance": 1e-6,
+    "no_valid_history_violation_max": 0,
+    "target_data_read": false,
+    "fixed_test_read": false
+  },
+  "interpretation": {
+    "current_only_still_computes_history_features": true,
+    "compute_or_memory_reduction_claim_authorized": false,
+    "single_metric_promotion": false,
+    "automatic_cv_training_authorization": false
+  },
+  "execution": {
+    "optimizer_steps": 0,
+    "training": false,
+    "official_source_val_738_read": false,
+    "target_data_read": false,
+    "fixed_test_read": false
+  },
+  "target_data_read": false,
+  "fixed_test_read": false,
+  "three_fold_training_authorized": false
+}

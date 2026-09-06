@@ -18,13 +18,13 @@ from crane_project.tools.symeood_dino_seq11_v2_baseline_compare import (
     _sha256, _write_exact)
 
 
-PROTOCOL = 'symeood_dino_seq11_v2_history_contribution_audit_v1'
-CONTRACT_PROTOCOL = 'real_seq11_base_v3_history_contribution_ablation_v1'
+PROTOCOL = 'symeood_dino_seq11_v2_history_contribution_audit_v2'
+CONTRACT_PROTOCOL = 'real_seq11_base_v3_history_contribution_ablation_v2'
 THREE_WAY_PROTOCOL = 'symeood_dino_seq11_v2_three_way_baseline_comparison_v1'
 RECEIPT_PROTOCOL = 'mmdet_runtime_result_order_identity_v1'
-RUNTIME_PROTOCOL = 'mmdet_runtime_inference_resource_audit_v1'
+RUNTIME_PROTOCOL = 'mmdet_runtime_inference_resource_audit_v2'
 CURRENT_ONLY_PROTOCOL = (
-    'base_v3_epoch9_seq11_v2_full251_current_only_inference_v1')
+    'base_v3_epoch9_seq11_v2_full251_current_only_inference_v2')
 
 
 def parse_args():
@@ -55,6 +55,37 @@ def _verify_recorded_identity(item, role):
     if observed['sha256'] != item['sha256']:
         raise RuntimeError('Recorded identity changed for ' + role)
     return observed
+
+
+def _locked_metric_parameters(three_way, args):
+    """Reject CLI drift and reuse the already frozen three-way metric values."""
+    contract = dict(three_way.get('metric_contract') or {})
+    mapping = dict(
+        iou_threshold='iou_threshold',
+        center_threshold_px='center_threshold_px',
+        angle_limit_deg='angle_limit_deg',
+        high_confidence_threshold='high_confidence_threshold')
+    observed = dict(
+        iou_threshold=args.iou_threshold,
+        center_threshold_px=args.center_threshold_px,
+        angle_limit_deg=args.angle_limit_deg,
+        high_confidence_threshold=args.high_confidence_threshold)
+    missing = [name for name in mapping if name not in contract]
+    if missing:
+        raise RuntimeError(
+            'Three-way report lacks locked metric parameters: '
+            + ', '.join(missing))
+    mismatches = [
+        '{}={} expected {}'.format(name, observed[name], contract[key])
+        for name, key in mapping.items()
+        if not math.isclose(
+            float(observed[name]), float(contract[key]),
+            rel_tol=0.0, abs_tol=1e-12)]
+    if mismatches:
+        raise RuntimeError(
+            'Metric CLI parameters differ from frozen three-way report: '
+            + '; '.join(mismatches))
+    return {name: float(contract[key]) for name, key in mapping.items()}
 
 
 def _metric_delta(full, current):
@@ -142,13 +173,14 @@ def audit(args):
     contract_id, contract = _json(
         args.ablation_contract, CONTRACT_PROTOCOL)
     if (contract.get('status') !=
-            'preregistered_before_current_only_inference'
+            'preregistered_before_hardened_current_only_inference'
             or contract.get('three_fold_training_authorized') is not False):
         raise RuntimeError('Invalid history ablation contract')
     report_id, three_way = _json(args.three_way_report, THREE_WAY_PROTOCOL)
     if (three_way.get('training_run') is not False
             or three_way.get('eligible_for_three_fold_training') is not False):
         raise RuntimeError('Three-way input has an invalid evidence role')
+    locked_metrics = _locked_metric_parameters(three_way, args)
     recorded = three_way.get('inputs') or {}
     verified_inputs = {}
     for role in (
@@ -194,10 +226,8 @@ def audit(args):
     current_config_id = _identity(args.current_only_config)
     config_text = Path(current_config_id['path']).read_text(encoding='utf-8')
     required_config_tokens = (
-        "inference_component_mode='current_only'",
-        'history_output_contribution=False',
-        'same_setting_all_frames=True',
-        'domain_routing=False', 'sequence_frame_routing=False',
+        'base_v3_epoch9_seq11_v2_full251_current_only_inference_v2',
+        'mmdet_runtime_inference_resource_audit_v2',
         'optimizer_steps=0', 'fixed_test_read=False')
     if not all(token in config_text for token in required_config_tokens):
         raise RuntimeError('Current-only config contract is incomplete')
@@ -220,6 +250,11 @@ def audit(args):
         args.current_only_runtime_audit, RUNTIME_PROTOCOL)
     runtime_dino = dict(runtime.get('runtime_input_files') or {}).get(
         'dino_all_lane_audit') or {}
+    runtime_model = dict(runtime.get('runtime_model_contract') or {})
+    runtime_component = dict(runtime_model.get('component_contract') or {})
+    effective_config = dict(runtime.get('effective_config') or {})
+    effective_model = dict(effective_config.get('model') or {})
+    effective_refiner = dict(effective_model.get('geometry_refiner') or {})
     if (runtime.get('result_count') != 251
             or runtime.get('checkpoint_sha256') != checkpoint_sha
             or runtime.get('config_sha256') != current_config_id['sha256']
@@ -228,7 +263,16 @@ def audit(args):
                 'inference_forward') != 251
             or (runtime.get('forward_counts') or {}).get(
                 'dino_detector_forward') != 0
-            or (runtime.get('cuda') or {}).get('cuda_visible_devices') != '0'):
+            or (runtime.get('cuda') or {}).get('cuda_visible_devices') != '0'
+            or not runtime.get('effective_config_sha256')
+            or runtime.get('cli_cfg_options') is not None
+            or runtime_model.get('evaluation_only') is not True
+            or runtime_model.get('inference_component_mode') != 'current_only'
+            or runtime_model.get('causal_history_features_computed') is not True
+            or runtime_model.get('history_output_contribution') is not False
+            or runtime_component.get('inference_component_mode') != 'current_only'
+            or effective_refiner.get('inference_component_mode') !=
+            'current_only'):
         raise RuntimeError('Current-only runtime audit mismatch')
 
     ann_root = Path(args.data_root).resolve() / args.source_split / 'annfiles'
@@ -246,10 +290,12 @@ def audit(args):
 
     evaluation_kwargs = dict(
         gt_boxes=gt_boxes, frames=frames, segments=_segments(frames),
-        category_rows=support_rows, iou_threshold=args.iou_threshold,
-        center_threshold=args.center_threshold_px,
-        angle_limit_deg=args.angle_limit_deg,
-        high_confidence_threshold=args.high_confidence_threshold)
+        category_rows=support_rows,
+        iou_threshold=locked_metrics['iou_threshold'],
+        center_threshold=locked_metrics['center_threshold_px'],
+        angle_limit_deg=locked_metrics['angle_limit_deg'],
+        high_confidence_threshold=locked_metrics[
+            'high_confidence_threshold'])
     current_metric = _evaluate(
         'base_v3_epoch9_current_only', current_boxes, current_scores,
         **evaluation_kwargs)
@@ -336,6 +382,14 @@ def audit(args):
     history_changed = [
         row for row in geometry_rows
         if 'current_only_vs_full_hit_change' in row['selection_reasons']]
+    checks = dict(
+        frozen_metric_parameters=True,
+        runtime_effective_mode_current_only=True,
+        runtime_merged_config_recorded=True,
+        no_valid_history_invariance=(len(no_history_equality) == 0),
+        target_data_not_read=True,
+        fixed_test_not_read=True)
+    passed = all(checks.values())
     return dict(
         protocol=PROTOCOL,
         evidence_boundary='seq11_same_video_source_only_component_ablation',
@@ -355,6 +409,11 @@ def audit(args):
             history_tensors_loaded=True,
             history_output_contribution=False,
             domain_routing=False, sequence_frame_routing=False),
+        metric_contract=dict(
+            locked_to_three_way_report=True, **locked_metrics,
+            confidence_semantics=(
+                'raw detector/cache score where available; deterministic '
+                'fallback score fill is not calibrated probability')),
         metrics=dict(
             deterministic_k1_else_dino=three_way['metrics'][
                 'deterministic_k1_else_dino'],
@@ -374,12 +433,19 @@ def audit(args):
             rows=geometry_rows),
         interpretation_policy=dict(
             history_claim_requires_paired_improvement=True,
+            current_only_still_computes_history_features=True,
+            compute_or_memory_reduction_claim=False,
+            scores_are_not_calibrated_probabilities=True,
             no_single_metric_promotion=True,
             no_automatic_cv_training_authorization=True),
+        checks=checks, passed=passed,
         target_data_read=False, fixed_test_read=False,
         training_run=False, eligible_for_checkpoint_promotion=False,
         eligible_for_three_fold_training=False,
-        decision='HISTORY_CONTRIBUTION_AUDIT_READY_FOR_REVIEW_NO_TRAINING_AUTHORIZED')
+        decision=(
+            'HISTORY_CONTRIBUTION_AUDIT_READY_FOR_REVIEW_NO_TRAINING_AUTHORIZED'
+            if passed else
+            'STOP_HISTORY_CONTRIBUTION_AUDIT_CONTRACT_FAILED'))
 
 
 def main():
@@ -399,6 +465,8 @@ def main():
         report['no_valid_history_invariance']['violation_count']))
     print('[seq11-history-ablation] selected_overlays={}'.format(
         report['key_frame_summary']['selected_frame_count']))
+    if not report['passed']:
+        raise SystemExit(2)
 
 
 if __name__ == '__main__':

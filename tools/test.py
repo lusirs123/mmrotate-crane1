@@ -96,6 +96,17 @@ def _sha256_file(path):
     return digest.hexdigest()
 
 
+def _json_safe(value):
+    """Preserve merged config structure while representing custom objects."""
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    return repr(value)
+
+
 def _checkpoint_eval_record(cfg, args, checkpoint, metric):
     """Build a provenance-rich evaluation record for paired diagnostics."""
     contract = dict(checkpoint.get('meta') or {}).get(
@@ -164,6 +175,8 @@ def _runtime_audit_record(cfg, args, model, outputs):
     """Record single-run CUDA peaks and model-owned forward counters."""
     raw_model = model.module if hasattr(model, 'module') else model
     counter = getattr(raw_model, 'runtime_forward_counts', None)
+    runtime_contract_getter = getattr(
+        raw_model, 'runtime_inference_contract', None)
     evidence_contract = cfg.get('formal_k1_full251_contract', None)
     if evidence_contract is None:
         evidence_contract = cfg.get('source_only_result_contract', {})
@@ -184,8 +197,14 @@ def _runtime_audit_record(cfg, args, model, outputs):
             device_name=torch.cuda.get_device_name(device),
             peak_allocated_bytes=int(torch.cuda.max_memory_allocated(device)),
             peak_reserved_bytes=int(torch.cuda.max_memory_reserved(device))))
+    effective_config = _json_safe(cfg._cfg_dict.to_dict())
+    effective_config_raw = json.dumps(
+        effective_config, sort_keys=True, separators=(',', ':'),
+        ensure_ascii=False, default=repr).encode('utf-8')
     return dict(
-        protocol='mmdet_runtime_inference_resource_audit_v1',
+        protocol=evidence_contract.get(
+            'runtime_audit_protocol',
+            'mmdet_runtime_inference_resource_audit_v1'),
         config=osp.realpath(osp.abspath(args.config)),
         config_sha256=_sha256_file(args.config),
         checkpoint=osp.realpath(osp.abspath(args.checkpoint)),
@@ -193,6 +212,14 @@ def _runtime_audit_record(cfg, args, model, outputs):
         result_count=len(outputs),
         runtime_input_files=runtime_inputs,
         forward_counts=(dict(counter()) if callable(counter) else None),
+        runtime_model_contract=(
+            dict(runtime_contract_getter())
+            if callable(runtime_contract_getter) else None),
+        effective_config=effective_config,
+        effective_config_sha256=hashlib.sha256(
+            effective_config_raw).hexdigest(),
+        cli_cfg_options=(None if args.cfg_options is None
+                         else dict(args.cfg_options)),
         cuda=cuda,
         evidence_contract=dict(evidence_contract),
         target_data_read=evidence_contract.get('target_data_read', None),

@@ -720,3 +720,18 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
     def runtime_forward_counts(self):
         """Return explicit detector/component forward counters for evidence."""
         return dict(self._runtime_forward_counts)
+
+    def runtime_inference_contract(self):
+        """Expose the effective inference mode after config merging/building."""
+        component = dict(self.geometry_refiner.component_contract())
+        mode = component.get('inference_component_mode')
+        return dict(
+            detector_class=self.__class__.__name__,
+            geometry_refiner_class=self.geometry_refiner.__class__.__name__,
+            evaluation_only=bool(self.evaluation_only),
+            inference_component_mode=mode,
+            causal_history_features_computed=hasattr(
+                self.geometry_refiner, 'forward_causal'),
+            history_output_contribution=(mode != 'current_only'),
+            component_contract=component,
+            evidence_contract=dict(self.evidence_contract))
