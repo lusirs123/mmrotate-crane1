@@ -145,9 +145,9 @@ def _validate_contract(contract):
 
 
 def _expand_scope(rows, manifest, contract):
-    if manifest.get('status') != MANIFEST_FROZEN_STATUS:
-        raise RuntimeError(
-            'Scope manifest is still a draft; review and freeze it first')
+    status = manifest.get('status')
+    if status not in (MANIFEST_DRAFT_STATUS, MANIFEST_FROZEN_STATUS):
+        raise RuntimeError('Unknown scope manifest status')
     if (manifest.get('evidence_role') !=
             'official_source_val_738_supplementary_diagnostic'
             or manifest.get('selection_basis') !=
@@ -170,6 +170,20 @@ def _expand_scope(rows, manifest, contract):
     if not isinstance(specs, dict) or set(specs) != set(grouped):
         raise RuntimeError('Scope manifest must enumerate every sequence')
 
+    draft_all_frames = status == MANIFEST_DRAFT_STATUS
+    if draft_all_frames:
+        draft_policy = dict(contract.get('draft_manifest_policy') or {})
+        if (draft_policy.get('accepted_as_all_frames_only') is not True
+                or draft_policy.get('override_intervals_must_be_empty')
+                is not True
+                or draft_policy.get('operation_phase_exclusions_applied')
+                is not False):
+            raise RuntimeError('Draft all-frame policy changed')
+        if any(spec.get('override_intervals') for spec in specs.values()):
+            raise RuntimeError(
+                'Draft manifest contains overrides; either remove them for '
+                'all-frame reporting or independently review and freeze it')
+
     scope = {}
     reason_counts = Counter()
     for key, sequence_rows in grouped.items():
@@ -178,7 +192,8 @@ def _expand_scope(rows, manifest, contract):
                 or spec.get('default_perception_valid') is not True
                 or spec.get('default_control_valid') is not True):
             raise RuntimeError('Invalid sequence scope defaults for ' + key)
-        overrides = list(spec.get('override_intervals') or [])
+        overrides = ([] if draft_all_frames else
+                     list(spec.get('override_intervals') or []))
         previous_end = None
         for interval in overrides:
             start, end = int(interval['start_frame']), int(interval['end_frame'])
@@ -219,7 +234,10 @@ def _expand_scope(rows, manifest, contract):
                 or not scope[row['frame_key']]['control_valid']
                 for row in selected):
             raise RuntimeError('Confirmed-valid interval was excluded: ' + key)
-    return scope, dict(reason_counts)
+    return scope, dict(reason_counts), (
+        'all_frames_only_draft_manifest_not_applied'
+        if draft_all_frames else
+        'frozen_operation_phase_oracle_supplementary')
 
 
 def _verify_bound_input(recorded, role):
@@ -325,7 +343,8 @@ def audit(contract_id, contract, attribution_id, attribution,
     rows = list(attribution.get('per_frame') or [])
     if len(rows) != 738:
         raise RuntimeError('Official source-val attribution must have 738 rows')
-    scope, reason_counts = _expand_scope(rows, manifest, contract)
+    scope, reason_counts, scope_mode = _expand_scope(
+        rows, manifest, contract)
 
     inputs = attribution.get('inputs') or {}
     full_id = _verify_bound_input(inputs.get('full_results'), 'full results')
@@ -391,7 +410,11 @@ def audit(contract_id, contract, attribution_id, attribution,
                     current_only_results=current_id,
                     annotation_dir=os.fspath(ann_root)),
         scope_coverage=dict(by_domain=counts,
-                            override_reason_counts=reason_counts),
+                            override_reason_counts=reason_counts,
+                            scope_mode=scope_mode,
+                            operation_phase_exclusions_applied=(
+                                scope_mode ==
+                                'frozen_operation_phase_oracle_supplementary')),
         methods=methods,
         confirmed_valid_interval_audit=dict(
             sim_seq10_207_221_perception_valid=True,
@@ -406,8 +429,12 @@ def audit(contract_id, contract, attribution_id, attribution,
         training_run=False, optimizer_steps=0,
         target_data_read=False, fixed_test_read=False,
         decision=(
-            'SOURCE_VAL_METRIC_SCOPE_V2_READY_SUPPLEMENTARY_ONLY_'
-            'NO_GATE_OVERRIDE'))
+            'SOURCE_VAL_ALL_FRAME_METRIC_DECOMPOSITION_V2_READY_'
+            'NO_GATE_OVERRIDE'
+            if scope_mode == 'all_frames_only_draft_manifest_not_applied'
+            else
+            'SOURCE_VAL_OPERATION_PHASE_ORACLE_SCOPE_V2_READY_'
+            'SUPPLEMENTARY_ONLY_NO_GATE_OVERRIDE'))
 
 
 def main():
@@ -430,6 +457,8 @@ def main():
     output = _write_exact(args.out_json, report)
     print('[metric-scope-v2] output={}'.format(output['path']))
     print('[metric-scope-v2] decision={}'.format(report['decision']))
+    print('[metric-scope-v2] scope_mode={}'.format(
+        report['scope_coverage']['scope_mode']))
     for method in ('full', 'current_only'):
         angle = report['methods'][method]['angle_decomposition']
         print('[metric-scope-v2] {} penalized={:.4f} raw={:.4f} '

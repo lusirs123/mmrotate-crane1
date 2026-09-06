@@ -703,8 +703,10 @@ def test_source_val_metric_scope_v2_freezes_phase_and_metric_roles():
     contract = json.loads((ROOT / (
         'crane_project/data_contracts/'
         'base_v3_source_val_metric_scope_v2.json')).read_text())
-    scope, reasons = scope_audit._expand_scope(rows, manifest, contract)
+    scope, reasons, mode = scope_audit._expand_scope(
+        rows, manifest, contract)
     assert reasons == {}
+    assert mode == 'frozen_operation_phase_oracle_supplementary'
     assert all(item['control_valid'] for item in scope.values())
     angle = scope_audit._angle_summary(rows, 'current_only', scope)
     assert angle['center_penalty_count'] == 1
@@ -739,6 +741,47 @@ def test_source_val_metric_scope_v2_rejects_control_without_perception():
         confirmed_valid_intervals=[])
     contract = dict(required_confirmed_valid_intervals=[])
     with pytest.raises(RuntimeError, match='control_valid requires'):
+        scope_audit._expand_scope(rows, manifest, contract)
+
+
+def test_source_val_metric_scope_v2_accepts_clean_draft_as_all_frames():
+    from crane_project.tools import (
+        symeood_dino_source_val_metric_scope_v2 as scope_audit)
+
+    rows = [dict(frame_key='sim_seq10_{:05d}'.format(frame), domain='sim',
+                 sequence='seq10', frame=frame) for frame in range(207, 222)]
+    contract = json.loads((ROOT / (
+        'crane_project/data_contracts/'
+        'base_v3_source_val_metric_scope_v2.json')).read_text())
+    manifest = dict(
+        status=scope_audit.MANIFEST_DRAFT_STATUS,
+        evidence_role='official_source_val_738_supplementary_diagnostic',
+        selection_basis=(
+            'review_from_operation_phase_evidence_without_model_outputs'),
+        frame_count=len(rows),
+        frame_set_sha256=scope_audit._canonical_frame_set_sha256(rows),
+        operation_phase_used_as_model_input=False,
+        official_gate_override=False,
+        target_data_read=False,
+        fixed_test_read=False,
+        sequences=dict(sim_seq10=dict(
+            observed_frame_count=len(rows),
+            default_perception_valid=True,
+            default_control_valid=True,
+            override_intervals=[])),
+        confirmed_valid_intervals=contract[
+            'required_confirmed_valid_intervals'])
+    scope, reasons, mode = scope_audit._expand_scope(
+        rows, manifest, contract)
+    assert reasons == {}
+    assert mode == 'all_frames_only_draft_manifest_not_applied'
+    assert all(item['perception_valid'] and item['control_valid']
+               for item in scope.values())
+
+    manifest['sequences']['sim_seq10']['override_intervals'] = [dict(
+        start_frame=210, end_frame=212, perception_valid=True,
+        control_valid=False, reason='unreviewed_material_contact')]
+    with pytest.raises(RuntimeError, match='Draft manifest contains overrides'):
         scope_audit._expand_scope(rows, manifest, contract)
 
 

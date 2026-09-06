@@ -1,7 +1,7 @@
 {
   "protocol": "base_v3_source_val_metric_scope_contract_v2",
   "status": "supplementary_metric_scope_frozen_before_output",
-  "purpose": "Separate perception-valid geometry metrics from control-valid temporal survival metrics without changing the official 738-frame gate.",
+  "purpose": "Report all-frame angle and temporal coverage decomposition without changing the official 738-frame gate; an independently frozen operation-phase manifest may add an oracle-only supplementary slice.",
   "evidence_role": "official_source_val_738_supplementary_diagnostic",
   "required_confirmed_valid_intervals": [
     {
@@ -15,6 +15,7 @@
   ],
   "metric_scopes": {
     "all_frame_reference": "immutable_existing_official_gate",
+    "all_frames_only": "default_when_manifest_remains_an_unedited_draft",
     "perception_valid": [
       "mean_RIoU",
       "R_center",
@@ -52,6 +53,11 @@
     "model_routing": true,
     "training_authorization": true,
     "fixed_test_authorization": true
+  },
+  "draft_manifest_policy": {
+    "accepted_as_all_frames_only": true,
+    "override_intervals_must_be_empty": true,
+    "operation_phase_exclusions_applied": false
   },
   "training": false,
   "optimizer_steps": 0,
