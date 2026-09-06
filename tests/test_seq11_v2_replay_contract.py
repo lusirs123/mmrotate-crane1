@@ -2,7 +2,9 @@
 
 import ast
 import argparse
+import builtins
 import hashlib
+import io
 import json
 import pickle
 from pathlib import Path
@@ -527,6 +529,8 @@ def test_current_only_source_val_gate_is_preregistered_and_fail_closed():
         'symeood_dino_current_only_source_val_gate.py')).read_text()
 
     assert "inference_component_mode='current_only'" in config
+    assert 'expected_checkpoint = promoted_checkpoint' not in config
+    assert 'k1_retentive_v3_epoch9_promoted.pth' in config
     assert 'same_setting_real_sim=True' in config
     assert 'optimizer_steps=0' in config
     assert 'fixed_test_read=False' in config
@@ -558,3 +562,40 @@ def test_current_only_source_val_gate_is_preregistered_and_fail_closed():
         failing, reference, contract['relative_non_regression'])
     assert result['passed'] is False
     assert result['checks']['real_center_no_drop'] is False
+
+
+def test_current_only_source_val_config_resolves_without_parent_locals(
+        monkeypatch):
+    from mmcv import Config
+
+    config_path = ROOT / (
+        'crane_project/configs/'
+        'crane_symeood_dino_k1_retentive_component_'
+        'current_only_source_val.py')
+    promotion = dict(
+        decision='ALLOW_K1_RETENTIVE_CAUSAL_PHASE_FIXED_BENCHMARK_TEST',
+        eligible_for_fixed_benchmark_test=True,
+        target_data_read=False,
+        fixed_test_read=False,
+        selection=dict(selected=dict(epoch=9)),
+        output=dict(
+            checkpoint=(
+                'work_dirs/crane_symeood_dino_k1_retentive_causal_phase_'
+                'refiner_source_v3_seed3407/'
+                'k1_retentive_v3_epoch9_promoted.pth'),
+            checkpoint_sha256='a' * 64))
+    original_open = builtins.open
+
+    def patched_open(path, *args, **kwargs):
+        if str(path).endswith('epoch9_source_promotion.json'):
+            return io.StringIO(json.dumps(promotion))
+        return original_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, 'open', patched_open)
+    merged = Config.fromfile(str(config_path))
+    assert merged.expected_checkpoint.endswith(
+        'k1_retentive_v3_epoch9_promoted.pth')
+    assert merged.model.geometry_refiner.inference_component_mode == (
+        'current_only')
+    assert merged.data.test.ann_file == 'val/annfiles/'
+    assert merged.source_only_result_contract.fixed_test_read is False

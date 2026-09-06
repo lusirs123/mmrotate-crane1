@@ -16,7 +16,11 @@ model = dict(
     geometry_refiner=dict(inference_component_mode='current_only'),
     evaluation_only=True)
 
-expected_checkpoint = promoted_checkpoint
+# MMCV merges the parent config dictionary but does not inject the parent's
+# temporary Python variables into this child module's execution namespace.
+expected_checkpoint = (
+    'work_dirs/crane_symeood_dino_k1_retentive_causal_phase_refiner_'
+    'source_v3_seed3407/k1_retentive_v3_epoch9_promoted.pth')
 expected_checkpoint_protocol = (
     'source_gated_k1_retentive_causal_phase_refiner_v3')
 expected_checkpoint_source_train_frames = 2781
