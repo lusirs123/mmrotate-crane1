@@ -12,10 +12,12 @@ import argparse
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 import numpy as np
+import torch
 from mmcv import Config
 from mmcv.utils import import_modules_from_strings
 from mmdet.apis import inference_detector, init_detector
@@ -129,6 +131,27 @@ def init_sequence_detector(
     required and must resolve to the same file declared by the config.
     """
     cfg = Config.fromfile(str(config_path))
+    rescue = cfg.model.get("dino_rescue")
+    if rescue is not None:
+        dino_gpus = [
+            int(value) for value in rescue.get("dinov2", {}).get("gpus", [])]
+        head_gpu = int(rescue.get("head", {}).get("gpu", 0))
+        requested = dino_gpus + [head_gpu]
+        visible_count = torch.cuda.device_count()
+        invalid = [index for index in requested
+                   if index < 0 or index >= visible_count]
+        if invalid:
+            raise RuntimeError(
+                "Configured logical CUDA devices {} are unavailable; "
+                "CUDA_VISIBLE_DEVICES={!r} exposes {} device(s). "
+                "Use the matching runtime-placement config."
+                .format(
+                    sorted(set(invalid)),
+                    os.environ.get("CUDA_VISIBLE_DEVICES"),
+                    visible_count))
+        if head_gpu in dino_gpus:
+            raise RuntimeError(
+                "DINO and head logical GPUs must remain separate")
     imports = cfg.get("custom_imports")
     if imports:
         import_modules_from_strings(**imports)
@@ -215,7 +238,10 @@ def main() -> None:
         "model_type": str(cfg.model.get("type")),
         "formal_detection_contract": dict(
             cfg.get("formal_detection_contract", {})),
+        "runtime_device_contract": dict(
+            cfg.get("runtime_device_contract", {})),
         "device": args.device,
+        "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
         "discovered_frame_count": len(all_images),
         "processed_frame_count": len(images),
         "detected_frame_count": detected_count,
