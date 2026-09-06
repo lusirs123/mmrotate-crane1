@@ -70,7 +70,6 @@ model = dict(
     runtime_checkpoint_in_constructor=True,
     scope_manifest=None,
     scope_policy='all_frames',
-    scope_split='fixed_dev',
     stabilizer=dict(enabled=False, alpha=1.0),
     temporal_association=dict(enabled=False, source_selected=False),
     test_cfg=dict(score_thr=0.05, max_per_img=1))

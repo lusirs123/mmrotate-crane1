@@ -15,7 +15,7 @@ import hashlib
 import json
 import math
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -29,6 +29,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--sequence", required=True, type=Path)
     parser.add_argument("--calibration", required=True, type=Path)
     parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--stage",
+        choices=("calibration_train_audit", "fixed_dev_evaluation"),
+        default="fixed_dev_evaluation",
+        help=(
+            "calibration_train_audit designs/freezes detector-output validity "
+            "rules without reading fixed-dev; fixed_dev_evaluation applies the "
+            "already frozen interface to fixed target-dev"
+        ),
+    )
     parser.add_argument(
         "--reference-predictions", type=Path,
         help="Optional frozen component output for paired metric deltas")
@@ -211,6 +221,16 @@ def validate_raw_opt_calibration(calibration: Dict[str, Any]) -> None:
         raise ValueError("Raw-opt calibration does not declare raw OBB inputs")
 
 
+def validate_sequence_stage(stage: str, split: Optional[str]) -> None:
+    expected = {
+        "calibration_train_audit": "calibration_train",
+        "fixed_dev_evaluation": "fixed_dev",
+    }[stage]
+    if split != expected:
+        raise ValueError(
+            f"Stage {stage!r} requires split={expected!r}, got {split!r}")
+
+
 def evaluate_predictions(
     predictions_path: Path, truth_rows: List[Dict[str, Any]],
     sequence_manifest: Dict[str, Any], calibration: Dict[str, Any]
@@ -221,6 +241,9 @@ def evaluate_predictions(
         raise FileNotFoundError(f"Missing prediction manifest: {manifest_path}")
     prediction_manifest = load_json(manifest_path)
     validate_prediction_manifest(predictions_path, prediction_manifest, len(truth_rows))
+    if prediction_manifest.get("sequence_id") != sequence_manifest.get("sequence_id"):
+        raise ValueError(
+            "Prediction manifest sequence_id does not match truth sequence")
     if len(predictions) != len(truth_rows):
         raise ValueError("Prediction/truth row count mismatch")
 
@@ -349,31 +372,25 @@ def main() -> None:
     args = parse_args()
     sequence_dir = args.sequence.resolve()
     sequence_manifest = load_json(sequence_dir / "metadata" / "manifest.json")
-    if sequence_manifest.get("split") != "fixed_dev":
-        raise ValueError(
-            "This evaluator is fixed-dev only; unknown-sequence evaluation "
-            "must remain a separate protocol")
+    validate_sequence_stage(args.stage, sequence_manifest.get("split"))
     calibration = load_json(args.calibration.resolve())
     validate_raw_opt_calibration(calibration)
     truth_rows = load_jsonl(sequence_dir / "metadata" / "frames.jsonl")
     current = evaluate_predictions(
         args.predictions.resolve(), truth_rows, sequence_manifest, calibration)
 
-    gates = calibration.get("preregistered_unknown_test", {}).get(
-        "performance_gate", {})
-    metrics = current.get("detector_obb_depth_metrics") or {}
-    checks = {
-        "complete_detection": current["detected_frame_count"] == current["frame_count"],
-        "mae_m": metrics.get("mae_m", math.inf) <= float(gates.get("mae_m_max", math.inf)),
-        "rmse_m": metrics.get("rmse_m", math.inf) <= float(gates.get("rmse_m_max", math.inf)),
-        "abs_rel": metrics.get("abs_rel", math.inf) <= float(gates.get("abs_rel_max", math.inf)),
-        "p95_abs_error_m": metrics.get("p95_abs_error_m", math.inf) <= float(
-            gates.get("p95_abs_error_m_max", math.inf)),
-    }
+    is_calibration_audit = args.stage == "calibration_train_audit"
     report: Dict[str, Any] = {
-        "schema_version": "fixed_dev_detector_obb_depth_eval_v2",
+        "schema_version": (
+            "calibration_train_detector_obb_depth_audit_v1"
+            if is_calibration_audit
+            else "fixed_dev_detector_obb_depth_eval_v2"),
         "coordinate_contract": "raw_opt_v1",
-        "protocol_role": "fixed_target_dev_component_diagnostic",
+        "stage": args.stage,
+        "protocol_role": (
+            "calibration_train_detector_validity_rule_design"
+            if is_calibration_audit
+            else "fixed_target_dev_component_diagnostic"),
         "sequence_id": sequence_manifest["sequence_id"],
         "calibration_id": calibration["calibration_id"],
         "calibration_sha256": sha256_file(args.calibration.resolve()),
@@ -382,13 +399,37 @@ def main() -> None:
         "unknown_sequence_read": False,
         "real_metric_depth_claim_allowed": False,
         "current": current,
-        "diagnostic_reference_gate": {
+    }
+    if is_calibration_audit:
+        report["validity_rule_status"] = {
+            "frozen_by_this_script": False,
+            "note": (
+                "Use this calibration-train report to define and version the "
+                "detector-output validity rule before fixed-dev evaluation")
+        }
+    else:
+        gates = calibration.get("preregistered_unknown_test", {}).get(
+            "performance_gate", {})
+        metrics = current.get("detector_obb_depth_metrics") or {}
+        checks = {
+            "complete_detection": (
+                current["detected_frame_count"] == current["frame_count"]),
+            "mae_m": metrics.get("mae_m", math.inf) <= float(
+                gates.get("mae_m_max", math.inf)),
+            "rmse_m": metrics.get("rmse_m", math.inf) <= float(
+                gates.get("rmse_m_max", math.inf)),
+            "abs_rel": metrics.get("abs_rel", math.inf) <= float(
+                gates.get("abs_rel_max", math.inf)),
+            "p95_abs_error_m": metrics.get(
+                "p95_abs_error_m", math.inf) <= float(
+                    gates.get("p95_abs_error_m_max", math.inf)),
+        }
+        report["diagnostic_reference_gate"] = {
             "passed": all(checks.values()),
             "checks": checks,
             "thresholds_reused_from_frozen_unknown_protocol": gates,
             "deployment_gate": False,
-        },
-    }
+        }
     if args.reference_predictions is not None:
         reference = evaluate_predictions(
             args.reference_predictions.resolve(), truth_rows,

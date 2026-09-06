@@ -70,3 +70,12 @@ def test_raw_opt_calibration_contract_is_required():
     }
     with pytest.raises(ValueError, match="raw_opt_v1"):
         MODULE.validate_raw_opt_calibration(invalid)
+
+
+def test_sequence_stage_keeps_calibration_and_fixed_dev_separate():
+    MODULE.validate_sequence_stage(
+        "calibration_train_audit", "calibration_train")
+    MODULE.validate_sequence_stage("fixed_dev_evaluation", "fixed_dev")
+    with pytest.raises(ValueError, match="requires split"):
+        MODULE.validate_sequence_stage(
+            "calibration_train_audit", "fixed_dev")
