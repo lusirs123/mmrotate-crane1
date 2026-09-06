@@ -1,0 +1,60 @@
+{
+  "protocol": "base_v3_source_val_metric_scope_contract_v2",
+  "status": "supplementary_metric_scope_frozen_before_output",
+  "purpose": "Separate perception-valid geometry metrics from control-valid temporal survival metrics without changing the official 738-frame gate.",
+  "evidence_role": "official_source_val_738_supplementary_diagnostic",
+  "required_confirmed_valid_intervals": [
+    {
+      "sequence": "sim_seq10",
+      "start_frame": 207,
+      "end_frame": 221,
+      "perception_valid": true,
+      "control_valid": true,
+      "reason": "verified_non_material_contact_operation"
+    }
+  ],
+  "metric_scopes": {
+    "all_frame_reference": "immutable_existing_official_gate",
+    "perception_valid": [
+      "mean_RIoU",
+      "R_center",
+      "penalized_A_RMSE",
+      "raw_angle_RMSE"
+    ],
+    "control_valid_contiguous_blocks": [
+      "DFR",
+      "ACI",
+      "TDR",
+      "MCML",
+      "MRF"
+    ]
+  },
+  "temporal_boundary_policy": {
+    "same_domain": true,
+    "same_sequence": true,
+    "original_frame_difference_exactly_one": true,
+    "control_invalid_frame_breaks_continuity": true,
+    "missing_prediction_breaks_DFR_ACI_continuity": true
+  },
+  "angle_reporting": {
+    "legacy_penalized_metric_preserved": true,
+    "center_penalty_threshold_px": 10.0,
+    "center_penalty_deg": 90.0,
+    "raw_angle_rmse_present_predictions_added": true,
+    "center_penalty_count_added": true,
+    "missing_prediction_count_added": true
+  },
+  "prohibited_uses": {
+    "official_gate_override": true,
+    "threshold_tuning": true,
+    "epoch_selection": true,
+    "checkpoint_promotion": true,
+    "model_routing": true,
+    "training_authorization": true,
+    "fixed_test_authorization": true
+  },
+  "training": false,
+  "optimizer_steps": 0,
+  "target_data_read": false,
+  "fixed_test_read": false
+}

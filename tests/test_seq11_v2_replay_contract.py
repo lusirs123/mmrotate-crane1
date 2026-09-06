@@ -10,6 +10,7 @@ import math
 import pickle
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from crane_project.tools.symeood_dino_replay_schedule_audit import (
@@ -658,3 +659,111 @@ def test_current_only_failure_attribution_preserves_boundaries_and_role():
         'sim_angle_center_threshold_px'] == 10.0
     assert 'seq11_dataset_has_diagnostic_value=True' in source
     assert 'CURRENT_ONLY_FAILURE_ATTRIBUTION_READY_' in source
+
+
+def test_source_val_metric_scope_v2_freezes_phase_and_metric_roles():
+    from crane_project.tools import (
+        symeood_dino_source_val_metric_scope_v2 as scope_audit)
+
+    rows = [
+        dict(frame_key='sim_seq10_{:05d}'.format(frame), domain='sim',
+             sequence='seq10', frame=frame,
+             full=dict(prediction_present=True,
+                       raw_angle_error_deg=2.0,
+                       angle_metric_state='direct_periodic_angle_error',
+                       angle_metric_error_deg=2.0),
+             current_only=dict(prediction_present=True,
+                               raw_angle_error_deg=3.0,
+                               angle_metric_state=(
+                                   'center_error_penalty' if frame == 213
+                                   else 'direct_periodic_angle_error'),
+                               angle_metric_error_deg=(
+                                   90.0 if frame == 213 else 3.0)))
+        for frame in range(207, 222)]
+    manifest = dict(
+        status=scope_audit.MANIFEST_FROZEN_STATUS,
+        evidence_role='official_source_val_738_supplementary_diagnostic',
+        selection_basis=(
+            'review_from_operation_phase_evidence_without_model_outputs'),
+        frame_count=len(rows),
+        frame_set_sha256=scope_audit._canonical_frame_set_sha256(rows),
+        operation_phase_used_as_model_input=False,
+        official_gate_override=False,
+        target_data_read=False,
+        fixed_test_read=False,
+        sequences=dict(sim_seq10=dict(
+            observed_frame_count=len(rows),
+            default_perception_valid=True,
+            default_control_valid=True,
+            override_intervals=[])),
+        confirmed_valid_intervals=[dict(
+            sequence='sim_seq10', start_frame=207, end_frame=221,
+            perception_valid=True, control_valid=True,
+            reason='verified_non_material_contact_operation')])
+    contract = json.loads((ROOT / (
+        'crane_project/data_contracts/'
+        'base_v3_source_val_metric_scope_v2.json')).read_text())
+    scope, reasons = scope_audit._expand_scope(rows, manifest, contract)
+    assert reasons == {}
+    assert all(item['control_valid'] for item in scope.values())
+    angle = scope_audit._angle_summary(rows, 'current_only', scope)
+    assert angle['center_penalty_count'] == 1
+    assert angle['raw_angle_RMSE_present_predictions_deg'] == pytest.approx(3.0)
+    assert angle['penalized_A_RMSE_deg'] > 20.0
+
+
+def test_source_val_metric_scope_v2_rejects_control_without_perception():
+    from crane_project.tools import (
+        symeood_dino_source_val_metric_scope_v2 as scope_audit)
+
+    rows = [dict(frame_key='real_seq01_00001', domain='real',
+                 sequence='seq01', frame=1)]
+    manifest = dict(
+        status=scope_audit.MANIFEST_FROZEN_STATUS,
+        evidence_role='official_source_val_738_supplementary_diagnostic',
+        selection_basis=(
+            'review_from_operation_phase_evidence_without_model_outputs'),
+        frame_count=1,
+        frame_set_sha256=scope_audit._canonical_frame_set_sha256(rows),
+        operation_phase_used_as_model_input=False,
+        official_gate_override=False,
+        target_data_read=False,
+        fixed_test_read=False,
+        sequences=dict(real_seq01=dict(
+            observed_frame_count=1,
+            default_perception_valid=True,
+            default_control_valid=True,
+            override_intervals=[dict(
+                start_frame=1, end_frame=1, perception_valid=False,
+                control_valid=True, reason='invalid_test')])),
+        confirmed_valid_intervals=[])
+    contract = dict(required_confirmed_valid_intervals=[])
+    with pytest.raises(RuntimeError, match='control_valid requires'):
+        scope_audit._expand_scope(rows, manifest, contract)
+
+
+def test_source_val_metric_scope_v2_breaks_pairs_at_control_invalid_frame():
+    from crane_project.tools import (
+        symeood_dino_source_val_metric_scope_v2 as scope_audit)
+
+    rows = [dict(frame_key='sim_seq01_{:05d}'.format(frame), domain='sim',
+                 sequence='seq01', frame=frame) for frame in (1, 2, 3)]
+    scope = {
+        row['frame_key']: dict(
+            perception_valid=True, control_valid=row['frame'] != 2,
+            reason='material_contact' if row['frame'] == 2 else 'default_valid')
+        for row in rows}
+    boxes = [np.asarray([0., 0., 10., 20., 0.]) for _ in rows]
+    coverage = scope_audit._pair_coverage(rows, boxes, scope)['sim']
+    assert coverage['contiguous_control_valid_gt_pair_count'] == 0
+    assert coverage['valid_prediction_pair_count'] == 0
+    assert coverage['valid_pair_fraction'] == 0.0
+
+    metrics = {
+        'sim/A-RMSE(deg)': 1.0,
+        'sim/mean_RIoU': 0.8,
+        'sim/DFR(%/frame)': 2.0,
+        'sim/MCML_max(frames)': 1}
+    assert set(scope_audit._metric_subset(
+        metrics, ('A-RMSE(deg)', 'mean_RIoU'))) == {
+            'sim/A-RMSE(deg)', 'sim/mean_RIoU'}
