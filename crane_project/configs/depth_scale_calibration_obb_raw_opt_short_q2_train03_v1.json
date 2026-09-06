@@ -1,0 +1,84 @@
+{
+  "schema_version": "obb_raw_opt_short_q2_depth_calibration_v1",
+  "calibration_id": "obb_raw_opt_short_q2_train03_v1",
+  "status": "fixed_dev_diagnostic_complete_not_unknown_qualified",
+  "coordinate_contract": {
+    "id": "raw_opt_v1",
+    "input_frame": "physical_camera_raw_image",
+    "target": "z_cg_opt_m",
+    "target_definition": "optical-axis depth of grab reference center G from physical camera center C",
+    "homography_raw_to_plumb_used": false
+  },
+  "formula": "z_hat = c * Z_S * exp(beta * log(Z_L / Z_S)^2)",
+  "formula_terms": {
+    "s_L": "w * sqrt((cos(gamma)/fx)^2 + (sin(gamma)/fy)^2)",
+    "s_S": "h * sqrt((sin(gamma)/fx)^2 + (cos(gamma)/fy)^2)",
+    "Z_L": "L_G / s_L",
+    "Z_S": "S_G / s_S",
+    "q_signed": "log(Z_L / Z_S)"
+  },
+  "deployable_inputs": [
+    "obb_geometry.cx_px",
+    "obb_geometry.cy_px",
+    "obb_geometry.w_px",
+    "obb_geometry.h_px",
+    "obb_geometry.gamma_deg",
+    "camera_intrinsics.fx_px",
+    "camera_intrinsics.fy_px",
+    "camera_intrinsics.cx_px",
+    "camera_intrinsics.cy_px",
+    "grab_geometry.long_m",
+    "grab_geometry.short_m"
+  ],
+  "parameters": {
+    "c": 1.0044577340905951,
+    "beta": 20.682289543661955,
+    "b_m": 0.0,
+    "fit_offset": false,
+    "q_signed_min": -0.02070317402614643,
+    "q_signed_max": 0.006703449986171836,
+    "q_signed_p01": -0.02019995536448857,
+    "q_signed_p99": 0.005640719944840945
+  },
+  "fit": {
+    "train_sequence": "calibration_train_03_tilt_obb",
+    "train_frames": 981,
+    "loss": "Huber",
+    "huber_scale_m": 0.05,
+    "fixed_dev_refit": false,
+    "unknown_sequence_read": false
+  },
+  "fixed_dev_component_metrics": {
+    "sequence": "fixed_dev_01_unseen_depth_swing",
+    "frames": 893,
+    "mae_m": 0.03417252952444211,
+    "rmse_m": 0.040447557289183846,
+    "abs_rel": 0.001956705596509066,
+    "bias_m": 0.008436459391374286,
+    "p95_abs_error_m": 0.07679436839418372,
+    "max_abs_error_m": 0.10716233853116286,
+    "truth_obb_only": true
+  },
+  "fixed_dev_baselines": {
+    "M0_diagonal_power_mae_m": 0.10763667053888211,
+    "M0_diagonal_power_rmse_m": 0.11360598885890426,
+    "M1_short_edge_mae_m": 0.044897300053772106,
+    "M1_short_edge_rmse_m": 0.05053314487094451,
+    "M2S_mae_improvement_vs_M0_percent": 68.25200019107068,
+    "M2S_mae_improvement_vs_M1_short_percent": 23.88724677715035
+  },
+  "detector_output_validity": {
+    "gate_status": "not_frozen",
+    "fit_q_support_is_diagnostic_only": true,
+    "required_next_evidence": "freeze detector-output q validity policy on calibration_train detector outputs before fixed-dev detector evaluation"
+  },
+  "evidence_boundary": {
+    "webots_truth_only": true,
+    "gps_is_model_input": false,
+    "uses_plc_or_encoder": false,
+    "detector_obb_evaluated": false,
+    "unknown_sequence_evaluated": false,
+    "real_scene_metric_depth_claim": false,
+    "deployment_validated": false
+  }
+}

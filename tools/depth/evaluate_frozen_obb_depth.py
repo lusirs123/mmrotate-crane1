@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
-"""Audit or evaluate a frozen OBB-only depth calibration without refitting.
+"""Reproduce the historical virtual-plumb/optical-depth unknown evaluation.
 
 Use ``--coverage-only`` immediately after collection.  That stage intentionally
 does not compute or reveal depth residuals.  Run the full evaluation only after
 the preregistered coverage gate passes and the sequence directory is frozen.
+
+This entry is intentionally locked to ``legacy_plumb_opt_v1``.  It must not be
+used with the deployable Raw-opt calibration because the previously exposed
+unknown sequence belongs to the old coordinate contract.
 """
 
 from __future__ import annotations
@@ -115,6 +119,14 @@ def main() -> None:
     calibration_path = args.calibration.resolve()
     sequence_dir = args.eval.resolve()
     calibration = load_json(calibration_path)
+    contract_id = calibration.get("coordinate_contract", {}).get("id")
+    if contract_id == "raw_opt_v1":
+        raise ValueError(
+            "Raw-opt unknown evaluation is not registered: refusing to reuse "
+            "the historical exposed virtual-plumb unknown sequence")
+    if contract_id not in (None, "legacy_plumb_opt_v1"):
+        raise ValueError(
+            f"Unsupported coordinate contract for historical evaluator: {contract_id!r}")
     manifest = load_json(sequence_dir / "metadata" / "manifest.json")
 
     expected = calibration["preregistered_unknown_test"]
@@ -141,7 +153,11 @@ def main() -> None:
     if boundary.get("frozen_scale_calibration_id") != calibration["calibration_id"]:
         raise ValueError("Unknown-test manifest does not bind the frozen calibration ID")
 
-    data = _load_sequence(sequence_dir, require_train=False)
+    data = _load_sequence(
+        sequence_dir,
+        require_train=False,
+        coordinate_contract="legacy_plumb_opt_v1",
+    )
     frame_audit = audit_frames(
         sequence_dir,
         expected_sequence_id=manifest["sequence_id"],

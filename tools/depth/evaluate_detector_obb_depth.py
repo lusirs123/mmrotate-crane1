@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Evaluate frozen detector OBBs against one frozen Webots fixed-dev sequence.
+"""Evaluate raw detector OBBs under the deployable Raw-opt depth contract.
 
 The script never refits the monocular formula or changes detector boxes.  It
-reports (1) raw OBB geometry against the four-point Webots truth and (2) depth
-obtained after applying the stored raw-to-plumb homography and the frozen M2S
-formula.  Unknown-test sequences are intentionally rejected by this entry.
+reports (1) raw OBB geometry against the four-point Webots truth and (2)
+physical-camera optical-axis depth from the same raw OBB.  It deliberately does
+not consume ``homography_raw_to_plumb`` or Supervisor camera attitude.
+Unknown-test sequences are intentionally rejected by this entry.
 """
 
 from __future__ import annotations
@@ -163,7 +164,7 @@ def predicted_box(record: Dict[str, Any]) -> np.ndarray | None:
         float(top1["angle_rad"]))
 
 
-def depth_from_plumb_box(
+def depth_from_obb_box(
     box: np.ndarray, fx: float, fy: float, long_m: float, short_m: float,
     parameters: Dict[str, Any]
 ) -> Tuple[float, Dict[str, float]]:
@@ -184,6 +185,30 @@ def depth_from_plumb_box(
         "z_short_m": z_short,
         "q_signed": q_signed,
     }
+
+
+# Historical import compatibility.  New code should use depth_from_obb_box;
+# the formula itself is coordinate-agnostic when its box and target contract
+# are explicitly paired.
+depth_from_plumb_box = depth_from_obb_box
+
+
+def validate_raw_opt_calibration(calibration: Dict[str, Any]) -> None:
+    contract = calibration.get("coordinate_contract", {})
+    if contract.get("id") != "raw_opt_v1":
+        raise ValueError(
+            "Detector evaluation requires a raw_opt_v1 calibration; refusing "
+            "legacy plumb/optical or virtual-plumb parameters")
+    if contract.get("target") != "z_cg_opt_m":
+        raise ValueError("raw_opt_v1 calibration target must be z_cg_opt_m")
+    inputs = set(calibration.get("deployable_inputs", []))
+    required = {
+        "obb_geometry.w_px",
+        "obb_geometry.h_px",
+        "obb_geometry.gamma_deg",
+    }
+    if not required.issubset(inputs):
+        raise ValueError("Raw-opt calibration does not declare raw OBB inputs")
 
 
 def evaluate_predictions(
@@ -217,6 +242,7 @@ def evaluate_predictions(
     depth_truth: List[float] = []
     theta: List[float] = []
     oracle_prediction: List[float] = []
+    q_signed_values: List[float] = []
     missing_frames: List[str] = []
 
     for pred, truth in zip(predictions, truth_rows):
@@ -225,23 +251,16 @@ def evaluate_predictions(
             raise ValueError(
                 f"Frame mismatch: prediction={pred.get('frame_id')} truth={expected_frame}")
         gt = truth_box(truth)
-        gt_plumb = normalize_obb(
-            float(truth["obb_geometry"]["cx_px"]),
-            float(truth["obb_geometry"]["cy_px"]),
-            float(truth["obb_geometry"]["plumb_w_px"]),
-            float(truth["obb_geometry"]["plumb_h_px"]),
-            math.radians(float(truth["obb_geometry"]["plumb_gamma_deg"])))
-        oracle_z, _ = depth_from_plumb_box(
-            gt_plumb, fx, fy, long_m, short_m, parameters)
+        oracle_z, _ = depth_from_obb_box(
+            gt, fx, fy, long_m, short_m, parameters)
         oracle_prediction.append(oracle_z)
 
         box = predicted_box(pred)
         if box is None:
             missing_frames.append(expected_frame)
             continue
-        plumb = transform_obb(box, truth["homography_raw_to_plumb"])
-        predicted_z, _ = depth_from_plumb_box(
-            plumb, fx, fy, long_m, short_m, parameters)
+        predicted_z, depth_components = depth_from_obb_box(
+            box, fx, fy, long_m, short_m, parameters)
         gt_diag = math.hypot(float(gt[2]), float(gt[3]))
         pred_diag = math.hypot(float(box[2]), float(box[3]))
         center_errors.append(float(np.linalg.norm(box[:2] - gt[:2])))
@@ -252,6 +271,7 @@ def evaluate_predictions(
         diag_rel.append(pred_diag / gt_diag - 1.0)
         scores.append(float(pred["top1"]["score"]))
         depth_prediction.append(predicted_z)
+        q_signed_values.append(depth_components["q_signed"])
         depth_truth.append(float(truth["camera_geometry"]["z_cg_opt_m"]))
         theta.append(float(truth["pivot_relative"]["theta_total_deg"]))
 
@@ -266,6 +286,26 @@ def evaluate_predictions(
     if metrics is not None:
         metrics["by_theta"] = _stratified_metrics(
             detected_depth, detected_gt, detected_theta)
+
+    q_support = None
+    q_min = parameters.get("q_signed_min")
+    q_max = parameters.get("q_signed_max")
+    if q_min is not None and q_max is not None:
+        q_array = np.asarray(q_signed_values, dtype=np.float64)
+        in_support = (q_array >= float(q_min)) & (q_array <= float(q_max))
+        q_support = {
+            "source": "calibration_train raw-GT-OBB fit support",
+            "q_signed_min": float(q_min),
+            "q_signed_max": float(q_max),
+            "in_support_count": int(np.count_nonzero(in_support)),
+            "out_of_support_count": int(q_array.size - np.count_nonzero(in_support)),
+            "in_support_rate": float(np.mean(in_support)) if q_array.size else 0.0,
+            "deployment_validity_gate_frozen": False,
+            "note": (
+                "Diagnostic only: a detector-output validity gate must be "
+                "frozen from calibration_train detector outputs, not fixed-dev"
+            ),
+        }
 
     return {
         "prediction_file": str(predictions_path.resolve()),
@@ -283,7 +323,11 @@ def evaluate_predictions(
             "short_edge_relative_error": summary(short_rel),
             "diagonal_relative_error": summary(diag_rel),
             "score": summary(scores),
+            "q_signed": summary(q_signed_values),
         },
+        "coordinate_contract": "raw_opt_v1",
+        "homography_raw_to_plumb_used": False,
+        "formula_fit_q_support_diagnostic": q_support,
         "detector_obb_depth_metrics": metrics,
         "truth_obb_oracle_depth_metrics": _metrics(oracle, all_gt),
     }
@@ -310,6 +354,7 @@ def main() -> None:
             "This evaluator is fixed-dev only; unknown-sequence evaluation "
             "must remain a separate protocol")
     calibration = load_json(args.calibration.resolve())
+    validate_raw_opt_calibration(calibration)
     truth_rows = load_jsonl(sequence_dir / "metadata" / "frames.jsonl")
     current = evaluate_predictions(
         args.predictions.resolve(), truth_rows, sequence_manifest, calibration)
@@ -326,7 +371,8 @@ def main() -> None:
             gates.get("p95_abs_error_m_max", math.inf)),
     }
     report: Dict[str, Any] = {
-        "schema_version": "fixed_dev_detector_obb_depth_eval_v1",
+        "schema_version": "fixed_dev_detector_obb_depth_eval_v2",
+        "coordinate_contract": "raw_opt_v1",
         "protocol_role": "fixed_target_dev_component_diagnostic",
         "sequence_id": sequence_manifest["sequence_id"],
         "calibration_id": calibration["calibration_id"],

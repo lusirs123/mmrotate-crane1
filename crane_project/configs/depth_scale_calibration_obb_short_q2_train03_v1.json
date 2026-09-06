@@ -1,7 +1,13 @@
 {
   "schema_version": "obb_short_q2_depth_calibration_v1",
   "calibration_id": "obb_short_q2_train03_v1",
-  "status": "frozen_before_unknown_test",
+  "status": "historical_legacy_plumb_opt_do_not_use_for_raw_opt",
+  "coordinate_contract": {
+    "id": "legacy_plumb_opt_v1",
+    "input_frame": "virtual_plumb_image",
+    "target": "z_cg_opt_m",
+    "geometrically_closed": false
+  },
   "target_definition": "camera optical center to grab reference center optical-axis depth z_cg_opt_m",
   "formula": "z_hat = c * z_short * exp(beta * log(z_long / z_short)^2)",
   "deployable_inputs": [

@@ -46,3 +46,27 @@ def test_six_percent_short_edge_shrink_increases_pinhole_depth():
     z_shrunk, _ = MODULE.depth_from_plumb_box(
         shrunk, 900, 900, 1.8, 0.6, parameters)
     assert z_shrunk / z_truth == pytest.approx(1.0 / 0.94)
+
+
+def test_raw_opt_calibration_contract_is_required():
+    valid = {
+        "coordinate_contract": {"id": "raw_opt_v1", "target": "z_cg_opt_m"},
+        "deployable_inputs": [
+            "obb_geometry.w_px",
+            "obb_geometry.h_px",
+            "obb_geometry.gamma_deg",
+        ],
+    }
+    MODULE.validate_raw_opt_calibration(valid)
+
+    invalid = {
+        "coordinate_contract": {
+            "id": "legacy_plumb_opt_v1", "target": "z_cg_opt_m"},
+        "deployable_inputs": [
+            "obb_geometry.plumb_w_px",
+            "obb_geometry.plumb_h_px",
+            "obb_geometry.plumb_gamma_deg",
+        ],
+    }
+    with pytest.raises(ValueError, match="raw_opt_v1"):
+        MODULE.validate_raw_opt_calibration(invalid)

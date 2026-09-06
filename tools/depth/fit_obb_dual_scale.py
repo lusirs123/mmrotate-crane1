@@ -15,6 +15,11 @@ Candidate models:
 
 where q = log(Z_long / Z_short).  The paper-facing minimal M2 sets b=0;
 ``--fit-offset`` enables b only as an ablation.
+
+Coordinate contracts are explicit.  The deployable default is ``raw_opt_v1``:
+raw-image OBB geometry predicts the physical camera optical-axis depth.  The
+legacy plumb-OBB/optical-depth pairing is retained only so historical artifacts
+remain reproducible; it must not be promoted as a geometrically closed model.
 """
 
 from __future__ import annotations
@@ -31,6 +36,36 @@ from scipy.optimize import least_squares
 
 THETA_BINS_DEG = ((0.0, 3.0), (3.0, 5.0), (5.0, 8.0), (8.0, math.inf))
 
+COORDINATE_CONTRACTS = {
+    "raw_opt_v1": {
+        "width": "w_px",
+        "height": "h_px",
+        "angle": "gamma_deg",
+        "diagonal": "l_diag_raw_px",
+        "target": "z_cg_opt_m",
+        "description": "raw-image OBB -> physical-camera optical-axis depth",
+        "geometrically_closed": True,
+    },
+    "plumb_plumb_v1": {
+        "width": "plumb_w_px",
+        "height": "plumb_h_px",
+        "angle": "plumb_gamma_deg",
+        "diagonal": "l_diag_plumb_px",
+        "target": "z_cg_plumb_m",
+        "description": "virtual-plumb OBB -> virtual-plumb axis depth",
+        "geometrically_closed": True,
+    },
+    "legacy_plumb_opt_v1": {
+        "width": "plumb_w_px",
+        "height": "plumb_h_px",
+        "angle": "plumb_gamma_deg",
+        "diagonal": "l_diag_plumb_px",
+        "target": "z_cg_opt_m",
+        "description": "historical plumb-OBB -> physical optical-depth pairing",
+        "geometrically_closed": False,
+    },
+}
+
 
 def _sequence_files(sequence_dir: Path) -> Tuple[Path, Path]:
     manifest = sequence_dir / "metadata" / "manifest.json"
@@ -41,7 +76,14 @@ def _sequence_files(sequence_dir: Path) -> Tuple[Path, Path]:
     return manifest, frames
 
 
-def _load_sequence(sequence_dir: Path, require_train: bool) -> Dict[str, Any]:
+def _load_sequence(
+    sequence_dir: Path,
+    require_train: bool,
+    coordinate_contract: str = "legacy_plumb_opt_v1",
+) -> Dict[str, Any]:
+    if coordinate_contract not in COORDINATE_CONTRACTS:
+        raise ValueError(f"Unknown coordinate contract: {coordinate_contract}")
+    contract = COORDINATE_CONTRACTS[coordinate_contract]
     manifest_path, frames_path = _sequence_files(sequence_dir)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if require_train and manifest.get("split") != "calibration_train":
@@ -68,11 +110,11 @@ def _load_sequence(sequence_dir: Path, require_train: bool) -> Dict[str, Any]:
             camera = row.get("camera_geometry", {})
             pivot = row.get("pivot_relative", {})
             required = (
-                obb.get("plumb_w_px"),
-                obb.get("plumb_h_px"),
-                obb.get("plumb_gamma_deg"),
-                obb.get("l_diag_plumb_px"),
-                camera.get("z_cg_opt_m"),
+                obb.get(contract["width"]),
+                obb.get(contract["height"]),
+                obb.get(contract["angle"]),
+                obb.get(contract["diagonal"]),
+                camera.get(contract["target"]),
                 pivot.get("theta_total_deg"),
             )
             if any(value is None for value in required):
@@ -100,6 +142,8 @@ def _load_sequence(sequence_dir: Path, require_train: bool) -> Dict[str, Any]:
     return {
         "manifest": manifest,
         "sequence_dir": str(sequence_dir),
+        "coordinate_contract": coordinate_contract,
+        "coordinate_contract_definition": contract,
         "diag_px": diag_px,
         "z_gt": z_gt,
         "theta_deg": theta_deg,
@@ -227,6 +271,10 @@ def _fit_short_q2(
         "b_m": float(fit.x[2]) if fit_offset else 0.0,
         "fit_offset": bool(fit_offset),
         "optimizer_success": bool(fit.success),
+        "q_signed_min": float(np.min(q)),
+        "q_signed_max": float(np.max(q)),
+        "q_signed_p01": float(np.quantile(q, 0.01)),
+        "q_signed_p99": float(np.quantile(q, 0.99)),
     }
 
 
@@ -319,6 +367,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", type=Path, help="write JSON report/model to this path")
     parser.add_argument("--huber-scale-m", type=float, default=0.05)
     parser.add_argument(
+        "--coordinate-contract",
+        choices=tuple(COORDINATE_CONTRACTS),
+        default="raw_opt_v1",
+        help=(
+            "pixel/depth coordinate pairing; raw_opt_v1 is the deployable "
+            "default, while legacy_plumb_opt_v1 is historical only"
+        ),
+    )
+    parser.add_argument(
         "--fit-offset",
         action="store_true",
         help="fit additive b term as an ablation; the paper-facing minimal M2 keeps b=0",
@@ -331,7 +388,9 @@ def main() -> None:
     if args.huber_scale_m <= 0.0:
         raise ValueError("--huber-scale-m must be positive")
 
-    train = _load_sequence(args.train.resolve(), require_train=True)
+    train = _load_sequence(
+        args.train.resolve(), require_train=True,
+        coordinate_contract=args.coordinate_contract)
     q_span = float(np.quantile(train["q_signed"], 0.95) - np.quantile(train["q_signed"], 0.05))
     theta_max = float(np.max(train["theta_deg"]))
     identifiability_warnings = []
@@ -358,8 +417,14 @@ def main() -> None:
             "M2 lambda is near a [0,1] boundary; compare the simpler axis "
             "ablations before freezing the formula")
     report: Dict[str, Any] = {
-        "schema_version": "obb_dual_scale_depth_fit_v1",
-        "target": "camera_geometry.z_cg_opt_m",
+        "schema_version": "obb_dual_scale_depth_fit_v2",
+        "coordinate_contract": {
+            "id": args.coordinate_contract,
+            **COORDINATE_CONTRACTS[args.coordinate_contract],
+        },
+        "target": (
+            "camera_geometry."
+            + COORDINATE_CONTRACTS[args.coordinate_contract]["target"]),
         "deployable_inputs_only": True,
         "fit_loss": {"name": "Huber", "scale_m": args.huber_scale_m},
         "train_sequence": train["manifest"].get("sequence_id"),
@@ -381,7 +446,9 @@ def main() -> None:
     }
 
     if args.eval is not None:
-        evaluation = _load_sequence(args.eval.resolve(), require_train=False)
+        evaluation = _load_sequence(
+            args.eval.resolve(), require_train=False,
+            coordinate_contract=args.coordinate_contract)
         if evaluation["manifest"].get("sequence_id") == train["manifest"].get("sequence_id"):
             raise ValueError("Train and evaluation sequence IDs must differ")
         report["eval_sequence"] = evaluation["manifest"].get("sequence_id")
