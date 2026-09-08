@@ -1,0 +1,45 @@
+{
+  "protocol": "base_v3_obb_external_sequence_eval_contract_v1",
+  "evidence_boundary": "frozen_calibration_independent_sequence_evaluation_candidate",
+  "fixed_test_read": false,
+  "target_data_read": false,
+  "expected_inputs": {
+    "runtime_calibration_protocol": "base_v3_obb_observation_calibration_v3",
+    "runtime_calibration_sha256": "2ce567d068e8be062afeb6a4d7ed76c3c6eacde1a949190f2f05ec5ba68b2799",
+    "development_report_protocol": "base_v3_obb_observation_interface_v3",
+    "development_report_sha256": "9ed8e73791622ee75404dc79116bb00faf36ed7d93f7d16dd193fd24667e08d3",
+    "external_records_protocol": "base_v3_obb_external_sequence_records_v1"
+  },
+  "required_provenance": [
+    "dataset_id",
+    "capture_session_id",
+    "frame_manifest_sha256",
+    "annotation_status",
+    "not_used_for_calibration_or_feature_selection"
+  ],
+  "input_schema": {
+    "required_record_fields": [
+      "frame_key",
+      "domain",
+      "sequence",
+      "frame",
+      "anchor_source",
+      "anchor_score",
+      "base_v3_box",
+      "k1_box",
+      "dino_box"
+    ],
+    "obb_format": ["center_x", "center_y", "width", "height", "angle_rad"],
+    "anchor_source_values": ["k1", "dino_fallback", null],
+    "annotation_status_values": ["complete", "none"],
+    "gt_rule": "complete requires gt_box on every record; none forbids gt_box"
+  },
+  "risk_coverage_targets": [1.0, 0.95, 0.9, 0.8, 0.7, 0.5],
+  "evaluation": {
+    "center_error_threshold_px": 5.0,
+    "scale_relative_error_threshold": 0.1,
+    "angle_error_threshold_deg": 3.0,
+    "tail_quantiles": [0.5, 0.9, 0.95, 1.0]
+  },
+  "claim_limit": "The runner never refits thresholds or selects features. Code-level disjoint sequence and frame identities plus provenance attestation establish an independent-evaluation candidate, but physical capture independence must still be documented. Interface-only inputs support state and availability reporting, not error or generalization claims."
+}
