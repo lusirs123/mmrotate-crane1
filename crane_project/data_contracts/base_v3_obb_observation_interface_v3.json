@@ -1,0 +1,63 @@
+{
+  "protocol": "base_v3_obb_observation_interface_contract_v3",
+  "evidence_boundary": "official_source_val_same_sequence_development_replay",
+  "fixed_test_read": false,
+  "target_data_read": false,
+  "split": {
+    "calibration_prefix_fraction": 0.4,
+    "minimum_calibration_frames_per_segment": 2
+  },
+  "target_measurement_coverage": 0.9,
+  "selected_feature_groups": {
+    "center": "current_geometry",
+    "scale": "refiner_correction",
+    "angle": "candidate_disagreement"
+  },
+  "feature_groups": {
+    "center": {
+      "current_geometry": [
+        "anchor_uncertainty",
+        "k1_dino_center_disagreement_norm",
+        "refiner_center_correction_norm"
+      ]
+    },
+    "scale": {
+      "refiner_correction": [
+        "refiner_scale_correction_log"
+      ]
+    },
+    "angle": {
+      "candidate_disagreement": [
+        "k1_dino_angle_disagreement_norm"
+      ]
+    }
+  },
+  "component_output_policy": {
+    "center": {
+      "rejected_or_missing": "unavailable",
+      "max_hold_frames": 0
+    },
+    "scale": {
+      "rejected_or_missing": "bounded_last_measurement_hold",
+      "max_hold_frames": 1
+    },
+    "angle": {
+      "rejected_or_missing": "bounded_last_measurement_hold",
+      "max_hold_frames": 1
+    }
+  },
+  "risk_coverage_targets": [1.0, 0.95, 0.9, 0.8, 0.7, 0.5],
+  "synthetic_missing_stress": {
+    "enabled": true,
+    "stride_frames": 60,
+    "start_offset_frames": 20,
+    "run_lengths": [1, 2, 3]
+  },
+  "evaluation": {
+    "center_error_threshold_px": 5.0,
+    "scale_relative_error_threshold": 0.1,
+    "angle_error_threshold_deg": 3.0,
+    "tail_quantiles": [0.5, 0.9, 0.95, 1.0]
+  },
+  "claim_limit": "Development replay of an explicit component observation interface. Selected feature groups were chosen after exploratory same-sequence analysis; this is not independent validation, calibrated probability, unknown-sequence, target-domain, deployment, or physical-state evidence. Continuous means an explicit measurement/prediction/unavailable state at every frame, not a fabricated numeric observation at every frame."
+}
