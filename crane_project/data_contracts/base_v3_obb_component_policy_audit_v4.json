@@ -1,0 +1,44 @@
+{
+  "protocol": "base_v3_obb_component_policy_audit_contract_v4",
+  "evidence_boundary": "official_source_val_suffix_development_audit_after_fixed_test_diagnosis",
+  "fixed_test_read": false,
+  "target_data_read": false,
+  "expected_inputs": {
+    "baseline_protocol": "base_v3_obb_reliability_baseline_v1",
+    "baseline_portable_sha256": "b4a06372c4c02c48a4c23fdaa3f3f8595378503504958681bdacb34cb0865ad9",
+    "baseline_contract_sha256": "3173a641a5269fb699477517c948a591311ee95f1f7f2a5026680934b3df7265",
+    "runtime_calibration_protocol": "base_v3_obb_observation_calibration_v3",
+    "runtime_calibration_sha256": "2ce567d068e8be062afeb6a4d7ed76c3c6eacde1a949190f2f05ec5ba68b2799"
+  },
+  "split": {
+    "definition": "same frozen 40-percent contiguous-prefix calibration and 60-percent suffix evaluation used by observation interface v3",
+    "calibration_prefix_fraction": 0.4,
+    "minimum_calibration_frames_per_segment": 2,
+    "expected_calibration_frames": 294,
+    "expected_evaluation_frames": 444
+  },
+  "methods": [
+    "raw_rejection_only",
+    "score_rejection_only",
+    "score_bounded_hold",
+    "component_rejection_only",
+    "component_bounded_hold",
+    "feature_availability_rejection_only",
+    "feature_availability_bounded_hold",
+    "k1_anchor_rejection_only",
+    "k1_anchor_bounded_hold"
+  ],
+  "simple_baselines": {
+    "feature_availability": "accept a component exactly when every frozen selected feature for that component is observable",
+    "k1_anchor": "accept all components exactly when the formal anchor source is K1"
+  },
+  "risk_coverage_targets": [1.0, 0.95, 0.9, 0.8, 0.7, 0.5],
+  "minimum_source_slice_count": 30,
+  "evaluation": {
+    "center_error_threshold_px": 5.0,
+    "scale_relative_error_threshold": 0.1,
+    "angle_error_threshold_deg": 3.0,
+    "tail_quantiles": [0.5, 0.9, 0.95, 1.0]
+  },
+  "claim_limit": "This is a source-val development audit created after inspection of the fixed TEST diagnostic. It decomposes rejection from bounded hold and compares complex risks with simple availability controls. It cannot validate a TEST-informed policy, calibrated probability, unknown-sequence generalization, deployment, or physical state. DINO-fallback slices below the declared support count are descriptive only."
+}
