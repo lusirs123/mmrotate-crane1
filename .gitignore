@@ -13,7 +13,7 @@ work_dirs
 docs
 # 日志文件
 *.log
-
+server_received
 *.md
 # Mac OS 系统文件
 .DS_Store

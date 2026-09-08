@@ -1,0 +1,53 @@
+{
+  "protocol": "base_v3_obb_component_reliability_continuous_contract_v1",
+  "input_protocol": "base_v3_obb_reliability_baseline_v1",
+  "evidence_boundary": "official_source_val_same_sequence_exploratory",
+  "fixed_test_read": false,
+  "target_data_read": false,
+  "split": {
+    "calibration_prefix_fraction": 0.4,
+    "minimum_calibration_frames_per_segment": 2,
+    "history_crosses_sequence_gap": false,
+    "domain_identity_used_by_reliability_model": false
+  },
+  "risk": {
+    "normalization": "pooled_calibration_empirical_cdf",
+    "aggregation": "mean_available_feature_percentile",
+    "target_measurement_coverage": 0.9,
+    "risk_coverage_targets": [1.0, 0.95, 0.9, 0.8, 0.7, 0.5],
+    "center_features": [
+      "anchor_uncertainty",
+      "k1_dino_center_disagreement_norm",
+      "refiner_center_correction_norm",
+      "causal_center_residual_norm"
+    ],
+    "scale_features": [
+      "anchor_uncertainty",
+      "k1_dino_scale_disagreement_log",
+      "refiner_scale_correction_log",
+      "causal_scale_residual_log"
+    ],
+    "angle_features": [
+      "anchor_uncertainty",
+      "k1_dino_angle_disagreement_norm",
+      "refiner_angle_correction_norm",
+      "causal_angle_residual_norm",
+      "aspect_ambiguity"
+    ]
+  },
+  "continuous_output": {
+    "max_prediction_gap_frames": 2,
+    "center_prediction": "constant_velocity_from_last_two_measurements_else_hold",
+    "scale_prediction": "last_measurement_hold",
+    "angle_prediction": "last_measurement_hold_pi_periodic",
+    "states": ["measurement", "prediction", "unavailable"]
+  },
+  "evaluation": {
+    "center_error_threshold_px": 5.0,
+    "scale_relative_error_threshold": 0.1,
+    "angle_error_threshold_deg": 3.0,
+    "report_domains_separately": true,
+    "prediction_and_measurement_errors_separate": true
+  },
+  "claim_limit": "Mechanism exploration on held-out suffixes of the same source-val sequences; not unknown-sequence validation or deployment calibration."
+}
