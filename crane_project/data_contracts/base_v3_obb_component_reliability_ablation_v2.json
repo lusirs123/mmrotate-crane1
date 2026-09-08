@@ -1,0 +1,57 @@
+{
+  "protocol": "base_v3_obb_component_reliability_ablation_contract_v2",
+  "evidence_boundary": "official_source_val_same_sequence_exploratory",
+  "fixed_test_read": false,
+  "target_data_read": false,
+  "split": {
+    "calibration_prefix_fraction": 0.4,
+    "minimum_calibration_frames_per_segment": 2
+  },
+  "target_measurement_coverage": 0.9,
+  "risk_coverage_targets": [1.0, 0.95, 0.9, 0.8, 0.7, 0.5],
+  "selected_gate_group": "composite",
+  "feature_groups": {
+    "center": {
+      "score_only": ["anchor_uncertainty"],
+      "candidate_disagreement": ["k1_dino_center_disagreement_norm"],
+      "refiner_correction": ["refiner_center_correction_norm"],
+      "causal_residual": ["causal_center_residual_norm"],
+      "current_geometry": ["anchor_uncertainty", "k1_dino_center_disagreement_norm", "refiner_center_correction_norm"],
+      "composite": ["anchor_uncertainty", "k1_dino_center_disagreement_norm", "refiner_center_correction_norm", "causal_center_residual_norm"]
+    },
+    "scale": {
+      "score_only": ["anchor_uncertainty"],
+      "candidate_disagreement": ["k1_dino_scale_disagreement_log"],
+      "refiner_correction": ["refiner_scale_correction_log"],
+      "causal_residual": ["causal_scale_residual_log"],
+      "current_geometry": ["anchor_uncertainty", "k1_dino_scale_disagreement_log", "refiner_scale_correction_log"],
+      "composite": ["anchor_uncertainty", "k1_dino_scale_disagreement_log", "refiner_scale_correction_log", "causal_scale_residual_log"]
+    },
+    "angle": {
+      "score_only": ["anchor_uncertainty"],
+      "candidate_disagreement": ["k1_dino_angle_disagreement_norm"],
+      "refiner_correction": ["refiner_angle_correction_norm"],
+      "causal_residual": ["causal_angle_residual_norm"],
+      "aspect_ambiguity": ["aspect_ambiguity"],
+      "current_geometry": ["anchor_uncertainty", "k1_dino_angle_disagreement_norm", "refiner_angle_correction_norm", "aspect_ambiguity"],
+      "composite": ["anchor_uncertainty", "k1_dino_angle_disagreement_norm", "refiner_angle_correction_norm", "causal_angle_residual_norm", "aspect_ambiguity"]
+    }
+  },
+  "continuous_output": {
+    "max_prediction_gap_frames": 2,
+    "policies": ["none", "hold", "center_constant_velocity"],
+    "synthetic_dropout": {
+      "enabled": true,
+      "stride_frames": 60,
+      "start_offset_frames": 20,
+      "run_lengths": [1, 2, 3]
+    }
+  },
+  "evaluation": {
+    "center_error_threshold_px": 5.0,
+    "scale_relative_error_threshold": 0.1,
+    "angle_error_threshold_deg": 3.0,
+    "tail_quantiles": [0.5, 0.9, 0.95, 1.0]
+  },
+  "claim_limit": "Exploratory mechanism and synthetic-dropout stress audit only. No unknown-sequence, deployment, or calibrated-probability claim."
+}
