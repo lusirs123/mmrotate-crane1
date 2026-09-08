@@ -1,0 +1,64 @@
+{
+  "protocol": "base_v3_obb_reliability_baseline_contract_v1",
+  "evidence_boundary": "official_source_val_exploratory_only",
+  "fixed_test_read": false,
+  "target_data_read": false,
+  "model": {
+    "name": "base_v3_epoch9_source_promoted_reference",
+    "baseline_k1": "symeood_k1_epoch24",
+    "anchor_policy": "k1_present_else_native_dino",
+    "final_output_score_is_confidence": false
+  },
+  "expected_inputs": {
+    "promoted_refiner_sha256": "28d17d91fe5a9ae2f548d9b8f7fc9c4fbd8a53382ed7f12b6f0446a6064dce85",
+    "promotion_report_sha256": "31ad5cfe59ad859348205be1e9ebb3ee8cdb347435312af123661f3597a9daa6",
+    "source_gate_sha256": "c279024dd7447260d5edaeeaa91bdb63aed768c14db1d8384365ed2a8ff7368f",
+    "base_v3_results_sha256": "bc6ed73b633df451ff52500f545b7f5618ece6bd6c567307f3a32f3f31b421f7",
+    "k1_checkpoint_sha256": "57233e5423de4a9d0a67fd51058cd7d92adaac5d6621f275cc0ec5b0fc7f9ee2",
+    "k1_results_sha256": "361ccd8848c162e92477e04e38f87cd7f28209f07129823e84045e8ec74031c9",
+    "source_val_audit_sha256": "a3c453b7752f9e8747b737b7bb86421db12abad04c97a01f5fbeef3e041512ea"
+  },
+  "source_val_scope": {
+    "frame_count": 738,
+    "domain_counts": {
+      "real": 226,
+      "sim": 512
+    },
+    "expected_k1_present": 736,
+    "expected_dino_fallback": 2,
+    "expected_base_v3_present": 738
+  },
+  "score_baseline": {
+    "definition": "uncalibrated_actual_anchor_score_v1",
+    "k1_present": "top1_k1_detection_score",
+    "k1_missing": "dino_native_common_score",
+    "coverage_targets": [
+      1.0,
+      0.95,
+      0.9,
+      0.8,
+      0.7,
+      0.5
+    ],
+    "component_error_thresholds": {
+      "center_error_px": [5.0, 8.0, 10.0],
+      "long_relative_error": [0.1, 0.15, 0.2],
+      "short_relative_error": [0.1, 0.15, 0.2],
+      "angle_error_deg": [3.0, 5.0, 8.0]
+    },
+    "minimum_fallback_samples_for_cross_source_calibration_claim": 30
+  },
+  "geometry": {
+    "obb_convention": "le90",
+    "angle_error": "pi_periodic_absolute_degrees",
+    "size_components": "orientation_invariant_long_short",
+    "riou": "opencv_exact_rotated_intersection"
+  },
+  "prohibitions": [
+    "do_not_use_base_v3_final_output_score_as_confidence",
+    "do_not_use_legacy_union_selected_source_as_base_v3_source",
+    "do_not_use_legacy_union_sym_eood_box_as_base_v3_k1_anchor",
+    "do_not_tune_with_fixed_test_or_target_data",
+    "do_not_claim_calibrated_reliability_or_cross_video_generalization"
+  ]
+}
