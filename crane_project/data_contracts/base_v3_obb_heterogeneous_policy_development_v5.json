@@ -1,0 +1,83 @@
+{
+  "protocol": "base_v3_obb_heterogeneous_policy_development_contract_v5",
+  "evidence_boundary": "official_source_val_suffix_development_after_v4_and_fixed_test_diagnosis",
+  "fixed_test_read": false,
+  "target_data_read": false,
+  "post_fixed_test_hypothesis_generation": true,
+  "expected_inputs": {
+    "baseline_protocol": "base_v3_obb_reliability_baseline_v1",
+    "baseline_portable_sha256": "b4a06372c4c02c48a4c23fdaa3f3f8595378503504958681bdacb34cb0865ad9",
+    "baseline_contract_sha256": "3173a641a5269fb699477517c948a591311ee95f1f7f2a5026680934b3df7265",
+    "runtime_calibration_protocol": "base_v3_obb_observation_calibration_v3",
+    "runtime_calibration_sha256": "2ce567d068e8be062afeb6a4d7ed76c3c6eacde1a949190f2f05ec5ba68b2799",
+    "v4_report_protocol": "base_v3_obb_component_policy_audit_v4",
+    "v4_report_sha256": "ad474219d6ff2239b1ce3d9eecf448a4cabcb7d014c6515f234cf561b0c0a311",
+    "v4_contract_sha256": "5f61bf719720b8f32babc93d6b3c2e2a4e3cdbd5ea48f0d566e02f20e525f8dc"
+  },
+  "split": {
+    "calibration_prefix_fraction": 0.4,
+    "minimum_calibration_frames_per_segment": 2,
+    "expected_calibration_frames": 294,
+    "expected_evaluation_frames": 444
+  },
+  "score_policy": {
+    "center": {
+      "rejected_or_missing": "one_frame_constant_velocity",
+      "max_prediction_frames": 1,
+      "require_two_consecutive_measurements": true
+    },
+    "scale": {
+      "rejected_or_missing": "unavailable",
+      "max_prediction_frames": 0
+    },
+    "angle": {
+      "rejected_or_missing": "bounded_last_measurement_hold",
+      "max_prediction_frames": 1
+    }
+  },
+  "component_risk_challenger": {
+    "model": "standardized_l2_logistic_error_ranker",
+    "features": [
+      "anchor_uncertainty",
+      "aspect_ambiguity",
+      "causal_angle_residual_norm",
+      "causal_center_residual_norm",
+      "causal_scale_residual_log",
+      "k1_dino_angle_disagreement_norm",
+      "k1_dino_center_disagreement_norm",
+      "k1_dino_scale_disagreement_log",
+      "refiner_angle_correction_norm",
+      "refiner_center_correction_norm",
+      "refiner_scale_correction_log"
+    ],
+    "missing_value_policy": "calibration_median_plus_missing_indicator",
+    "l2_regularization": 1.0,
+    "maximum_newton_iterations": 50,
+    "convergence_tolerance": 1e-8,
+    "target_measurement_coverage": 0.9,
+    "risk_coverage_targets": [0.95, 0.9, 0.8, 0.7, 0.5],
+    "minimum_matched_coverage_wins": 2
+  },
+  "evaluation": {
+    "center_error_threshold_px": 5.0,
+    "scale_relative_error_threshold": 0.1,
+    "angle_error_threshold_deg": 3.0,
+    "tail_quantiles": [0.5, 0.9, 0.95, 1.0]
+  },
+  "promotion_gates": {
+    "angle": {
+      "mean_error_not_worse_than_raw": true,
+      "correct_output_coverage_not_worse_than_raw": true,
+      "prediction_improved_not_fewer_than_degraded": true
+    },
+    "center": {
+      "correct_output_coverage_better_than_score_rejection": true,
+      "prediction_improved_not_fewer_than_degraded": true,
+      "mean_error_not_worse_than_raw": true
+    },
+    "scale": {
+      "must_equal_score_rejection_only": true
+    }
+  },
+  "claim_limit": "V5 is a source-val development experiment designed after V4 and fixed-TEST diagnosis. Calibration-prefix GT may fit an error-ranking challenger, but GT is never an online input and the source suffix is evaluation only. V5 cannot validate calibrated probability, fixed-TEST improvement, unknown-sequence generalization, deployment, or physical state. The fixed TEST must not be read or rerun for V5 selection."
+}
