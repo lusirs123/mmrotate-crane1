@@ -1,0 +1,35 @@
+{
+  "protocol": "base_v3_obb_hybrid_fixed_test_eval_contract_v51",
+  "evidence_boundary": "frozen_v51_post_exposure_existing_fixed_test_reevaluation",
+  "fixed_test_read": true,
+  "target_data_read": true,
+  "fixed_test_previously_exposed": true,
+  "post_fixed_test_hypothesis_generation": true,
+  "fixed_test_reuse_role": "post_exposure_frozen_policy_reevaluation",
+  "expected_inputs": {
+    "runtime_calibration_protocol": "base_v3_obb_hybrid_observation_calibration_v51",
+    "runtime_calibration_sha256": "626a8cf4727181fa91ee222c1654a50fa9fffafaff9dca20e693df25e9e94d7e",
+    "policy_freeze_report_protocol": "base_v3_obb_hybrid_policy_freeze_v51",
+    "policy_freeze_report_sha256": "9ce37abcb948a908ee122a3a72f578856985fe4399964dcdaff506a4c2865251",
+    "previous_fixed_test_report_protocol": "base_v3_obb_fixed_test_eval_v1",
+    "previous_fixed_test_report_sha256": "70ffabd077a7626784cc1bca02aad42d6f37f4428e38e014647af83a9c4c3476",
+    "attribution_protocol": "k1_anchor_fallback_attribution_audit_v1",
+    "attribution_evidence_role": "fixed-target",
+    "all_lane_audit_protocol": "source_owned_geometry_union_v2"
+  },
+  "fixed_test_scope": {
+    "frame_count": 992,
+    "domain_counts": {
+      "real": 420,
+      "sim": 572
+    },
+    "annotation_status": "complete"
+  },
+  "evaluation": {
+    "center_error_threshold_px": 5.0,
+    "scale_relative_error_threshold": 0.1,
+    "angle_error_threshold_deg": 3.0,
+    "tail_quantiles": [0.5, 0.9, 0.95, 1.0]
+  },
+  "claim_limit": "This is a frozen V5.1 re-evaluation on the existing fixed TEST after that TEST had already informed method diagnosis. No TEST label is used for online decisions or fitting. Results may compare raw, score-only rejection, and V5.1 on this fixed split, but cannot serve as fresh independent validation, authorize parameter tuning, or establish unknown-sequence, deployment, or physical-state generalization."
+}
