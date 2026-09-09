@@ -1,0 +1,52 @@
+{
+  "protocol": "fixed_test_operation_phase_manifest_v2",
+  "annotation_role": "offline_descriptive_grouping_only",
+  "target_definition": "grab_top_beam_obb",
+  "target_geometry_note": "The OBB covers the rigid grab top beam, not the whole grab. Grab opening or closing does not redefine the annotated object size.",
+  "online_input_authorized": false,
+  "annotation_basis": "manual_operation_review_without_using_model_scores_or_errors",
+  "rules": [
+    {
+      "domain": "real",
+      "sequence": "seq02",
+      "frame_start_inclusive": null,
+      "frame_end_inclusive": null,
+      "operation_group": "transport_seq02",
+      "interpretation": "transport_process"
+    },
+    {
+      "domain": "real",
+      "sequence": "seq03",
+      "frame_start_inclusive": 1,
+      "frame_end_inclusive": 129,
+      "operation_group": "transport_seq03",
+      "interpretation": "transport_process_before_grabbing"
+    },
+    {
+      "domain": "real",
+      "sequence": "seq03",
+      "frame_start_inclusive": 130,
+      "frame_end_inclusive": 180,
+      "operation_group": "grabbing_seq03_130_180",
+      "interpretation": "grabbing_process_with_visibility_varying_across_interval",
+      "visual_reference_frames": [130, 177]
+    },
+    {
+      "domain": "real",
+      "sequence": "seq03",
+      "frame_start_inclusive": 181,
+      "frame_end_inclusive": 200,
+      "operation_group": "transport_seq03",
+      "interpretation": "transport_process_after_grabbing"
+    },
+    {
+      "domain": "sim",
+      "sequence": "seq09",
+      "frame_start_inclusive": null,
+      "frame_end_inclusive": null,
+      "operation_group": "simulation_reference",
+      "interpretation": "not_assigned_a_real_operation_phase"
+    }
+  ],
+  "claim_limit": "Operation groups are manual offline audit labels. They may explain where the frozen method succeeds or fails, but they are unavailable to the online policy and cannot support phase-conditioned deployment, sample exclusion, or parameter tuning."
+}

@@ -1,0 +1,99 @@
+{
+  "protocol": "base_v3_obb_top_beam_geometry_audit_contract_v1",
+  "evidence_boundary": "post_exposure_fixed_test_top_beam_geometry_diagnostic",
+  "fixed_test_read": true,
+  "fixed_test_previously_exposed": true,
+  "phase_labels_used_online": false,
+  "sample_selection_uses_model_errors": false,
+  "parameter_tuning_authorized": false,
+  "expected_inputs": {
+    "fixed_test_report_protocol": "base_v3_obb_hybrid_fixed_test_eval_v51",
+    "fixed_test_report_sha256": "584c6982e717e96d05511afe795b62f7bbfd631697890bf0080add4383c61964",
+    "attribution_protocol": "k1_anchor_fallback_attribution_audit_v1",
+    "attribution_sha256": "2e7bc5016b46139d4bbe3ffa50e7b41081fefff210c6f7d268308739fd6e6c20",
+    "phase_manifest_protocol": "fixed_test_operation_phase_manifest_v2",
+    "phase_manifest_sha256": "82c2c10952cbe22e380cd8994398dcbbaecd90b0862cf1fb3cbdf65eb1cef50c"
+  },
+  "fixed_test_scope": {
+    "frame_count": 992,
+    "domain_counts": {
+      "real": 420,
+      "sim": 572
+    },
+    "annotation_status": "complete"
+  },
+  "expected_operation_group_counts": {
+    "transport_seq02": 220,
+    "transport_seq03": 149,
+    "grabbing_seq03_130_180": 51,
+    "simulation_reference": 572
+  },
+  "expected_sample_count": 33,
+  "sample_plan": [
+    {
+      "sample_group": "transport_seq02_uniform",
+      "domain": "real",
+      "sequence": "seq02",
+      "operation_group": "transport_seq02",
+      "frame_start_inclusive": null,
+      "frame_end_inclusive": null,
+      "selection": "uniform_ordered_index",
+      "sample_count": 8,
+      "required_frames": []
+    },
+    {
+      "sample_group": "transport_seq03_pre_uniform",
+      "domain": "real",
+      "sequence": "seq03",
+      "operation_group": "transport_seq03",
+      "frame_start_inclusive": 1,
+      "frame_end_inclusive": 129,
+      "selection": "uniform_ordered_index",
+      "sample_count": 6,
+      "required_frames": []
+    },
+    {
+      "sample_group": "grabbing_seq03_uniform_with_visual_references",
+      "domain": "real",
+      "sequence": "seq03",
+      "operation_group": "grabbing_seq03_130_180",
+      "frame_start_inclusive": 130,
+      "frame_end_inclusive": 180,
+      "selection": "uniform_ordered_index_plus_required_frames",
+      "sample_count": 6,
+      "required_frames": [130, 177]
+    },
+    {
+      "sample_group": "transport_seq03_post_uniform",
+      "domain": "real",
+      "sequence": "seq03",
+      "operation_group": "transport_seq03",
+      "frame_start_inclusive": 181,
+      "frame_end_inclusive": 200,
+      "selection": "uniform_ordered_index",
+      "sample_count": 4,
+      "required_frames": []
+    },
+    {
+      "sample_group": "simulation_seq09_uniform",
+      "domain": "sim",
+      "sequence": "seq09",
+      "operation_group": "simulation_reference",
+      "frame_start_inclusive": null,
+      "frame_end_inclusive": null,
+      "selection": "uniform_ordered_index",
+      "sample_count": 8,
+      "required_frames": []
+    }
+  ],
+  "rendering": {
+    "require_all_images": true,
+    "box_colors_bgr": {
+      "gt": [0, 200, 0],
+      "base_v3": [0, 0, 255],
+      "k1": [255, 80, 0],
+      "dino": [0, 165, 255]
+    }
+  },
+  "claim_limit": "This predeclared, error-independent sample and full-frame geometry audit is a post-exposure diagnostic of the rigid top-beam OBB. It may localize center, long-side, short-side, and angle failures by operation group and source, but cannot tune V5.1, exclude grabbing frames, establish phase-conditioned inference, or provide fresh-sequence generalization evidence."
+}
