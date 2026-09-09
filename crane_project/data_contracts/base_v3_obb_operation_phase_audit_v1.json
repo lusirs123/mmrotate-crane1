@@ -1,0 +1,40 @@
+{
+  "protocol": "base_v3_obb_operation_phase_audit_contract_v1",
+  "evidence_boundary": "frozen_v51_post_exposure_fixed_test_operation_phase_diagnostic",
+  "fixed_test_read": true,
+  "fixed_test_previously_exposed": true,
+  "phase_labels_used_online": false,
+  "parameter_tuning_authorized": false,
+  "expected_inputs": {
+    "fixed_test_report_protocol": "base_v3_obb_hybrid_fixed_test_eval_v51",
+    "fixed_test_report_sha256": "584c6982e717e96d05511afe795b62f7bbfd631697890bf0080add4383c61964",
+    "phase_manifest_protocol": "fixed_test_operation_phase_manifest_v1",
+    "phase_manifest_sha256": "8c67f4ca575553bab9c948b575cfb599b86cfff7c6a7813e36ad06eeb9b6c8b3"
+  },
+  "fixed_test_scope": {
+    "frame_count": 992,
+    "domain_counts": {
+      "real": 420,
+      "sim": 572
+    }
+  },
+  "expected_operation_group_counts": {
+    "transport_seq02": 220,
+    "other_seq03": 149,
+    "grabbing_seq03_130_180": 51,
+    "simulation_reference": 572
+  },
+  "reported_operation_groups": [
+    "transport_seq02",
+    "grabbing_seq03_130_180",
+    "other_seq03",
+    "simulation_reference"
+  ],
+  "matched_coverage_targets": [1.0, 0.95, 0.9, 0.8, 0.7, 0.5],
+  "evaluation": {
+    "center_error_threshold_px": 5.0,
+    "scale_relative_error_threshold": 0.1,
+    "angle_error_threshold_deg": 3.0
+  },
+  "claim_limit": "The top-beam OBB target is unchanged by grab opening or closing. Manual operation groups are attached only for post-exposure offline diagnosis. Results may test whether degradation concentrates in the confirmed grabbing interval, but cannot remove difficult frames, tune a phase-specific policy, imply online phase availability, or establish independent generalization."
+}
