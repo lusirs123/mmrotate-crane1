@@ -1,0 +1,25 @@
+{
+  "protocol": "base_v3_obb_hybrid_fixed_test_diagnostic_contract_v51",
+  "evidence_boundary": "frozen_v51_post_exposure_fixed_test_descriptive_diagnostic",
+  "fixed_test_read": true,
+  "fixed_test_previously_exposed": true,
+  "parameter_tuning_authorized": false,
+  "expected_input": {
+    "protocol": "base_v3_obb_hybrid_fixed_test_eval_v51",
+    "sha256": "584c6982e717e96d05511afe795b62f7bbfd631697890bf0080add4383c61964"
+  },
+  "fixed_test_scope": {
+    "frame_count": 992,
+    "domain_counts": {
+      "real": 420,
+      "sim": 572
+    }
+  },
+  "matched_coverage_targets": [1.0, 0.95, 0.9, 0.8, 0.7, 0.5],
+  "evaluation": {
+    "center_error_threshold_px": 5.0,
+    "scale_relative_error_threshold": 0.1,
+    "angle_error_threshold_deg": 3.0
+  },
+  "claim_limit": "This audit only diagnoses the already exposed V5.1 fixed-TEST report. Matched-coverage curves, paired angle-hold outcomes, and joint availability may explain observed behavior, but they must not select a new threshold, feature, policy, checkpoint, or final claim."
+}
