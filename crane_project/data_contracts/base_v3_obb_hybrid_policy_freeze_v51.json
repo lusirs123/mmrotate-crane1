@@ -1,0 +1,67 @@
+{
+  "protocol": "base_v3_obb_hybrid_policy_freeze_contract_v51",
+  "evidence_boundary": "official_source_val_post_v5_final_policy_selection_for_fresh_sequence_only",
+  "fixed_test_read": false,
+  "target_data_read": false,
+  "post_fixed_test_hypothesis_generation": true,
+  "expected_inputs": {
+    "baseline_protocol": "base_v3_obb_reliability_baseline_v1",
+    "baseline_portable_sha256": "b4a06372c4c02c48a4c23fdaa3f3f8595378503504958681bdacb34cb0865ad9",
+    "baseline_contract_sha256": "3173a641a5269fb699477517c948a591311ee95f1f7f2a5026680934b3df7265",
+    "runtime_calibration_v3_protocol": "base_v3_obb_observation_calibration_v3",
+    "runtime_calibration_v3_sha256": "2ce567d068e8be062afeb6a4d7ed76c3c6eacde1a949190f2f05ec5ba68b2799",
+    "v5_report_protocol": "base_v3_obb_heterogeneous_policy_development_v5",
+    "v5_report_sha256": "15746e547f08ba4a4364c8f2c1a975351061ebbd7b14390b3f275c806c95bc57",
+    "v5_contract_sha256": "2b7ebdbdaea97a17cb4c8e7dc5c423eb132728bd762ec028353ec864a4ab072d"
+  },
+  "split": {
+    "calibration_prefix_fraction": 0.4,
+    "minimum_calibration_frames_per_segment": 2,
+    "expected_calibration_frames": 294,
+    "expected_evaluation_frames": 444
+  },
+  "frozen_component_policy": {
+    "center": {
+      "gate": "anchor_score",
+      "rejected_or_missing": "unavailable",
+      "max_prediction_frames": 0
+    },
+    "scale": {
+      "gate": "v5_supervised_scale_error_risk",
+      "rejected_or_missing": "unavailable",
+      "max_prediction_frames": 0
+    },
+    "angle": {
+      "gate": "anchor_score",
+      "rejected_or_missing": "bounded_last_measurement_hold",
+      "max_prediction_frames": 1
+    }
+  },
+  "matched_coverage_groups": ["all", "real", "sim"],
+  "risk_coverage_targets": [0.95, 0.9, 0.8, 0.7, 0.5],
+  "promotion_gates": {
+    "center": {
+      "must_equal_score_rejection_only": true,
+      "prediction_count_must_be_zero": true
+    },
+    "scale": {
+      "v5_matched_coverage_gate_must_pass": true,
+      "mean_error_not_worse_than_raw": true,
+      "correct_output_coverage_not_worse_than_score_rejection": true,
+      "prediction_count_must_be_zero": true
+    },
+    "angle": {
+      "mean_error_not_worse_than_raw": true,
+      "correct_output_coverage_not_worse_than_raw": true,
+      "prediction_improved_not_fewer_than_degraded": true,
+      "max_prediction_frames": 1
+    }
+  },
+  "evaluation": {
+    "center_error_threshold_px": 5.0,
+    "scale_relative_error_threshold": 0.1,
+    "angle_error_threshold_deg": 3.0,
+    "tail_quantiles": [0.5, 0.9, 0.95, 1.0]
+  },
+  "claim_limit": "V5.1 freezes a hybrid component observation policy selected from the source-only V5 development report. It performs no new fitting or feature scan and never reads fixed TEST. The emitted runtime artifact may be evaluated once on a genuinely unused sequence, but this source report itself cannot establish calibrated probability, fixed-TEST improvement, unknown-sequence generalization, deployment, or physical state."
+}
