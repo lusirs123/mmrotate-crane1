@@ -1,0 +1,45 @@
+{
+  "protocol": "base_v3_obb_split_scale_policy_diagnostic_contract_v521",
+  "evidence_boundary": "post_exposure_source_val_v52_interpretation_correction_only",
+  "fixed_test_read": false,
+  "target_data_read": false,
+  "refitting_authorized": false,
+  "parameter_tuning_authorized": false,
+  "automatic_ablation_promotion": false,
+  "expected_inputs": {
+    "v52_report_protocol": "base_v3_obb_split_scale_policy_development_v52",
+    "v52_report_sha256": "ac85dc4c72499645dcc26d30c55f7e3f00bdf5b4fc9081e426c32723fed1e9b0",
+    "v52_contract_sha256": "1daff6f82d7031101da47ac1d20a1cf638f904c2f0082f3ebec7e327ea8f2845"
+  },
+  "expected_split_counts": {
+    "calibration": 294,
+    "evaluation": 444
+  },
+  "expected_methods": [
+    "raw_direct",
+    "confidence_only_rejection",
+    "v51_hybrid",
+    "split_existing_features_rejection_only",
+    "split_existing_features_one_frame_scale_hold",
+    "split_geometry_ablation_rejection_only",
+    "split_geometry_ablation_one_frame_scale_hold",
+    "split_image_quality_ablation_rejection_only",
+    "split_image_quality_ablation_one_frame_scale_hold"
+  ],
+  "report_groups": ["all", "real", "sim"],
+  "scale_hold_gate": {
+    "minimum_correct_prediction_fraction": 0.5,
+    "maximum_mean_error_delta_vs_raw": 0.0,
+    "require_improved_not_fewer_than_degraded": true,
+    "interpretation": "A held scale may be marked valid only when most filled observations are correct, its mean error does not exceed the current raw scale error, and paired improvements are not fewer than degradations."
+  },
+  "image_quality_hypothesis_gate": {
+    "minimum_win_count": 2,
+    "requirements": [
+      "all long-side, short-side, and joint-scale curves win at least twice versus V5.1",
+      "real joint-scale curve wins at least twice versus anchor confidence"
+    ],
+    "automatic_promotion": false
+  },
+  "claim_limit": "V5.2.1 is a source-val post-exposure diagnostic of the immutable V5.2 report. It performs no fitting, threshold selection, feature selection, or policy tuning. Its stricter hold gate corrects report interpretation but does not retroactively validate a new method. The image-quality result may motivate one bounded development experiment only; it is not a frozen policy, fixed-TEST result, unknown-sequence result, calibrated probability, deployment result, or physical-state result. Fixed TEST must not be read or rerun from this audit."
+}
