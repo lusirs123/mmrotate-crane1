@@ -1,0 +1,87 @@
+{
+  "protocol": "base_v3_obb_image_quality_block_oof_development_contract_v53",
+  "evidence_boundary": "official_source_val_post_v521_image_quality_block_oof_development_only",
+  "fixed_test_read": false,
+  "target_data_read": false,
+  "post_fixed_test_hypothesis_generation": true,
+  "expected_inputs": {
+    "baseline_protocol": "base_v3_obb_reliability_baseline_v1",
+    "baseline_portable_sha256": "b4a06372c4c02c48a4c23fdaa3f3f8595378503504958681bdacb34cb0865ad9",
+    "baseline_contract_sha256": "3173a641a5269fb699477517c948a591311ee95f1f7f2a5026680934b3df7265",
+    "v521_report_protocol": "base_v3_obb_split_scale_policy_diagnostic_v521",
+    "v521_report_sha256": "800f909cc72facdaecd4089cdb0205a11908b4935b2c4c605873ce78f46d9ce9",
+    "v521_contract_sha256": "1ec3ffdcafda5f0a52e48563011722084a8a16875d47a668e0b075f8628bca99"
+  },
+  "source_scope": {
+    "frame_count": 738,
+    "segments": {
+      "real:seq07": 226,
+      "sim:seq10": 512
+    }
+  },
+  "block_oof": {
+    "fold_count": 3,
+    "history_embargo_frames": 2,
+    "expected_validation_frames_per_fold": [246, 246, 246],
+    "expected_training_frames_per_fold": [488, 484, 488],
+    "each_frame_evaluated_once": true
+  },
+  "methods": [
+    "anchor_score",
+    "existing_scale_risk",
+    "existing_plus_image_quality"
+  ],
+  "existing_features": [
+    "anchor_uncertainty",
+    "aspect_ambiguity",
+    "causal_angle_residual_norm",
+    "causal_center_residual_norm",
+    "causal_scale_residual_log",
+    "k1_dino_angle_disagreement_norm",
+    "k1_dino_center_disagreement_norm",
+    "k1_dino_scale_disagreement_log",
+    "refiner_angle_correction_norm",
+    "refiner_center_correction_norm",
+    "refiner_scale_correction_log"
+  ],
+  "image_quality_features": [
+    "roi_gray_mean_norm",
+    "roi_gray_std_norm",
+    "roi_dark_fraction",
+    "roi_bright_fraction",
+    "roi_clipped_fraction"
+  ],
+  "ranker": {
+    "model": "standardized_l2_logistic_scale_error_ranker",
+    "missing_value_policy": "fold_training_median_plus_missing_indicator",
+    "l2_regularization": 1.0,
+    "maximum_newton_iterations": 50,
+    "convergence_tolerance": 1e-8,
+    "target_measurement_coverage": 0.9,
+    "probability_calibration_claimed": false
+  },
+  "evaluation": {
+    "scale_relative_error_threshold": 0.1,
+    "matched_coverages": [0.95, 0.9, 0.8, 0.7, 0.5],
+    "groups": ["all", "real", "sim"],
+    "report_false_acceptance_rate": true,
+    "report_correct_measurement_retention": true,
+    "report_bad_observation_rejection_recall": true,
+    "report_longest_unavailable_run": true
+  },
+  "output_policy": {
+    "scale_states": ["measurement", "unavailable"],
+    "scale_hold_enabled": false,
+    "center_interface": "inherit_v51_reference",
+    "angle_interface": "inherit_v51_reference"
+  },
+  "development_gate": {
+    "minimum_all_win_count_vs_existing": 3,
+    "minimum_real_win_count_vs_existing": 2,
+    "minimum_real_win_count_vs_anchor_score": 2,
+    "maximum_sim_loss_count_vs_existing": 2,
+    "minimum_folds_with_more_wins_than_losses_vs_existing": 2,
+    "automatic_runtime_freeze": false
+  },
+  "claim_limit": "V5.3 is a source-val block-OOF development experiment for one predeclared image-quality addition. It compares anchor confidence, the existing scale-risk feature set, and that same feature set plus current-frame OBB ROI image statistics. It uses scale rejection only. Fold labels, preprocessing, model weights, and thresholds are fitted from fold training rows after a two-frame embargo; validation labels are evaluation only. It cannot establish calibrated probability, fixed-TEST improvement, unknown-sequence generalization, deployment, or physical state. A passing result only authorizes a separate freeze step for a genuinely unused video."
+}
