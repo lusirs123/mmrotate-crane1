@@ -1,0 +1,101 @@
+{
+  "protocol": "base_v3_obb_true_online_pipeline_contract_v1",
+  "execution_mode": "true_online_model_inference",
+  "pipeline": [
+    "rgb_image",
+    "frozen_dino_native_s14",
+    "symeood_k1_epoch24",
+    "base_v3_epoch9_causal_refiner",
+    "v51_component_observation"
+  ],
+  "cached_dino_predictions_used": false,
+  "cached_base_v3_predictions_used": false,
+  "annotations_or_gt_read": false,
+  "future_frames_used": false,
+  "domain_identity_used_in_model_decisions": false,
+  "history_horizon": 4,
+  "base_v3_epoch": 9,
+  "v51_parameters_frozen": true,
+  "artifacts": {
+    "dino_config": {
+      "path": "crane_project/configs/crane_symeood_formal_dino_native_s14_v1.py",
+      "sha256": "00175d07197679d09414d614985a041fe6d59f59bcd8e0e0ebbffc2b8db069d5"
+    },
+    "dino_checkpoint": {
+      "path": "work_dirs/dino_teacher_fc_cls_interpolation_v1/source_safe_interpolated_head.pth",
+      "sha256": "6a4e112f89f92744dbb8f7a0725af185afd110b3aa18414d28340f31d7854c2a"
+    },
+    "dino_backbone": {
+      "path": "pretrained/dinov2_vitl14_pretrain.pth",
+      "sha256": "d5383ea8f4877b2472eb973e0fd72d557c7da5d3611bd527ceeb1d7162cbf428"
+    },
+    "base_v3_config": {
+      "path": "crane_project/configs/crane_symeood_dino_k1_retentive_causal_phase_online_v1.py",
+      "sha256": "51747326c9b41894e785464fae436612c8392dc93e9882295e92ca7bc83cb40b"
+    },
+    "k1_checkpoint": {
+      "path": "work_dirs/crane_symeood_k1/epoch_24.pth",
+      "sha256": "57233e5423de4a9d0a67fd51058cd7d92adaac5d6621f275cc0ec5b0fc7f9ee2"
+    },
+    "base_v3_refiner": {
+      "path": "work_dirs/crane_symeood_dino_k1_retentive_causal_phase_refiner_source_v3_seed3407/k1_retentive_v3_epoch9_promoted.pth",
+      "sha256": "28d17d91fe5a9ae2f548d9b8f7fc9c4fbd8a53382ed7f12b6f0446a6064dce85"
+    },
+    "runtime_calibration_v51": {
+      "path": "work_dirs/base_v3_obb_reliability_baseline_v1/base_v3_obb_hybrid_observation_calibration_v51.json",
+      "sha256": "626a8cf4727181fa91ee222c1654a50fa9fffafaff9dca20e693df25e9e94d7e"
+    },
+    "base_v3_fixed_config": {
+      "path": "crane_project/configs/crane_symeood_dino_k1_retentive_causal_phase_fixed_test.py",
+      "sha256": "948cc9b4beb7946d0b338a7ae93777fb10003a3980b1082ccb5f1e3ca285bbfb"
+    },
+    "base_v3_source_v3_config": {
+      "path": "crane_project/configs/crane_symeood_dino_k1_retentive_causal_phase_refiner_source_v3.py",
+      "sha256": "2b161c942f2e9590ac90c119bf006c59fe920fa428dc378d581abb3c93dd953e"
+    },
+    "base_v3_source_v2_config": {
+      "path": "crane_project/configs/crane_symeood_dino_k1_anchored_causal_phase_refiner_source_v2.py",
+      "sha256": "4fce84c29769de973014b7666f4ba4e94ea505560b13f7a193d3307fad898176"
+    },
+    "base_v3_source_v1_config": {
+      "path": "crane_project/configs/crane_symeood_dino_causal_history_refiner_source_v1.py",
+      "sha256": "bc367daf10358d85277d305b5b2ade8e23f1972fc80f2bdf3b27b84b54b3ba33"
+    },
+    "k1_config": {
+      "path": "crane_project/configs/crane_symeood_k1.py",
+      "sha256": "008335f315ed356fab606b95f5095cf1112a63720b7ad1a10c5ac4756d50b759"
+    },
+    "base_v3_promotion_report": {
+      "path": "work_dirs/crane_symeood_dino_k1_retentive_causal_phase_refiner_source_v3_seed3407/epoch9_source_promotion.json",
+      "sha256": "31ad5cfe59ad859348205be1e9ebb3ee8cdb347435312af123661f3597a9daa6"
+    }
+  },
+  "online_rules": {
+    "dino_invoked_on_every_frame": true,
+    "k1_computed_inside_base_v3_from_shared_features": true,
+    "anchor_rule": "k1_if_present_else_dino",
+    "base_v3_output_score_is_confidence": false,
+    "history_source": "strictly_previous_native_dino_top1",
+    "history_reset_on_sequence_or_frame_gap": true,
+    "output_coordinate_space": "original_image",
+    "top1_only": true
+  },
+  "observation_rules": {
+    "center": "anchor_score_rejection",
+    "scale": "frozen_v5_supervised_scale_error_risk_rejection",
+    "angle": "anchor_score_rejection_plus_at_most_one_frame_hold",
+    "states": [
+      "measurement",
+      "prediction",
+      "unavailable"
+    ]
+  },
+  "reference_artifacts": {
+    "paper_final_report": {
+      "path": "work_dirs/base_v3_obb_reliability_baseline_v1/fixed_test_obb_paper_final_report_v1.json",
+      "sha256": "2872aeb98cc9eee051fcc68c538f6e0d7863d91c3d443eb3ea3067ec8d8469f4",
+      "role": "optional_post_inference_reproduction_audit_only"
+    }
+  },
+  "claim_limit": "This contract integrates the formal frozen native-S14 DINO component, the source-promoted Base V3 epoch-9 detector, and the frozen V5.1 component-observation policy in one chronological RGB-image inference entrypoint. It is an implementation and reproducibility interface. Running it on the already exposed fixed TEST does not authorize tuning or establish fresh unknown-sequence generalization, calibrated uncertainty, physical depth, sway angle, control performance, or end-to-end deployment FPS."
+}

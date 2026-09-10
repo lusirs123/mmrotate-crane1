@@ -149,6 +149,7 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
             frozen_k1_backbone_fpn_image_count=0,
             frozen_k1_detection_head_forward=0,
             dino_detector_forward=0)
+        self._last_inference_records = []
 
     @staticmethod
     def _file_sha256(path):
@@ -296,8 +297,8 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
             batch, horizon, *feature.shape[1:]) for feature in features)
 
     @staticmethod
-    def _top_single_class_proposal(result, device, dtype):
-        """Convert an MMRotate bbox result into its highest-score OBB."""
+    def _top_single_class_detection(result, device, dtype):
+        """Convert an MMRotate bbox result into its highest-score OBB+score."""
         if not isinstance(result, (list, tuple)):
             raise RuntimeError('Frozen K1 result must be a class-wise list')
         candidates = []
@@ -310,10 +311,22 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
                 raise RuntimeError('Frozen K1 result has invalid shape')
             candidates.append(tensor[:, :6])
         if not candidates:
-            return torch.zeros((0, 5), device=device, dtype=dtype)
+            return torch.zeros((0, 6), device=device, dtype=dtype)
         candidates = torch.cat(candidates, dim=0)
         best = int(torch.argmax(candidates[:, 5]).item())
-        return candidates[best:best + 1, :5]
+        return candidates[best:best + 1, :6]
+
+    @classmethod
+    def _top_single_class_proposal(cls, result, device, dtype):
+        """Convert an MMRotate bbox result into its highest-score OBB."""
+        return cls._top_single_class_detection(
+            result, device, dtype)[:, :5]
+
+    @staticmethod
+    def _box_to_list(boxes):
+        if boxes is None or int(boxes.shape[0]) == 0:
+            return None
+        return [float(value) for value in boxes[0, :5].detach().cpu()]
 
     def _k1_results_and_proposals(self, features, img_metas, rescale=False):
         """Reuse frozen FPN features for K1 output and geometry anchors."""
@@ -538,6 +551,7 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
                     rescale=False,
                     **kwargs):
         del kwargs
+        self._last_inference_records = []
         self._runtime_forward_counts['inference_forward'] += 1
         features = self.extract_feat(img)
         dino_proposals = _unwrap_single_augmentation_proposals(
@@ -617,6 +631,8 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
                         image_features = tuple(
                             feature[index:index + 1]
                             for feature in features)
+                        self._runtime_forward_counts[
+                            'frozen_k1_detection_head_forward'] += 1
                         fallback = self.baseline.simple_test_from_features(
                             image_features, [img_metas[index]],
                             rescale=True)[0]
@@ -638,6 +654,53 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
             labels = torch.zeros(
                 boxes.shape[0], dtype=torch.long, device=boxes.device)
             outputs.append(rbbox2result(detections, labels, 1))
+        runtime_records = []
+        for index, output in enumerate(outputs):
+            device, dtype = features[0].device, features[0].dtype
+            k1_detection = (None if k1_results is None else
+                            self._top_single_class_detection(
+                                k1_results[index], device, dtype))
+            k1_model = (torch.zeros((0, 5), device=device, dtype=dtype)
+                        if k1_detection is None else k1_detection[:, :5])
+            dino_model = dino_proposal_list[index]
+            if rescale:
+                k1_export = (k1_model if int(k1_model.shape[0]) == 0 else
+                             map_model_obb_to_original(
+                                 k1_model, img_metas[index]))
+                dino_export = (dino_model
+                               if int(dino_model.shape[0]) == 0 else
+                               map_model_obb_to_original(
+                                   dino_model, img_metas[index]))
+            else:
+                k1_export, dino_export = k1_model, dino_model
+            output_detection = self._top_single_class_detection(
+                output, device, dtype)
+            anchor_source = (
+                'k1' if int(k1_model.shape[0]) == 1 else
+                'dino_fallback' if int(dino_model.shape[0]) == 1 else
+                'none')
+            refined_output = bool(
+                decoded[index] is not None
+                and int(decoded[index].shape[0]) > 0)
+            score_semantics = (
+                'constant_refiner_output_not_confidence' if refined_output
+                else 'frozen_k1_confidence' if int(k1_model.shape[0]) == 1
+                else 'missing_observation')
+            runtime_records.append(dict(
+                k1_box=self._box_to_list(k1_export),
+                k1_score=(None if k1_detection is None or
+                          int(k1_detection.shape[0]) == 0 else
+                          float(k1_detection[0, 5].detach().cpu())),
+                dino_box=self._box_to_list(dino_export),
+                anchor_source=anchor_source,
+                base_v3_box=self._box_to_list(output_detection[:, :5]),
+                base_v3_output_score=(None if
+                                      int(output_detection.shape[0]) == 0 else
+                                      float(output_detection[0, 5].detach().cpu())),
+                base_v3_output_score_semantics=score_semantics,
+                coordinate_space=('original_image' if rescale else
+                                  'model_input')))
+        self._last_inference_records = runtime_records
         return outputs
 
     def aug_test(self, imgs, img_metas, rescale=False, **kwargs):
@@ -720,6 +783,10 @@ class SymEOODDinoGeometryRefinerTrainer(RotatedBaseDetector):
     def runtime_forward_counts(self):
         """Return explicit detector/component forward counters for evidence."""
         return dict(self._runtime_forward_counts)
+
+    def last_inference_records(self):
+        """Return read-only per-frame component evidence from the last call."""
+        return copy.deepcopy(self._last_inference_records)
 
     def runtime_inference_contract(self):
         """Expose the effective inference mode after config merging/building."""
