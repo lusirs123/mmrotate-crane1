@@ -1,0 +1,125 @@
+{
+  "protocol": "base_v3_obb_split_scale_policy_development_contract_v52",
+  "evidence_boundary": "official_source_val_post_v51_split_scale_development_only",
+  "fixed_test_read": false,
+  "target_data_read": false,
+  "post_fixed_test_hypothesis_generation": true,
+  "expected_inputs": {
+    "baseline_protocol": "base_v3_obb_reliability_baseline_v1",
+    "baseline_portable_sha256": "b4a06372c4c02c48a4c23fdaa3f3f8595378503504958681bdacb34cb0865ad9",
+    "baseline_contract_sha256": "3173a641a5269fb699477517c948a591311ee95f1f7f2a5026680934b3df7265",
+    "runtime_calibration_v3_protocol": "base_v3_obb_observation_calibration_v3",
+    "runtime_calibration_v3_sha256": "2ce567d068e8be062afeb6a4d7ed76c3c6eacde1a949190f2f05ec5ba68b2799",
+    "v5_report_protocol": "base_v3_obb_heterogeneous_policy_development_v5",
+    "v5_report_sha256": "15746e547f08ba4a4364c8f2c1a975351061ebbd7b14390b3f275c806c95bc57",
+    "v5_contract_sha256": "2b7ebdbdaea97a17cb4c8e7dc5c423eb132728bd762ec028353ec864a4ab072d",
+    "v51_report_protocol": "base_v3_obb_hybrid_policy_freeze_v51",
+    "v51_report_sha256": "9ce37abcb948a908ee122a3a72f578856985fe4399964dcdaff506a4c2865251",
+    "v51_contract_sha256": "0bd75e38166b778b23a62ae1b570843b84a6c1251d6890f915cb48bf0c28062c"
+  },
+  "split": {
+    "calibration_prefix_fraction": 0.4,
+    "minimum_calibration_frames_per_segment": 2,
+    "expected_calibration_frames": 294,
+    "expected_evaluation_frames": 444
+  },
+  "primary_candidate": "split_existing_features",
+  "automatic_ablation_promotion": false,
+  "feature_sets": {
+    "split_existing_features": [
+      "anchor_uncertainty",
+      "aspect_ambiguity",
+      "causal_angle_residual_norm",
+      "causal_center_residual_norm",
+      "causal_scale_residual_log",
+      "k1_dino_angle_disagreement_norm",
+      "k1_dino_center_disagreement_norm",
+      "k1_dino_scale_disagreement_log",
+      "refiner_angle_correction_norm",
+      "refiner_center_correction_norm",
+      "refiner_scale_correction_log"
+    ],
+    "split_geometry_ablation": [
+      "anchor_uncertainty",
+      "aspect_ambiguity",
+      "causal_angle_residual_norm",
+      "causal_center_residual_norm",
+      "causal_scale_residual_log",
+      "k1_dino_angle_disagreement_norm",
+      "k1_dino_center_disagreement_norm",
+      "k1_dino_scale_disagreement_log",
+      "refiner_angle_correction_norm",
+      "refiner_center_correction_norm",
+      "refiner_scale_correction_log",
+      "obb_log_long_side_px",
+      "obb_log_short_side_px",
+      "obb_log_area_px2"
+    ],
+    "split_image_quality_ablation": [
+      "anchor_uncertainty",
+      "aspect_ambiguity",
+      "causal_angle_residual_norm",
+      "causal_center_residual_norm",
+      "causal_scale_residual_log",
+      "k1_dino_angle_disagreement_norm",
+      "k1_dino_center_disagreement_norm",
+      "k1_dino_scale_disagreement_log",
+      "refiner_angle_correction_norm",
+      "refiner_center_correction_norm",
+      "refiner_scale_correction_log",
+      "roi_gray_mean_norm",
+      "roi_gray_std_norm",
+      "roi_dark_fraction",
+      "roi_bright_fraction",
+      "roi_clipped_fraction"
+    ]
+  },
+  "image_quality_ablation": {
+    "enabled": true,
+    "roi_source": "current_base_v3_obb_axis_aligned_envelope",
+    "uses_gt": false,
+    "uses_operation_phase": false,
+    "may_replace_primary_candidate_automatically": false
+  },
+  "split_scale_ranker": {
+    "model": "separate_standardized_l2_logistic_side_error_rankers",
+    "missing_value_policy": "calibration_median_plus_missing_indicator",
+    "risk_comparability": "calibration_empirical_percentile_per_side",
+    "combined_scale_risk": "max_long_short_percentile_risk",
+    "l2_regularization": 1.0,
+    "maximum_newton_iterations": 50,
+    "convergence_tolerance": 1e-8,
+    "target_measurement_coverage": 0.9
+  },
+  "continuous_output": {
+    "center_policy": "frozen_v51_anchor_score_rejection",
+    "angle_policy": "frozen_v51_anchor_score_plus_one_frame_hold",
+    "scale_rejection_evaluated_first": true,
+    "scale_hold_evaluated_separately": true,
+    "scale_hold_max_frames": 1,
+    "hold_used_for_ranker_selection": false,
+    "reset_on_sequence_or_frame_gap": true
+  },
+  "evaluation": {
+    "center_error_threshold_px": 5.0,
+    "side_relative_error_threshold": 0.1,
+    "scale_relative_error_threshold": 0.1,
+    "angle_error_threshold_deg": 3.0,
+    "tail_quantiles": [0.5, 0.9, 0.95, 1.0],
+    "matched_coverages": [0.95, 0.9, 0.8, 0.7, 0.5],
+    "matched_coverage_groups": ["all", "real", "sim"],
+    "minimum_source_slice_count": 20
+  },
+  "baselines": [
+    "raw_direct",
+    "confidence_only_rejection",
+    "v51_single_scale_risk"
+  ],
+  "promotion_gates": {
+    "reference": "v51_single_scale_risk",
+    "minimum_matched_coverage_wins_per_target": 2,
+    "ablation_results_are_hypothesis_generating_only": true,
+    "scale_hold_must_not_gate_ranker_selection": true
+  },
+  "claim_limit": "V5.2 is a source-val development experiment designed after V5.1 and exposure of fixed TEST. It tests separately fitted long-side and short-side error rankings, then reports one-frame scale hold separately. The primary candidate is fixed before evaluation; geometry and image-quality variants are ablations and cannot be promoted automatically. Calibration-prefix GT supplies only offline side-error labels. Online decisions consume no GT, domain, sequence identity, operation phase, or future frames. This report cannot validate fixed-TEST improvement, calibrated probability, unknown-sequence generalization, deployment, physical state, or learned DINO fallback reliability. Fixed TEST must not be read or rerun for V5.2 selection."
+}
