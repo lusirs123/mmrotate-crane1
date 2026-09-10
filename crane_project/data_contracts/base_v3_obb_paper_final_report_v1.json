@@ -1,0 +1,54 @@
+{
+  "protocol": "base_v3_obb_paper_final_report_contract_v1",
+  "evidence_boundary": "frozen_v51_post_exposure_fixed_test_paper_finalization_with_v53_stop",
+  "fixed_test_read": true,
+  "fixed_test_previously_exposed": true,
+  "parameter_tuning_authorized": false,
+  "expected_inputs": {
+    "v51_report_protocol": "base_v3_obb_hybrid_fixed_test_eval_v51",
+    "v51_report_sha256": "584c6982e717e96d05511afe795b62f7bbfd631697890bf0080add4383c61964",
+    "v51_diagnostic_protocol": "base_v3_obb_hybrid_fixed_test_diagnostic_v51",
+    "v51_diagnostic_sha256": "4b3a16ec01ecfe7e4e8ad8d1236cd554be5863cbde3bf8789e9b0ebabf7be00b",
+    "v53_report_protocol": "base_v3_obb_image_quality_block_oof_development_v53",
+    "v53_report_sha256": "8f3d210ee1e657b7aadd5bb9691985e1e6240fab8ab2c200770ff0fd89466618",
+    "v51_eval_contract_protocol": "base_v3_obb_hybrid_fixed_test_eval_contract_v51",
+    "v51_eval_contract_sha256": "80b7fa043a58f9f920e559cedea97ac001e76a0b0d6704d28b5d3557b57e556a",
+    "runtime_calibration_protocol": "base_v3_obb_hybrid_observation_calibration_v51",
+    "runtime_calibration_sha256": "626a8cf4727181fa91ee222c1654a50fa9fffafaff9dca20e693df25e9e94d7e"
+  },
+  "fixed_test_scope": {
+    "frame_count": 992,
+    "domain_counts": {"real": 420, "sim": 572},
+    "sequence_counts": {"seq02": 220, "seq03": 200, "seq09": 572},
+    "annotation_status": "complete"
+  },
+  "methods": ["raw", "score_rejection_only", "v51_hybrid"],
+  "components": ["center", "scale", "angle"],
+  "evaluation": {
+    "center_error_threshold_px": 5.0,
+    "scale_relative_error_threshold": 0.1,
+    "angle_error_threshold_deg": 3.0,
+    "matched_coverage_targets": [0.95, 0.9, 0.8, 0.7, 0.5],
+    "riou_hit_threshold": 0.5,
+    "runtime_benchmark_repeats": 20
+  },
+  "selection_closure": {
+    "required_v53_decision": "STOP_IMAGE_QUALITY_CANDIDATE",
+    "final_runtime_policy": "v51_hybrid_reference",
+    "overall_winner_claimed": false,
+    "future_parameter_selection_from_fixed_test": false
+  },
+  "runtime_interface": {
+    "protocol": "base_v3_obb_paper_runtime_v1",
+    "states": ["measurement", "prediction", "unavailable"],
+    "required_component_fields": [
+      "value", "valid", "state", "source",
+      "age_since_measurement_frames", "measurement_available",
+      "measurement_accepted", "risk", "gate", "reason"
+    ],
+    "timestamp_optional": true,
+    "image_size_optional": true,
+    "gt_fields_consumed_online": []
+  },
+  "claim_limit": "This report closes the focused-paper development loop by consolidating the frozen raw, confidence-rejection, and V5.1 component observation results on the already exposed fixed TEST. It records component accuracy, coverage, rejection cost, recovery, joint validity, angle-hold behavior, matched-coverage scale ranking, and complete-OBB RIoU without fitting or selecting any parameter. The entrypoint separately prints observation-layer runtime, excluding detector inference and image I/O; it is not end-to-end FPS and is omitted from the hash-stable formal JSON. The JSON is a reproducible fixed-split paper result and runtime handoff, but it cannot establish fresh unknown-sequence generalization, calibrated uncertainty, physical state, depth, or deployment performance."
+}
