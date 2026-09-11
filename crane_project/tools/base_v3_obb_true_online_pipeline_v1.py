@@ -243,6 +243,19 @@ def build_constructor_loaded_detector(config_path, device, overrides=None):
     return model, config
 
 
+def resolve_cuda_scatter_device(device, current_device):
+    """Return the integer CUDA index required by legacy MMCV scatter."""
+    if getattr(device, 'type', None) != 'cuda':
+        raise RuntimeError('Formal Base V3 online inference requires CUDA')
+    index = getattr(device, 'index', None)
+    if index is None:
+        index = current_device()
+    index = int(index)
+    if index < 0:
+        raise RuntimeError('CUDA scatter device index must be non-negative')
+    return index
+
+
 class BaseV3OnlineAdapter:
     """Assemble the exact fixed Base V3 transforms from in-memory DINO/history."""
 
@@ -257,8 +270,8 @@ class BaseV3OnlineAdapter:
         self.model = model
         self.pipeline = Compose(config.online_test_pipeline)
         self.device = next(model.parameters()).device
-        if self.device.type != 'cuda':
-            raise RuntimeError('Formal Base V3 online inference requires CUDA')
+        self.scatter_device = resolve_cuda_scatter_device(
+            self.device, torch.cuda.current_device)
 
     def infer(self, image_path, dino_box, history):
         proposal = (np.zeros((0, 5), dtype=np.float32)
@@ -271,7 +284,9 @@ class BaseV3OnlineAdapter:
         sample.update(history)
         data = self.pipeline(sample)
         data = self._collate([data], samples_per_gpu=1)
-        data = self._scatter(data, [self.device])[0]
+        # MMCV 1.x indexes its CUDA stream cache with the target value and
+        # therefore requires an integer logical GPU id, not torch.device.
+        data = self._scatter(data, [self.scatter_device])[0]
         with self._torch.no_grad():
             results = self.model(
                 return_loss=False, rescale=True, **data)

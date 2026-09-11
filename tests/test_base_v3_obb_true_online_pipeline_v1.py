@@ -195,3 +195,19 @@ def test_constructor_loaded_builder_avoids_top_level_backbone(monkeypatch):
     assert calls['device'] == 'cuda:0'
     assert calls['eval'] is True
     assert calls['imports']['imports'] == ['fake.registration']
+
+
+def test_legacy_mmcv_scatter_device_is_an_integer_cuda_index():
+    explicit = types.SimpleNamespace(type='cuda', index=2)
+    assert online.resolve_cuda_scatter_device(explicit, lambda: 0) == 2
+
+    implicit = types.SimpleNamespace(type='cuda', index=None)
+    assert online.resolve_cuda_scatter_device(implicit, lambda: 3) == 3
+
+    cpu = types.SimpleNamespace(type='cpu', index=None)
+    with pytest.raises(RuntimeError, match='requires CUDA'):
+        online.resolve_cuda_scatter_device(cpu, lambda: 0)
+
+    invalid = types.SimpleNamespace(type='cuda', index=-1)
+    with pytest.raises(RuntimeError, match='non-negative'):
+        online.resolve_cuda_scatter_device(invalid, lambda: 0)
