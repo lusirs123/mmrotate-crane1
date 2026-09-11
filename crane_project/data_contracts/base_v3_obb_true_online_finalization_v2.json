@@ -1,0 +1,36 @@
+{
+  "protocol": "base_v3_obb_true_online_finalization_contract_v2",
+  "evidence_boundary": "post_exposure_fixed_test_true_online_pipeline_finalization",
+  "fixed_test_read": true,
+  "fixed_test_previously_exposed": true,
+  "threshold_fitting_performed": false,
+  "parameter_tuning_authorized": false,
+  "expected_inputs": {
+    "true_online_protocol": "base_v3_obb_true_online_pipeline_v1",
+    "true_online_sha256": "ef5487b9b20cc8f7723fd06f5004b330060f101637b3f68ebdbec23ac1a158ac",
+    "paper_report_protocol": "base_v3_obb_paper_final_report_v1",
+    "paper_report_sha256": "2872aeb98cc9eee051fcc68c538f6e0d7863d91c3d443eb3ea3067ec8d8469f4",
+    "attribution_protocol": "k1_anchor_fallback_attribution_audit_v1",
+    "attribution_sha256": "2e7bc5016b46139d4bbe3ffa50e7b41081fefff210c6f7d268308739fd6e6c20",
+    "v51_eval_contract_protocol": "base_v3_obb_hybrid_fixed_test_eval_contract_v51",
+    "v51_eval_contract_sha256": "80b7fa043a58f9f920e559cedea97ac001e76a0b0d6704d28b5d3557b57e556a"
+  },
+  "pipeline": ["rgb_image", "frozen_dino_native_s14", "symeood_k1_epoch24", "base_v3_epoch9_causal_refiner", "v51_component_observation"],
+  "fixed_test_scope": {
+    "frame_count": 992,
+    "domain_counts": {"real": 420, "sim": 572},
+    "sequence_counts": {"seq02": 220, "seq03": 200, "seq09": 572},
+    "annotation_status": "complete"
+  },
+  "methods": ["raw", "score_rejection_only", "v51_hybrid"],
+  "components": ["center", "scale", "angle"],
+  "comparison_tolerances": {"center_px": 0.001, "side_px": 0.001, "angle_deg": 0.05729577951308232},
+  "evaluation": {
+    "center_error_threshold_px": 5.0,
+    "scale_relative_error_threshold": 0.1,
+    "angle_error_threshold_deg": 3.0,
+    "tail_quantiles": [0.5, 0.9, 0.95, 1.0],
+    "riou_hit_threshold": 0.5
+  },
+  "claim_limit": "This report evaluates the already generated true-online RGB-to-observation output on the previously exposed fixed TEST. Ground truth is attached only after model inference and online observation generation. It reports actual online metrics and differences from the historical cached-input paper report without selecting any threshold, feature, policy, epoch, or checkpoint. It does not establish fresh unknown-sequence generalization, calibrated uncertainty, physical depth, sway, control performance, or deployment FPS."
+}
