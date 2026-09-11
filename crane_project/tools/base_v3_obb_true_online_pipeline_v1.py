@@ -222,6 +222,27 @@ def verify_artifacts(contract, paths):
     return identities
 
 
+def build_constructor_loaded_detector(config_path, device, overrides=None):
+    """Build wrapper detectors without MMDetection's backbone assumption."""
+    from mmcv import Config
+    from mmcv.utils import import_modules_from_strings
+    from mmrotate.models import build_detector
+
+    config = Config.fromfile(config_path)
+    imports = config.get('custom_imports')
+    if imports:
+        import_modules_from_strings(**imports)
+    model_config = copy.deepcopy(config.model)
+    for key, value in dict(overrides or {}).items():
+        model_config[key] = value
+    model = build_detector(
+        model_config, train_cfg=None, test_cfg=config.get('test_cfg'))
+    model.cfg = config
+    model.to(device)
+    model.eval()
+    return model, config
+
+
 class BaseV3OnlineAdapter:
     """Assemble the exact fixed Base V3 transforms from in-memory DINO/history."""
 
@@ -373,8 +394,7 @@ def summarize(records):
 
 def run(args, contract, identities):
     import cv2
-    from mmcv import Config
-    from mmdet.apis import inference_detector, init_detector
+    from mmdet.apis import inference_detector
 
     image_rows = discover_images(
         args.image_dir, args.sequence, args.max_frames)
@@ -383,11 +403,11 @@ def run(args, contract, identities):
         raise RuntimeError(
             'Image count mismatch: expected {}, got {}'.format(
                 args.expected_frame_count, len(image_rows)))
-    dino_model = init_detector(
-        args.dino_config, args.dino_checkpoint, device=args.device)
-    base_cfg = Config.fromfile(args.base_v3_config)
-    base_model = init_detector(
-        base_cfg, checkpoint=None, device=args.device)
+    dino_model, _dino_cfg = build_constructor_loaded_detector(
+        args.dino_config, args.device,
+        overrides={'dino_head_checkpoint': args.dino_checkpoint})
+    base_model, base_cfg = build_constructor_loaded_detector(
+        args.base_v3_config, args.device)
     if not hasattr(base_model, 'last_inference_records'):
         raise RuntimeError('Base V3 runtime evidence interface is missing')
     base_adapter = BaseV3OnlineAdapter(base_model, base_cfg)

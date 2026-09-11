@@ -1,4 +1,6 @@
 import json
+import sys
+import types
 from pathlib import Path
 
 import numpy as np
@@ -134,3 +136,62 @@ def test_paper_report_comparison_is_read_only_and_detects_state_drift():
         'state'] = 'unavailable'
     assert online.compare_paper_report([record], changed)[
         'component_state_mismatch_count'] == 1
+
+
+def test_constructor_loaded_builder_avoids_top_level_backbone(monkeypatch):
+    calls = {}
+
+    class FakeConfig(dict):
+        def __init__(self):
+            super().__init__(custom_imports=dict(
+                imports=['fake.registration'], allow_failed_imports=False))
+            self.model = dict(
+                type='WrapperDetector', dino_head_checkpoint='old.pth')
+
+    class FakeConfigFactory:
+        @staticmethod
+        def fromfile(path):
+            calls['config_path'] = path
+            return FakeConfig()
+
+    class FakeModel:
+        def to(self, device):
+            calls['device'] = device
+            return self
+
+        def eval(self):
+            calls['eval'] = True
+            return self
+
+    def fake_imports(**kwargs):
+        calls['imports'] = kwargs
+
+    def fake_build(model_config, train_cfg=None, test_cfg=None):
+        calls['model_config'] = dict(model_config)
+        calls['train_cfg'] = train_cfg
+        calls['test_cfg'] = test_cfg
+        return FakeModel()
+
+    mmcv = types.ModuleType('mmcv')
+    mmcv.Config = FakeConfigFactory
+    mmcv_utils = types.ModuleType('mmcv.utils')
+    mmcv_utils.import_modules_from_strings = fake_imports
+    mmrotate = types.ModuleType('mmrotate')
+    mmrotate_models = types.ModuleType('mmrotate.models')
+    mmrotate_models.build_detector = fake_build
+    monkeypatch.setitem(sys.modules, 'mmcv', mmcv)
+    monkeypatch.setitem(sys.modules, 'mmcv.utils', mmcv_utils)
+    monkeypatch.setitem(sys.modules, 'mmrotate', mmrotate)
+    monkeypatch.setitem(sys.modules, 'mmrotate.models', mmrotate_models)
+
+    model, config = online.build_constructor_loaded_detector(
+        'wrapper.py', 'cuda:0',
+        overrides={'dino_head_checkpoint': 'formal.pth'})
+    assert isinstance(model, FakeModel)
+    assert isinstance(config, FakeConfig)
+    assert calls['model_config']['dino_head_checkpoint'] == 'formal.pth'
+    assert 'backbone' not in calls['model_config']
+    assert calls['train_cfg'] is None
+    assert calls['device'] == 'cuda:0'
+    assert calls['eval'] is True
+    assert calls['imports']['imports'] == ['fake.registration']
