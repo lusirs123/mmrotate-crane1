@@ -40,6 +40,29 @@ def test_geometry_audit_separates_presence_and_propagated_difference():
     assert base['maximum_difference']['center_px']==pytest.approx(0.5)
 
 
+def test_geometry_audit_rejects_length_mismatch():
+    current=[dict(_row(1)['detector_components'],
+                  frame_key='real_seq02_00001')]
+    with pytest.raises(RuntimeError,match='different lengths'):
+        final.compare_geometry_lane(
+            current,[], 'base_v3_box',
+            dict(center_px=0.001,side_px=0.001,angle_deg=0.05))
+
+
+def test_evaluation_alignment_rejects_threshold_drift():
+    evaluation=dict(center_error_threshold_px=5.0,
+                    scale_relative_error_threshold=0.1,
+                    angle_error_threshold_deg=3.0)
+    final.validate_evaluation_alignment(
+        {'evaluation':copy.deepcopy(evaluation)},
+        {'evaluation':copy.deepcopy(evaluation)})
+    changed=copy.deepcopy(evaluation)
+    changed['scale_relative_error_threshold']=0.2
+    with pytest.raises(RuntimeError,match='scale_relative_error_threshold'):
+        final.validate_evaluation_alignment(
+            {'evaluation':evaluation},{'evaluation':changed})
+
+
 def test_current_rows_attach_gt_only_after_online_output():
     online=[_row(1)]
     historical=[dict(frame_key=online[0]['frame_key'],

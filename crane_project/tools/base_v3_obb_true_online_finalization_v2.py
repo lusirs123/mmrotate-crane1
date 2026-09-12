@@ -119,6 +119,9 @@ def _geometry_difference(first, second):
 
 
 def compare_geometry_lane(current, historical, lane, tolerances):
+    if len(current) != len(historical):
+        raise RuntimeError(
+            'Current and historical geometry lanes have different lengths')
     mismatches=[]
     maxima=dict(center_px=0.0, long_side_px=0.0,
                 short_side_px=0.0, angle_deg=0.0)
@@ -151,6 +154,16 @@ def compare_geometry_lane(current, historical, lane, tolerances):
         maximum_difference=maxima,
         mismatch_frame_keys=[r['frame_key'] for r in mismatches],
         mismatch_records=mismatches)
+
+
+def validate_evaluation_alignment(contract, v51_contract):
+    """Prevent silent metric-threshold drift between V2 and frozen V5.1."""
+    for field in ('center_error_threshold_px',
+                  'scale_relative_error_threshold',
+                  'angle_error_threshold_deg'):
+        if float(contract['evaluation'][field]) != float(
+                v51_contract['evaluation'][field]):
+            raise RuntimeError('Evaluation threshold changed: ' + field)
 
 
 def _current_rows(online_records, historical_rows):
@@ -345,6 +358,7 @@ def main():
     attribution=json.loads(Path(args.fixed_test_attribution).read_text(encoding='utf-8'))
     v51=json.loads(Path(args.v51_eval_contract).read_text(encoding='utf-8'))
     validate_v51_eval_contract(v51)
+    validate_evaluation_alignment(contract, v51)
     historical,reconstruction=build_records(attribution,args,v51)
     identities['historical_reconstruction']=reconstruction
     payload=run(online,paper,historical,contract,identities,args.wall_clock_seconds)

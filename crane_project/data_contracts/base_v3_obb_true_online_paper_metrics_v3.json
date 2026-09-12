@@ -1,0 +1,67 @@
+{
+  "protocol": "base_v3_obb_true_online_paper_metrics_contract_v3",
+  "evidence_boundary": "post_exposure_fixed_test_frozen_true_online_paper_metrics",
+  "fixed_test_read": true,
+  "fixed_test_previously_exposed": true,
+  "threshold_fitting_performed": false,
+  "parameter_tuning_authorized": false,
+  "expected_inputs": {
+    "true_online_finalization_protocol": "base_v3_obb_true_online_finalization_v2",
+    "true_online_finalization_sha256": "76aec1df6fe8f6424985fa5d054b4b8e9f1684924377d619520dd380b89fdc63",
+    "true_online_pipeline_protocol": "base_v3_obb_true_online_pipeline_v1",
+    "true_online_pipeline_sha256": "ef5487b9b20cc8f7723fd06f5004b330060f101637b3f68ebdbec23ac1a158ac",
+    "online_observation_csv_sha256": "8a9665c220a1138520a4bf34008f016b15f2b549d734d9819acbc5f8930704d3"
+  },
+  "pipeline": [
+    "rgb_image",
+    "frozen_dino_native_s14",
+    "symeood_k1_epoch24",
+    "base_v3_epoch9_causal_refiner",
+    "v51_component_observation"
+  ],
+  "fixed_test_scope": {
+    "frame_count": 992,
+    "domain_counts": {
+      "real": 420,
+      "sim": 572
+    },
+    "sequence_counts": {
+      "seq02": 220,
+      "seq03": 200,
+      "seq09": 572
+    },
+    "annotation_status": "complete"
+  },
+  "methods": [
+    "raw",
+    "score_rejection_only",
+    "v51_hybrid"
+  ],
+  "components": [
+    "center",
+    "scale",
+    "angle"
+  ],
+  "matched_coverage_targets": [
+    1.0,
+    0.95,
+    0.9,
+    0.8,
+    0.7,
+    0.5
+  ],
+  "evaluation": {
+    "center_error_threshold_px": 5.0,
+    "scale_relative_error_threshold": 0.1,
+    "angle_error_threshold_deg": 3.0,
+    "tail_quantiles": [
+      0.5,
+      0.9,
+      0.95,
+      1.0
+    ],
+    "riou_hit_threshold": 0.5
+  },
+  "claim_limit": "This frozen report consolidates the actual true-online RGB-to-OBB observation results on the previously exposed fixed TEST for later table construction. It does not fit or select any threshold, feature, policy, epoch, or checkpoint. It does not establish an overall method winner, fresh unknown-sequence generalization, calibrated uncertainty, physical depth, sway, control performance, timestamps, or deployment FPS.",
+  "base_v3_output_score_semantics": "constant_refiner_output_not_confidence"
+}
