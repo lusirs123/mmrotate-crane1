@@ -122,3 +122,16 @@ def test_matched_coverage_equal_metrics_are_reported_as_ties_not_wins():
         comparison = point['learned_minus_score']
         if comparison['tie_mean_and_failure']:
             assert comparison['wins_mean_and_failure'] is False
+
+
+def test_repository_contract_uses_contract_protocol_and_not_report_protocol():
+    import json
+    from pathlib import Path
+    contract_path = Path(__file__).parents[1] / (
+        'crane_project/data_contracts/'
+        'base_v3_obb_hybrid_fixed_test_diagnostic_v51.json')
+    contract = json.loads(contract_path.read_text(encoding='utf-8'))
+    diagnostic.validate_contract(contract)
+    assert contract['protocol'] == diagnostic.CONTRACT_PROTOCOL
+    assert diagnostic.PROTOCOL == 'base_v3_obb_hybrid_fixed_test_diagnostic_v51_v31'
+    assert contract['protocol'] != diagnostic.PROTOCOL
