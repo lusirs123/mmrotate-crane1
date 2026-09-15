@@ -1,0 +1,1624 @@
+{
+  "date": "2026-09-15",
+  "scope": "documentation consolidation only; no experiment or external evidence revalidation",
+  "sources": [
+    {
+      "file": "innovation4_frozen_dinov2_lowlight_large_target.md",
+      "sha256": "49b086324408800bf19f3ad26a0caaed83dfcf671cbdc2802696d6a79f8be057",
+      "bytes": 30613,
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "source_anchor": "source-l"
+    },
+    {
+      "file": "innovation4_dino_small_target_progress.md",
+      "sha256": "e98e0157fdffd2522e408806db0dffc923105eb940505489d1fa2c35aa243356",
+      "bytes": 167930,
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "source_anchor": "source-d"
+    },
+    {
+      "file": "20260905_symeood_dino_fusion_seq11_full_handoff.md",
+      "sha256": "f9173439893515d9aca5e5c125b8884b792ff4a60580bda952f7d254b9e27a09",
+      "bytes": 28185,
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "source_anchor": "source-f"
+    },
+    {
+      "file": "20260802_unified_temporal_candidate_literature_2025_2026.md",
+      "sha256": "eca37a162a3d6716f46cd8e9023f2db145cd0f1f3c4b960a200e7430c39df117",
+      "bytes": 13662,
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "source_anchor": "source-t"
+    },
+    {
+      "file": "journal_obb_reliability_handoff_20260907.md",
+      "sha256": "6f77a0b4a3976330ef3a6d3b1a6dc74dcef1f97f9f2989ec5644b32628c41a0d",
+      "bytes": 7640,
+      "destination": "OBB观测可靠性与连续输出.md",
+      "source_anchor": "source-h"
+    },
+    {
+      "file": "journal_obb_reliability_first_audit_20260907.md",
+      "sha256": "e818e0782994955616029c15683d4caf4273f2c505b393125048a4105e01946d",
+      "bytes": 9411,
+      "destination": "OBB观测可靠性与连续输出.md",
+      "source_anchor": "source-a"
+    },
+    {
+      "file": "20260910_obb_reliability_results_ledger_and_v53_plan.md",
+      "sha256": "43b352c57e31590287dd6ce4f65e8ef0d4de0d496e54185279f0e5f5319b1812",
+      "bytes": 4271,
+      "destination": "OBB观测可靠性与连续输出.md",
+      "source_anchor": "source-p"
+    },
+    {
+      "file": "20260910_obb_reliability_results_ledger_and_finalization.md",
+      "sha256": "0cef5d2d29138b2f71b9989b2914370885e02adf10ad6ffad436aef7aafa685c",
+      "bytes": 6499,
+      "destination": "OBB观测可靠性与连续输出.md",
+      "source_anchor": "source-r"
+    },
+    {
+      "file": "Webots 单目深度几何契约.md",
+      "sha256": "458593f49d13dc797fc14e2c0cf5cea3cecf06e0a7b81794ad3d4ffa4c023640",
+      "bytes": 14202,
+      "destination": "Webots单目深度估计.md",
+      "source_anchor": "source-g"
+    },
+    {
+      "file": "Webots深度估计现有数据与论文证据清单_20260906.md",
+      "sha256": "0ad63fbb3d904ae56452be3fa9495b02a4eadb242e7fea7154dcf63a9706ffa2",
+      "bytes": 27199,
+      "destination": "Webots单目深度估计.md",
+      "source_anchor": "source-e"
+    },
+    {
+      "file": "webots_depth_calibration_status_20260823.md",
+      "sha256": "599edb93b05508f0a71b5acd0f60f788bb323e0dabab25b897f6af3c90ff1b2a",
+      "bytes": 2623,
+      "destination": "Webots单目深度估计.md",
+      "source_anchor": "source-c"
+    }
+  ],
+  "sections": [
+    {
+      "source": "innovation4_frozen_dinov2_lowlight_large_target.md",
+      "section": 2,
+      "source_lines": [
+        26,
+        55
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "l-2",
+      "source_body_sha256": "ccd7a6a566413d3ff7a505db629aae674ead76d927464bef7d2606dcb9768577",
+      "integrated_body_sha256": "c413998fea884e95b695452de675e2236fdb28878459562b0a65c841531dd649",
+      "transformed_body_sha256": "c413998fea884e95b695452de675e2236fdb28878459562b0a65c841531dd649",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "innovation4_frozen_dinov2_lowlight_large_target.md",
+      "section": 3,
+      "source_lines": [
+        56,
+        205
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "l-3",
+      "source_body_sha256": "17852f14a3fced7d9a1ad88e50ff831375b8ab79a9b6c0cc40f7beb99789518e",
+      "integrated_body_sha256": "af6999597a43961c48b7f448fdc469feb1ebb41aaa77ac465b9357b080f1fca9",
+      "transformed_body_sha256": "af6999597a43961c48b7f448fdc469feb1ebb41aaa77ac465b9357b080f1fca9",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "innovation4_frozen_dinov2_lowlight_large_target.md",
+      "section": 4,
+      "source_lines": [
+        206,
+        278
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "l-4",
+      "source_body_sha256": "792d46d465e99aa52d6723bb4337342e5f3766554cbfd4d43943f915526da34a",
+      "integrated_body_sha256": "9b5909c50006f8f0486d49e8588aaa65bbdccee6293b478143bf9b28d7eada79",
+      "transformed_body_sha256": "9b5909c50006f8f0486d49e8588aaa65bbdccee6293b478143bf9b28d7eada79",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "innovation4_frozen_dinov2_lowlight_large_target.md",
+      "section": 9,
+      "source_lines": [
+        491,
+        510
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "l-9",
+      "source_body_sha256": "0b8848e3be2a9fcd24a1b812eba2bc20a35319c0538339e056dfcc281e9ae309",
+      "integrated_body_sha256": "e74ded70f711614d8a33d78607c90c4a4581d45274e751e572c08f9f81ed62c4",
+      "transformed_body_sha256": "e74ded70f711614d8a33d78607c90c4a4581d45274e751e572c08f9f81ed62c4",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "innovation4_frozen_dinov2_lowlight_large_target.md",
+      "section": 13,
+      "source_lines": [
+        584,
+        620
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "l-13",
+      "source_body_sha256": "7ad4444d7c1896ffb9e7639e8a3647cc9cc0c5193e88e269a7e0ad48b3a26a1f",
+      "integrated_body_sha256": "024fbeb552e3c6d94fa409193ca844298db2fc518eb93c3b3c9172c318da4f83",
+      "transformed_body_sha256": "024fbeb552e3c6d94fa409193ca844298db2fc518eb93c3b3c9172c318da4f83",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "innovation4_frozen_dinov2_lowlight_large_target.md",
+      "section": 14,
+      "source_lines": [
+        621,
+        701
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "l-14",
+      "source_body_sha256": "7c243baa5fa14da4bd963589f2b3b026e53d0c3f7257c96055448e18ae8188f5",
+      "integrated_body_sha256": "005cc845a94c5da038828c8aecc6f4b4ba625c8902fbd57d877d28e660961fa9",
+      "transformed_body_sha256": "005cc845a94c5da038828c8aecc6f4b4ba625c8902fbd57d877d28e660961fa9",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "innovation4_dino_small_target_progress.md",
+      "section": 3,
+      "source_lines": [
+        59,
+        99
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "d-3",
+      "source_body_sha256": "269c12db53e0ca771ebe556dbeccb90e5e6f7e26f16c4f9c66f69c84c9954109",
+      "integrated_body_sha256": "3b76328ae3177052755dbf2d5b653b26d1449c752959acc583b9f9cfa0d2e2e1",
+      "transformed_body_sha256": "3b76328ae3177052755dbf2d5b653b26d1449c752959acc583b9f9cfa0d2e2e1",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260905_symeood_dino_fusion_seq11_full_handoff.md",
+      "section": 1,
+      "source_lines": [
+        8,
+        38
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "f-1",
+      "source_body_sha256": "796a7b8684c514f35e3229f7f2254eb2413c7f30cc518ef5f10d3e5899f4fceb",
+      "integrated_body_sha256": "16b6e7bccf21d38d8a47df0e0844cde65319e6094f2ba2246f1ebf0f0b96bba2",
+      "transformed_body_sha256": "16b6e7bccf21d38d8a47df0e0844cde65319e6094f2ba2246f1ebf0f0b96bba2",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "innovation4_frozen_dinov2_lowlight_large_target.md",
+      "section": 1,
+      "source_lines": [
+        6,
+        25
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "l-1",
+      "source_body_sha256": "997d6b81b60335bbefc2d4e66fc344c3aad89f81f6712fcda50472a9af99a950",
+      "integrated_body_sha256": "7cb7bfae4b5fc2a5c2ca28031a360e01d311c370c1094bf7f5ddf0c49dc54d2a",
+      "transformed_body_sha256": "7cb7bfae4b5fc2a5c2ca28031a360e01d311c370c1094bf7f5ddf0c49dc54d2a",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "innovation4_frozen_dinov2_lowlight_large_target.md",
+      "section": 5,
+      "source_lines": [
+        279,
+        298
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "l-5",
+      "source_body_sha256": "29ddad89f24b25df5239cb75402cb24f3c13a430aae6c10ce2a98f028e35abe3",
+      "integrated_body_sha256": "19cd4b59887021a098f9d926434834ace7d99fd07f4e85b17fe8a73ea865485b",
+      "transformed_body_sha256": "19cd4b59887021a098f9d926434834ace7d99fd07f4e85b17fe8a73ea865485b",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "innovation4_frozen_dinov2_lowlight_large_target.md",
+      "section": 6,
+      "source_lines": [
+        299,
+        326
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "l-6",
+      "source_body_sha256": "eca86d84bc2d6e95aa1246710c912d424efe2b721a28eaa72566b5ad7f494363",
+      "integrated_body_sha256": "87b7cdbe954c4b39e86cdbfb142272b649a622f3d443d189c3b8f056360c73dc",
+      "transformed_body_sha256": "87b7cdbe954c4b39e86cdbfb142272b649a622f3d443d189c3b8f056360c73dc",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "innovation4_frozen_dinov2_lowlight_large_target.md",
+      "section": 7,
+      "source_lines": [
+        327,
+        459
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "l-7",
+      "source_body_sha256": "da80ebc3e7df5e534d5d6b87ae24e1f2cbce96559f34053d74b69969dfa0b345",
+      "integrated_body_sha256": "8fa2d3a7468db5cb5a19f668c4b0928e83f1adb6520a0e1b2f847bdc5731d5f4",
+      "transformed_body_sha256": "8fa2d3a7468db5cb5a19f668c4b0928e83f1adb6520a0e1b2f847bdc5731d5f4",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "innovation4_frozen_dinov2_lowlight_large_target.md",
+      "section": 8,
+      "source_lines": [
+        460,
+        490
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "l-8",
+      "source_body_sha256": "ae86398f06385d5de1a6ce13d3f13e755803be219536c5368569e553650def1f",
+      "integrated_body_sha256": "06701f100673078dea3be89cd0faa6e1408e3eca280a060abceb2ae6f67e6507",
+      "transformed_body_sha256": "06701f100673078dea3be89cd0faa6e1408e3eca280a060abceb2ae6f67e6507",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "innovation4_frozen_dinov2_lowlight_large_target.md",
+      "section": 10,
+      "source_lines": [
+        511,
+        528
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "l-10",
+      "source_body_sha256": "9b424107630d1035934ad5f36dd5906c4df740199edce04224731b3441cefe78",
+      "integrated_body_sha256": "4f52fdb8edc7713e8489556a72187a4f0d2721082d0268eb5f9a3aa87608693b",
+      "transformed_body_sha256": "4f52fdb8edc7713e8489556a72187a4f0d2721082d0268eb5f9a3aa87608693b",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "innovation4_frozen_dinov2_lowlight_large_target.md",
+      "section": 12,
+      "source_lines": [
+        570,
+        583
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "l-12",
+      "source_body_sha256": "d07d06a79b43c2b7508d301849dfae8479b789eba425eea8b8b3ea5e076847ef",
+      "integrated_body_sha256": "aca1060678d27de30812f227d09d101d1a48b5049e994b1d5b1773234c13c4d1",
+      "transformed_body_sha256": "aca1060678d27de30812f227d09d101d1a48b5049e994b1d5b1773234c13c4d1",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "innovation4_frozen_dinov2_lowlight_large_target.md",
+      "section": 15,
+      "source_lines": [
+        702,
+        710
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "l-15",
+      "source_body_sha256": "151503d382fa2b835e7c2754e43599824ac914719a963a532c7f41e940e8e0b4",
+      "integrated_body_sha256": "cfdf82830150153dba21d9b5882eb54f80615f499105ef7b6b3670d7a965e24a",
+      "transformed_body_sha256": "cfdf82830150153dba21d9b5882eb54f80615f499105ef7b6b3670d7a965e24a",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "innovation4_dino_small_target_progress.md",
+      "section": 2,
+      "source_lines": [
+        37,
+        58
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "d-2",
+      "source_body_sha256": "ddcb12362982c7645e094bb0328625a9320359990fe222dfa79ea6a6071c4952",
+      "integrated_body_sha256": "7ed4b5cdc64b05bc6d7e5a190f75da6dc797a052fc6f4264cdd4f339de09ffbd",
+      "transformed_body_sha256": "7ed4b5cdc64b05bc6d7e5a190f75da6dc797a052fc6f4264cdd4f339de09ffbd",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "innovation4_dino_small_target_progress.md",
+      "section": 1,
+      "source_lines": [
+        11,
+        36
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "d-1",
+      "source_body_sha256": "a888fbb48df2275b4864c3e637a8de8c9e63c47e344929f3175b191e95ee9bfd",
+      "integrated_body_sha256": "97394ac589171a08501518093432814b72ce4f4e8070594d52f8442d3377e9cc",
+      "transformed_body_sha256": "97394ac589171a08501518093432814b72ce4f4e8070594d52f8442d3377e9cc",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "innovation4_dino_small_target_progress.md",
+      "section": 4,
+      "source_lines": [
+        100,
+        128
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "d-4",
+      "source_body_sha256": "aa929c1273a7dddfa5e87af9fc0d1c1864f10222ffbb8288bd808a1672ff1a59",
+      "integrated_body_sha256": "21558126cd1a8802c4f0d4f956d897269166ff040431118cb566f5e1bee1f5bf",
+      "transformed_body_sha256": "21558126cd1a8802c4f0d4f956d897269166ff040431118cb566f5e1bee1f5bf",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "innovation4_dino_small_target_progress.md",
+      "section": 5,
+      "source_lines": [
+        129,
+        540
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "d-5",
+      "source_body_sha256": "641696e7b2161d1b6e997cb8d569b80575a9917c9ea4887af198e7a4deec050d",
+      "integrated_body_sha256": "0ff5933253fa2bf44d8cfef0204a795eb550bf171794819c55cadd37efaa5b48",
+      "transformed_body_sha256": "0ff5933253fa2bf44d8cfef0204a795eb550bf171794819c55cadd37efaa5b48",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "innovation4_dino_small_target_progress.md",
+      "section": 6,
+      "source_lines": [
+        541,
+        553
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "d-6",
+      "source_body_sha256": "d5af0436383f20c8a6564cd1907455d00a18e80cdffdf89402d66bf2a4cb1a7b",
+      "integrated_body_sha256": "f7d03241155dbf406462ee4fa68dcd193d8aa3b1c47f98adb41c8cbd383790ef",
+      "transformed_body_sha256": "f7d03241155dbf406462ee4fa68dcd193d8aa3b1c47f98adb41c8cbd383790ef",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "innovation4_dino_small_target_progress.md",
+      "section": 8,
+      "source_lines": [
+        642,
+        1138
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "d-8",
+      "source_body_sha256": "6ab270326dd3d4ba4675239068f4ec43e17a2f4454d21a3001bda3dc3fc49cb1",
+      "integrated_body_sha256": "9fd1f7ceb060a37ee471a5c28260cfa2052439a6ab7e3157815048f1c01fece3",
+      "transformed_body_sha256": "9fd1f7ceb060a37ee471a5c28260cfa2052439a6ab7e3157815048f1c01fece3",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "innovation4_dino_small_target_progress.md",
+      "section": 9,
+      "source_lines": [
+        1139,
+        1189
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "d-9",
+      "source_body_sha256": "b46b82f37d17803ccaf9a2f0b0679e7409ca444dbdb6e4b455aa28fb3b2fa754",
+      "integrated_body_sha256": "a976bc74c93d80e9ef7048afd659b81872a59915819797c2546c3b2af093ad9a",
+      "transformed_body_sha256": "a976bc74c93d80e9ef7048afd659b81872a59915819797c2546c3b2af093ad9a",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "innovation4_dino_small_target_progress.md",
+      "section": 10,
+      "source_lines": [
+        1190,
+        3014
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "d-10",
+      "source_body_sha256": "15107c83bebb4941dbfa17621f8d4eceb22f682df8d061aa8d4276eef43e1fa2",
+      "integrated_body_sha256": "bc20bcfeb337c22b8776a2dbdc482563adf65a054be7eb1272eccb5cac89e833",
+      "transformed_body_sha256": "bc20bcfeb337c22b8776a2dbdc482563adf65a054be7eb1272eccb5cac89e833",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260905_symeood_dino_fusion_seq11_full_handoff.md",
+      "section": 3,
+      "source_lines": [
+        88,
+        105
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "f-3",
+      "source_body_sha256": "f98817f4a01f1ccdc52ab20000dca5278b7f06710e7054b07e5fea2051fee3c7",
+      "integrated_body_sha256": "d614fea2ebef93e27c6a2742fcce8861b10ef3daaaeea7c3bc5a070dccb46663",
+      "transformed_body_sha256": "d614fea2ebef93e27c6a2742fcce8861b10ef3daaaeea7c3bc5a070dccb46663",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260905_symeood_dino_fusion_seq11_full_handoff.md",
+      "section": 4,
+      "source_lines": [
+        106,
+        152
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "f-4",
+      "source_body_sha256": "0ba1a20642ebf335953fb8b25c6ef8f8dab360a00eb7ae55e7167b341e1ad7d1",
+      "integrated_body_sha256": "213832e3460dc686298acacd34f3c08bb96292bebef107594a8f61e33f70388a",
+      "transformed_body_sha256": "213832e3460dc686298acacd34f3c08bb96292bebef107594a8f61e33f70388a",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260905_symeood_dino_fusion_seq11_full_handoff.md",
+      "section": 5,
+      "source_lines": [
+        153,
+        173
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "f-5",
+      "source_body_sha256": "a2271e5fc0fbdc9b1d9c2baa98cb9960d8cf9d588070c9e05b36007a57ff90e4",
+      "integrated_body_sha256": "a9fa3d5437d6c9ef42afa47822036caaad79ab9dd927999fc9b7ce0b1f56aed3",
+      "transformed_body_sha256": "a9fa3d5437d6c9ef42afa47822036caaad79ab9dd927999fc9b7ce0b1f56aed3",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260905_symeood_dino_fusion_seq11_full_handoff.md",
+      "section": 6,
+      "source_lines": [
+        174,
+        220
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "f-6",
+      "source_body_sha256": "553e5ae78dcc524f0e03ecdc6d7b33eca3f7ee20ee816a56a64221153b8b06a4",
+      "integrated_body_sha256": "9dddf08314613431051e1db97993d863183835fe684965c057b2d24d70b7e81d",
+      "transformed_body_sha256": "9dddf08314613431051e1db97993d863183835fe684965c057b2d24d70b7e81d",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260905_symeood_dino_fusion_seq11_full_handoff.md",
+      "section": 7,
+      "source_lines": [
+        221,
+        258
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "f-7",
+      "source_body_sha256": "5d10a696fb30cdf09566c6f1021574353afd5afacc34191f0bff988b15da0a46",
+      "integrated_body_sha256": "b48be0a5d17b56341aa8f438def7ba20391d13730f513a137e6e09e5c8c341cf",
+      "transformed_body_sha256": "b48be0a5d17b56341aa8f438def7ba20391d13730f513a137e6e09e5c8c341cf",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260905_symeood_dino_fusion_seq11_full_handoff.md",
+      "section": 8,
+      "source_lines": [
+        259,
+        300
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "f-8",
+      "source_body_sha256": "c7c7116ab56a9226d86eff05a9499ad6bd0d61a60818216b030bef1dad51720d",
+      "integrated_body_sha256": "ddada76d8995d82de70833d461dce42861367c016755eb254d34381630fa7322",
+      "transformed_body_sha256": "ddada76d8995d82de70833d461dce42861367c016755eb254d34381630fa7322",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260905_symeood_dino_fusion_seq11_full_handoff.md",
+      "section": 9,
+      "source_lines": [
+        301,
+        349
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "f-9",
+      "source_body_sha256": "036833979a42cf90ea0c063a35fbaae60deb28d6173b9fa60f6ac2c943273231",
+      "integrated_body_sha256": "c8d6a03cacf2d25c4bc85590140176925ff966299609e8a8279b9f863c4b9b1a",
+      "transformed_body_sha256": "c8d6a03cacf2d25c4bc85590140176925ff966299609e8a8279b9f863c4b9b1a",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260905_symeood_dino_fusion_seq11_full_handoff.md",
+      "section": 10,
+      "source_lines": [
+        350,
+        383
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "f-10",
+      "source_body_sha256": "6d646d411eefe8dd4977a7563a758e313aae549c7b4f41f5e5bab52db9b53fe1",
+      "integrated_body_sha256": "4bdd6c3d47ee23b089abcf2ccab51ff0b99724da7c688265101aaaf5b24727b5",
+      "transformed_body_sha256": "4bdd6c3d47ee23b089abcf2ccab51ff0b99724da7c688265101aaaf5b24727b5",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260905_symeood_dino_fusion_seq11_full_handoff.md",
+      "section": 11,
+      "source_lines": [
+        384,
+        470
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "f-11",
+      "source_body_sha256": "a99eeb2b489a1fff719d6db94b049935a3cecca8efce74de48ced34cb14a85eb",
+      "integrated_body_sha256": "d702ef29e24cfdb7fe0edd0b019a405125ad7292f788e144f3fb562705617480",
+      "transformed_body_sha256": "d702ef29e24cfdb7fe0edd0b019a405125ad7292f788e144f3fb562705617480",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260905_symeood_dino_fusion_seq11_full_handoff.md",
+      "section": 2,
+      "source_lines": [
+        39,
+        87
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "f-2",
+      "source_body_sha256": "f53c1d1c3932548dc17c153b0810d0ac3a86f3eced67bdbce649de1371953884",
+      "integrated_body_sha256": "7c208963873f5745553a6f4ae8f780f3681e6ee043022276890e5d1d30c458cd",
+      "transformed_body_sha256": "7c208963873f5745553a6f4ae8f780f3681e6ee043022276890e5d1d30c458cd",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260905_symeood_dino_fusion_seq11_full_handoff.md",
+      "section": 12,
+      "source_lines": [
+        471,
+        492
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "f-12",
+      "source_body_sha256": "60a773218dfef0dd9224a312276c2bec1a991915954fe70bbf51e893a21a012f",
+      "integrated_body_sha256": "bb3b14acf69cc8e3bc74a74f83ddcb2fe9910abb597043bbd548a221defdfbd1",
+      "transformed_body_sha256": "bb3b14acf69cc8e3bc74a74f83ddcb2fe9910abb597043bbd548a221defdfbd1",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260905_symeood_dino_fusion_seq11_full_handoff.md",
+      "section": 13,
+      "source_lines": [
+        493,
+        508
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "f-13",
+      "source_body_sha256": "990c603fbb89b2dcc25b5de0cf853f88c3734baef27bc955d8caf91c50db6de6",
+      "integrated_body_sha256": "63bc8da17687488dcaf5857c35ad50067be7d66b9ca82c5eb71ba1ec2da4d3e9",
+      "transformed_body_sha256": "63bc8da17687488dcaf5857c35ad50067be7d66b9ca82c5eb71ba1ec2da4d3e9",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260905_symeood_dino_fusion_seq11_full_handoff.md",
+      "section": 14,
+      "source_lines": [
+        509,
+        562
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "f-14",
+      "source_body_sha256": "fc2c1179c7e01380f168a64656e350cef588701e0614d26b32fd6441c7c4f379",
+      "integrated_body_sha256": "6bd557b97069493ee649406ae6fd78e741e401aed3f39d5bc007e569fe1be4b0",
+      "transformed_body_sha256": "6bd557b97069493ee649406ae6fd78e741e401aed3f39d5bc007e569fe1be4b0",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "innovation4_dino_small_target_progress.md",
+      "section": 7,
+      "source_lines": [
+        554,
+        641
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "d-7",
+      "source_body_sha256": "36892fe9b45dd5d68a3fae53e45b8d9e9b6c597dee02a5aeb291e16a86ab0f3b",
+      "integrated_body_sha256": "af971f5b76c0016a7a2abe4afa440c4f7fc85c23cd68bf24430ab03907503eb2",
+      "transformed_body_sha256": "af971f5b76c0016a7a2abe4afa440c4f7fc85c23cd68bf24430ab03907503eb2",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260802_unified_temporal_candidate_literature_2025_2026.md",
+      "section": 1,
+      "source_lines": [
+        5,
+        26
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "t-1",
+      "source_body_sha256": "0ae63f5707d3c078f938c5186f7bca6346d8de3b2573ae1e2b79da008519d846",
+      "integrated_body_sha256": "60a4443dab3c47c77f59ada30f0e5e47f8bf88ac683eb65de81f5e2ad0589142",
+      "transformed_body_sha256": "60a4443dab3c47c77f59ada30f0e5e47f8bf88ac683eb65de81f5e2ad0589142",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260802_unified_temporal_candidate_literature_2025_2026.md",
+      "section": 2,
+      "source_lines": [
+        27,
+        83
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "t-2",
+      "source_body_sha256": "d6d83dd8f4fc2f9e8768868a1c85d977ddd304690defd6e07c2d7cecb090eae0",
+      "integrated_body_sha256": "ddd820663fd143e393cfc2dbf5c825c1b84c0b7abceea2fad0b87137a2ddab60",
+      "transformed_body_sha256": "ddd820663fd143e393cfc2dbf5c825c1b84c0b7abceea2fad0b87137a2ddab60",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260802_unified_temporal_candidate_literature_2025_2026.md",
+      "section": 3,
+      "source_lines": [
+        84,
+        133
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "t-3",
+      "source_body_sha256": "377547603fff7dea1e0370e8a6c5834ab9c0250c9c182006c68500f4887abdc2",
+      "integrated_body_sha256": "649e9a69c502785faf6ad409a174593bb3c3b23b7a3cfe90f35a26773d10a4b4",
+      "transformed_body_sha256": "649e9a69c502785faf6ad409a174593bb3c3b23b7a3cfe90f35a26773d10a4b4",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260802_unified_temporal_candidate_literature_2025_2026.md",
+      "section": 4,
+      "source_lines": [
+        134,
+        152
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "t-4",
+      "source_body_sha256": "ed7c7de737036e2540ddaba686294e2b9f0bbabf7fec332b4043590e02577b0d",
+      "integrated_body_sha256": "c2ff1c2d7f5ed30efd865bf5ced18ffab39620f4c4400426b09e72b6602695ed",
+      "transformed_body_sha256": "c2ff1c2d7f5ed30efd865bf5ced18ffab39620f4c4400426b09e72b6602695ed",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260802_unified_temporal_candidate_literature_2025_2026.md",
+      "section": 5,
+      "source_lines": [
+        153,
+        167
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "t-5",
+      "source_body_sha256": "55ee2f11834a0878b7334c2e943475372b20bd86b9c99afc4ea493fdbe8f8a79",
+      "integrated_body_sha256": "c37ce6ca9b4534d2fabf72dcf9e4ea5a8bebd4820c867c6964906d198abec3b3",
+      "transformed_body_sha256": "c37ce6ca9b4534d2fabf72dcf9e4ea5a8bebd4820c867c6964906d198abec3b3",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260802_unified_temporal_candidate_literature_2025_2026.md",
+      "section": 6,
+      "source_lines": [
+        168,
+        190
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "t-6",
+      "source_body_sha256": "55bbef8c91bb7793b24cc46670b427a4ed0e5ba1f512f0d61729df91fc238653",
+      "integrated_body_sha256": "11246a6df3f73d243b2007232588c126f2a4a9ffb058833a95084e2501ca06c9",
+      "transformed_body_sha256": "11246a6df3f73d243b2007232588c126f2a4a9ffb058833a95084e2501ca06c9",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "innovation4_frozen_dinov2_lowlight_large_target.md",
+      "section": 11,
+      "source_lines": [
+        529,
+        569
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "l-11",
+      "source_body_sha256": "83463a9933244c8389676bf91b59f23566865d2193f7eb6407afda41e3850c77",
+      "integrated_body_sha256": "6e853556956b8957f050787769a0a49ddd7797bd2c2949ad7a6ed57651464219",
+      "transformed_body_sha256": "6e853556956b8957f050787769a0a49ddd7797bd2c2949ad7a6ed57651464219",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260905_symeood_dino_fusion_seq11_full_handoff.md",
+      "section": 16,
+      "source_lines": [
+        581,
+        587
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "f-16",
+      "source_body_sha256": "f1e1cb61c2e7e1d6f718b29171ed86063909a4c0ad98318f3ca6c2e483a21815",
+      "integrated_body_sha256": "a95f420db3682ef7286ca4f64ae59d1f0db6f153601494763ced085887383ad5",
+      "transformed_body_sha256": "a95f420db3682ef7286ca4f64ae59d1f0db6f153601494763ced085887383ad5",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260905_symeood_dino_fusion_seq11_full_handoff.md",
+      "section": 17,
+      "source_lines": [
+        588,
+        661
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "f-17",
+      "source_body_sha256": "d401dd236e4fae387980d75a2ca4d7e9bdc9fe80fcf7061d1c2edb5c39f6467f",
+      "integrated_body_sha256": "4845567e47b35a06734e0d85f5629cb65e74cba77c662c4969b92084e869f837",
+      "transformed_body_sha256": "4845567e47b35a06734e0d85f5629cb65e74cba77c662c4969b92084e869f837",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "innovation4_dino_small_target_progress.md",
+      "section": 11,
+      "source_lines": [
+        3015,
+        3077
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "d-11",
+      "source_body_sha256": "f628ee3e55c6abc27b3477c2440d5836a2cc1f35d876cd36134fa8cac14355ca",
+      "integrated_body_sha256": "1101aaf32d6dffb8cf3ee71ac6e0edaf8a0c48c8bd8c0107b0b6ac1e5e9734d8",
+      "transformed_body_sha256": "1101aaf32d6dffb8cf3ee71ac6e0edaf8a0c48c8bd8c0107b0b6ac1e5e9734d8",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "innovation4_dino_small_target_progress.md",
+      "section": 12,
+      "source_lines": [
+        3078,
+        3090
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "d-12",
+      "source_body_sha256": "8f02c35ad8f93d332fc3af48578c609dd062373039b4b8971c71ada53c8f07cb",
+      "integrated_body_sha256": "ce2d55264d5e67e88c9eb8b02e905d5a7a59c6e92f1936beb43ee75170f03f01",
+      "transformed_body_sha256": "ce2d55264d5e67e88c9eb8b02e905d5a7a59c6e92f1936beb43ee75170f03f01",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260905_symeood_dino_fusion_seq11_full_handoff.md",
+      "section": 15,
+      "source_lines": [
+        563,
+        580
+      ],
+      "destination": "冻结DINOv2与SymEOOD检测融合.md",
+      "anchor": "f-15",
+      "source_body_sha256": "04d29aec45a171a60d7eb2a9419d9792377f42a50b9ea77d4f609b3859039443",
+      "integrated_body_sha256": "35a8ff51594d361fcc8577e58e440afa54bdbbde30ac74ef52d5a32551a15b72",
+      "transformed_body_sha256": "35a8ff51594d361fcc8577e58e440afa54bdbbde30ac74ef52d5a32551a15b72",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "journal_obb_reliability_handoff_20260907.md",
+      "section": 1,
+      "source_lines": [
+        5,
+        14
+      ],
+      "destination": "OBB观测可靠性与连续输出.md",
+      "anchor": "h-1",
+      "source_body_sha256": "28d30b96f84054350235c0decf96d8b008596b14b72032f15da35c02cf6338c8",
+      "integrated_body_sha256": "31abefbd6519219f4fdf1446a8233edc996604af2d538cf8a88bd934407078ce",
+      "transformed_body_sha256": "31abefbd6519219f4fdf1446a8233edc996604af2d538cf8a88bd934407078ce",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "journal_obb_reliability_handoff_20260907.md",
+      "section": 3,
+      "source_lines": [
+        33,
+        44
+      ],
+      "destination": "OBB观测可靠性与连续输出.md",
+      "anchor": "h-3",
+      "source_body_sha256": "0981e5151b0baa4895a6481b067c852d4777f84cb52dc9ec2cd18b13f62fd0b4",
+      "integrated_body_sha256": "1f3a8bfe818e273e51c1bbc858fbf60f4056d377ce8a38a7de140f58471077fd",
+      "transformed_body_sha256": "1f3a8bfe818e273e51c1bbc858fbf60f4056d377ce8a38a7de140f58471077fd",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260910_obb_reliability_results_ledger_and_finalization.md",
+      "section": 1,
+      "source_lines": [
+        5,
+        10
+      ],
+      "destination": "OBB观测可靠性与连续输出.md",
+      "anchor": "r-1",
+      "source_body_sha256": "10b78596ce1bdc8027206cb675f598b43f2b58fa966afa4c4e1f0acd91624465",
+      "integrated_body_sha256": "a231bd7065642c10fab6614783f86ae2c6c7635e6a3dc992920169192e30d341",
+      "transformed_body_sha256": "a231bd7065642c10fab6614783f86ae2c6c7635e6a3dc992920169192e30d341",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260910_obb_reliability_results_ledger_and_finalization.md",
+      "section": 2,
+      "source_lines": [
+        11,
+        17
+      ],
+      "destination": "OBB观测可靠性与连续输出.md",
+      "anchor": "r-2",
+      "source_body_sha256": "911353919a4971ff2fb3f3ace3f871ca194fe550f253168c44209f44ba715873",
+      "integrated_body_sha256": "b9e52cd834f4e3872f4508b019f5f4c12e45962e7a610154723f07e54aaf4f1b",
+      "transformed_body_sha256": "b9e52cd834f4e3872f4508b019f5f4c12e45962e7a610154723f07e54aaf4f1b",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260910_obb_reliability_results_ledger_and_finalization.md",
+      "section": 3,
+      "source_lines": [
+        18,
+        27
+      ],
+      "destination": "OBB观测可靠性与连续输出.md",
+      "anchor": "r-3",
+      "source_body_sha256": "4ffcee217e88b70941daccff65227bf15eed4716d2ef7e2ffb5c7443dbd7b6c3",
+      "integrated_body_sha256": "bc5e1da53d70fbeabd3d4126b1b4ab5a02062a637c349d22cef0cf63fa229265",
+      "transformed_body_sha256": "bc5e1da53d70fbeabd3d4126b1b4ab5a02062a637c349d22cef0cf63fa229265",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260910_obb_reliability_results_ledger_and_finalization.md",
+      "section": 5,
+      "source_lines": [
+        32,
+        39
+      ],
+      "destination": "OBB观测可靠性与连续输出.md",
+      "anchor": "r-5",
+      "source_body_sha256": "6459043d2e3e240c092dbc60820cc52dd9eae66c7a440047fb6da13262bd0ad4",
+      "integrated_body_sha256": "57c736bb1630ac7e394f934478d6c05392fbed09b5af418484251dce65bd7667",
+      "transformed_body_sha256": "57c736bb1630ac7e394f934478d6c05392fbed09b5af418484251dce65bd7667",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260910_obb_reliability_results_ledger_and_finalization.md",
+      "section": 6,
+      "source_lines": [
+        40,
+        45
+      ],
+      "destination": "OBB观测可靠性与连续输出.md",
+      "anchor": "r-6",
+      "source_body_sha256": "67a620a4c69ba4d9e346461fcc589d1598312d194b747ba4a6b2ed8d97196356",
+      "integrated_body_sha256": "f69a7f90a158869110c15064f52c4c88e24ed2488105b4b3b6e51a97516eabe6",
+      "transformed_body_sha256": "f69a7f90a158869110c15064f52c4c88e24ed2488105b4b3b6e51a97516eabe6",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260910_obb_reliability_results_ledger_and_finalization.md",
+      "section": 7,
+      "source_lines": [
+        46,
+        53
+      ],
+      "destination": "OBB观测可靠性与连续输出.md",
+      "anchor": "r-7",
+      "source_body_sha256": "4ac47e83a08e42d7daeba441da0bbe735de6a15bf35e975531bdabf3037c49d9",
+      "integrated_body_sha256": "6947bbeefa050e01c8e8820a16fd36e7d3c3110a41a6e977ac39668153aca50c",
+      "transformed_body_sha256": "6947bbeefa050e01c8e8820a16fd36e7d3c3110a41a6e977ac39668153aca50c",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260910_obb_reliability_results_ledger_and_finalization.md",
+      "section": 4,
+      "source_lines": [
+        28,
+        31
+      ],
+      "destination": "OBB观测可靠性与连续输出.md",
+      "anchor": "r-4",
+      "source_body_sha256": "a3f172c8154128c00c45e5c32e7b60d32ef74d68fb7e2c3a8155ceda87c893f9",
+      "integrated_body_sha256": "3250dd6cedbda858908326b7ec7eb8e9aeaf80c0700177be1e45bf780cc3c20a",
+      "transformed_body_sha256": "3250dd6cedbda858908326b7ec7eb8e9aeaf80c0700177be1e45bf780cc3c20a",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260910_obb_reliability_results_ledger_and_v53_plan.md",
+      "section": 2,
+      "source_lines": [
+        11,
+        44
+      ],
+      "destination": "OBB观测可靠性与连续输出.md",
+      "anchor": "p-2",
+      "source_body_sha256": "4864af8bc9170d7d31058d55b829d671691d1a7ba28ea5bd76a2dc2624e4e9d8",
+      "integrated_body_sha256": "de7ccbd0d1168ba4e2016271979bd5addd4626b0175782103ee8cbc683d4091e",
+      "transformed_body_sha256": "de7ccbd0d1168ba4e2016271979bd5addd4626b0175782103ee8cbc683d4091e",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260910_obb_reliability_results_ledger_and_v53_plan.md",
+      "section": 4,
+      "source_lines": [
+        54,
+        65
+      ],
+      "destination": "OBB观测可靠性与连续输出.md",
+      "anchor": "p-4",
+      "source_body_sha256": "40026ae801e40b8e34f60ff3df7ce2d8ee04ec864bf366c1d109fb79f8efcdc3",
+      "integrated_body_sha256": "e56873c3b0ac5d801e631fb75c0a810150dbe285b0e929aa4dba0bfa81f0dd3f",
+      "transformed_body_sha256": "e56873c3b0ac5d801e631fb75c0a810150dbe285b0e929aa4dba0bfa81f0dd3f",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260910_obb_reliability_results_ledger_and_v53_plan.md",
+      "section": 5,
+      "source_lines": [
+        66,
+        73
+      ],
+      "destination": "OBB观测可靠性与连续输出.md",
+      "anchor": "p-5",
+      "source_body_sha256": "9c58d17081ef895e0d9a51d4c9aa9c58e0a240e8b4f739b633173b47614c26da",
+      "integrated_body_sha256": "81ca9c6cec5b9f26d3b6991964c61bf29a642c2a25fb8e2e4469758b757bff77",
+      "transformed_body_sha256": "81ca9c6cec5b9f26d3b6991964c61bf29a642c2a25fb8e2e4469758b757bff77",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260910_obb_reliability_results_ledger_and_v53_plan.md",
+      "section": 3,
+      "source_lines": [
+        45,
+        53
+      ],
+      "destination": "OBB观测可靠性与连续输出.md",
+      "anchor": "p-3",
+      "source_body_sha256": "e908be04c59ff52c3312aeab0f204f2b8d4a2f1926564e1adb701bc9d9ae1f7a",
+      "integrated_body_sha256": "7baf9cbd1efe7f6df1adb56bd0634089fc374bac8fea035b7407e49f8cef426f",
+      "transformed_body_sha256": "7baf9cbd1efe7f6df1adb56bd0634089fc374bac8fea035b7407e49f8cef426f",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260910_obb_reliability_results_ledger_and_v53_plan.md",
+      "section": 6,
+      "source_lines": [
+        74,
+        78
+      ],
+      "destination": "OBB观测可靠性与连续输出.md",
+      "anchor": "p-6",
+      "source_body_sha256": "cfd1dae108e3bd1e33eafb9c50350800cb1f932be063abedaf819985b7374c19",
+      "integrated_body_sha256": "606866c74e38dc9bb61c31fc9b14b358f1a1f07c830ea6761d3869377273649a",
+      "transformed_body_sha256": "606866c74e38dc9bb61c31fc9b14b358f1a1f07c830ea6761d3869377273649a",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "20260910_obb_reliability_results_ledger_and_v53_plan.md",
+      "section": 1,
+      "source_lines": [
+        5,
+        10
+      ],
+      "destination": "OBB观测可靠性与连续输出.md",
+      "anchor": "p-1",
+      "source_body_sha256": "1e762b1ed43e20abc327afce24c3306659951d3a8ef158b6a681a91f31108e54",
+      "integrated_body_sha256": "c583d8fb22c07bda94bb0b63eeb2e6ffc546712555270f99e2fd7e447f74dd7f",
+      "transformed_body_sha256": "c583d8fb22c07bda94bb0b63eeb2e6ffc546712555270f99e2fd7e447f74dd7f",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "journal_obb_reliability_first_audit_20260907.md",
+      "section": 1,
+      "source_lines": [
+        5,
+        11
+      ],
+      "destination": "OBB观测可靠性与连续输出.md",
+      "anchor": "a-1",
+      "source_body_sha256": "dec09dba490f28dc6719915d5336f91f9903f2027dfb2ed501058324a2b0e995",
+      "integrated_body_sha256": "386a3cae8150dc4ed4486029e55bbac09fa9c22be6577e982919d23aba58636c",
+      "transformed_body_sha256": "386a3cae8150dc4ed4486029e55bbac09fa9c22be6577e982919d23aba58636c",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "journal_obb_reliability_first_audit_20260907.md",
+      "section": 2,
+      "source_lines": [
+        12,
+        23
+      ],
+      "destination": "OBB观测可靠性与连续输出.md",
+      "anchor": "a-2",
+      "source_body_sha256": "8b976a9466fdaf0ea6faec540cc17b8fc9781741faf15a9b56a77fa05d690df2",
+      "integrated_body_sha256": "b668af8e9670b195672754a86ec9f7d6861305170b96b463bc23da13e1abee99",
+      "transformed_body_sha256": "b668af8e9670b195672754a86ec9f7d6861305170b96b463bc23da13e1abee99",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "journal_obb_reliability_first_audit_20260907.md",
+      "section": 3,
+      "source_lines": [
+        24,
+        38
+      ],
+      "destination": "OBB观测可靠性与连续输出.md",
+      "anchor": "a-3",
+      "source_body_sha256": "fb3efc488cee2ac19c23648f3f73044e038cb40ae44f5751eebb40550f347253",
+      "integrated_body_sha256": "55b42766369c02b09ec8f048fbe124e6bf8f5c2e005ce3e7f34392ccc1b39703",
+      "transformed_body_sha256": "55b42766369c02b09ec8f048fbe124e6bf8f5c2e005ce3e7f34392ccc1b39703",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "journal_obb_reliability_first_audit_20260907.md",
+      "section": 4,
+      "source_lines": [
+        39,
+        48
+      ],
+      "destination": "OBB观测可靠性与连续输出.md",
+      "anchor": "a-4",
+      "source_body_sha256": "387e02f996d401cf574a4901b33c5cd528136332cb2f3438c7d5800f565812f4",
+      "integrated_body_sha256": "f116b5aaf6645166e1c35062c1d99e2a7064a8c90f3a8200b9ef7f2de8fb1eb4",
+      "transformed_body_sha256": "f116b5aaf6645166e1c35062c1d99e2a7064a8c90f3a8200b9ef7f2de8fb1eb4",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "journal_obb_reliability_first_audit_20260907.md",
+      "section": 5,
+      "source_lines": [
+        49,
+        75
+      ],
+      "destination": "OBB观测可靠性与连续输出.md",
+      "anchor": "a-5",
+      "source_body_sha256": "fca9d4903743279aaa911d4278cf77fdb53f9045213a46a99ba1fb91218afef4",
+      "integrated_body_sha256": "ad01d5060d56ee9d300fbe802acac788b09f16d083a46f233963cb27be839d8f",
+      "transformed_body_sha256": "ad01d5060d56ee9d300fbe802acac788b09f16d083a46f233963cb27be839d8f",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "journal_obb_reliability_first_audit_20260907.md",
+      "section": 6,
+      "source_lines": [
+        76,
+        79
+      ],
+      "destination": "OBB观测可靠性与连续输出.md",
+      "anchor": "a-6",
+      "source_body_sha256": "af7929d0bb2911d536b34dd99927404eb33848a5c3a17ec09d6a9ee076cbf208",
+      "integrated_body_sha256": "db801d676cd0d67b8042d4429606bd1729a5c0b4c960b4f51c8da34cfe1a1cee",
+      "transformed_body_sha256": "db801d676cd0d67b8042d4429606bd1729a5c0b4c960b4f51c8da34cfe1a1cee",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "journal_obb_reliability_first_audit_20260907.md",
+      "section": 7,
+      "source_lines": [
+        80,
+        82
+      ],
+      "destination": "OBB观测可靠性与连续输出.md",
+      "anchor": "a-7",
+      "source_body_sha256": "b8d03f7c8800bb3bc8bf338c3c0c42943e52614fb849ddc2f6b6686f4d5e1fc1",
+      "integrated_body_sha256": "db2e61a213e5d81fb61f1c45f7661841f29de3fa17cf78a1e0a364f6b9f8071e",
+      "transformed_body_sha256": "db2e61a213e5d81fb61f1c45f7661841f29de3fa17cf78a1e0a364f6b9f8071e",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "journal_obb_reliability_handoff_20260907.md",
+      "section": 2,
+      "source_lines": [
+        15,
+        32
+      ],
+      "destination": "OBB观测可靠性与连续输出.md",
+      "anchor": "h-2",
+      "source_body_sha256": "11c9aa21ff0f1d28bb205ec849866d339cfe9d1e88bf4368d5d092d60c423c39",
+      "integrated_body_sha256": "8bdc72146de99e8811a0b56e9bbbfef461630e84829f1f478a8dfe3e01df6278",
+      "transformed_body_sha256": "8bdc72146de99e8811a0b56e9bbbfef461630e84829f1f478a8dfe3e01df6278",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "journal_obb_reliability_handoff_20260907.md",
+      "section": 4,
+      "source_lines": [
+        45,
+        55
+      ],
+      "destination": "OBB观测可靠性与连续输出.md",
+      "anchor": "h-4",
+      "source_body_sha256": "c47ee66cc7201b74177f75e7cccd17f9ec9ced8bd4f92cddaf23f8f5237a161e",
+      "integrated_body_sha256": "a9f1a82e646742e5d509ac7617711c1c28e90e8167290f1ddb608d0aae3613d3",
+      "transformed_body_sha256": "a9f1a82e646742e5d509ac7617711c1c28e90e8167290f1ddb608d0aae3613d3",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "journal_obb_reliability_handoff_20260907.md",
+      "section": 5,
+      "source_lines": [
+        56,
+        63
+      ],
+      "destination": "OBB观测可靠性与连续输出.md",
+      "anchor": "h-5",
+      "source_body_sha256": "5ccc07d1e1ad492ec28daaca52a80581c4a60697364dd47f934acc9d4b9472f7",
+      "integrated_body_sha256": "86476c145b0a1d330439fac11ab73148664e1b7a0c591f30f7f66145b0bd1ed7",
+      "transformed_body_sha256": "86476c145b0a1d330439fac11ab73148664e1b7a0c591f30f7f66145b0bd1ed7",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "journal_obb_reliability_handoff_20260907.md",
+      "section": 7,
+      "source_lines": [
+        74,
+        80
+      ],
+      "destination": "OBB观测可靠性与连续输出.md",
+      "anchor": "h-7",
+      "source_body_sha256": "152edee827ec44c7dc1b7f5682384e9eabfde7914596e036a3650641a7d7657a",
+      "integrated_body_sha256": "d7e6558404da25c1ee87f6ed306486f480fe4d8fd2b87f055a315485a19bb2ef",
+      "transformed_body_sha256": "d7e6558404da25c1ee87f6ed306486f480fe4d8fd2b87f055a315485a19bb2ef",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "journal_obb_reliability_handoff_20260907.md",
+      "section": 6,
+      "source_lines": [
+        64,
+        73
+      ],
+      "destination": "OBB观测可靠性与连续输出.md",
+      "anchor": "h-6",
+      "source_body_sha256": "f6c2b29062a94ed4a740d5759ab1c5c6fa30ea625600b1d6c48bff89dcd97743",
+      "integrated_body_sha256": "df4c3a2f2c3af96e347e6a7a52e1d8e9fc8a6ab9696605e4ecc4949b6f4a5d66",
+      "transformed_body_sha256": "df4c3a2f2c3af96e347e6a7a52e1d8e9fc8a6ab9696605e4ecc4949b6f4a5d66",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "Webots深度估计现有数据与论文证据清单_20260906.md",
+      "section": 1,
+      "source_lines": [
+        9,
+        76
+      ],
+      "destination": "Webots单目深度估计.md",
+      "anchor": "e-1",
+      "source_body_sha256": "a7ccebea2c990fef1b976e9892fee366ec167fbe82c41c8123d8f24c1859dd8d",
+      "integrated_body_sha256": "0644d8a97bd839a5430f78fa0a537f62c752b33234d8f3fc2ef3e81b93aaf3be",
+      "transformed_body_sha256": "0644d8a97bd839a5430f78fa0a537f62c752b33234d8f3fc2ef3e81b93aaf3be",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "Webots 单目深度几何契约.md",
+      "section": 1,
+      "source_lines": [
+        7,
+        44
+      ],
+      "destination": "Webots单目深度估计.md",
+      "anchor": "g-1",
+      "source_body_sha256": "194e444ef7f58699a3c2c67c41b04b2e73a9e125984acc4840a878bb0fee2a1b",
+      "integrated_body_sha256": "a9589ee527c19ca5ea0e6ee8987fe51299fd8c6a06b30dcb6b15758461a5e713",
+      "transformed_body_sha256": "a9589ee527c19ca5ea0e6ee8987fe51299fd8c6a06b30dcb6b15758461a5e713",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "Webots 单目深度几何契约.md",
+      "section": 2,
+      "source_lines": [
+        45,
+        68
+      ],
+      "destination": "Webots单目深度估计.md",
+      "anchor": "g-2",
+      "source_body_sha256": "04318cd63c483c674742c2931bbddfd0725ae2fd963c79688ad058c9fc2dbe28",
+      "integrated_body_sha256": "4d1b708b522c0c4a5c040d17ddc67c31dbe0f5b731b2f0177d358d8d17fff6cf",
+      "transformed_body_sha256": "4d1b708b522c0c4a5c040d17ddc67c31dbe0f5b731b2f0177d358d8d17fff6cf",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "Webots 单目深度几何契约.md",
+      "section": 3,
+      "source_lines": [
+        69,
+        119
+      ],
+      "destination": "Webots单目深度估计.md",
+      "anchor": "g-3",
+      "source_body_sha256": "1c1de76f674370635f7e52152cdcbc18550cb68a28670b310648b2df5054e566",
+      "integrated_body_sha256": "e72ffd129d21477db755638d280bc6f22b4b51b2ccf9a36ec7baef5600002db8",
+      "transformed_body_sha256": "e72ffd129d21477db755638d280bc6f22b4b51b2ccf9a36ec7baef5600002db8",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "Webots 单目深度几何契约.md",
+      "section": 4,
+      "source_lines": [
+        120,
+        144
+      ],
+      "destination": "Webots单目深度估计.md",
+      "anchor": "g-4",
+      "source_body_sha256": "90936dd27eeda0c6c6aa9a4d4d36735d5e8bd125b9c42cd9e75ad31071460735",
+      "integrated_body_sha256": "89f7dcc58dd3e818b4212a66b63fd8256e7b6795b17d3aecf00341f1cc4cdd7e",
+      "transformed_body_sha256": "89f7dcc58dd3e818b4212a66b63fd8256e7b6795b17d3aecf00341f1cc4cdd7e",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "Webots 单目深度几何契约.md",
+      "section": 5,
+      "source_lines": [
+        145,
+        188
+      ],
+      "destination": "Webots单目深度估计.md",
+      "anchor": "g-5",
+      "source_body_sha256": "829ad7d3b2e233b0765b0443754977c0b18fb7b842d9fb492d4bcb011f98fa22",
+      "integrated_body_sha256": "fda14911173d745bd02038322b134622fd46a9be001f344c993dd30e23ea8425",
+      "transformed_body_sha256": "fda14911173d745bd02038322b134622fd46a9be001f344c993dd30e23ea8425",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "Webots 单目深度几何契约.md",
+      "section": 6,
+      "source_lines": [
+        189,
+        210
+      ],
+      "destination": "Webots单目深度估计.md",
+      "anchor": "g-6",
+      "source_body_sha256": "d7b164a49377ccb038a2c4ccb5cd9019f99ff8696a4456fa68fd513f80175013",
+      "integrated_body_sha256": "c331ff5e4d5bf79c47fb2ec5299a7d15e33b56edf36ccf35f7bfe76e5733ef53",
+      "transformed_body_sha256": "c331ff5e4d5bf79c47fb2ec5299a7d15e33b56edf36ccf35f7bfe76e5733ef53",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "Webots 单目深度几何契约.md",
+      "section": 7,
+      "source_lines": [
+        211,
+        222
+      ],
+      "destination": "Webots单目深度估计.md",
+      "anchor": "g-7",
+      "source_body_sha256": "3814a829d08e3ec902981be2c40dfb4addd3462b9469f8494ccf8a2d92aba0f8",
+      "integrated_body_sha256": "3f6187894b2a1467a46d61644b9745c419011435aa7e6ff3aa2012c045727fda",
+      "transformed_body_sha256": "3f6187894b2a1467a46d61644b9745c419011435aa7e6ff3aa2012c045727fda",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "Webots 单目深度几何契约.md",
+      "section": 8,
+      "source_lines": [
+        223,
+        232
+      ],
+      "destination": "Webots单目深度估计.md",
+      "anchor": "g-8",
+      "source_body_sha256": "969a3a8f4989d964628d626fef01a87818becaaed36b41313d32bcc7ba95e513",
+      "integrated_body_sha256": "4c22a978d61890c5d97e7f2ef96a8a6dcb2ca4a798c6daa89c999d5719002733",
+      "transformed_body_sha256": "4c22a978d61890c5d97e7f2ef96a8a6dcb2ca4a798c6daa89c999d5719002733",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "Webots深度估计现有数据与论文证据清单_20260906.md",
+      "section": 2,
+      "source_lines": [
+        77,
+        96
+      ],
+      "destination": "Webots单目深度估计.md",
+      "anchor": "e-2",
+      "source_body_sha256": "8dbdbc6fe9cdca569172942cb758d6b0d39f263badbbaa0b22a4208c801e7815",
+      "integrated_body_sha256": "3a10b2c5acc31f37a1e04f8a86455d5dee088a63ce8ac2ef373304dec0413509",
+      "transformed_body_sha256": "3a10b2c5acc31f37a1e04f8a86455d5dee088a63ce8ac2ef373304dec0413509",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "Webots深度估计现有数据与论文证据清单_20260906.md",
+      "section": 3,
+      "source_lines": [
+        97,
+        141
+      ],
+      "destination": "Webots单目深度估计.md",
+      "anchor": "e-3",
+      "source_body_sha256": "cd5cf00fb038cb68aa7a235d4c14666d5f2c34424f08917a907560c1a28368f0",
+      "integrated_body_sha256": "60ea6a95455520987a88833a83855c6b1fea48c42019756ac0728d90f5d42aff",
+      "transformed_body_sha256": "60ea6a95455520987a88833a83855c6b1fea48c42019756ac0728d90f5d42aff",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "Webots深度估计现有数据与论文证据清单_20260906.md",
+      "section": 4,
+      "source_lines": [
+        142,
+        161
+      ],
+      "destination": "Webots单目深度估计.md",
+      "anchor": "e-4",
+      "source_body_sha256": "05152f27d072a4dd6ef4cc9fcfe6187c6d767130c440a3634ece0f3b9563fa5f",
+      "integrated_body_sha256": "f90dc204b20c7069fe77be5f861f25b35686de96a03aac94317c6049db833baf",
+      "transformed_body_sha256": "f90dc204b20c7069fe77be5f861f25b35686de96a03aac94317c6049db833baf",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "Webots深度估计现有数据与论文证据清单_20260906.md",
+      "section": 5,
+      "source_lines": [
+        162,
+        183
+      ],
+      "destination": "Webots单目深度估计.md",
+      "anchor": "e-5",
+      "source_body_sha256": "d52474a4f2a2c1c74929deafa324b2c4c8b1268183169c17493a4a7db3629f0c",
+      "integrated_body_sha256": "2c8d90a8cfe4f389a4a8a8fee0601143c1616efc8b56d369e03826eccb35ecea",
+      "transformed_body_sha256": "2c8d90a8cfe4f389a4a8a8fee0601143c1616efc8b56d369e03826eccb35ecea",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "Webots深度估计现有数据与论文证据清单_20260906.md",
+      "section": 6,
+      "source_lines": [
+        184,
+        212
+      ],
+      "destination": "Webots单目深度估计.md",
+      "anchor": "e-6",
+      "source_body_sha256": "a8d09e9db89df616d2f846dc1d6850606b9f2f4ee292031b1410124400dff367",
+      "integrated_body_sha256": "3299a5add4c14ca95ee6ce7a6d00075340a1ce512e7fbafb0ff5213d09606eb3",
+      "transformed_body_sha256": "3299a5add4c14ca95ee6ce7a6d00075340a1ce512e7fbafb0ff5213d09606eb3",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "Webots深度估计现有数据与论文证据清单_20260906.md",
+      "section": 7,
+      "source_lines": [
+        213,
+        243
+      ],
+      "destination": "Webots单目深度估计.md",
+      "anchor": "e-7",
+      "source_body_sha256": "cf59c8769e4fa64bdff8432d2c61bdeecb2906fd4db0ca5b7ec276e36ce21513",
+      "integrated_body_sha256": "2cada53d3b94f59f8ee882ffb863c5ab203fb5208dc97bc011b1f6b45b1556d5",
+      "transformed_body_sha256": "2cada53d3b94f59f8ee882ffb863c5ab203fb5208dc97bc011b1f6b45b1556d5",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "Webots深度估计现有数据与论文证据清单_20260906.md",
+      "section": 8,
+      "source_lines": [
+        244,
+        277
+      ],
+      "destination": "Webots单目深度估计.md",
+      "anchor": "e-8",
+      "source_body_sha256": "4fc50897c42ec316778ffbdf7f210a0f121e150a1a737f299dedc7b39641951b",
+      "integrated_body_sha256": "e150fa050ab68706963ef09051a35a6cbe7337ff0be8b984ab7190947e74b6c6",
+      "transformed_body_sha256": "e150fa050ab68706963ef09051a35a6cbe7337ff0be8b984ab7190947e74b6c6",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "Webots 单目深度几何契约.md",
+      "section": 9,
+      "source_lines": [
+        233,
+        301
+      ],
+      "destination": "Webots单目深度估计.md",
+      "anchor": "g-9",
+      "source_body_sha256": "1678d1aa520e9b734ee12ae91ea1dae1c25cbf1295acc437865dfc01b5050c08",
+      "integrated_body_sha256": "d9046169ce688cf9a46a857b72d1882ba24c05c53f79bb367d044da032cfcdf2",
+      "transformed_body_sha256": "d9046169ce688cf9a46a857b72d1882ba24c05c53f79bb367d044da032cfcdf2",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "Webots深度估计现有数据与论文证据清单_20260906.md",
+      "section": 9,
+      "source_lines": [
+        278,
+        306
+      ],
+      "destination": "Webots单目深度估计.md",
+      "anchor": "e-9",
+      "source_body_sha256": "0ac9f44b37580a2e7295f748eb7960c4e747e5124301a6ae258f8b4e3defa2b5",
+      "integrated_body_sha256": "4aaf06b64934114e64f27b00978cb0202c8289c8576a63c74b74c9d91295248a",
+      "transformed_body_sha256": "4aaf06b64934114e64f27b00978cb0202c8289c8576a63c74b74c9d91295248a",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "Webots深度估计现有数据与论文证据清单_20260906.md",
+      "section": 10,
+      "source_lines": [
+        307,
+        352
+      ],
+      "destination": "Webots单目深度估计.md",
+      "anchor": "e-10",
+      "source_body_sha256": "0331a06405fcaac38ec8817431d5fb8dea860a7c8aa2d16fe9d1e954974ffbdb",
+      "integrated_body_sha256": "7253b12eac336be2364217ace13c2023147083182dd19e26ed8c70b4f5405267",
+      "transformed_body_sha256": "7253b12eac336be2364217ace13c2023147083182dd19e26ed8c70b4f5405267",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "Webots 单目深度几何契约.md",
+      "section": 10,
+      "source_lines": [
+        302,
+        315
+      ],
+      "destination": "Webots单目深度估计.md",
+      "anchor": "g-10",
+      "source_body_sha256": "5fc53a6660cb136278897eba13e9c5dcc85ee9049cf1ad56f35a231808072368",
+      "integrated_body_sha256": "feb2d4a7173f1f068193eaba5709a6bba62b2049d3dbbcc712aa7d0688aaa160",
+      "transformed_body_sha256": "feb2d4a7173f1f068193eaba5709a6bba62b2049d3dbbcc712aa7d0688aaa160",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "Webots深度估计现有数据与论文证据清单_20260906.md",
+      "section": 11,
+      "source_lines": [
+        353,
+        360
+      ],
+      "destination": "Webots单目深度估计.md",
+      "anchor": "e-11",
+      "source_body_sha256": "86675419da9f926449c10412c65ed11baaf75678bde83ab00e7fdd1f2a621c71",
+      "integrated_body_sha256": "09dc10505eb988a332cf6873a05b7a6bf6ea5434bbfc93f15aa2dfe331a741d8",
+      "transformed_body_sha256": "09dc10505eb988a332cf6873a05b7a6bf6ea5434bbfc93f15aa2dfe331a741d8",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "webots_depth_calibration_status_20260823.md",
+      "section": 1,
+      "source_lines": [
+        3,
+        9
+      ],
+      "destination": "Webots单目深度估计.md",
+      "anchor": "c-1",
+      "source_body_sha256": "df8f66d91e8049773d6c57405457e681fccf7cd141dccddc909f0dd90056aa4d",
+      "integrated_body_sha256": "f084133b65beedb3bc665ac0aceedead8b6e405b9de403d08308e3c5c2d5644a",
+      "transformed_body_sha256": "f084133b65beedb3bc665ac0aceedead8b6e405b9de403d08308e3c5c2d5644a",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "webots_depth_calibration_status_20260823.md",
+      "section": 2,
+      "source_lines": [
+        10,
+        16
+      ],
+      "destination": "Webots单目深度估计.md",
+      "anchor": "c-2",
+      "source_body_sha256": "247b3cf0b288006cb3e7fe314e7c5b6843555ca232c151136c0ed0f487d9ff48",
+      "integrated_body_sha256": "527639108e4eb4085232aacbf624ae9cc2a6bce490ba6a228d3004cf07197cf2",
+      "transformed_body_sha256": "527639108e4eb4085232aacbf624ae9cc2a6bce490ba6a228d3004cf07197cf2",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "webots_depth_calibration_status_20260823.md",
+      "section": 3,
+      "source_lines": [
+        17,
+        30
+      ],
+      "destination": "Webots单目深度估计.md",
+      "anchor": "c-3",
+      "source_body_sha256": "245a4d98dd597600f80068d1054407d46b7fa59b2eee87071327fee208c91b01",
+      "integrated_body_sha256": "ed0beb16152689866d59f4b7a5b82fc0e61313f3910227291757359e66296b37",
+      "transformed_body_sha256": "ed0beb16152689866d59f4b7a5b82fc0e61313f3910227291757359e66296b37",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "webots_depth_calibration_status_20260823.md",
+      "section": 4,
+      "source_lines": [
+        31,
+        37
+      ],
+      "destination": "Webots单目深度估计.md",
+      "anchor": "c-4",
+      "source_body_sha256": "ea16c50fa03a4d894e4fba4525360e9bc541ffef8cdc579810379d36ee49137f",
+      "integrated_body_sha256": "8c62c2359308a433a31a4b4522af843f87bd122d950a650c48c3f64a22f7c70d",
+      "transformed_body_sha256": "8c62c2359308a433a31a4b4522af843f87bd122d950a650c48c3f64a22f7c70d",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "webots_depth_calibration_status_20260823.md",
+      "section": 5,
+      "source_lines": [
+        38,
+        43
+      ],
+      "destination": "Webots单目深度估计.md",
+      "anchor": "c-5",
+      "source_body_sha256": "56f7668e81bd8379e40e5835acd21ece4fc52a0ba981583169a6a5cf5da690be",
+      "integrated_body_sha256": "b749b9de98caf3f79ca0594cf368f1ec420718ec2d8d46ca8556c26e35a8e658",
+      "transformed_body_sha256": "b749b9de98caf3f79ca0594cf368f1ec420718ec2d8d46ca8556c26e35a8e658",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "webots_depth_calibration_status_20260823.md",
+      "section": 6,
+      "source_lines": [
+        44,
+        46
+      ],
+      "destination": "Webots单目深度估计.md",
+      "anchor": "c-6",
+      "source_body_sha256": "8c2118c98fb2f267394e282510049f0cf000d61b4f60c7dab9a66035f77d3808",
+      "integrated_body_sha256": "b3c5297343feef3c8685715503db217a7aa0d5a5d022d546c477445fdb84952c",
+      "transformed_body_sha256": "b3c5297343feef3c8685715503db217a7aa0d5a5d022d546c477445fdb84952c",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "Webots 单目深度几何契约.md",
+      "section": 11,
+      "source_lines": [
+        316,
+        327
+      ],
+      "destination": "Webots单目深度估计.md",
+      "anchor": "g-11",
+      "source_body_sha256": "a7f5d97fd8e8280babc0faf51673a426db83995a15c60e6da3a5bf5d3f94567e",
+      "integrated_body_sha256": "93dcbb41adb87f745ed5862991358fc5dc628b49f237ed4bca51c0da51251700",
+      "transformed_body_sha256": "93dcbb41adb87f745ed5862991358fc5dc628b49f237ed4bca51c0da51251700",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "Webots 单目深度几何契约.md",
+      "section": 12,
+      "source_lines": [
+        328,
+        330
+      ],
+      "destination": "Webots单目深度估计.md",
+      "anchor": "g-12",
+      "source_body_sha256": "f9b524797c09c805494d5ddd95e7b3c0fca9d3385004df33ed5a74af7d36e5c0",
+      "integrated_body_sha256": "61d448d9de5623c430cbb7e2dbeaee0edb59b9d21ab0da91f039d83f04f747b0",
+      "transformed_body_sha256": "61d448d9de5623c430cbb7e2dbeaee0edb59b9d21ab0da91f039d83f04f747b0",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "Webots深度估计现有数据与论文证据清单_20260906.md",
+      "section": 12,
+      "source_lines": [
+        361,
+        368
+      ],
+      "destination": "Webots单目深度估计.md",
+      "anchor": "e-12",
+      "source_body_sha256": "21adb3a6b610248994e77ebf3d840fd96f3b284418aa801d93f614ae5725e092",
+      "integrated_body_sha256": "250edea7620d81290e1d1abd29de5718429d6a5bd6b5ec1fc0ae6985f9c7de73",
+      "transformed_body_sha256": "250edea7620d81290e1d1abd29de5718429d6a5bd6b5ec1fc0ae6985f9c7de73",
+      "duplicate_paragraphs": []
+    },
+    {
+      "source": "Webots深度估计现有数据与论文证据清单_20260906.md",
+      "section": 13,
+      "source_lines": [
+        369,
+        371
+      ],
+      "destination": "Webots单目深度估计.md",
+      "anchor": "e-13",
+      "source_body_sha256": "6ed36c9fae0e45c0cf61e5c8ca61623118a169023e4f20700e63c9951ed689f2",
+      "integrated_body_sha256": "2be15ef82671eb8ce787215d8578cdf8a151571965db65331e7031a4a31d45a7",
+      "transformed_body_sha256": "2be15ef82671eb8ce787215d8578cdf8a151571965db65331e7031a4a31d45a7",
+      "duplicate_paragraphs": []
+    }
+  ],
+  "outputs": [
+    {
+      "file": "冻结DINOv2与SymEOOD检测融合.md",
+      "sha256": "2cdb80f927fca53317408d71cecee8113360a0bb5d026a968d9a252a89a7a28e",
+      "bytes": 250783
+    },
+    {
+      "file": "OBB观测可靠性与连续输出.md",
+      "sha256": "8bbfd31987abe42b3280c6931f52c4b20d653a90c22ab83b17bf68a981acf33a",
+      "bytes": 34626
+    },
+    {
+      "file": "Webots单目深度估计.md",
+      "sha256": "d50a159a3eec01a6374891156b94a0af61408087b24e37392e075f63ae882fb2",
+      "bytes": 52127
+    }
+  ],
+  "verification": {
+    "archived_source_hashes_verified": 11,
+    "integrated_section_bodies_verified": 108,
+    "output_hashes_verified": 3,
+    "unique_anchors_and_internal_links": "passed",
+    "markdown_code_fences": "passed",
+    "external_artifact_or_experiment_revalidation": "not_run",
+    "visual_rendering": "not_run; Markdown structural checks only",
+    "semantic_compression": "none; conservative topic regrouping preserves complete source sections"
+  }
+}

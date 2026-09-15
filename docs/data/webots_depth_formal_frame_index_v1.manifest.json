@@ -1,0 +1,157 @@
+{
+  "schema_version": "webots_depth_formal_frame_index_v1",
+  "dataset_root": "/Users/mac/Documents/fangzhen/grab_副本/datasets/yolo_obb_depth_dataset",
+  "included_sequences": [
+    "calibration_train_03_tilt_obb",
+    "fixed_dev_01_unseen_depth_swing",
+    "unknown_test_02_coverage_retry"
+  ],
+  "excluded_by_protocol": {
+    "calibration_train_01": "historical power-law calibration only",
+    "calibration_train_02_yaw_small_step": "training-side yaw audit only",
+    "unknown_test_01_mixed_depth_swing": "coverage gate failed before model errors were exposed",
+    "depth_pilot_04": "pipeline pilot",
+    "depth_pilot_05_compact": "storage pilot"
+  },
+  "frame_count": 2971,
+  "constant_contract": {
+    "camera": {
+      "device_name": "down_camera",
+      "width_px": 1024,
+      "height_px": 1024,
+      "horizontal_fov_rad": 1.0,
+      "intrinsics": {
+        "fx": 937.2097135167754,
+        "fy": 937.2097135167754,
+        "cx": 512.0,
+        "cy": 512.0
+      },
+      "projection": "planar_pinhole_no_lens_distortion"
+    },
+    "obb_reference_geometry": {
+      "long_edge_mean_m": 1.7750000000000017,
+      "short_edge_mean_m": 0.6100409808533983,
+      "reference_ar_3d": 2.9096405908942695,
+      "planarity_error_m": 9.3856399157734e-08,
+      "grab_reference_center_error_m": 2.346410307875875e-08
+    }
+  },
+  "sequence_summaries": [
+    {
+      "sequence_id": "calibration_train_03_tilt_obb",
+      "protocol_role": "calibration_train",
+      "scenario": "tilt_stratified_obb_scale",
+      "run_instance_id": "31166ebea2aa4c90bea5681c9110a884",
+      "schema_version": "webots_crane_depth_gt_v7",
+      "nominal_fps": 10.416666666666666,
+      "frame_count": 981,
+      "image_count": 981,
+      "label_count": 981,
+      "frame_indices_contiguous_zero_based": true,
+      "all_image_and_label_paths_exist": true,
+      "obb_valid_count": 981,
+      "truth_valid_count": 981,
+      "truth_audit_pass_count": 981,
+      "z_cg_opt_range_m": [
+        11.888473310918114,
+        24.57480853808907
+      ],
+      "h_pg_vertical_range_m": [
+        11.779727006004151,
+        24.486590352720086
+      ],
+      "theta_total_range_deg": [
+        0.03735871198652205,
+        13.968396533738948
+      ],
+      "theta_total_bin_counts": {
+        "0_to_3": 228,
+        "3_to_5": 166,
+        "5_to_8": 294,
+        "8_or_more": 293
+      },
+      "manifest_sha256": "4dbc6c8dcb039c73cca0311da1a648fa08ad807d6b29a1e23124d6c659a4c0d6",
+      "frames_jsonl_sha256": "3441b0e1dad135ee7d49b0ee2c243fc603c5193284aa69a8ab67d71b52db7aad"
+    },
+    {
+      "sequence_id": "fixed_dev_01_unseen_depth_swing",
+      "protocol_role": "fixed_dev",
+      "scenario": "unseen_continuous_depth_with_natural_swing",
+      "run_instance_id": "07c8ea8327704719837d33c49b2dca45",
+      "schema_version": "webots_crane_depth_gt_v7",
+      "nominal_fps": 12.5,
+      "frame_count": 893,
+      "image_count": 893,
+      "label_count": 893,
+      "frame_indices_contiguous_zero_based": true,
+      "all_image_and_label_paths_exist": true,
+      "obb_valid_count": 893,
+      "truth_valid_count": 893,
+      "truth_audit_pass_count": 893,
+      "z_cg_opt_range_m": [
+        12.518310044395701,
+        24.77375514219677
+      ],
+      "h_pg_vertical_range_m": [
+        12.434825886556588,
+        24.696190085355944
+      ],
+      "theta_total_range_deg": [
+        0.029077460198543105,
+        10.789275676043374
+      ],
+      "theta_total_bin_counts": {
+        "0_to_3": 510,
+        "3_to_5": 248,
+        "5_to_8": 90,
+        "8_or_more": 45
+      },
+      "manifest_sha256": "b86a86a154d1552500cf11bafef677f24b1bb9a7bca59b47c6235f8aa8705259",
+      "frames_jsonl_sha256": "a4e0b59d54b7cffd3c0299c3470f660510f37ac2d6c63ee1f8bd76d953584d87"
+    },
+    {
+      "sequence_id": "unknown_test_02_coverage_retry",
+      "protocol_role": "unknown_test",
+      "scenario": "one_time_coverage_retry_mixed_depth_high_swing",
+      "run_instance_id": "c7ed7b43768e4b38aff7046b2266cf68",
+      "schema_version": "webots_crane_depth_gt_v7",
+      "nominal_fps": 10.416666666666666,
+      "frame_count": 1097,
+      "image_count": 1097,
+      "label_count": 1097,
+      "frame_indices_contiguous_zero_based": true,
+      "all_image_and_label_paths_exist": true,
+      "obb_valid_count": 1097,
+      "truth_valid_count": 1097,
+      "truth_audit_pass_count": 1097,
+      "z_cg_opt_range_m": [
+        12.647220218179918,
+        23.069788077499904
+      ],
+      "h_pg_vertical_range_m": [
+        12.53796873578974,
+        22.993152449716927
+      ],
+      "theta_total_range_deg": [
+        0.1138442012819825,
+        10.232442554359338
+      ],
+      "theta_total_bin_counts": {
+        "0_to_3": 351,
+        "3_to_5": 268,
+        "5_to_8": 374,
+        "8_or_more": 104
+      },
+      "manifest_sha256": "ed8a42c3755d67ff0051b7dfc3a898e1dd94d5325de275883d795a7d21dc5f15",
+      "frames_jsonl_sha256": "6c5a728833a77b4f12caa854c8720d12813602a67a9caf75c9563c21c71ac29e"
+    }
+  ],
+  "validation": {
+    "all_sequences_passed": true,
+    "detector_predictions_joined": false,
+    "gps_used_as_model_input": false,
+    "plc_or_encoder_used_as_model_input": false,
+    "real_metric_depth_claim_allowed": false
+  },
+  "csv_sha256": "d4ef1fe8466218616d5c6f61d3f45870d23eccc5c9c20e6b1ab74278d9e7276c"
+}

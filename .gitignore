@@ -10,7 +10,6 @@ plan
 # 数据文件夹，不上传
 crane_project/data
 work_dirs
-docs
 # 日志文件
 *.log
 server_received
