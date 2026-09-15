@@ -1,0 +1,731 @@
+
+##########################################################################################
+SLIDE 1 layout=4_标题和内容
+##########################################################################################
+文本框 11 | L=0.342 T=1.188 W=7.234 H=1.042 | len=31 | bodyPr={'wrap': 'square', 'autofit': 'spAutoFit'}
+  p0 len=31 algn=None lvl=None | 复杂港口环境下门座起重机抓斗有向检测与视觉运动状态估计方法研究{cs=+mn-ea}
+等腰三角形 13 | L=8.142 T=3.298 W=0.431 H=0.39 | len=0 | bodyPr={'anchor': 'ctr'}
+  p0 len=0 algn=ctr lvl=0 | 
+任意多边形: 形状 18 | L=0.571 T=5.538 W=7.7 H=0.22 | len=0 | bodyPr={'anchor': 'ctr'}
+  p0 len=0 algn=ctr lvl=0 | 
+文本框 107 | L=0.797 T=6.901 W=2.145 H=0.31 | len=0 | bodyPr={'wrap': 'square', 'anchor': 't', 'lIns': '91440', 'tIns': '45720', 'rIns': '91440', 'bIns': '45720', 'rot': '0', 'vert': 'horz', 'autofit': 'noAutofit'}
+  p0 len=0 algn=l lvl=0 | 
+文本框 5 | L=6.389 T=3.542 W=0.393 H=0.521 | len=0 | bodyPr={'wrap': 'none', 'anchor': 't', 'autofit': 'noAutofit'}
+  p0 len=0 algn=None lvl=None | 
+文本框 3 | L=0.742 T=6.139 W=3.444 H=0.438 | len=7 | bodyPr={'wrap': 'square', 'autofit': 'spAutoFit'}
+  p0 len=7 algn=None lvl=None | 汇报人：路佳金{}
+  [NOTES] bodyPr={}
+  n0 len=0 | 
+
+##########################################################################################
+SLIDE 2 layout=章节页
+##########################################################################################
+矩形: 圆角 4 | L=1.385 T=1.755 W=10.562 H=3.99 | len=0 | bodyPr={'anchor': 'ctr'}
+  p0 len=0 algn=ctr lvl=None | 
+组合 6 [GROUP]
+  椭圆 7 | L=1.14 T=3.033 W=1.081 H=1.081 | len=0 | bodyPr={'anchor': 'ctr'}
+    p0 len=0 algn=ctr lvl=None | 
+  椭圆 8 | L=1.227 T=3.121 W=0.906 H=0.906 | len=0 | bodyPr={'anchor': 'ctr'}
+    p0 len=0 algn=ctr lvl=None | 
+  文本框 9 | L=1.356 T=3.366 W=0.649 H=0.473 | len=2 | bodyPr={'wrap': 'square', 'autofit': 'spAutoFit'}
+    p0 len=2 algn=ctr lvl=None | 01{latin=+mj-lt,color=scheme:bg1}
+文本框 10 | L=4.509 T=3.034 W=5.319 H=0.841 | len=4 | bodyPr={'wrap': 'square', 'autofit': 'spAutoFit'}
+  p0 len=4 algn=ctr lvl=None | 研究背景{latin=微软雅黑,ea=微软雅黑}
+  [NOTES] bodyPr={}
+  n0 len=8 | 第一点，研究背景{latin=+mn-lt,ea=+mn-ea,cs=+mn-cs,color=scheme:tx1}
+  n1 len=0 | 
+
+##########################################################################################
+SLIDE 3 layout=章节页
+##########################################################################################
+直接连接符 3 | L=0.0 T=1.029 W=13.333 H=0.0 | (no text frame)
+图片 2 | L=0.336 T=0.161 W=0.728 H=0.721 | (no text frame)
+图片 3 | L=1.244 T=0.279 W=1.299 H=0.484 | (no text frame)
+文本框 6 | L=0.121 T=1.136 W=8.396 H=5.15 | len=442 | bodyPr={'wrap': 'square', 'autofit': 'spAutoFit'}
+  p0 len=237 algn=None lvl=None | 港口海运作为全球供应链的核心枢纽，其大宗散货的流转效率高度依赖门座起重机（{latin=SimSun,ea=SimSun} ;; Portal Crane{latin=SimSun,ea=SimSun} ;; ）{latin=SimSun,ea=SimSun} ;; 的连续协同作业。在追求极致吞吐量的现代港口物流中，精确且高效的负载搬运是维系生产节拍的生命线。然而，当前多数起重机的运行仍受制于“人机开环”的操控模式，高度依赖驾驶员的经验直觉。这种模式在工业高压下存在固有的物理局限：为迎合不断攀升的生产率考核，操作员常被迫提高变幅与起升的运行速度。这种激进的操纵指令会向柔性钢丝绳吊装机构注入巨大的惯性激振力，直接打破吊载系统的动态平衡。{latin=SimSun,ea=SimSun}
+  p1 len=204 algn=None lvl=None | 在长达数十米的悬垂尺度下，门座起重机本质上是一个极易受扰的欠驱动非线性动力学系统。激进操作与操作员瞬时误判诱发的有效载荷（抓斗）高频过度摆动，不仅严重迟滞了装卸周期的闭环，更是港口特种设备安全作业的致命隐患。残余摇摆极易导致大吨位抓斗与船舱边框或地面设施发生非预期碰撞，进而引发灾难性的人员伤亡与巨大的经济损失{latin=SimSun,ea=SimSun} ;; 。{latin=SimSun,ea=SimSun} ;; 因此，研究并部署门机的防摇摆控制策略，已成为突破起重机作业性能瓶颈与守住操作安全底线的必然路径。{latin=SimSun,ea=SimSun}
+图片 4 | L=8.516 T=1.294 W=4.626 H=3.517 | (no text frame)
+  [NOTES] bodyPr={}
+  n0 len=21 | 后续可以加上当前对于防摇摆的现状和主要问题{}
+
+##########################################################################################
+SLIDE 4 layout=章节页
+##########################################################################################
+直接连接符 3 | L=0.0 T=1.029 W=13.333 H=0.0 | (no text frame)
+图片 2 | L=0.336 T=0.161 W=0.728 H=0.721 | (no text frame)
+图片 3 | L=1.244 T=0.279 W=1.299 H=0.484 | (no text frame)
+文本框 6 | L=0.145 T=1.185 W=10.283 H=0.706 | len=71 | bodyPr={'wrap': 'square', 'autofit': 'spAutoFit'}
+  p0 len=71 algn=None lvl=None | 对于当前的防摇摆控制上，硬件上使用{latin=宋体,ea=宋体} ;; 机械式防摇和电子防摇两种{latin=宋体,ea=宋体} ;; ，控制方案上大多是使用开环控制方案和闭环控制方案。对于使用视觉去进行防摇控制研究较少{latin=宋体,ea=宋体}
+文本框 10 | L=0.145 T=1.9 W=10.429 H=1.917 | len=244 | bodyPr={'wrap': 'square', 'autofit': 'spAutoFit'}
+  p0 len=244 algn=l lvl=None | 早期工业界主要采用输入整形（Input Shaping）等开环前馈控制，通过在指令中注入相位相反的脉冲来抵消系统固有频率。然而，开环控制无法抑制风载等不可预测的外部物理扰动。当前，学术界与高端装备制造已全面转向基于非线性动力学的闭环控制。其中，滑模控制（Sliding Mode Control, SMC） 因其对参数摄动和外部扰动的绝对不变性，成为该领域的核心算法。最新的研究已演进至快速终端滑模（Fast Terminal SMC）与自适应神经滑模，以期在有限时间内强制消除残余摆角。{latin=Times New Roman,ea=宋体,color=scheme:tx1}
+  [NOTES] bodyPr={}
+  n0 len=0 | 
+
+##########################################################################################
+SLIDE 5 layout=章节页
+##########################################################################################
+矩形: 圆角 4 | L=1.385 T=1.755 W=10.562 H=3.99 | len=0 | bodyPr={'anchor': 'ctr'}
+  p0 len=0 algn=ctr lvl=None | 
+组合 6 [GROUP]
+  椭圆 7 | L=1.14 T=3.033 W=1.081 H=1.081 | len=0 | bodyPr={'anchor': 'ctr'}
+    p0 len=0 algn=ctr lvl=None | 
+  椭圆 8 | L=1.227 T=3.121 W=0.906 H=0.906 | len=0 | bodyPr={'anchor': 'ctr'}
+    p0 len=0 algn=ctr lvl=None | 
+  文本框 9 | L=1.356 T=3.316 W=0.649 H=0.473 | len=2 | bodyPr={'wrap': 'square', 'autofit': 'spAutoFit'}
+    p0 len=2 algn=ctr lvl=None | 02{latin=+mj-lt,color=scheme:bg1}
+文本框 10 | L=4.509 T=3.034 W=5.319 H=0.841 | len=4 | bodyPr={'wrap': 'square', 'autofit': 'spAutoFit'}
+  p0 len=4 algn=ctr lvl=None | 研究思路{latin=微软雅黑,ea=微软雅黑}
+  [NOTES] bodyPr={}
+  n0 len=8 | 第一点，研究背景{latin=+mn-lt,ea=+mn-ea,cs=+mn-cs,color=scheme:tx1}
+  n1 len=0 | 
+
+##########################################################################################
+SLIDE 6 layout=章节页
+##########################################################################################
+直接连接符 3 | L=0.0 T=1.029 W=13.333 H=0.0 | (no text frame)
+图片 2 | L=0.336 T=0.161 W=0.728 H=0.721 | (no text frame)
+图片 3 | L=1.244 T=0.279 W=1.299 H=0.484 | (no text frame)
+矩形 7 | L=0.25 T=1.271 W=7.917 H=0.396 | len=21 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=21 algn=l lvl=None | 门座起重机抓斗检测是防摇闭环的前端{latin=等线,ea=等线,cs=等线,color=090909} ;; 测量{latin=等线,ea=等线,cs=等线,color=090909} ;; 问题{latin=等线,ea=等线,cs=等线,color=090909}
+矩形 8 | L=0.25 T=1.854 W=7.656 H=1.406 | len=70 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=70 algn=l lvl=None | 港口散货装卸要求门机连续、高速、稳定作业。抓斗在长悬垂、负载变化和人工操作扰动下容易产生摆动，若视觉量测不稳定，后续防摇控制会直接受到影响。{latin=Times New Roman,ea=宋体}
+矩形 9 | L=0.25 T=3.187 W=7.917 H=1.25 | len=123 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=95 algn=None lvl=None | 目标是单类抓斗旋转框检测以及后续的防摇控制量的求取，评价重点就不能沿用普通 mAP 、检测框是否重合。在控制上更关心中心点、角度、时序连续性和漏检恢复能力，为后续的防摇控制提供稳定的控制量。{latin=Times New Roman,ea=宋体,cs=+mn-cs,color=scheme:tx1}
+  p1 len=27 algn=l lvl=None | 真实{latin=Times New Roman,ea=宋体,cs=+mn-cs,color=scheme:tx1} ;; 数据可验证检测可用性，仿真数据可提供可靠角度真值。{latin=Times New Roman,ea=宋体}
+矩形 12 | L=8.469 T=1.029 W=4.625 H=4.562 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 13 | L=8.821 T=1.445 W=3.574 H=0.312 | len=4 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=4 algn=ctr lvl=None | 控制链路{latin=等线,ea=等线,cs=等线,color=090909}
+圆角矩形 14 | L=9.271 T=2.347 W=3.125 H=0.479 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 15 | L=9.208 T=2.427 W=3.125 H=0.312 | len=4 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=4 algn=ctr lvl=None | 抓斗图像{latin=等线,ea=等线,cs=等线,color=090909}
+圆角矩形 16 | L=9.271 T=3.187 W=3.125 H=0.479 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 17 | L=9.208 T=3.26 W=3.125 H=0.312 | len=11 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=11 algn=ctr lvl=None | 检测框{latin=等线,ea=等线,cs=等线,color=090909} ;; (OBB){latin=等线,ea=等线,cs=等线,color=090909} ;; /中心{latin=等线,ea=等线,cs=等线,color=090909}
+圆角矩形 18 | L=9.271 T=4.031 W=3.125 H=0.479 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 19 | L=9.208 T=4.094 W=3.125 H=0.312 | len=7 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=7 algn=ctr lvl=None | 角度/深度估计{latin=等线,ea=等线,cs=等线,color=090909}
+圆角矩形 20 | L=9.271 T=4.848 W=3.125 H=0.479 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 21 | L=9.208 T=4.927 W=3.125 H=0.312 | len=5 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=5 algn=ctr lvl=None | 防摇控制量{latin=等线,ea=等线,cs=等线,color=090909}
+直线连接符 22 | L=10.771 T=2.823 W=0.01 H=0.354 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+直线连接符 23 | L=10.771 T=3.656 W=0.01 H=0.354 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+直线连接符 24 | L=10.771 T=4.49 W=0.01 H=0.354 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+  [NOTES] bodyPr={}
+  n0 len=0 | 
+
+##########################################################################################
+SLIDE 7 layout=章节页
+##########################################################################################
+直接连接符 3 | L=0.0 T=1.029 W=13.333 H=0.0 | (no text frame)
+图片 2 | L=0.336 T=0.161 W=0.728 H=0.721 | (no text frame)
+图片 3 | L=1.244 T=0.279 W=1.299 H=0.484 | (no text frame)
+矩形 25 | L=3.972 T=0.279 W=5.39 H=0.829 | len=9 | bodyPr={'anchor': 'ctr', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=9 algn=ctr lvl=None | 抓斗检测自定义指标{latin=等线,ea=等线,cs=等线,color=090909}
+矩形 26 | L=3.086 T=1.103 W=7.162 H=0.562 | len=18 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=18 algn=l lvl=None | 静态{latin=等线,ea=等线,cs=等线,color=090909} ;; 指标：先保证量测位置，再检查姿态{latin=等线,ea=等线,cs=等线,color=090909}
+圆角矩形 27 | L=0.696 T=2.07 W=2.865 H=2.135 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 28 | L=0.884 T=2.215 W=2.49 H=0.333 | len=8 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=8 algn=ctr lvl=None | R_center{latin=等线,ea=等线,cs=等线,color=182667}
+矩形 29 | L=0.884 T=2.59 W=2.49 H=0.292 | len=6 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=6 algn=ctr lvl=None | 中心点召回率{latin=等线,ea=等线,cs=等线,color=666666}
+矩形 30 | L=0.884 T=2.965 W=2.49 H=0.802 | len=38 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=38 algn=ctr lvl=None | 只看预测中心点与真实中心点的偏移是否在容许范围内，不要求检测框形状完全准确。{latin=宋体,ea=宋体,cs=等线,color=090909}
+矩形 31 | L=0.884 T=3.872 W=2.49 H=0.229 | len=4 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=4 algn=ctr lvl=None | 越大越好{latin=等线,ea=等线,cs=等线,color=182667}
+圆角矩形 32 | L=4.96 T=2.071 W=3.041 H=2.135 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 33 | L=5.148 T=2.217 W=2.49 H=0.333 | len=6 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=6 algn=ctr lvl=None | A-RMSE{latin=等线,ea=等线,cs=等线,color=BD4B4B}
+矩形 34 | L=5.148 T=2.592 W=2.49 H=0.292 | len=9 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=9 algn=ctr lvl=None | 角度序列均方根误差{latin=等线,ea=等线,cs=等线,color=666666}
+矩形 35 | L=5.148 T=2.967 W=2.679 H=0.802 | len=46 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=46 algn=ctr lvl=None | 衡量预测角度与真值角度的差异抓斗长方形具有 180°对称性，误差折叠到 -90°到 90°。{latin=宋体,ea=宋体,cs=宋体,color=090909}
+矩形 36 | L=5.236 T=3.872 W=2.49 H=0.229 | len=11 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=11 algn=ctr lvl=None | 越小越好，仅用仿真数据{latin=等线,ea=等线,cs=等线,color=BD4B4B}
+圆角矩形 37 | L=9.224 T=2.07 W=2.865 H=2.135 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 38 | L=9.411 T=2.215 W=2.49 H=0.333 | len=9 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=9 algn=ctr lvl=None | mean_RIoU{latin=等线,ea=等线,cs=等线,color=3A8B59}
+矩形 39 | L=9.411 T=2.59 W=2.49 H=0.292 | len=7 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=7 algn=ctr lvl=None | 平均旋转交并比{latin=等线,ea=等线,cs=等线,color=666666}
+矩形 40 | L=9.411 T=2.965 W=2.49 H=0.802 | len=36 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=36 algn=ctr lvl=None | 保留传统旋转框质量评价，用于解释检测框是否贴合，但不单独决定控制可用性。{latin=宋体,ea=宋体,cs=等线,color=090909}
+矩形 41 | L=9.411 T=3.872 W=2.49 H=0.229 | len=4 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=4 algn=ctr lvl=None | 越大越好{latin=等线,ea=等线,cs=等线,color=3A8B59}
+圆角矩形 42 | L=7.037 T=-2.207 W=2.865 H=2.135 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 43 | L=7.224 T=-2.061 W=2.49 H=0.333 | len=3 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=3 algn=l lvl=None | DEP{latin=等线,ea=等线,cs=等线,color=D8AA72}
+矩形 44 | L=7.224 T=-1.686 W=2.49 H=0.292 | len=9 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=9 algn=l lvl=None | 深度估算误差传播率{latin=等线,ea=等线,cs=等线,color=666666}
+矩形 45 | L=7.224 T=-1.311 W=2.49 H=0.802 | len=32 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=32 algn=l lvl=None | 评估中心点、框对角线或角度误差传递到深度/距离估算时的放大程度。{latin=等线,ea=等线,cs=等线,color=090909}
+矩形 46 | L=3.825 T=-0.791 W=2.49 H=0.229 | len=4 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=4 algn=l lvl=None | 越小越好{latin=等线,ea=等线,cs=等线,color=D8AA72}
+矩形 47 | L=-2.045 T=-0.95 W=1.771 H=0.354 | len=4 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=4 algn=l lvl=None | 角度折叠{latin=等线,ea=等线,cs=等线,color=090909}
+直线连接符 48 | L=-0.014 T=-0.513 W=6.927 H=0.01 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+直线连接符 49 | L=-0.014 T=-0.659 W=0.01 H=0.292 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 50 | L=-0.733 T=-0.372 W=0.729 H=0.25 | len=5 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=5 algn=ctr lvl=None | -180°{latin=等线,ea=等线,cs=等线,color=090909}
+直线连接符 51 | L=1.715 T=-0.659 W=0.01 H=0.292 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 52 | L=0.997 T=-0.372 W=0.729 H=0.25 | len=4 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=4 algn=ctr lvl=None | -90°{latin=等线,ea=等线,cs=等线,color=090909}
+直线连接符 53 | L=3.455 T=-0.659 W=0.01 H=0.292 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 54 | L=2.736 T=-0.372 W=0.729 H=0.25 | len=2 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=2 algn=ctr lvl=None | 0°{latin=等线,ea=等线,cs=等线,color=090909}
+直线连接符 55 | L=5.184 T=-0.659 W=0.01 H=0.292 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 56 | L=4.465 T=-0.372 W=0.729 H=0.25 | len=3 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=3 algn=ctr lvl=None | 90°{latin=等线,ea=等线,cs=等线,color=090909}
+直线连接符 57 | L=6.913 T=-0.659 W=0.01 H=0.292 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 58 | L=6.195 T=-0.372 W=0.729 H=0.25 | len=4 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=4 algn=ctr lvl=None | 180°{latin=等线,ea=等线,cs=等线,color=090909}
+圆角矩形 59 | L=1.705 T=-1.055 W=3.49 H=0.396 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 60 | L=1.705 T=-0.971 W=3.49 H=0.25 | len=20 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=20 algn=ctr lvl=None | 有效角度误差区间：[-90°, 90°]{latin=等线,ea=等线,cs=等线,color=182667}
+矩形 61 | L=1.062 T=5.769 W=10.722 H=0.354 | len=48 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=48 algn=ctr lvl=None | 真实数据手工角度标注噪声较大，因此 A-RMSE {latin=宋体,ea=宋体,cs=宋体,color=090909} ;; 用仿真真值计算；真实数据主要看中心和时序可用{latin=宋体,ea=宋体,cs=宋体,color=090909} ;; 。{latin=宋体,ea=宋体,cs=宋体,color=090909}
+  [NOTES] bodyPr={}
+  n0 len=0 | 
+
+##########################################################################################
+SLIDE 8 layout=章节页
+##########################################################################################
+圆角矩形 122 | L=10.219 T=1.981 W=2.448 H=2.298 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+圆角矩形 121 | L=7.075 T=1.973 W=2.448 H=2.298 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+圆角矩形 120 | L=3.929 T=1.981 W=2.448 H=2.298 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+直接连接符 3 | L=0.0 T=1.029 W=13.333 H=0.0 | (no text frame)
+图片 2 | L=0.336 T=0.161 W=0.728 H=0.721 | (no text frame)
+图片 3 | L=1.244 T=0.279 W=1.299 H=0.484 | (no text frame)
+矩形 25 | L=3.972 T=0.178 W=5.39 H=0.829 | len=9 | bodyPr={'anchor': 'ctr', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=9 algn=ctr lvl=None | 抓斗检测自定义指标{latin=等线,ea=等线,cs=等线,color=090909}
+圆角矩形 42 | L=7.037 T=-2.207 W=2.865 H=2.135 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 43 | L=7.224 T=-2.061 W=2.49 H=0.333 | len=3 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=3 algn=l lvl=None | DEP{latin=等线,ea=等线,cs=等线,color=D8AA72}
+矩形 44 | L=7.224 T=-1.686 W=2.49 H=0.292 | len=9 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=9 algn=l lvl=None | 深度估算误差传播率{latin=等线,ea=等线,cs=等线,color=666666}
+矩形 45 | L=7.224 T=-1.311 W=2.49 H=0.802 | len=32 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=32 algn=l lvl=None | 评估中心点、框对角线或角度误差传递到深度{latin=等线,ea=等线,cs=等线,color=090909} ;; /{latin=等线,ea=等线,cs=等线,color=090909} ;; 距离估算时的放大程度{latin=等线,ea=等线,cs=等线,color=090909} ;; 。{latin=等线,ea=等线,cs=等线,color=090909}
+矩形 46 | L=7.224 T=-0.405 W=2.49 H=0.229 | len=4 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=4 algn=l lvl=None | 越小越好{latin=等线,ea=等线,cs=等线,color=D8AA72}
+矩形 62 | L=3.151 T=1.11 W=7.031 H=0.562 | len=21 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=21 algn=l lvl=None | 时序与漏检指标：控制系统更关心连续稳定观测{latin=等线,ea=等线,cs=等线,color=090909}
+圆角矩形 63 | L=0.785 T=1.981 W=2.448 H=2.298 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 64 | L=1.068 T=2.105 W=2.073 H=0.333 | len=3 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=3 algn=l lvl=None | DFR{latin=等线,ea=等线,cs=等线,color=BD4B4B}
+矩形 65 | L=1.068 T=2.502 W=2.073 H=0.292 | len=8 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=8 algn=l lvl=None | 对角线相对抖动率{latin=等线,ea=等线,cs=等线,color=666666}
+矩形 66 | L=1.068 T=2.826 W=2.073 H=0.646 | len=34 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=34 algn=l lvl=None | 衡量相邻帧检测框尺寸{latin=宋体,ea=宋体,cs=宋体,color=090909} ;; /{latin=宋体,ea=宋体,cs=宋体,color=090909} ;; 位置的跳变。对角线归一化后可比较不同尺度目标{latin=宋体,ea=宋体,cs=宋体,color=090909} ;; 。{latin=等线,ea=等线,cs=等线,color=090909}
+矩形 67 | L=1.068 T=3.91 W=2.073 H=0.229 | len=4 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=4 algn=l lvl=None | 越小越好{latin=等线,ea=等线,cs=等线,color=BD4B4B}
+矩形 69 | L=4.16 T=2.105 W=2.073 H=0.333 | len=3 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=3 algn=l lvl=None | ACI{latin=等线,ea=等线,cs=等线,color=3A8B59}
+矩形 70 | L=4.16 T=2.509 W=2.073 H=0.292 | len=7 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=7 algn=l lvl=None | 帧间角度一致性{latin=等线,ea=等线,cs=等线,color=666666}
+矩形 71 | L=4.16 T=2.845 W=2.073 H=0.646 | len=28 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=28 algn=l lvl=None | 衡量相邻帧角度变化是否平滑，避免角度序列突然翻转或抖动{latin=宋体,ea=宋体,cs=等线,color=090909} ;; 。{latin=等线,ea=等线,cs=等线,color=090909}
+矩形 72 | L=4.183 T=3.919 W=2.073 H=0.229 | len=4 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=4 algn=l lvl=None | 越大越好{latin=等线,ea=等线,cs=等线,color=3A8B59}
+矩形 74 | L=7.325 T=2.078 W=2.073 H=0.333 | len=5 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=5 algn=l lvl=None | TDR_w{latin=等线,ea=等线,cs=等线,color=182667}
+矩形 75 | L=7.322 T=2.473 W=2.073 H=0.292 | len=9 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=9 algn=l lvl=None | 滑窗时序有效检测率{latin=等线,ea=等线,cs=等线,color=666666}
+矩形 76 | L=7.289 T=2.817 W=2.073 H=0.646 | len=35 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=35 algn=l lvl=None | 固定滑窗内有效观测比例，例如 10 帧窗口内中心与质量都达标的帧占比。{latin=宋体,ea=宋体,cs=宋体,color=090909}
+矩形 77 | L=7.284 T=3.897 W=2.073 H=0.229 | len=4 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=4 algn=l lvl=None | 越大越好{latin=等线,ea=等线,cs=等线,color=182667}
+矩形 79 | L=10.453 T=2.086 W=2.073 H=0.333 | len=8 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=8 algn=l lvl=None | MCML_max{latin=等线,ea=等线,cs=等线,color=BD4B4B}
+矩形 80 | L=10.443 T=2.517 W=2.073 H=0.292 | len=8 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=8 algn=l lvl=None | 最大连续漏检长度{latin=等线,ea=等线,cs=等线,color=666666}
+矩形 81 | L=10.443 T=2.825 W=2.073 H=0.646 | len=27 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=27 algn=l lvl=None | 记录最长一次连续丢失目标多少帧，是控制系统的生存红线。{latin=宋体,ea=宋体,cs=等线,color=090909}
+矩形 82 | L=10.428 T=3.878 W=2.073 H=0.229 | len=4 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=4 algn=l lvl=None | 越小越好{latin=等线,ea=等线,cs=等线,color=BD4B4B}
+矩形 88 | L=1.427 T=5.958 W=2.188 H=0.312 | len=8 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=8 algn=l lvl=None | 10 帧滑窗示意{latin=等线,ea=等线,cs=等线,color=090909}
+圆角矩形 89 | L=3.844 T=6.01 W=0.5 H=0.5 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 90 | L=3.844 T=6.073 W=0.5 H=0.292 | len=1 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=1 algn=ctr lvl=None | ✓{latin=等线,ea=等线,cs=等线,color=3A8B59}
+矩形 91 | L=3.802 T=6.656 W=0.583 H=0.229 | len=2 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=2 algn=ctr lvl=None | t1{latin=等线,ea=等线,cs=等线,color=666666}
+圆角矩形 92 | L=4.573 T=6.01 W=0.5 H=0.5 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 93 | L=4.573 T=6.073 W=0.5 H=0.292 | len=1 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=1 algn=ctr lvl=None | ✓{latin=等线,ea=等线,cs=等线,color=3A8B59}
+矩形 94 | L=4.531 T=6.656 W=0.583 H=0.229 | len=2 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=2 algn=ctr lvl=None | t2{latin=等线,ea=等线,cs=等线,color=666666}
+圆角矩形 95 | L=5.302 T=6.01 W=0.5 H=0.5 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 96 | L=5.302 T=6.073 W=0.5 H=0.292 | len=1 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=1 algn=ctr lvl=None | ×{latin=等线,ea=等线,cs=等线,color=BD4B4B}
+矩形 97 | L=5.261 T=6.656 W=0.583 H=0.229 | len=2 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=2 algn=ctr lvl=None | t3{latin=等线,ea=等线,cs=等线,color=666666}
+圆角矩形 98 | L=6.031 T=6.01 W=0.5 H=0.5 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 99 | L=6.031 T=6.073 W=0.5 H=0.292 | len=1 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=1 algn=ctr lvl=None | ✓{latin=等线,ea=等线,cs=等线,color=3A8B59}
+矩形 100 | L=5.99 T=6.656 W=0.583 H=0.229 | len=2 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=2 algn=ctr lvl=None | t4{latin=等线,ea=等线,cs=等线,color=666666}
+圆角矩形 101 | L=6.761 T=6.01 W=0.5 H=0.5 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 102 | L=6.761 T=6.073 W=0.5 H=0.292 | len=1 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=1 algn=ctr lvl=None | ✓{latin=等线,ea=等线,cs=等线,color=3A8B59}
+矩形 103 | L=6.719 T=6.656 W=0.583 H=0.229 | len=2 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=2 algn=ctr lvl=None | t5{latin=等线,ea=等线,cs=等线,color=666666}
+圆角矩形 104 | L=7.49 T=6.01 W=0.5 H=0.5 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 105 | L=7.49 T=6.073 W=0.5 H=0.292 | len=1 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=1 algn=ctr lvl=None | ✓{latin=等线,ea=等线,cs=等线,color=3A8B59}
+矩形 106 | L=7.448 T=6.656 W=0.583 H=0.229 | len=2 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=2 algn=ctr lvl=None | t6{latin=等线,ea=等线,cs=等线,color=666666}
+圆角矩形 107 | L=8.219 T=6.01 W=0.5 H=0.5 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 108 | L=8.219 T=6.073 W=0.5 H=0.292 | len=1 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=1 algn=ctr lvl=None | ×{latin=等线,ea=等线,cs=等线,color=BD4B4B}
+矩形 109 | L=8.177 T=6.656 W=0.583 H=0.229 | len=2 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=2 algn=ctr lvl=None | t7{latin=等线,ea=等线,cs=等线,color=666666}
+圆角矩形 110 | L=8.948 T=6.01 W=0.5 H=0.5 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 111 | L=8.948 T=6.073 W=0.5 H=0.292 | len=1 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=1 algn=ctr lvl=None | ×{latin=等线,ea=等线,cs=等线,color=BD4B4B}
+矩形 112 | L=8.906 T=6.656 W=0.583 H=0.229 | len=2 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=2 algn=ctr lvl=None | t8{latin=等线,ea=等线,cs=等线,color=666666}
+圆角矩形 113 | L=9.677 T=6.01 W=0.5 H=0.5 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 114 | L=9.677 T=6.073 W=0.5 H=0.292 | len=1 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=1 algn=ctr lvl=None | ✓{latin=等线,ea=等线,cs=等线,color=3A8B59}
+矩形 115 | L=9.636 T=6.656 W=0.583 H=0.229 | len=2 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=2 algn=ctr lvl=None | t9{latin=等线,ea=等线,cs=等线,color=666666}
+圆角矩形 116 | L=10.406 T=6.01 W=0.5 H=0.5 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 117 | L=10.406 T=6.073 W=0.5 H=0.292 | len=1 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=1 algn=ctr lvl=None | ✓{latin=等线,ea=等线,cs=等线,color=3A8B59}
+矩形 118 | L=10.365 T=6.656 W=0.583 H=0.229 | len=3 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=3 algn=ctr lvl=None | t10{latin=等线,ea=等线,cs=等线,color=666666}
+文本框 6 | L=1.064 T=4.695 W=10.872 H=0.706 | len=73 | bodyPr={'wrap': 'square', 'autofit': 'spAutoFit'}
+  p0 len=36 algn=None lvl=None | 而且这里因为是计算相邻帧之间的关系，而一般的验证过程中都是单帧独立计算，{latin=宋体,ea=宋体,cs=宋体,color=090909}
+  p1 len=36 algn=None lvl=None | 所以在训练过程中，没有办法每隔 {latin=宋体,ea=宋体,cs=宋体,color=090909} ;; 2 {latin=宋体,ea=宋体,cs=宋体,color=090909} ;; 个 {latin=宋体,ea=宋体,cs=宋体,color=090909} ;; epoch {latin=宋体,ea=宋体,cs=宋体,color=090909} ;; 去计算这些时序指标。{latin=宋体,ea=宋体,cs=宋体,color=090909}
+  [NOTES] bodyPr={}
+  n0 len=0 | 
+
+##########################################################################################
+SLIDE 9 layout=章节页
+##########################################################################################
+直接连接符 3 | L=0.0 T=1.029 W=13.333 H=0.0 | (no text frame)
+图片 2 | L=0.336 T=0.161 W=0.728 H=0.721 | (no text frame)
+图片 3 | L=1.244 T=0.279 W=1.299 H=0.484 | (no text frame)
+矩形 25 | L=3.403 T=0.333 W=7.611 H=0.562 | len=26 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=26 algn=l lvl=None | 权重保存策略：训练阶段固定保存，valid 离线选择{latin=等线,ea=等线,cs=等线,color=090909}
+圆角矩形 26 | L=0.616 T=1.447 W=1.958 H=0.875 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 27 | L=0.616 T=1.676 W=1.958 H=0.333 | len=2 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=2 algn=ctr lvl=None | 训练{latin=等线,ea=等线,cs=等线,color=090909}
+矩形 28 | L=0.491 T=2.655 W=2.208 H=0.875 | len=54 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=54 algn=ctr lvl=None | 每 2 epoch 保存 checkpoint；在线 mAP / loss / R_center 只用于监控{latin=Times New Roman,ea=宋体,cs=宋体,color=090909}
+直线连接符 29 | L=2.574 T=1.884 W=0.562 H=0.01 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+圆角矩形 30 | L=3.137 T=1.447 W=1.958 H=0.875 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 31 | L=3.137 T=1.676 W=1.958 H=0.333 | len=11 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=11 algn=ctr lvl=None | 离线{latin=等线,ea=等线,cs=等线,color=090909} ;;  {latin=等线,ea=等线,cs=等线,color=090909} ;; valid 扫描{latin=等线,ea=等线,cs=等线,color=090909}
+矩形 32 | L=3.012 T=2.655 W=2.208 H=0.875 | len=37 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=37 algn=ctr lvl=None | 对候选 epoch_16 至 epoch_24 离线推理，计算完整控制指标{latin=Times New Roman,ea=宋体,cs=宋体,color=090909}
+直线连接符 33 | L=5.095 T=1.884 W=0.562 H=0.01 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+圆角矩形 34 | L=5.657 T=1.447 W=1.958 H=0.875 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 35 | L=5.657 T=1.676 W=1.958 H=0.333 | len=3 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=3 algn=ctr lvl=None | 硬约束{latin=等线,ea=等线,cs=等线,color=090909}
+矩形 36 | L=5.532 T=2.655 W=2.208 H=0.875 | len=23 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=23 algn=ctr lvl=None | 中心召回接近最优；MCML 不超过控制生存限制{latin=Times New Roman,ea=宋体,cs=宋体,color=090909}
+直线连接符 37 | L=7.616 T=1.884 W=0.562 H=0.01 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+圆角矩形 38 | L=8.178 T=1.447 W=1.958 H=0.875 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 39 | L=8.178 T=1.676 W=1.958 H=0.333 | len=3 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=3 algn=ctr lvl=None | 软评分{latin=等线,ea=等线,cs=等线,color=090909}
+矩形 40 | L=8.053 T=2.655 W=2.208 H=0.661 | len=23 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=23 algn=ctr lvl=None | 在可行权重中按 ControlScore 排序{latin=Times New Roman,ea=宋体,cs=宋体,color=090909}
+直线连接符 41 | L=10.137 T=1.884 W=0.562 H=0.01 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+圆角矩形 42 | L=10.699 T=1.447 W=1.958 H=0.875 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 43 | L=10.699 T=1.676 W=1.958 H=0.333 | len=4 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=4 algn=ctr lvl=None | test{latin=等线,ea=等线,cs=等线,color=090909}
+矩形 44 | L=10.574 T=2.655 W=2.208 H=0.661 | len=38 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=38 algn=ctr lvl=None | 只用 selected_ckpt 评估一次，禁止用 test 选 epoch{latin=Times New Roman,ea=宋体,cs=宋体,color=090909}
+圆角矩形 49 | L=0.954 T=3.845 W=4.579 H=1.884 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 50 | L=1.141 T=3.968 W=3.814 H=0.311 | len=10 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=10 algn=l lvl=None | 第一阶段：硬约束筛选{latin=等线,ea=等线,cs=等线,color=090909}
+矩形 51 | L=1.329 T=4.468 W=3.729 H=0.854 | len=105 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=34 algn=l lvl=None | Weighted_R_center >= W_max - 0.005{latin=Times New Roman,ea=宋体,cs=宋体,color=090909}
+  p1 len=35 algn=l lvl=None | MCML_max <= MCML_limit，推荐 limit = 5{latin=Times New Roman,ea=宋体,cs=宋体,color=090909}
+  p2 len=34 algn=l lvl=None | 若 MCML 全部失败，选择 MCML 最小者作为 fallback{latin=Times New Roman,ea=宋体,cs=宋体,color=090909}
+圆角矩形 52 | L=7.271 T=3.845 W=5.206 H=1.884 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 53 | L=7.53 T=3.971 W=4.688 H=0.333 | len=11 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=11 algn=l lvl=None | 第二阶段：可行域内评分{latin=等线,ea=等线,cs=等线,color=090909}
+矩形 54 | L=7.59 T=4.468 W=4.688 H=0.5 | len=85 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=85 algn=l lvl=None | ControlScore = 0.35{latin=Times New Roman,ea=宋体,cs=宋体,color=090909} ;;  {latin=Times New Roman,ea=宋体,cs=宋体,color=090909} ;; *{latin=Times New Roman,ea=宋体,cs=宋体,color=090909} ;;  {latin=Times New Roman,ea=宋体,cs=宋体,color=090909} ;; TDR + 0.25{latin=Times New Roman,ea=宋体,cs=宋体,color=090909} ;;  {latin=Times New Roman,ea=宋体,cs=宋体,color=090909} ;; *{latin=Times New Roman,ea=宋体,cs=宋体,color=090909} ;;  {latin=Times New Roman,ea=宋体,cs=宋体,color=090909} ;; Weighted_R_center + 0.20{latin=Times New Roman,ea=宋体,cs=宋体,color=090909} ;;  {latin=Times New Roman,ea=宋体,cs=宋体,color=090909} ;; *{latin=Times New Roman,ea=宋体,cs=宋体,color=090909} ;;  {latin=Times New Roman,ea=宋体,cs=宋体,color=090909} ;; ACI + 0.20{latin=Times New Roman,ea=宋体,cs=宋体,color=090909} ;;  {latin=Times New Roman,ea=宋体,cs=宋体,color=090909} ;; *{latin=Times New Roman,ea=宋体,cs=宋体,color=090909} ;;  {latin=Times New Roman,ea=宋体,cs=宋体,color=090909} ;; AngleScore{latin=Times New Roman,ea=宋体,cs=宋体,color=090909}
+矩形 55 | L=7.634 T=5.075 W=4.479 H=0.25 | len=37 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=37 algn=l lvl=None | AngleScore = 1 - min(A_RMSE, 90) / 90{latin=等线,ea=等线,cs=等线,color=182667}
+圆角矩形 56 | L=2.152 T=6.231 W=8.854 H=0.917 | len=0 | bodyPr={}
+  p0 len=0 algn=None lvl=None | 
+矩形 57 | L=2.464 T=6.418 W=1.667 H=0.25 | len=4 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=4 algn=l lvl=None | 最终协议{latin=等线,ea=等线,cs=等线,color=182667}
+矩形 58 | L=4.131 T=6.376 W=6.51 H=0.5 | len=77 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=77 algn=l lvl=None | 固定间隔保存 checkpoint + valid 离线扫描 + 中心召回近最优约束 + MCML 一票否决 + 控制质量评分 + test 单次最终评估{latin=等线,ea=等线,cs=等线,color=090909}
+矩形 59 | L=1.37 T=8.345 W=10.417 H=0.354 | len=56 | bodyPr={'anchor': 't', 'lIns': '19050', 'tIns': '19050', 'rIns': '19050', 'bIns': '19050'}
+  p0 len=56 algn=ctr lvl=None | 这套规则避免 test 泄漏，也避免只用单一 Weighted_R_center 选择权重导致的控制性能脆弱性。{latin=等线,ea=等线,cs=等线,color=090909}
+  [NOTES] bodyPr={}
+  n0 len=0 | 
+
+##########################################################################################
+SLIDE 10 layout=章节页
+##########################################################################################
+直接连接符 3 | L=0.0 T=1.029 W=13.333 H=0.0 | (no text frame)
+图片 2 | L=0.336 T=0.161 W=0.728 H=0.721 | (no text frame)
+图片 3 | L=1.244 T=0.279 W=1.299 H=0.484 | (no text frame)
+圆角矩形 4 | L=5.848 T=0.094 W=2.677 H=0.552 | len=4 | bodyPr={'anchor': 'ctr'}
+  p0 len=4 algn=ctr lvl=None | 门机防摇{color=scheme:tx1}
+圆角矩形 5 | L=2.747 T=0.957 W=2.516 H=0.552 | len=7 | bodyPr={'anchor': 'ctr'}
+  p0 len=7 algn=ctr lvl=None | 求取抓斗摇摆角{color=scheme:tx1}
+圆角矩形 6 | L=10.502 T=0.953 W=1.696 H=0.552 | len=4 | bodyPr={'anchor': 'ctr'}
+  p0 len=4 algn=ctr lvl=None | 防摇控制{color=scheme:tx1}
+肘形连接符 18 | L=8.553 T=-0.72 W=0.583 H=3.315 | (no text frame)
+肘形连接符 21 | L=5.932 T=-0.021 W=0.587 H=1.923 | (no text frame)
+直线箭头连接符 27 | L=3.994 T=1.51 W=0.011 H=0.599 | (no text frame)
+文本框 30 | L=0.108 T=1.705 W=1.212 H=0.404 | len=4 | bodyPr={'wrap': 'none', 'autofit': 'spAutoFit'}
+  p0 len=4 algn=None lvl=None | 核心模型{}
+图片 12 | L=1.504 T=1.685 W=5.262 H=3.41 | (no text frame)
+文本框 8 | L=7.613 T=1.705 W=1.717 H=0.404 | len=6 | bodyPr={'wrap': 'none', 'autofit': 'spAutoFit'}
+  p0 len=6 algn=None lvl=None | 相机安装位置{}
+图片 10 | L=8.348 T=2.141 W=3.442 H=4.406 | (no text frame)
+  [NOTES] bodyPr={}
+  n0 len=0 | 
+
+##########################################################################################
+SLIDE 11 layout=章节页
+##########################################################################################
+直接连接符 3 | L=0.0 T=1.029 W=13.333 H=0.0 | (no text frame)
+图片 2 | L=0.336 T=0.161 W=0.728 H=0.721 | (no text frame)
+图片 3 | L=1.244 T=0.279 W=1.299 H=0.484 | (no text frame)
+圆角矩形 9 | L=5.408 T=0.343 W=2.516 H=0.552 | len=7 | bodyPr={'anchor': 'ctr'}
+  p0 len=7 algn=ctr lvl=None | 抓斗摇摆角检测{color=scheme:tx1}
+圆角矩形 15 | L=1.703 T=1.176 W=2.516 H=0.552 | len=4 | bodyPr={'anchor': 'ctr'}
+  p0 len=4 algn=ctr lvl=None | 抓斗检测{color=scheme:tx1}
+肘形连接符 25 | L=7.612 T=-0.05 W=0.557 H=2.447 | (no text frame)
+肘形连接符 28 | L=5.165 T=-0.05 W=0.557 H=2.447 | (no text frame)
+直线箭头连接符 32 | L=2.962 T=1.728 W=0.0 H=1.04 | (no text frame)
+文本框 33 | L=2.962 T=1.877 W=2.57 H=0.404 | len=9 | bodyPr={'wrap': 'none', 'autofit': 'spAutoFit'}
+  p0 len=9 algn=None lvl=None | 目标：获取像素坐标{}
+文本框 4 | L=0.055 T=2.429 W=1.212 H=0.505 | len=3 | bodyPr={'wrap': 'none', 'autofit': 'spAutoFit'}
+  p0 len=3 algn=None lvl=None | 方法：{}
+直线箭头连接符 12 | L=10.425 T=1.728 W=0.0 H=1.135 | (no text frame)
+文本框 6 | L=10.512 T=1.854 W=2.674 H=0.707 | len=15 | bodyPr={'wrap': 'square', 'autofit': 'spAutoFit'}
+  p0 len=15 algn=None lvl=None | 目标：获取相机到抓斗的垂直距离{}
+文本框 13 | L=6.804 T=3.347 W=5.828 H=1.01 | len=48 | bodyPr={'wrap': 'square', 'autofit': 'spAutoFit'}
+  p0 len=48 algn=None lvl=None | 思想：{} ;; 小孔成像透视缩放原理，物体在图像上的像素尺寸 {} ;; ，{} ;; 与它距离相机的物理深度严格成{} ;; 反比{latin=Google Sans Text} ;; 。远大近小{}
+直线箭头连接符 18 | L=5.81 T=3.423 W=0.804 H=1.143 | (no text frame)
+文本框 23 | L=1.727 T=2.767 W=4.083 H=1.313 | len=51 | bodyPr={'wrap': 'square', 'autofit': 'spAutoFit'}
+  p0 len=51 algn=None lvl=None | 检测的部位不能是抓斗的全部因为在抓斗运行过程中有抓斗开合会影响预测结果，为此数据标注上要标注抓斗的顶梁{}
+文本框 27 | L=0.08 T=3.981 W=1.212 H=0.707 | len=11 | bodyPr={'wrap': 'square', 'autofit': 'spAutoFit'}
+  p0 len=11 algn=None lvl=None | yolo11 {} ;; 检测抓斗{}
+左大括号 31 | L=1.308 T=3.036 W=0.268 H=2.734 | len=0 | bodyPr={'anchor': 'ctr'}
+  p0 len=0 algn=ctr lvl=None | 
+直线箭头连接符 37 | L=5.781 T=4.566 W=0.833 H=0.102 | (no text frame)
+文本框 58 | L=1.698 T=5.367 W=3.989 H=0.404 | len=15 | bodyPr={'wrap': 'none', 'autofit': 'spAutoFit'}
+  p0 len=15 algn=None lvl=None | 检测框要求召回率，保证不要漏检{}
+直线箭头连接符 63 | L=9.498 T=5.298 W=0.0 H=0.472 | (no text frame)
+文本框 65 | L=5.949 T=5.609 W=7.236 H=1.313 | len=77 | bodyPr={'wrap': 'square', 'autofit': 'spAutoFit'}
+  p0 len=5 algn=None lvl=None | 产生问题：{}
+  p1 len=71 algn=None lvl=None | 抓斗自旋转问题，当抓斗起升时自旋转会影响预测，因为自旋转也会使对角线长度变化，无法分辨是起升还是原地自旋转。后续可能需要使用{} ;;  PLC{} ;; 去获取绳长{}
+  [NOTES] bodyPr={}
+  n0 len=35 | 时序几何刚性指标 {} ;; ({} ;; $\{latin=Google Sans Text} ;; sigma^2_{\text{diag}}${latin=Google Sans Text} ;; ){}
+  n1 len=42 | 二是门机变幅导致相机动态倾角 {} ;; $\{latin=Google Sans Text} ;; beta(t)${latin=Google Sans Text} ;;  {} ;; 引起的{} ;; 透视仿射畸变（非线性拉伸）{latin=Google Sans Text}
+
+##########################################################################################
+SLIDE 12 layout=章节页
+##########################################################################################
+矩形: 圆角 4 | L=1.385 T=1.755 W=10.562 H=3.99 | len=0 | bodyPr={'anchor': 'ctr'}
+  p0 len=0 algn=ctr lvl=None | 
+组合 6 [GROUP]
+  椭圆 7 | L=1.14 T=3.033 W=1.081 H=1.081 | len=0 | bodyPr={'anchor': 'ctr'}
+    p0 len=0 algn=ctr lvl=None | 
+  椭圆 8 | L=1.227 T=3.121 W=0.906 H=0.906 | len=0 | bodyPr={'anchor': 'ctr'}
+    p0 len=0 algn=ctr lvl=None | 
+  文本框 9 | L=1.356 T=3.316 W=0.649 H=0.473 | len=2 | bodyPr={'wrap': 'square', 'autofit': 'spAutoFit'}
+    p0 len=2 algn=ctr lvl=None | 03{latin=+mj-lt,color=scheme:bg1}
+文本框 10 | L=4.509 T=3.034 W=5.319 H=0.841 | len=3 | bodyPr={'wrap': 'square', 'autofit': 'spAutoFit'}
+  p0 len=3 algn=ctr lvl=None | 数据集{latin=微软雅黑,ea=微软雅黑}
+  [NOTES] bodyPr={}
+  n0 len=8 | 第一点，研究背景{latin=+mn-lt,ea=+mn-ea,cs=+mn-cs,color=scheme:tx1}
+  n1 len=0 | 
+
+##########################################################################################
+SLIDE 13 layout=标题幻灯片
+##########################################################################################
+直接连接符 3 | L=0.0 T=1.059 W=13.333 H=0.0 | (no text frame)
+图片 7 | L=0.396 T=0.279 W=0.728 H=0.721 | (no text frame)
+图片 8 | L=1.244 T=0.397 W=1.299 H=0.484 | (no text frame)
+文本框 5 | L=3.276 T=0.354 W=7.12 H=0.572 | len=18 | bodyPr={'wrap': 'none', 'autofit': 'spAutoFit'}
+  p0 len=18 algn=None lvl=None | 整体数据集的组成：真实数据{} ;; +{} ;; 仿真数据{}
+文本框 1 | L=0.211 T=1.19 W=12.603 H=1.11 | len=107 | bodyPr={'wrap': 'square', 'autofit': 'spAutoFit'}
+  p0 len=107 algn=None lvl=None | 真实数据来自{latin=Times New Roman,ea=宋体} ;;  roboflow {latin=Times New Roman,ea=宋体} ;; 公开数据集网站和港口视频数据，数据集中只有抓斗的形状特征，无法用来检验论文后续预测计算出的摇摆角是否正确，只能去增强模型的检测能力，而{latin=Times New Roman,ea=宋体} ;; 仿真数据可提供可靠角度真值，方便之后的指标计算。{latin=Times New Roman,ea=宋体,color=090909}
+图片 6 | L=0.897 T=2.711 W=4.758 H=2.252 | (no text frame)
+图片 13 | L=0.897 T=4.963 W=4.758 H=2.379 | (no text frame)
+图片 15 | L=6.777 T=2.344 W=3.098 H=2.56 | (no text frame)
+图片 16 | L=6.777 T=4.905 W=3.051 H=2.539 | (no text frame)
+
+##########################################################################################
+SLIDE 14 layout=标题幻灯片
+##########################################################################################
+直接连接符 3 | L=0.0 T=1.059 W=13.333 H=0.0 | (no text frame)
+图片 7 | L=0.396 T=0.279 W=0.728 H=0.721 | (no text frame)
+图片 8 | L=1.244 T=0.397 W=1.299 H=0.484 | (no text frame)
+图片 4 | L=0.0 T=3.978 W=6.654 H=3.522 | (no text frame)
+文本框 5 | L=0.222 T=1.059 W=6.934 H=2.255 | len=92 | bodyPr={'wrap': 'none', 'autofit': 'spAutoFit'}
+  p0 len=8 algn=None lvl=None | 仿真模型的构建：{}
+  p1 len=21 algn=None lvl=None | 门式起重机本体可以旋转起升以及抓斗的升降，{}
+  p2 len=21 algn=None lvl=None | 散货船船舱模型，这里散货船模型免费的很少，{}
+  p3 len=6 algn=None lvl=None | 能用的不多。{}
+  p4 len=24 algn=None lvl=None | 摄像头的安装也是与真实数据上一样安装在臂架的头部{}
+  p5 len=7 algn=None lvl=None | 垂直向下拍摄。{}
+图片 10 | L=7.38 T=-0.008 W=4.709 H=3.425 | (no text frame)
+图片 11 | L=6.654 T=3.418 W=6.463 H=4.082 | (no text frame)
+
+##########################################################################################
+SLIDE 15 layout=章节页
+##########################################################################################
+矩形: 圆角 4 | L=1.385 T=1.755 W=10.562 H=3.99 | len=0 | bodyPr={'anchor': 'ctr'}
+  p0 len=0 algn=ctr lvl=None | 
+组合 6 [GROUP]
+  椭圆 7 | L=1.14 T=3.033 W=1.081 H=1.081 | len=0 | bodyPr={'anchor': 'ctr'}
+    p0 len=0 algn=ctr lvl=None | 
+  椭圆 8 | L=1.227 T=3.121 W=0.906 H=0.906 | len=0 | bodyPr={'anchor': 'ctr'}
+    p0 len=0 algn=ctr lvl=None | 
+  文本框 9 | L=1.356 T=3.316 W=0.649 H=0.473 | len=2 | bodyPr={'wrap': 'square', 'autofit': 'spAutoFit'}
+    p0 len=2 algn=ctr lvl=None | 04{latin=+mj-lt,color=scheme:bg1}
+文本框 10 | L=4.509 T=3.034 W=5.319 H=0.841 | len=4 | bodyPr={'wrap': 'square', 'autofit': 'spAutoFit'}
+  p0 len=4 algn=ctr lvl=None | 论文改进{latin=微软雅黑,ea=微软雅黑}
+  [NOTES] bodyPr={}
+  n0 len=8 | 第一点，研究背景{latin=+mn-lt,ea=+mn-ea,cs=+mn-cs,color=scheme:tx1}
+  n1 len=0 | 
+
+##########################################################################################
+SLIDE 16 layout=章节页
+##########################################################################################
+直接连接符 3 | L=0.0 T=1.029 W=13.333 H=0.0 | (no text frame)
+图片 2 | L=0.314 T=0.175 W=0.728 H=0.721 | (no text frame)
+图片 3 | L=1.244 T=0.279 W=1.299 H=0.484 | (no text frame)
+文本框 8 | L=2.747 T=0.325 W=9.993 H=0.438 | len=65 | bodyPr={'wrap': 'square', 'autofit': 'spAutoFit'}
+  p0 len=65 algn=None lvl=None | EOOD: End-to-end oriented object detection，{} ;; 2025{} ;; ，{} ;; Neurocomputing{latin=ElsevierSans,color=505050} ;; ，二区{latin=ElsevierSans,color=505050}
+Rectangle 2 | L=3.812 T=1.046 W=5.708 H=0.438 | len=14 | bodyPr={'wrap': 'square', 'anchor': 'ctr', 'lIns': '91440', 'tIns': '45720', 'rIns': '91440', 'bIns': '45720', 'vert': 'horz', 'autofit': 'spAutoFit'}
+  p0 len=14 algn=l lvl=0 | SymEOOD 三项核心改进{latin=Arial,color=scheme:tx1}
+文本框 18 | L=11.065 T=2.139 W=1.548 H=0.505 | len=4 | bodyPr={'wrap': 'none', 'autofit': 'spAutoFit'}
+  p0 len=4 algn=None lvl=None | 度量同构{}
+文本框 41 | L=11.685 T=2.898 W=0.37 H=0.404 | len=1 | bodyPr={'wrap': 'none', 'autofit': 'spAutoFit'}
+  p0 len=1 algn=None lvl=None | +{}
+文本框 42 | L=10.928 T=3.546 W=1.885 H=0.505 | len=5 | bodyPr={'wrap': 'none', 'autofit': 'spAutoFit'}
+  p0 len=5 algn=None lvl=None | 一对一匹配{}
+文本框 43 | L=11.311 T=4.667 W=1.341 H=0.505 | len=5 | bodyPr={'wrap': 'none', 'autofit': 'spAutoFit'}
+  p0 len=5 algn=None lvl=None | 无{} ;;  NMS{}
+文本框 55 | L=11.654 T=4.129 W=0.37 H=0.404 | len=1 | bodyPr={'wrap': 'none', 'autofit': 'spAutoFit'}
+  p0 len=1 algn=None lvl=None | +{}
+  [NOTES] bodyPr={}
+  n0 len=0 | 
+
+##########################################################################################
+SLIDE 17 layout=章节页
+##########################################################################################
+矩形: 圆角 4 | L=1.385 T=1.755 W=10.562 H=3.99 | len=0 | bodyPr={'anchor': 'ctr'}
+  p0 len=0 algn=ctr lvl=None | 
+组合 6 [GROUP]
+  椭圆 7 | L=1.14 T=3.033 W=1.081 H=1.081 | len=0 | bodyPr={'anchor': 'ctr'}
+    p0 len=0 algn=ctr lvl=None | 
+  椭圆 8 | L=1.227 T=3.121 W=0.906 H=0.906 | len=0 | bodyPr={'anchor': 'ctr'}
+    p0 len=0 algn=ctr lvl=None | 
+  文本框 9 | L=1.356 T=3.316 W=0.649 H=0.473 | len=2 | bodyPr={'wrap': 'square', 'autofit': 'spAutoFit'}
+    p0 len=2 algn=ctr lvl=None | 05{latin=+mj-lt,color=scheme:bg1}
+文本框 10 | L=4.509 T=3.034 W=5.319 H=0.841 | len=4 | bodyPr={'wrap': 'square', 'autofit': 'spAutoFit'}
+  p0 len=4 algn=ctr lvl=None | 实验进展{latin=微软雅黑,ea=微软雅黑}
+  [NOTES] bodyPr={}
+  n0 len=8 | 第一点，研究背景{latin=+mn-lt,ea=+mn-ea,cs=+mn-cs,color=scheme:tx1}
+  n1 len=0 | 
+
+##########################################################################################
+SLIDE 18 layout=章节页
+##########################################################################################
+直接连接符 3 | L=0.0 T=1.029 W=13.333 H=0.0 | (no text frame)
+图片 2 | L=0.314 T=0.175 W=0.728 H=0.721 | (no text frame)
+图片 3 | L=1.244 T=0.279 W=1.299 H=0.484 | (no text frame)
+表格 6 [TABLE 11x4] L=0.324 T=1.474 W=6.184 H=3.291
+  row0 h=0.236
+    c0 len=2 | 指标
+    c1 len=8 | Baseline
+    c2 len=2 | M1
+    c3 len=2 | M2
+  row1 h=0.236
+    c0 len=8 | 第一层 静态精度
+    c1 len=0 | 
+    c2 len=0 | 
+    c3 len=0 | 
+  row2 h=0.299
+    c0 len=14 | R_center (%) ↑
+    c1 len=5 | 95.85
+    c2 len=5 | 98.12
+    c3 len=5 | 99.58
+  row3 h=0.236
+    c0 len=11 | mean_RIoU ↑
+    c1 len=6 | 0.8294
+    c2 len=6 | 0.8418
+    c3 len=6 | 0.8552
+  row4 h=0.236
+    c0 len=9 | 第二层 时序稳定性
+    c1 len=0 | 
+    c2 len=0 | 
+    c3 len=0 | 
+  row5 h=0.236
+    c0 len=15 | DFR (%/frame) ↓
+    c1 len=5 | 3.048
+    c2 len=5 | 3.224
+    c3 len=5 | 2.312
+  row6 h=0.236
+    c0 len=5 | ACI ↑
+    c1 len=6 | 0.9329
+    c2 len=6 | 0.9331
+    c3 len=6 | 0.9339
+  row7 h=0.236
+    c0 len=9 | 第三层 控制适用性
+    c1 len=0 | 
+    c2 len=0 | 
+    c3 len=0 | 
+  row8 h=0.236
+    c0 len=13 | TDR_w10 (%) ↑
+    c1 len=5 | 80.60
+    c2 len=8 | 56.72 ⬇️
+    c3 len=5 | 77.86
+  row9 h=0.236
+    c0 len=14 | MCML_max (帧) ↓
+    c1 len=2 | 39
+    c2 len=5 | 97 ⬆️
+    c3 len=2 | 44
+  row10 h=0.236
+    c0 len=15 | MCML_mean (帧) ↓
+    c1 len=4 | 34.5
+    c2 len=7 | 79.0 ⬆️
+    c3 len=4 | 37.0
+文本框 10 | L=0.39 T=1.028 W=1.772 H=0.436 | len=9 | bodyPr={'wrap': 'none', 'autofit': 'spAutoFit'}
+  p0 len=9 algn=None lvl=None | Real 域指标{latin=Times New Roman,ea=宋体} ;;  {}
+表格 11 [TABLE 10x4] L=6.508 T=1.433 W=6.536 H=4.039
+  row0 h=0.338
+    c0 len=2 | 指标
+    c1 len=8 | Baseline
+    c2 len=2 | M1
+    c3 len=2 | M2
+  row1 h=0.241
+    c0 len=8 | 第一层 静态精度
+    c1 len=0 | 
+    c2 len=0 | 
+    c3 len=0 | 
+  row2 h=0.401
+    c0 len=14 | A-RMSE (deg) ↓
+    c1 len=5 | 2.378
+    c2 len=5 | 2.144
+    c3 len=5 | 1.488
+  row3 h=0.241
+    c0 len=14 | R_center (%) ↑
+    c1 len=5 | 100.0
+    c2 len=5 | 100.0
+    c3 len=5 | 100.0
+  row4 h=0.241
+    c0 len=11 | mean_RIoU ↑
+    c1 len=6 | 0.9325
+    c2 len=6 | 0.9190
+    c3 len=6 | 0.9232
+  row5 h=0.401
+    c0 len=9 | 第二层 时序稳定性
+    c1 len=0 | 
+    c2 len=0 | 
+    c3 len=0 | 
+  row6 h=0.241
+    c0 len=15 | DFR (%/frame) ↓
+    c1 len=5 | 2.052
+    c2 len=5 | 2.919
+    c3 len=5 | 1.885
+  row7 h=0.241
+    c0 len=5 | ACI ↑
+    c1 len=6 | 0.9502
+    c2 len=6 | 0.9390
+    c3 len=6 | 0.9623
+  row8 h=0.401
+    c0 len=9 | 第三层 控制适用性
+    c1 len=0 | 
+    c2 len=0 | 
+    c3 len=0 | 
+  row9 h=0.241
+    c0 len=13 | TDR_w10 (%) ↑
+    c1 len=5 | 100.0
+    c2 len=5 | 100.0
+    c3 len=5 | 100.0
+文本框 13 | L=6.667 T=1.029 W=1.694 H=0.436 | len=8 | bodyPr={'wrap': 'none', 'autofit': 'spAutoFit'}
+  p0 len=8 algn=None lvl=None | Sim 域指标{latin=Times New Roman,ea=宋体} ;;  {}
+表格 17 [TABLE 2x3] L=2.249 T=5.592 W=8.996 H=0.867
+  row0 h=0.462
+    c0 len=19 | Baseline: RetinaNet
+    c1 len=5 |  M1: 
+    c2 len=3 |  M2
+  row1 h=0.406
+    c0 len=15 | 单头  anchor+NMS 
+    c1 len=22 | +NMS-free架构  +SymEOOD 
+    c2 len=17 |  +RotatedATSS 辅助头
+文本框 17 | L=3.057 T=0.363 W=1.548 H=0.505 | len=4 | bodyPr={'wrap': 'none', 'autofit': 'spAutoFit'}
+  p0 len=4 algn=None lvl=None | 消融实验{}
+  [NOTES] bodyPr={}
+  n0 len=0 | 
+
+##########################################################################################
+SLIDE 19 layout=章节页
+##########################################################################################
+矩形 13 | L=0.0 T=5.712 W=13.333 H=1.788 | len=0 | bodyPr={'anchor': 'ctr'}
+  p0 len=0 algn=ctr lvl=0 | 
+任意多边形 27 | L=5.146 T=0.0 W=3.041 H=3.351 | len=0 | bodyPr={'anchor': 'ctr'}
+  p0 len=0 algn=ctr lvl=0 | 
+组合 6 [GROUP]
+  椭圆 7 | L=5.477 T=0.987 W=2.782 H=2.782 | len=0 | bodyPr={'anchor': 'ctr'}
+    p0 len=0 algn=ctr lvl=0 | 
+  椭圆 8 | L=5.643 T=1.153 W=2.42 H=2.42 | len=0 | bodyPr={'anchor': 'ctr'}
+    p0 len=0 algn=ctr lvl=0 | 
+矩形 14 | L=0.0 T=5.527 W=13.333 H=0.084 | len=0 | bodyPr={'anchor': 'ctr'}
+  p0 len=0 algn=ctr lvl=0 | 
+文本框 15 | L=-0.0 T=3.717 W=13.333 H=1.212 | len=6 | bodyPr={'wrap': 'square', 'autofit': 'spAutoFit'}
+  p0 len=6 algn=ctr lvl=0 | THANKS{latin=微软雅黑,ea=微软雅黑,cs=+mn-cs}
+图片 10 | L=5.332 T=0.382 W=2.73 H=2.771 | (no text frame)
+  [NOTES] bodyPr={}
+  n0 len=15 | 我的汇报完毕，请老师批评指正。{latin=+mn-lt,ea=+mn-ea,cs=+mn-cs,color=scheme:tx1}
+  n1 len=0 | 

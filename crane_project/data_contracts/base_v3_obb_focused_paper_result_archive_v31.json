@@ -1,0 +1,12 @@
+{
+  "protocol": "base_v3_obb_focused_paper_result_archive_v31_r1_contract",
+  "online": {
+    "protocol": "base_v3_obb_true_online_paper_metrics_v3",
+    "sha256": "95a1671b9f53d1258e2db21053c14ecaea6bc22a08973dfc560d13fa762301cf"
+  },
+  "historical_diagnostic": {
+    "protocol": "base_v3_obb_hybrid_fixed_test_diagnostic_v51_v31",
+    "sha256": "753b6460c192c2a4367b67cb020951d40d1adc383c7ea01f0bfcdbfc35402f38"
+  },
+  "frozen_eval_sha256": "584c6982e717e96d05511afe795b62f7bbfd631697890bf0080add4383c61964"
+}

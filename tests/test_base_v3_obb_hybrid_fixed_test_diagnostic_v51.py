@@ -135,3 +135,76 @@ def test_repository_contract_uses_contract_protocol_and_not_report_protocol():
     assert contract['protocol'] == diagnostic.CONTRACT_PROTOCOL
     assert diagnostic.PROTOCOL == 'base_v3_obb_hybrid_fixed_test_diagnostic_v51_v31'
     assert contract['protocol'] != diagnostic.PROTOCOL
+
+
+@pytest.mark.parametrize('mean,failure,tied,won', [
+    (0., 0., True, False), (1e-12, -1e-12, True, False),
+    (0.5e-12, -0.5e-12, True, False),
+    (-1.0001e-12, -1.0001e-12, False, True),
+    (-2e-12, 0., False, False), (0., -2e-12, False, False),
+    (2e-12, -2e-12, False, False)])
+def test_absolute_comparison_boundaries(mean, failure, tied, won):
+    flags = diagnostic.comparison_flags(mean, failure)
+    assert flags['tie_mean_and_failure'] is tied
+    assert flags['wins_mean_and_failure'] is won
+
+
+def test_full_coverage_all_groups_and_permutations():
+    rows = _report()['records']
+    for i, row in enumerate(rows):
+        row['domain'] = ('real', 'sim')[i % 2]
+        row['sequence'] = 'seq' + str(i % 2)
+        row['anchor_source'] = ('k1', 'dino_fallback')[i % 2]
+        row['offline_errors']['raw']['scale'] = [1e10, 0.1, 0.2, 0.3][i]
+    contract = _contract()
+    contract['matched_coverage_targets'] = [1.0]
+    for permutation in (rows, list(reversed(rows)), rows[1:] + rows[:1]):
+        groups = diagnostic.scale_matched_coverage(permutation, contract)
+        for group in groups.values():
+            assert group['matched_coverage_tie_count'] == 1
+            assert group['risk_wins_both_count'] == 0
+
+
+def test_strict_wins_exact_count_and_raw_deltas_unchanged():
+    values = [(-2e-12, -3e-12), (-2e-12, 0.), (1e-12, -1e-12)]
+    scale = {'all': {'points': [dict(learned_minus_score=dict(
+        mean_error=m, failure_rate=f)) for m, f in values]}}
+    result = diagnostic.revise_scale_comparisons(scale)['all']
+    assert result['risk_wins_both_count'] == 1
+    assert result['matched_coverage_tie_count'] == 1
+    assert [(p['learned_minus_score']['mean_error'],
+             p['learned_minus_score']['failure_rate']) for p in result['points']] == values
+
+
+def test_actual_contract_rejects_output_protocol():
+    import json
+    from pathlib import Path
+    path = Path(__file__).parents[1] / 'crane_project/data_contracts/base_v3_obb_hybrid_fixed_test_diagnostic_v51.json'
+    contract = json.loads(path.read_text())
+    contract['protocol'] = diagnostic.PROTOCOL
+    with pytest.raises(ValueError, match='Unexpected'):
+        diagnostic.validate_contract(contract)
+
+
+def test_diagnostic_cli_temporary_files(tmp_path):
+    import hashlib
+    import json
+    import subprocess
+    import sys
+    from pathlib import Path
+    report = tmp_path / 'input.json'
+    report.write_text(json.dumps(_report()))
+    contract = _contract()
+    contract['expected_input']['sha256'] = hashlib.sha256(report.read_bytes()).hexdigest()
+    contract_path = tmp_path / 'contract.json'
+    contract_path.write_text(json.dumps(contract))
+    output = tmp_path / 'out.json'
+    command = [sys.executable, '-m', diagnostic.__name__,
+               '--fixed-test-v51-report', str(report), '--contract', str(contract_path),
+               '--out-json', str(output)]
+    subprocess.run(command, cwd=Path(__file__).parents[1], check=True, capture_output=True)
+    result = json.loads(output.read_text())
+    assert result['statistical_revision'] == diagnostic.STATISTICAL_REVISION
+    assert result['comparison_tolerance'] == 1e-12
+    assert result['input']['sha256'] == contract['expected_input']['sha256']
+    assert result['scale_matched_coverage']['all']['matched_coverage_tie_count'] == 1

@@ -24,6 +24,48 @@ INPUT_PROTOCOL = 'base_v3_obb_hybrid_fixed_test_eval_v51'
 COMPONENTS = ('center', 'scale', 'angle')
 
 
+COMPARISON_TOLERANCE = 1e-12
+STATISTICAL_REVISION = 'v31_r1_absolute_tolerance'
+COMPARISON_RULES = {
+    'strict_win': 'mean_delta < -tolerance and failure_delta < -tolerance',
+    'joint_tie': 'abs(mean_delta) <= tolerance and abs(failure_delta) <= tolerance',
+    'raw_deltas_preserved': True,
+}
+
+
+def comparison_flags(mean_delta, failure_delta):
+    if not all(math.isfinite(x) for x in (mean_delta, failure_delta)):
+        raise ValueError('Comparison deltas must be finite')
+    tolerance = COMPARISON_TOLERANCE
+    return dict(
+        mean_error_tie=abs(mean_delta) <= tolerance,
+        failure_rate_tie=abs(failure_delta) <= tolerance,
+        tie_mean_and_failure=(abs(mean_delta) <= tolerance and
+                              abs(failure_delta) <= tolerance),
+        wins_mean_and_failure=(mean_delta < -tolerance and
+                               failure_delta < -tolerance))
+
+
+def revise_scale_comparisons(scale):
+    """Update classification only; retain errors, deltas and selected frames."""
+    for group in scale.values():
+        for point in group['points']:
+            delta = point['learned_minus_score']
+            delta.update(comparison_flags(delta['mean_error'], delta['failure_rate']))
+        group['comparison_count'] = len(group['points'])
+        group['risk_wins_both_count'] = sum(
+            p['learned_minus_score']['wins_mean_and_failure'] for p in group['points'])
+        group['matched_coverage_tie_count'] = sum(
+            p['learned_minus_score']['tie_mean_and_failure'] for p in group['points'])
+        group['matched_coverage_tie_rate'] = (
+            group['matched_coverage_tie_count'] / group['comparison_count']
+            if group['comparison_count'] else 0.0)
+        group.update(comparison_tolerance=COMPARISON_TOLERANCE,
+                     comparison_rules=COMPARISON_RULES.copy(),
+                     statistical_revision=STATISTICAL_REVISION)
+    return scale
+
+
 def validate_contract(contract):
     if contract.get('protocol') != CONTRACT_PROTOCOL:
         raise ValueError('Unexpected V5.1 TEST diagnostic contract')
@@ -160,7 +202,7 @@ def scale_matched_coverage(records, contract):
                             matched_coverage_tie_rate=(sum(ties) / len(points) if points else 0.0),
                             comparison_count=len(points),
                             tie_policy='strict_metric_improvement_required')
-    return result
+    return revise_scale_comparisons(result)
 
 
 def _ordered(records):
@@ -333,6 +375,9 @@ def run(report, contract, input_identity=None):
     records = report['records']
     return dict(
         protocol=PROTOCOL,
+        statistical_revision=STATISTICAL_REVISION,
+        comparison_tolerance=COMPARISON_TOLERANCE,
+        comparison_rules=COMPARISON_RULES.copy(),
         evidence_boundary=contract['evidence_boundary'],
         claim_status='POST_EXPOSURE_FIXED_TEST_DIAGNOSTIC_ONLY',
         fixed_test_read=True, fixed_test_previously_exposed=True,
