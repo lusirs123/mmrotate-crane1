@@ -109,3 +109,16 @@ def test_contract_cannot_authorize_test_tuning():
     contract['parameter_tuning_authorized'] = True
     with pytest.raises(ValueError, match='must not authorize'):
         diagnostic.validate_contract(contract)
+
+
+def test_matched_coverage_equal_metrics_are_reported_as_ties_not_wins():
+    report = _report()
+    result = diagnostic.scale_matched_coverage(
+        report['records'], _contract())['all']
+    assert result['comparison_count'] == 2
+    assert result['matched_coverage_tie_count'] >= 1
+    assert result['tie_policy'] == 'strict_metric_improvement_required'
+    for point in result['points']:
+        comparison = point['learned_minus_score']
+        if comparison['tie_mean_and_failure']:
+            assert comparison['wins_mean_and_failure'] is False

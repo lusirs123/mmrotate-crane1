@@ -7,7 +7,7 @@
   "expected_inputs": {
     "v51_report_protocol": "base_v3_obb_hybrid_fixed_test_eval_v51",
     "v51_report_sha256": "584c6982e717e96d05511afe795b62f7bbfd631697890bf0080add4383c61964",
-    "v51_diagnostic_protocol": "base_v3_obb_hybrid_fixed_test_diagnostic_v51",
+    "v51_diagnostic_protocol": "base_v3_obb_hybrid_fixed_test_diagnostic_v51_v31",
     "v51_diagnostic_sha256": "4b3a16ec01ecfe7e4e8ad8d1236cd554be5863cbde3bf8789e9b0ebabf7be00b",
     "v53_report_protocol": "base_v3_obb_image_quality_block_oof_development_v53",
     "v53_report_sha256": "8f3d210ee1e657b7aadd5bb9691985e1e6240fab8ab2c200770ff0fd89466618",
@@ -18,17 +18,38 @@
   },
   "fixed_test_scope": {
     "frame_count": 992,
-    "domain_counts": {"real": 420, "sim": 572},
-    "sequence_counts": {"seq02": 220, "seq03": 200, "seq09": 572},
+    "domain_counts": {
+      "real": 420,
+      "sim": 572
+    },
+    "sequence_counts": {
+      "seq02": 220,
+      "seq03": 200,
+      "seq09": 572
+    },
     "annotation_status": "complete"
   },
-  "methods": ["raw", "score_rejection_only", "v51_hybrid"],
-  "components": ["center", "scale", "angle"],
+  "methods": [
+    "raw",
+    "score_rejection_only",
+    "v51_hybrid"
+  ],
+  "components": [
+    "center",
+    "scale",
+    "angle"
+  ],
   "evaluation": {
     "center_error_threshold_px": 5.0,
     "scale_relative_error_threshold": 0.1,
     "angle_error_threshold_deg": 3.0,
-    "matched_coverage_targets": [0.95, 0.9, 0.8, 0.7, 0.5],
+    "matched_coverage_targets": [
+      0.95,
+      0.9,
+      0.8,
+      0.7,
+      0.5
+    ],
     "riou_hit_threshold": 0.5,
     "runtime_benchmark_repeats": 20
   },
@@ -40,11 +61,22 @@
   },
   "runtime_interface": {
     "protocol": "base_v3_obb_paper_runtime_v1",
-    "states": ["measurement", "prediction", "unavailable"],
+    "states": [
+      "measurement",
+      "prediction",
+      "unavailable"
+    ],
     "required_component_fields": [
-      "value", "valid", "state", "source",
-      "age_since_measurement_frames", "measurement_available",
-      "measurement_accepted", "risk", "gate", "reason"
+      "value",
+      "valid",
+      "state",
+      "source",
+      "age_since_measurement_frames",
+      "measurement_available",
+      "measurement_accepted",
+      "risk",
+      "gate",
+      "reason"
     ],
     "timestamp_optional": true,
     "image_size_optional": true,

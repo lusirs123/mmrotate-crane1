@@ -18,7 +18,7 @@ from crane_project.tools.base_v3_obb_reliability_baseline import (
     _identity, _write_exact)
 
 
-PROTOCOL = 'base_v3_obb_hybrid_fixed_test_diagnostic_v51'
+PROTOCOL = 'base_v3_obb_hybrid_fixed_test_diagnostic_v51_v31'
 CONTRACT_PROTOCOL = 'base_v3_obb_hybrid_fixed_test_diagnostic_contract_v51'
 INPUT_PROTOCOL = 'base_v3_obb_hybrid_fixed_test_eval_v51'
 COMPONENTS = ('center', 'scale', 'angle')
@@ -147,14 +147,19 @@ def scale_matched_coverage(records, contract):
                     correct_output_coverage=(
                         risk['correct_output_coverage']-
                         score['correct_output_coverage']),
-                    wins_mean_and_failure=(
-                        risk['mean_error'] <= score['mean_error'] and
-                        risk['failure_rate'] <= score['failure_rate']))))
+                    mean_error_tie=(risk['mean_error'] == score['mean_error']),
+                    failure_rate_tie=(risk['failure_rate'] == score['failure_rate']),
+                    tie_mean_and_failure=(risk['mean_error'] == score['mean_error'] and risk['failure_rate'] == score['failure_rate']),
+                    wins_mean_and_failure=(risk['mean_error'] < score['mean_error'] and risk['failure_rate'] < score['failure_rate']))))
+        ties = [point['learned_minus_score']['tie_mean_and_failure'] for point in points]
         result[name] = dict(frame_count=len(selected), points=points,
                             risk_wins_both_count=sum(
-                                point['learned_minus_score'][
-                                    'wins_mean_and_failure']
-                                for point in points))
+                                point['learned_minus_score']['wins_mean_and_failure']
+                                for point in points),
+                            matched_coverage_tie_count=sum(ties),
+                            matched_coverage_tie_rate=(sum(ties) / len(points) if points else 0.0),
+                            comparison_count=len(points),
+                            tie_policy='strict_metric_improvement_required')
     return result
 
 

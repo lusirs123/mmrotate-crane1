@@ -1,5 +1,5 @@
 {
-  "protocol": "base_v3_obb_hybrid_fixed_test_diagnostic_contract_v51",
+  "protocol": "base_v3_obb_hybrid_fixed_test_diagnostic_v51_v31",
   "evidence_boundary": "frozen_v51_post_exposure_fixed_test_descriptive_diagnostic",
   "fixed_test_read": true,
   "fixed_test_previously_exposed": true,
@@ -15,7 +15,14 @@
       "sim": 572
     }
   },
-  "matched_coverage_targets": [1.0, 0.95, 0.9, 0.8, 0.7, 0.5],
+  "matched_coverage_targets": [
+    1.0,
+    0.95,
+    0.9,
+    0.8,
+    0.7,
+    0.5
+  ],
   "evaluation": {
     "center_error_threshold_px": 5.0,
     "scale_relative_error_threshold": 0.1,
