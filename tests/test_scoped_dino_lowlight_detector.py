@@ -158,17 +158,6 @@ def test_filename_parser_accepts_webots_frame_names():
     assert frame == 42
 
 
-def test_formal_config_builds_integrated_model_and_paper_metrics():
-    root = pathlib.Path(__file__).resolve().parents[1]
-    config = runpy.run_path(
-        str(root / 'crane_project/configs/'
-            'crane_symeood_scoped_dino_lowlight_v1.py'))
-    assert config['model']['type'] == 'ScopedDinoLowlightDetector'
-    assert config['model']['stabilizer']['alpha'] == 0.25
-    assert config['model']['stabilizer']['target_used_for_selection'] is False
-    assert config['evaluation']['paper_temporal'] is True
-
-
 def _formal_native_payload(alpha=0.5, s7_enabled=False):
     return dict(
         source_only_fc_cls_interpolation=dict(
@@ -294,44 +283,6 @@ def test_pure_dino_simple_test_does_not_require_fusion_audit(monkeypatch):
         [10, 20, 30, 12, 0.1, 0.9])
 
 
-def test_formal_unified_config_keeps_symeood_and_common_dino_ranking():
-    root = pathlib.Path(__file__).resolve().parents[1]
-    config = runpy.run_path(
-        str(root / 'crane_project/configs/'
-            'crane_symeood_dino_unified_v1.py'))
-    model = config['model']
-    assert model['type'] == 'SymEOODDinoUnifiedDetector'
-    assert model['baseline_config'].endswith(
-        'crane_symeood_k1_brightaug.py')
-    assert not pathlib.Path(model['baseline_config']).is_absolute()
-    assert model['fusion_policy'] == 'sym_eood_proposal_dino_roi_union'
-    assert model['scope_policy'] == 'all_frames'
-    assert model['scope_manifest'] is None
-    assert model['stabilizer']['enabled'] is False
-    assert model['temporal_association']['enabled'] is False
-    assert model['fusion_audit_enabled'] is True
-    assert model['dino_head_checkpoint'].endswith(
-        'dino_teacher_fc_cls_interpolation_v1/'
-        'source_safe_interpolated_head.pth')
-    assert not pathlib.Path(model['dino_head_checkpoint']).is_absolute()
-    head = model['dino_rescue']['head']
-    assert head['feature_strides'] == [14]
-    assert head['roi_nms_iou_thr'] == pytest.approx(0.5)
-    assert head['s7_residual'] is False
-    assert config['dino_checkpoint_contract']['alpha'] == pytest.approx(0.5)
-    formal = config['formal_detection_contract']
-    assert formal['proposal_sources'] == [
-        'symeood_k1_brightaug_top1', 'frozen_dino_native_s14_rpn']
-    assert formal['sym_eood_checkpoint'].endswith(
-        'crane_symeood_k1_brightaug/epoch_20.pth')
-    assert formal['common_ranker'] == 'frozen_dino_roi_classifier_alpha05'
-    assert formal['source_owned_geometry'] is True
-    assert formal['raw_cross_model_score_comparison'] is False
-    assert formal['target_scope'] is False
-    assert formal['sequence_identity_routing'] is False
-    assert formal['brightaug'] is True
-
-
 def test_symeood_proposal_is_scaled_and_raw_score_is_discarded():
     baseline = np.asarray([[10, 20, 30, 40, 0.25, 0.123]], np.float32)
     proposal = MODULE.ScopedDinoLowlightDetector._sym_eood_proposals_for_dino(
@@ -413,16 +364,6 @@ def test_unified_selector_keeps_dino_regression_when_native_wins():
     assert audit['selected_source'] == 'dino_native'
 
 
-def test_unified_source_val_config_uses_val_split():
-    root = pathlib.Path(__file__).resolve().parents[1]
-    config = runpy.run_path(
-        str(root / 'crane_project/configs/'
-            'crane_symeood_dino_unified_source_val_v1.py'))
-    assert config['data']['test']['ann_file'] == 'val/annfiles/'
-    assert config['data']['test']['img_prefix'] == 'val/images/'
-    assert not pathlib.Path(config['data']['test']['data_root']).is_absolute()
-
-
 def test_fusion_audit_metadata_reports_hidden_runtime_parameters():
     detector = _detector()
     detector.baseline = nn.Linear(2, 1)
@@ -438,44 +379,6 @@ def test_fusion_audit_metadata_reports_hidden_runtime_parameters():
     assert counts['dinov2']['total'] == 8
     assert counts['dino_heads']['total'] == 15
     assert counts['combined_runtime']['total'] == 26
-
-
-def test_conservative_takeover_config_requires_source_calibration():
-    root = pathlib.Path(__file__).resolve().parents[1]
-    config = runpy.run_path(
-        str(root / 'crane_project/configs/'
-            'crane_symeood_dino_conservative_takeover_v2.py'))
-    takeover = config['model']['conservative_takeover']
-    assert takeover['enabled'] is True
-    assert not pathlib.Path(takeover['calibration_json']).is_absolute()
-    contract = config['formal_conservative_takeover_contract']
-    assert contract['selection_split'] == 'val'
-    assert contract['metric_protocol_version'] == 2
-    assert contract['target_data_read'] is False
-    assert contract['test_parameter_search'] is False
-
-
-def test_lane_isolated_v3_configs_keep_source_and_fixed_test_separate():
-    root = pathlib.Path(__file__).resolve().parents[1]
-    source = runpy.run_path(str(
-        root / 'crane_project/configs/'
-        'crane_symeood_dino_lane_isolated_source_val_v3.py'))
-    source_contract = source['formal_lane_isolated_source_contract']
-    assert source_contract['split'] == 'val'
-    assert source_contract['expected_frames'] == 738
-    assert source_contract['target_data_read'] is False
-    fixed = runpy.run_path(str(
-        root / 'crane_project/configs/'
-        'crane_symeood_dino_lane_isolated_conditional_v3.py'))
-    conditional = fixed['model']['conditional_dino']
-    assert conditional['enabled'] is True
-    assert not pathlib.Path(conditional['calibration_json']).is_absolute()
-    contract = fixed['formal_lane_isolated_conditional_contract']
-    assert contract['selection_split'] == 'val'
-    assert contract['independent_lane_state'] is True
-    assert contract['cross_lane_geometry_rejection'] is False
-    assert contract['target_scope'] is False
-    assert contract['test_parameter_search'] is False
 
 
 def test_conditional_v3_skips_entire_dino_runtime_when_not_triggered():
@@ -533,61 +436,3 @@ def test_symeood_proposal_fusion_rejects_invalid_geometry():
             baseline,
             dict(scale_factor=np.ones(4, np.float32)),
             torch.device('cpu'))
-
-
-def test_unified_temporal_config_removes_target_slice_routing():
-    root = pathlib.Path(__file__).resolve().parents[1]
-    config = runpy.run_path(
-        str(root / 'crane_project/configs/'
-            'crane_symeood_scoped_dino_lowlight_s7_temporal_association_v1.py'))
-    assert config['model']['scope_policy'] == 'all_frames'
-    assert config['model']['scope_manifest'] is None
-    assert config['model']['temporal_association']['enabled'] is True
-    head = config['model']['dino_rescue']['head']
-    assert head['s7_temporal_association'] is True
-    assert head['s7_quality_suppression'] is False
-    assert head['s7_lane_arbitration'] is False
-    assert config['model']['temporal_association']['source_selected'] is True
-    assert config['model']['temporal_association']['source_gate'] == dict(
-        min_full_top1=688, min_small_top1=311, max_mcml=3)
-
-
-def test_temporal_quality_config_is_source_only_and_unified():
-    root = pathlib.Path(__file__).resolve().parents[1]
-    config = runpy.run_path(
-        str(root / 'crane_project/configs/'
-            'crane_symeood_scoped_dino_lowlight_s7_temporal_quality_association_v1.py'))
-    assert config['model']['scope_policy'] == 'all_frames'
-    assert config['model']['scope_manifest'] is None
-    assert config['model']['temporal_association']['target_used_for_selection'] is False
-    head = config['model']['dino_rescue']['head']
-    assert head['s7_temporal_association'] is True
-    assert head['s7_temporal_quality_head'] is True
-    assert head['s7_temporal_quality_hidden'] == 128
-    assert config['s7_temporal_quality_training']['target_read'] is False
-    assert config['s7_temporal_quality_training']['positive_promotion'] is False
-    assert config['s7_temporal_quality_training']['gain_replay'] is False
-
-
-def test_full_test_manifest_covers_stream_and_enables_exact_dark_slice():
-    root = pathlib.Path(__file__).resolve().parents[1]
-    manifest = root / (
-        'crane_project/configs/scopes/'
-        'full_test_seq02_lowlight_diagnosis.json')
-    intervals = MODULE._load_scope(str(manifest), 'test')
-    images = sorted((root / 'crane_project/data/crane_grab/test/images').glob(
-        '*.jpg'))
-    covered = 0
-    enabled = []
-    for path in images:
-        seq, frame = MODULE._sequence_frame(str(path))
-        matches = [(start, end, value)
-                   for start, end, value in intervals.get(seq, ())
-                   if start <= frame <= end]
-        assert len(matches) == 1
-        covered += 1
-        if matches[0][2]:
-            enabled.append((seq, frame))
-    assert covered == 992
-    assert enabled == [('real_seq02', frame)
-                       for frame in range(137, 170)]

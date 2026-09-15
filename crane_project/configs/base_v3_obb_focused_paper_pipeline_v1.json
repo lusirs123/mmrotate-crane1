@@ -1,0 +1,116 @@
+{
+  "protocol": "base_v3_obb_focused_paper_pipeline_config_v1",
+  "pipeline": [
+    "rgb_image",
+    "frozen_dino_native_s14",
+    "symeood_k1_epoch24",
+    "base_v3_epoch9_causal_refiner",
+    "v51_component_observation",
+    "offline_gt_metrics_after_inference",
+    "paper_and_reliability_reports"
+  ],
+  "evidence_boundary": {
+    "fixed_test_previously_exposed": true,
+    "parameter_tuning_authorized": false,
+    "unknown_sequence_claim_authorized": false,
+    "physical_state_claim_authorized": false
+  },
+  "report_sources": {
+    "online_pipeline": {
+      "path": "work_dirs/base_v3_obb_reliability_baseline_v1/fixed_test_true_online_pipeline_v1.json",
+      "protocol": "base_v3_obb_true_online_pipeline_v1",
+      "sha256": "ef5487b9b20cc8f7723fd06f5004b330060f101637b3f68ebdbec23ac1a158ac"
+    },
+    "online_finalization": {
+      "path": "work_dirs/base_v3_obb_reliability_baseline_v1/fixed_test_true_online_finalization_v2.json",
+      "protocol": "base_v3_obb_true_online_finalization_v2",
+      "sha256": "76aec1df6fe8f6424985fa5d054b4b8e9f1684924377d619520dd380b89fdc63"
+    },
+    "paper_metrics": {
+      "path": "work_dirs/base_v3_obb_reliability_baseline_v1/fixed_test_true_online_paper_metrics_v3.json",
+      "protocol": "base_v3_obb_true_online_paper_metrics_v3",
+      "sha256": "95a1671b9f53d1258e2db21053c14ecaea6bc22a08973dfc560d13fa762301cf"
+    },
+    "reliability_diagnostic": {
+      "path": "work_dirs/base_v3_obb_reliability_baseline_v1/fixed_test_obb_hybrid_policy_diagnostic_v51_v31_r1_reclassified.json",
+      "protocol": "base_v3_obb_hybrid_fixed_test_diagnostic_v51_v31",
+      "sha256": "3f30f5f720e8a3036dae8e3116f453f9581c5cad86af96db9168efdf52fa0ae7"
+    },
+    "observation_csv": {
+      "path": "work_dirs/base_v3_obb_reliability_baseline_v1/fixed_test_true_online_observations_v2.csv",
+      "sha256": "8a9665c220a1138520a4bf34008f016b15f2b549d734d9819acbc5f8930704d3"
+    }
+  },
+  "full_run": {
+    "image_dir": "crane_project/data/crane_grab/test/images",
+    "expected_frame_count": 992,
+    "dino_config": "crane_project/configs/crane_symeood_formal_dino_native_s14_v1.py",
+    "dino_checkpoint": "work_dirs/dino_teacher_fc_cls_interpolation_v1/source_safe_interpolated_head.pth",
+    "base_v3_config": "crane_project/configs/crane_symeood_dino_k1_retentive_causal_phase_online_v1.py",
+    "runtime_calibration_v51": "work_dirs/base_v3_obb_reliability_baseline_v1/base_v3_obb_hybrid_observation_calibration_v51.json",
+    "online_contract": "crane_project/data_contracts/base_v3_obb_true_online_pipeline_v1.json",
+    "paper_final_report": "work_dirs/base_v3_obb_reliability_baseline_v1/fixed_test_obb_paper_final_report_v1.json",
+    "fixed_test_attribution": "work_dirs/crane_symeood_dino_anchor_fallback_attribution_v1/fixed_target_anchor_fallback_attribution.json",
+    "v51_eval_contract": "crane_project/data_contracts/base_v3_obb_hybrid_fixed_test_eval_v51.json",
+    "finalization_contract": "crane_project/data_contracts/base_v3_obb_true_online_finalization_v2.json",
+    "paper_metrics_contract": "crane_project/data_contracts/base_v3_obb_true_online_paper_metrics_v3.json",
+    "base_v3_results": "work_dirs/crane_symeood_dino_k1_retentive_causal_phase_fixed_test/fixed_test_results.pkl",
+    "k1_results": "work_dirs/crane_symeood_k1/ckpt_sweep/final_test/epoch_24/preds/results.pkl",
+    "all_lane_audit": "work_dirs/crane_symeood_dino_conservative_takeover_v2/full_test_metric_v2/conservative_takeover_fusion_audit.json",
+    "annotation_dir": "crane_project/data/crane_grab/test/annfiles",
+    "outputs": {
+      "online_pipeline": "unified_true_online_pipeline_v1.json",
+      "online_finalization": "unified_true_online_finalization_v2.json",
+      "observation_csv": "unified_true_online_observations_v2.csv",
+      "paper_metrics": "unified_true_online_paper_metrics_v3.json",
+      "reliability_diagnostic": "unified_reliability_diagnostic_v31_r1.json"
+    }
+  },
+  "metric_inventory": {
+    "methods": ["raw", "score_rejection_only", "v51_hybrid"],
+    "components": ["center", "scale", "angle"],
+    "primary_groups": ["all", "real", "sim"],
+    "anchor_groups": ["anchor:k1", "anchor:dino_fallback"],
+    "complete_obb_metrics": [
+      "available_obb_coverage",
+      "mean_available_riou",
+      "riou_hit_coverage",
+      "riou_hit_rate_given_available",
+      "bad_available_obb_rate",
+      "jointly_correct_coverage",
+      "false_all_components_valid_rate",
+      "longest_incomplete_obb_run"
+    ],
+    "component_metrics": [
+      "measurement_coverage",
+      "output_coverage",
+      "mean_available_output_error",
+      "bad_available_output_rate",
+      "correct_output_coverage",
+      "longest_unavailable_run"
+    ],
+    "reliability_diagnostics": [
+      "partial_valid_count",
+      "state_tuple_counts",
+      "validity_mask_counts",
+      "scale_matched_coverage",
+      "angle_hold_pair_audit",
+      "rejection_recovery"
+    ]
+  },
+  "visualization": {
+    "image_dir": "crane_project/data/crane_grab/test/images",
+    "method": "v51_hybrid",
+    "selection_rule": "first_frame_per_component_state_tuple_without_gt_or_error_ranking",
+    "max_frames": 8,
+    "directory": "work_dirs/base_v3_obb_reliability_baseline_v1/focused_paper_visualization_v1",
+    "manifest": "visualization_manifest_v1.json"
+  },
+  "outputs": {
+    "directory": "work_dirs/base_v3_obb_reliability_baseline_v1",
+    "model_report_json": "fixed_test_focused_paper_model_pipeline_v1.json",
+    "model_report_markdown": "fixed_test_focused_paper_model_pipeline_v1.md",
+    "reliability_report_json": "fixed_test_focused_paper_reliability_v1.json",
+    "reliability_report_markdown": "fixed_test_focused_paper_reliability_v1.md"
+  }
+}

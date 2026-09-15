@@ -12,8 +12,6 @@ import numpy as np
 
 from crane_project.tools import (
     base_v3_obb_hybrid_fixed_test_diagnostic_v51 as diagnostic)
-from crane_project.tools import (
-    base_v3_obb_image_quality_block_oof_development_v53 as v53)
 from crane_project.tools.base_v3_obb_component_reliability_continuous import (
     COMPONENTS)
 from crane_project.tools.base_v3_obb_hybrid_fixed_test_eval_v51 import (
@@ -34,6 +32,7 @@ from crane_project.tools.eval_crane_offline import compute_riou
 
 PROTOCOL = 'base_v3_obb_paper_final_report_v1'
 CONTRACT_PROTOCOL = 'base_v3_obb_paper_final_report_contract_v1'
+V53_REPORT_PROTOCOL = 'base_v3_obb_image_quality_block_oof_development_v53'
 
 
 def _require_identity(identity, expected, role):
@@ -59,7 +58,7 @@ def validate_contract(contract):
     required_protocols = {
         'v51_report_protocol': V51_REPORT_PROTOCOL,
         'v51_diagnostic_protocol': diagnostic.PROTOCOL,
-        'v53_report_protocol': v53.PROTOCOL,
+        'v53_report_protocol': V53_REPORT_PROTOCOL,
         'v51_eval_contract_protocol': V51_EVAL_CONTRACT_PROTOCOL,
         'runtime_calibration_protocol':
             V51_RUNTIME_CALIBRATION_PROTOCOL}
@@ -136,7 +135,7 @@ def validate_inputs(v51_report, v51_diagnostic, v53_report, contract):
         if float(diagnostic_evaluation.get(field, -1)) != float(
                 expected_evaluation[field]):
             raise ValueError('Final evaluation threshold changed: ' + field)
-    if v53_report.get('protocol') != v53.PROTOCOL:
+    if v53_report.get('protocol') != V53_REPORT_PROTOCOL:
         raise ValueError('Unexpected V5.3 report')
     if v53_report.get('decision') != contract['selection_closure'][
             'required_v53_decision']:

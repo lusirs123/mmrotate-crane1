@@ -78,7 +78,7 @@ def test_contract_rejects_tuning_and_overall_winner():
         expected_inputs={
             'v51_report_protocol': final.V51_REPORT_PROTOCOL,
             'v51_diagnostic_protocol': final.diagnostic.PROTOCOL,
-            'v53_report_protocol': final.v53.PROTOCOL,
+            'v53_report_protocol': final.V53_REPORT_PROTOCOL,
             'v51_eval_contract_protocol':
                 final.V51_EVAL_CONTRACT_PROTOCOL,
             'runtime_calibration_protocol':
