@@ -9,6 +9,7 @@ __pycache__/
 plan
 # 数据文件夹，不上传
 crane_project/data
+deliverables
 work_dirs
 # 日志文件
 *.log

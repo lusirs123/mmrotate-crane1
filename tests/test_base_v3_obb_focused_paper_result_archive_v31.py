@@ -45,16 +45,33 @@ def test_archive_cli_is_reproducible_and_preserves_sources(tmp_path):
     for _ in range(2):
         subprocess.run(cmd, check=True, capture_output=True,
                        cwd=Path(__file__).parents[1])
-    result = json.loads((tmp_path / 'out/fixed_test_focused_paper_result_archive_v31_r1.json').read_text())
+    result = json.loads((tmp_path / 'out' / archive.ARCHIVE_FILENAME).read_text())
     assert result['source_differences']['all']['online_mean_error_delta_vs_raw'] == 0.3
     assert result['source_differences']['all']['frozen_mean_error_delta_vs_raw'] == 0.2
     assert result['overall_winner_claimed'] is False
     assert json.loads((tmp_path / 'historical_diagnostic.json').read_text()) == historical
-    assert (tmp_path / 'out/fixed_test_focused_paper_result_archive_v31_r1.md').exists()
+    assert (tmp_path / 'out' / archive.MARKDOWN_FILENAME).exists()
     (tmp_path / 'online.json').write_text('{}')
     failed = subprocess.run(cmd, capture_output=True)
     assert failed.returncode != 0
     assert b'SHA256 mismatch' in failed.stderr
+
+
+def test_existing_frame_replay_diagnostic_does_not_collide(tmp_path):
+    fixture_inputs(tmp_path)
+    output = tmp_path / 'out'
+    output.mkdir()
+    replay = output / 'fixed_test_obb_hybrid_policy_diagnostic_v51_v31_r1.json'
+    replay.write_text('frame replay result must remain untouched')
+    cmd = [sys.executable, '-m', archive.__name__, '--online',
+           str(tmp_path / 'online.json'), '--historical-diagnostic',
+           str(tmp_path / 'historical_diagnostic.json'), '--contract',
+           str(tmp_path / 'contract.json'), '--out-dir', str(output)]
+    subprocess.run(cmd, check=True, capture_output=True,
+                   cwd=Path(__file__).parents[1])
+    assert replay.read_text() == 'frame replay result must remain untouched'
+    assert (output / archive.RECLASSIFIED_DIAGNOSTIC_FILENAME).exists()
+    assert (output / archive.ARCHIVE_FILENAME).exists()
 
 
 def test_revision_preserves_metrics_and_rejects_inconsistent_delta(tmp_path):

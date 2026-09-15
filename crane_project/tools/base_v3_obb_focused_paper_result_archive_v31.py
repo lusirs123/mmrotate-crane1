@@ -8,8 +8,12 @@ from pathlib import Path
 from crane_project.tools import base_v3_obb_hybrid_fixed_test_diagnostic_v51 as diag
 from crane_project.tools.base_v3_obb_reliability_baseline import _write_exact
 
-PROTOCOL = 'base_v3_obb_focused_paper_result_archive_v31_r1'
+PROTOCOL = 'base_v3_obb_focused_paper_result_archive_v31_r2'
 CONTRACT_PROTOCOL = PROTOCOL + '_contract'
+RECLASSIFIED_DIAGNOSTIC_FILENAME = (
+    'fixed_test_obb_hybrid_policy_diagnostic_v51_v31_r1_reclassified.json')
+ARCHIVE_FILENAME = 'fixed_test_focused_paper_result_archive_v31_r2.json'
+MARKDOWN_FILENAME = 'fixed_test_focused_paper_result_archive_v31_r2.md'
 
 
 def load_bound(path, expected):
@@ -82,14 +86,14 @@ def build(online, revised, identities):
         supported=['完整在线链路与分量状态接口', '准确性、完整覆盖率与部分分量可用性须并列报告'],
         unsupported=['V5.1 总体最优', '未知序列泛化', '学习风险全面优越',
                      '角度保持提升平均精度', '物理状态能力', '标准稳态部署实时性'],
-        outstanding=['本地未从冻结 V5.1 原始逐帧评估重跑诊断；本归档从绑定历史差值修订',
+        outstanding=['本归档中的冻结诊断从绑定历史差值重分类；逐帧回放结果作为独立证据保存',
                      '两来源角度差异尚未完成上游逐帧核对',
                      '独立未知序列验证未完成',
                      '服务器源码一致性与 Python 3.8 实机验证待执行'])
 
 
 def markdown(report):
-    lines = ['# Base V3 + V5.1 结果归档 V3.1 R1', '',
+    lines = ['# Base V3 + V5.1 结果归档 V3.1 R2', '',
              '固定 TEST 已暴露；不调参。V5.1 不是整体最优方法。', '',
              '真实在线性能与冻结诊断分别列示。角度来源差异未解释。', '']
     def render(value, title, depth=2):
@@ -147,14 +151,17 @@ def main():
         raise ValueError('Frozen evaluation identity mismatch')
     revised = revision_from_history(historical, historical_id)
     out = Path(args.out_dir)
-    revised_id = _write_exact(out / 'fixed_test_obb_hybrid_policy_diagnostic_v51_v31_r1.json', revised)
+    # This is a deterministic reclassification of the bound historical report.
+    # It must never share a filename with a diagnostic rebuilt from frame records.
+    revised_id = _write_exact(out / RECLASSIFIED_DIAGNOSTIC_FILENAME,
+                              revised)
     identities = dict(online=online_id, historical_diagnostic=historical_id,
                       revised_diagnostic={k:v for k,v in revised_id.items() if k != 'path'},
                       contract_sha256=hashlib.sha256(Path(args.contract).read_bytes()).hexdigest())
     report = build(online, revised, identities)
-    result_id = _write_exact(out / 'fixed_test_focused_paper_result_archive_v31_r1.json', report)
+    result_id = _write_exact(out / ARCHIVE_FILENAME, report)
     text = markdown(report)
-    md = out / 'fixed_test_focused_paper_result_archive_v31_r1.md'
+    md = out / MARKDOWN_FILENAME
     if md.exists() and md.read_text() != text:
         raise ValueError('Refusing to overwrite different Markdown')
     md.write_text(text, encoding='utf-8')

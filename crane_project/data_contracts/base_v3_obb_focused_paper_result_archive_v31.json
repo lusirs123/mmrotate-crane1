@@ -1,5 +1,5 @@
 {
-  "protocol": "base_v3_obb_focused_paper_result_archive_v31_r1_contract",
+  "protocol": "base_v3_obb_focused_paper_result_archive_v31_r2_contract",
   "online": {
     "protocol": "base_v3_obb_true_online_paper_metrics_v3",
     "sha256": "95a1671b9f53d1258e2db21053c14ecaea6bc22a08973dfc560d13fa762301cf"
