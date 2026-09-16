@@ -107,19 +107,24 @@ def test_visualization_selects_states_without_gt_or_error_ranking(tmp_path):
                for context in row['context_frames'])
 
 
-def test_gt_consistency_audit_is_read_only_and_records_actual_differences(
+def test_gt_consistency_audit_detects_injected_difference_without_mutation(
         tmp_path):
     config = _config()
     bundle = pipeline.load_report_sources(config, ROOT)
+    changed = copy.deepcopy(bundle)
+    row = changed['finalization']['records'][0]
+    original = row['offline_errors']['raw']['center']
+    row['offline_errors']['raw']['center'] = original + 0.01
     result = pipeline.write_gt_consistency_audit(
-        bundle, config, ROOT, tmp_path)
+        changed, config, ROOT, tmp_path)
     audit = json.loads(Path(result['path']).read_text(encoding='utf-8'))
     assert audit['protocol'] == 'base_v3_obb_gt_consistency_audit_v1'
     assert audit['frame_count'] == 992
     assert audit['changes_bound_results'] is False
     assert audit['status'] == 'LOCAL_RECOMPUTATION_DIFFERENCES_PRESENT'
-    assert audit['comparisons']['center']['max_abs_difference'] > 0
-    assert audit['comparisons']['riou']['max_abs_difference'] > 0
+    assert audit['comparisons']['center']['max_abs_difference'] > 0.0099
+    assert bundle['finalization']['records'][0][
+        'offline_errors']['raw']['center'] == original
 
 
 def test_full_run_diagnostic_is_rebuilt_from_current_online_records():

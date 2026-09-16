@@ -88,5 +88,6 @@
 - 新增 `audit-gt` 只读入口，输出 `gt_consistency_audit_v1.json`。它重新解析本地992份标注并比较绑定服务器逐帧值，不回写正式报告。当前确认存在历史同量级差异，状态为 `LOCAL_RECOMPUTATION_DIFFERENCES_PRESENT`。
 - `visualize` 的状态组合选择仍不使用 GT 或误差排序；每个中心案例增加前后各2帧的同序列上下文，manifest绑定全部图像身份，可直接检查测量、保持和缺测转换。
 - 本地已从下载的 `unified_staged_archive_v2` 生成可审阅目录 `unified_staged_archive_v2_paper_flow_v2`。精简模型 Markdown SHA256 为 `fed3e7160b6d299c29f43c38b9397f53b74957a04fcaab178782afca24b3d73d`，可靠性主 Markdown 为 `99bdb1dc73eb4cccc89a8761bc22ac6df341927c8c5ccc0d8cd1deb3b140342d`，可靠性详细 Markdown 为 `5f684f8223b9034ef8b16bce4c58d23ad9e03df042d00f15a739734d40531afa`，GT审计 JSON 为 `54c1f7f6725fcf729eb54d0738b15f02c7b6c35d530968e2c4dcc77e9fdd99b6`，连续状态 manifest 为 `ad5a9d7d3875d22287aaf4ac2f180a570b96488a7d0c6516bf9787fdcbe4fe6a`。
-- 新增和更新后的相关回归为 `16 passed`。实际检查还包括动态报告生成、GT审计CLI、`git diff --check`及真实下载结果加载。服务器 Python 3.8仍需执行同一组回归。
+- 新增和更新后的核心回归为 `16 passed`；扩展相关回归为 `52 passed`。实际检查还包括动态报告生成、GT审计CLI、`git diff --check`及真实下载结果加载。服务器首次执行为 `51 passed, 1 failed`，失败原因是测试错误地要求所有环境都必须出现 Mac 本地重算差异；修订后测试通过注入可控差异验证检出能力，不再绑定环境结果。
+- 服务器实际审计可达到 `EXACT_WITHIN_EPSILON`，而 Mac 本地为 `LOCAL_RECOMPUTATION_DIFFERENCES_PRESENT`。这表明审计工具应报告环境事实，不能把某一环境的状态写成跨环境固定断言。
 - 旧报告及本节以前记录的SHA256继续作为历史证据。精简版必须写入新目录，避免安全写入机制拒绝覆盖或混淆历史文件。

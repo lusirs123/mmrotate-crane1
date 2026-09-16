@@ -96,7 +96,7 @@ tests/test_eval_crane_offline_records.py
 | `base_v3_obb_focused_paper_pipeline_v1.py` | `f8974eb33e9e4c98bff0550ec8a0ed17654a47702d168a5e5de17b2979ae8253` |
 | `analyze_unified_full_run_v1.py` | `fe63b0f7269a74a83537bf299e44c5a899d63c3fdb870212d9d0e8b108d22eb2` |
 | `base_v3_obb_true_online_finalization_v2.py` | `9b27215f614ae473f54256c834232221dcd7d38c4616c6af840d6c89e9c6b935` |
-| `test_base_v3_obb_focused_paper_pipeline_v1.py` | `38af8f5b2e3d745a93a5d690c643d77b1494e99d2249c2e3c649fc7fa5301ffa` |
+| `test_base_v3_obb_focused_paper_pipeline_v1.py` | `f82879e79dafab1915f1537db78e31f674d395e25092e6764279961b90c20b3f` |
 | `test_analyze_unified_full_run_v1.py` | `71f15d5c758c1901be025b330078e2e75a38a188dc01a4be835aeebf967df2b9` |
 
 ## 4. 模型链逐级说明
@@ -737,7 +737,7 @@ python -m crane_project.tools.base_v3_obb_focused_paper_pipeline_v1 \
     work_dirs/base_v3_obb_reliability_baseline_v1/unified_staged_archive_v2_audit
 ```
 
-输出文件为 `gt_consistency_audit_v1.json`。当前本地复核状态为 `LOCAL_RECOMPUTATION_DIFFERENCES_PRESENT`；最大差异与此前审计一致：中心 `0.0444445893 px`、尺度 `1.03489105e-6`、方向 `0.0522689819°`、RIoU `0.00133404516`。这些差异未用于替换正式结果。
+输出文件为 `gt_consistency_audit_v1.json`。当前 Mac 本地复核状态为 `LOCAL_RECOMPUTATION_DIFFERENCES_PRESENT`；最大差异与此前审计一致：中心 `0.0444445893 px`、尺度 `1.03489105e-6`、方向 `0.0522689819°`、RIoU `0.00133404516`。服务器 `mmrotljj` 环境可得到 `EXACT_WITHIN_EPSILON`，说明审计状态取决于执行环境中的标注/几何解析链；两种状态都是工具的合法输出，测试不能强制服务器复现 Mac 本地差异。这些差异未用于替换正式结果。
 
 ### 16.3 连续状态案例
 
