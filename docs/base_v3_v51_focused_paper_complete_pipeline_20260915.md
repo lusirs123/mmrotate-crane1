@@ -1,6 +1,6 @@
 # Base V3 + V5.1 小论文模型与实验完整流程
 
-更新日期：2026-09-15  
+更新日期：2026-09-16
 本地主仓库：`/Users/mac/Documents/paper/symEOOD`  
 服务器主仓库：`/media/omnisky/personal_files/ljj/symEOOD`  
 服务器环境：Python 3.8，conda 环境 `mmrotljj`
@@ -92,11 +92,11 @@ tests/test_eval_crane_offline_records.py
 
 | 文件 | 当前本地 SHA256 |
 | --- | --- |
-| `base_v3_obb_focused_paper_pipeline_v1.json` | `185cf88bad05716ac3fcad6287dca6d1d0c50bfa814397f4b2d1742b96e239da` |
-| `base_v3_obb_focused_paper_pipeline_v1.py` | `50cdef26a53cc8944516e681ed96f73724980f511864f9bb7c6b03bfa6073af8` |
+| `base_v3_obb_focused_paper_pipeline_v1.json` | `373228fd49f82cd029c45830a6a274e87082253bfd465824d2600d6871594082` |
+| `base_v3_obb_focused_paper_pipeline_v1.py` | `f8974eb33e9e4c98bff0550ec8a0ed17654a47702d168a5e5de17b2979ae8253` |
 | `analyze_unified_full_run_v1.py` | `fe63b0f7269a74a83537bf299e44c5a899d63c3fdb870212d9d0e8b108d22eb2` |
 | `base_v3_obb_true_online_finalization_v2.py` | `9b27215f614ae473f54256c834232221dcd7d38c4616c6af840d6c89e9c6b935` |
-| `test_base_v3_obb_focused_paper_pipeline_v1.py` | `693c808037f26200c13a7a0a00642572b554877591c39a65574e5caebc144b06` |
+| `test_base_v3_obb_focused_paper_pipeline_v1.py` | `38af8f5b2e3d745a93a5d690c643d77b1494e99d2249c2e3c649fc7fa5301ffa` |
 | `test_analyze_unified_full_run_v1.py` | `71f15d5c758c1901be025b330078e2e75a38a188dc01a4be835aeebf967df2b9` |
 
 ## 4. 模型链逐级说明
@@ -229,7 +229,7 @@ infer（无 GT） → evaluate（推理后连接 GT） → report（只读结果
 8. 生成论文指标 JSON。
 9. 保存诊断输入及诊断运行时契约，再从本次逐帧记录生成 V3.1-r1 可靠性诊断。
 10. 从同一绑定结果自动计算 R_center、A-RMSE、DFR、ACI、TDR、MCML、MRF。
-11. 生成模型总报告和独立可靠性报告。
+11. 生成精简模型总报告、精简可靠性主报告、可靠性详细诊断和完整 JSON。
 
 该隔离用于保证 GT 只参与后验度量，不进入在线判定。固定 TEST 已暴露这一事实仍然存在，所以隔离并不会重新赋予该 TEST 独立验证资格。
 
@@ -703,3 +703,59 @@ RGB 图像
 > V5.1 不是整体最优方法。它的主要现象是增加部分尺度与方向观测，但这些收益必须与有效输出误差、完整 OBB 覆盖率、联合正确覆盖率和连续缺测代价同时报告。
 
 本文档、原始服务器产物、补充自定义指标报告和状态文件共同构成当前小论文模型与实验阶段的交接证据。后续写作应从这些绑定结果提取数值，不从聊天记录手工抄写近似值。
+
+## 16. 2026-09-16 流程精简修订
+
+本次只优化小论文的评估、报告与核验流程，不训练模型，不修改 DINO、Base V3、V5.1、阈值、checkpoint 或固定 TEST 结果。V5.1 继续作为冻结诊断基线，不作为已经成立的最终可靠性方法，也不建立正式消融入口。
+
+### 16.1 报告分层
+
+统一入口现在生成五份报告文件：
+
+| 文件 | 用途 |
+| --- | --- |
+| `fixed_test_focused_paper_model_pipeline_v1.json` | 完整机器可读模型、指标和证据链 |
+| `fixed_test_focused_paper_model_pipeline_v1.md` | 精简检测与时序主报告 |
+| `fixed_test_focused_paper_reliability_v1.json` | 完整机器可读可靠性诊断 |
+| `fixed_test_focused_paper_reliability_v1.md` | 只展示“输出率 / 输出准确率”的可靠性主报告 |
+| `fixed_test_focused_paper_reliability_detail_v1.md` | 逐分量、同覆盖率、角度保持、来源和连续缺失详细表 |
+
+检测主报告保留 `R_center`、`mean_RIoU`、`DFR`、`ACI`、`TDR_w10`、`MCML_max`，仿真增加 `A-RMSE`。其余自定义指标继续保存在 JSON，不挤入主表。可靠性主报告优先列真实港口结果，再列仿真和全部数据。完整框准确要求中心、尺度、方向同时满足冻结阈值。
+
+### 16.2 GT 一致性审计
+
+新增只读模式 `audit-gt`。它重新解析当前本地 992 份 DOTA 标注，重算逐帧中心、尺度、方向误差和 RIoU，再与绑定的服务器 finalization 比较。该模式只生成差异报告，不改写正式指标。
+
+```bash
+PYTHONPATH="$PWD" PYTHONDONTWRITEBYTECODE=1 \
+python -m crane_project.tools.base_v3_obb_focused_paper_pipeline_v1 \
+  --config crane_project/configs/base_v3_obb_focused_paper_pipeline_v1.json \
+  --mode audit-gt \
+  --input-dir \
+    work_dirs/base_v3_obb_reliability_baseline_v1/unified_staged_archive_v2 \
+  --out-dir \
+    work_dirs/base_v3_obb_reliability_baseline_v1/unified_staged_archive_v2_audit
+```
+
+输出文件为 `gt_consistency_audit_v1.json`。当前本地复核状态为 `LOCAL_RECOMPUTATION_DIFFERENCES_PRESENT`；最大差异与此前审计一致：中心 `0.0444445893 px`、尺度 `1.03489105e-6`、方向 `0.0522689819°`、RIoU `0.00133404516`。这些差异未用于替换正式结果。
+
+### 16.3 连续状态案例
+
+`visualize` 仍按首次出现的分量状态组合选择案例，不读取 GT 或误差排序；每个案例现在同时输出前后各 2 帧的同序列上下文。manifest 记录中心帧、上下文帧、三分量状态、有效分量和图像 SHA256，可用于制作测量、方向保持和缺测的连续序列示例。
+
+```bash
+PYTHONPATH="$PWD" PYTHONDONTWRITEBYTECODE=1 \
+python -m crane_project.tools.base_v3_obb_focused_paper_pipeline_v1 \
+  --config crane_project/configs/base_v3_obb_focused_paper_pipeline_v1.json \
+  --mode visualize \
+  --input-dir \
+    work_dirs/base_v3_obb_reliability_baseline_v1/unified_staged_archive_v2 \
+  --out-dir \
+    work_dirs/base_v3_obb_reliability_baseline_v1/focused_paper_visualization_v2
+```
+
+状态颜色只表达输出状态：灰色是 Base V3 框，绿色是完整 V5.1 OBB，黄色是完整框不可用时仍有效的中心。颜色不表示该输出经 GT 证明正确。
+
+### 16.4 后续阶段
+
+当前流程优化完成后，下一阶段优先处理检测前端的 DINO 问题。可靠性性能优化与正式消融暂缓；只有检测基线重新冻结、可靠性方法在独立训练/验证划分上达到预先定义的覆盖率—准确率标准后，才进入可靠性消融和最终 TEST。

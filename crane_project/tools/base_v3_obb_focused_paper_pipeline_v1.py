@@ -112,9 +112,10 @@ def validate_config(config):
     output_config = config.get('outputs', {})
     output_names = [output_config.get(key) for key in (
         'model_report_json', 'model_report_markdown',
-        'reliability_report_json', 'reliability_report_markdown')]
-    if len(output_names) != 4 or len(set(output_names)) != 4:
-        raise ValueError('Four distinct report outputs are required')
+        'reliability_report_json', 'reliability_report_markdown',
+        'reliability_detail_markdown')]
+    if len(output_names) != 5 or len(set(output_names)) != 5:
+        raise ValueError('Five distinct report outputs are required')
     visualization = config.get('visualization', {})
     if visualization.get('method') != 'v51_hybrid':
         raise ValueError('Visualization must use the frozen V5.1 method')
@@ -123,6 +124,13 @@ def validate_config(config):
         raise ValueError('Visualization selection rule changed')
     if int(visualization.get('max_frames', 0)) <= 0:
         raise ValueError('Visualization max_frames must be positive')
+    if int(visualization.get('context_radius_frames', 0)) <= 0:
+        raise ValueError('Visualization context radius must be positive')
+    gt_audit = config.get('gt_consistency_audit', {})
+    if not gt_audit.get('annotation_dir') or not gt_audit.get('output'):
+        raise ValueError('GT consistency audit paths are required')
+    if float(gt_audit.get('comparison_epsilon', -1)) != 1e-12:
+        raise ValueError('GT consistency comparison epsilon changed')
     full_outputs = config.get('full_run', {}).get('outputs', {})
     required_full_outputs = {
         'online_pipeline', 'inference_receipt', 'online_finalization',
@@ -478,33 +486,29 @@ def model_markdown(report):
         '- 域计数：{}'.format(_format(report['dataset_summary']['domain_counts'])),
         '- 序列计数：{}'.format(_format(report['dataset_summary']['sequence_counts'])),
         '- 时间戳：未提供，不合成。', '',
-        '## 完整 OBB 指标', '']
+        '## 完整 OBB 主结果', '',
+        '覆盖率回答“输出多少”，有效框平均 RIoU 回答“已输出框的几何质量”，'
+        'RIoU 命中覆盖率回答“全部帧中有多少帧既输出完整框又达到 RIoU 阈值”。', '']
     complete_fields = [
         'method', 'group', 'frame_count', 'available_obb_coverage',
         'mean_available_riou', 'riou_hit_coverage',
         'jointly_correct_coverage', 'false_all_components_valid_rate',
         'longest_incomplete_obb_run']
     lines.extend(_markdown_table(report['metrics']['complete_obb'], complete_fields))
-    lines.extend(['', '## 分量指标', ''])
-    component_fields = [
-        'method', 'group', 'component', 'measurement_coverage',
-        'output_coverage', 'mean_available_output_error',
-        'bad_available_output_rate', 'correct_output_coverage',
-        'longest_unavailable_run']
-    lines.extend(_markdown_table(report['metrics']['components'], component_fields))
-    lines.extend(['', '## 锚来源指标', ''])
-    anchor_fields = [
-        'method', 'group', 'frame_count', 'available_obb_coverage',
-        'mean_available_riou', 'riou_hit_coverage',
-        'jointly_correct_coverage', 'false_all_components_valid_rate']
-    lines.extend(_markdown_table(report['metrics']['anchor_sources'], anchor_fields))
     custom = report['metrics']['custom_temporal']
     lines.extend(['', '## 自定义检测与时序指标', '',
                   '完整 OBB 口径；部分分量观测在本表中计为缺少完整框。', ''])
     values = custom['values']
     custom_rows = []
-    fields = sorted(set(
-        key for method_values in values.values() for key in method_values))
+    preferred = [
+        'real/R_center(%)', 'real/mean_RIoU', 'real/DFR(%/frame)',
+        'real/ACI', 'real/TDR_w10(%)', 'real/MCML_max(frames)',
+        'sim/R_center(%)', 'sim/mean_RIoU', 'sim/A-RMSE(deg)',
+        'sim/DFR(%/frame)', 'sim/ACI', 'sim/TDR_w10(%)',
+        'sim/MCML_max(frames)']
+    available = set(
+        key for method_values in values.values() for key in method_values)
+    fields = [field for field in preferred if field in available]
     for metric in fields:
         custom_rows.append(dict(
             metric=metric, raw=values['raw'].get(metric),
@@ -530,11 +534,81 @@ def model_markdown(report):
         '- `valid` 表示规则允许输出，不是 GT 正确性标签。',
         '- 部分分量有效不能计为完整 OBB。',
         '- V5.1 不是整体最优方法。',
-        '- 可靠性细节见独立可靠性 JSON 与 Markdown 报告。', ''])
+        '- 分量可靠性见独立精简报告；全部诊断表保存在详细 Markdown 与 JSON。',
+        '- 本报告不包含检测器 AP/mAP，不能用这里的覆盖率替代检测器比较。', ''])
     return '\n'.join(lines)
 
 
+def _reliability_summary_rows(report, group):
+    components = {
+        (row['method'], row['group'], row['component']): row
+        for row in report['component_metrics']}
+    complete = report['joint_component_availability']
+    rows = []
+    labels = (('center', '中心'), ('scale', '尺度'), ('angle', '方向'))
+    for component, label in labels:
+        row = dict(output=label)
+        for method in METHODS:
+            values = components[(method, group, component)]
+            row[method] = '{:.2%} / {:.2%}'.format(
+                values['output_coverage'],
+                1.0-values['bad_available_output_rate'])
+        rows.append(row)
+    row = dict(output='完整框')
+    for method in METHODS:
+        values = complete[method][group]
+        row[method] = '{:.2%} / {:.2%}'.format(
+            values['all_components_valid_coverage'],
+            1.0-values['false_all_components_valid_rate'])
+    rows.append(row)
+    return rows
+
+
 def reliability_markdown(report):
+    lines = [
+        '# Base V3 + V5.1 可靠性主报告', '',
+        '本报告只回答两个问题：系统输出多少，以及已输出结果中有多少满足冻结误差要求。', '',
+        '- 输出率：有效输出帧数除以全部帧数。',
+        '- 输出准确率：满足冻结误差要求的输出数除以有效输出数；它不是分类准确率。',
+        '- 完整框准确要求中心、尺度和方向同时达标。',
+        '- 中心阈值为 5 px，尺度相对误差阈值为 0.1，方向阈值为 3°。', '',
+        '表格单元均为“输出率 / 输出准确率”。', '']
+    for group, title in (('real', '真实港口（主结果）'),
+                         ('sim', '仿真'), ('all', '全部数据（补充）')):
+        lines.extend(['## ' + title, ''])
+        lines.extend(_markdown_table(_reliability_summary_rows(report, group), [
+            'output', 'raw', 'score_rejection_only', 'v51_hybrid']))
+        lines.append('')
+    joint = report['joint_component_availability']
+    score_all = joint['score_rejection_only']['all']
+    hybrid_all = joint['v51_hybrid']['all']
+    angle = report['angle_hold']['all']
+    scale = report['matched_coverage_scale']['all']
+    lines.extend([
+        '## 结果解释', '',
+        '- 中心：V5.1 与置信度筛选采用相同规则，结果相同。',
+        ('- 尺度：V5.1 增加尺度输出，但同覆盖率总体比较为 {} 个严格胜出点；'
+         '当前不支持尺度风险排序整体优于置信度排序。').format(
+             scale['risk_wins_both_count']),
+        ('- 方向：一帧历史保持产生 {} 次输出，其中 {} 次改善、{} 次退化，'
+         '平均误差变化为 {:+.6f}°。').format(
+             angle['prediction_count'], angle['improved_count'],
+             angle['degraded_count'], angle['mean_error_delta_vs_raw']),
+        ('- 完整框：相比置信度筛选，V5.1 输出率变化 {:+.2%}，'
+         '联合正确覆盖率变化 {:+.2%}。').format(
+             hybrid_all['all_components_valid_coverage']-
+             score_all['all_components_valid_coverage'],
+             hybrid_all['jointly_correct_coverage']-
+             score_all['jointly_correct_coverage']),
+        ('- 部分观测：V5.1 有 {} 帧只输出一个或两个分量，'
+         '不能计为完整 OBB。').format(hybrid_all['partial_valid_count']), '',
+        '## 使用边界', ''])
+    lines.extend('- ' + value for value in report['limits'])
+    lines.extend(['', '全部逐分量、同覆盖率、角度保持、来源分组和连续缺失统计见详细诊断 Markdown 与 JSON。', ''])
+    return '\n'.join(lines)
+
+
+def reliability_detail_markdown(report):
     lines = [
         '# Base V3 + V5.1 可靠性专项报告', '',
         '该报告单独解释分量有效性、完整框可用性和正确性，三者不能互相替代。', '',
@@ -645,7 +719,7 @@ def _draw_obb(cv2, image, box, color, thickness):
 
 
 def write_visualizations(bundle, config, root, out_dir=None):
-    """Render deterministic state examples without GT/error-based selection."""
+    """Render deterministic state examples and local temporal context."""
     import cv2
 
     settings = config['visualization']
@@ -665,8 +739,14 @@ def write_visualizations(bundle, config, root, out_dir=None):
         selected.append((row, observations, state_tuple))
         if len(selected) >= int(settings['max_frames']):
             break
-    rendered = []
-    for row, observations, state_tuple in selected:
+    rendered_images = {}
+
+    def render(row):
+        if row['frame_key'] in rendered_images:
+            return rendered_images[row['frame_key']]
+        observations = row['observations'][method]
+        state_tuple = tuple(
+            observations[name]['state'] for name in COMPONENTS)
         source = _find_image(image_dir, row['frame_key'])
         image = cv2.imread(os.fspath(source), cv2.IMREAD_COLOR)
         if image is None:
@@ -697,24 +777,47 @@ def write_visualizations(bundle, config, root, out_dir=None):
                                + os.fspath(output))
         if not output.exists():
             output.write_bytes(raw)
-        rendered.append(dict(
+        record = dict(
             frame_key=row['frame_key'], state_tuple=list(state_tuple),
             validity_mask=[name for name in COMPONENTS
                            if observations[name]['valid']],
             source_image=_relative_identity(root, source),
             output=_relative_identity(root, output),
-            selection_uses_gt_or_error=False))
+            selection_uses_gt_or_error=False)
+        rendered_images[row['frame_key']] = record
+        return record
+
+    by_sequence = {}
+    for row in bundle['online']['records']:
+        key = (row['domain'], row['sequence'])
+        by_sequence.setdefault(key, []).append(row)
+    for rows in by_sequence.values():
+        rows.sort(key=lambda item: int(item['frame']))
+    radius = int(settings['context_radius_frames'])
+    rendered = []
+    for row, observations, state_tuple in selected:
+        center_frame = int(row['frame'])
+        context = [candidate for candidate in by_sequence[
+            (row['domain'], row['sequence'])]
+            if abs(int(candidate['frame'])-center_frame) <= radius]
+        selected_record = copy.deepcopy(render(row))
+        selected_record['context_frames'] = [copy.deepcopy(render(candidate))
+                                             for candidate in context]
+        rendered.append(selected_record)
     manifest = dict(
         protocol='base_v3_obb_focused_paper_visualization_manifest_v1',
         online_report=copy.deepcopy(bundle['identities']['online_pipeline']),
         method=method, selection_rule=settings['selection_rule'],
+        context_radius_frames=radius,
         legend=dict(gray='Base V3 detector OBB', green='complete V5.1 OBB',
                     yellow='valid center when the complete OBB is unavailable'),
-        selected_frame_count=len(rendered), records=rendered,
+        selected_frame_count=len(rendered),
+        rendered_image_count=len(rendered_images), records=rendered,
         gt_or_error_used_for_selection=False)
     manifest_identity = _write_exact(
         directory / settings['manifest'], manifest)
-    return dict(manifest=manifest_identity, images=[row['output'] for row in rendered])
+    images = [rendered_images[key]['output'] for key in sorted(rendered_images)]
+    return dict(manifest=manifest_identity, images=images)
 
 
 def write_reports(bundle, config, root, out_dir=None, config_identity=None):
@@ -733,6 +836,9 @@ def write_reports(bundle, config, root, out_dir=None, config_identity=None):
     reliability_md = _write_text_exact(
         directory / outputs['reliability_report_markdown'],
         reliability_markdown(reliability))
+    reliability_detail_md = _write_text_exact(
+        directory / outputs['reliability_detail_markdown'],
+        reliability_detail_markdown(reliability))
     reliability_identity = dict(
         json={key: value for key, value in reliability_json.items()
               if key != 'path'},
@@ -751,7 +857,8 @@ def write_reports(bundle, config, root, out_dir=None, config_identity=None):
     return dict(
         model_json=model_json, model_markdown=model_md,
         reliability_json=reliability_json,
-        reliability_markdown=reliability_md)
+        reliability_markdown=reliability_md,
+        reliability_detail_markdown=reliability_detail_md)
 
 
 def _validate_paths(config, root, roles):
@@ -776,6 +883,114 @@ def validate_evaluation_inputs(config, root):
         'paper_final_report', 'fixed_test_attribution', 'v51_eval_contract',
         'finalization_contract', 'paper_metrics_contract', 'base_v3_results',
         'k1_results', 'all_lane_audit', 'annotation_dir'))
+
+
+def build_gt_consistency_audit(bundle, config, root):
+    """Recompute per-frame errors from local annotations without changing results."""
+    import numpy as np
+    from crane_project.tools.eval_crane_offline import parse_dota_txt, compute_riou
+    from crane_project.tools.base_v3_obb_component_reliability_continuous import (
+        _error_from_value)
+    from crane_project.tools.base_v3_obb_paper_final_report_v1 import (
+        _reconstruct_obb)
+
+    settings = config['gt_consistency_audit']
+    annotation_dir = _resolve(root, settings['annotation_dir'])
+    epsilon = float(settings['comparison_epsilon'])
+    offline = {row['frame_key']: row
+               for row in bundle['finalization']['records']}
+    comparisons = {
+        name: dict(comparison_count=0, difference_count=0,
+                   max_abs_difference=0.0, worst_case=None)
+        for name in COMPONENTS + ('riou',)}
+    annotation_hashes = {}
+    for online_row in bundle['online']['records']:
+        key = online_row['frame_key']
+        annotation = annotation_dir / (key + '.txt')
+        if not annotation.is_file():
+            raise RuntimeError('Missing GT annotation: ' + os.fspath(annotation))
+        boxes = parse_dota_txt(os.fspath(annotation))
+        if len(boxes) != 1:
+            raise RuntimeError(
+                'GT audit requires exactly one box for {}: got {}'.format(
+                    key, len(boxes)))
+        annotation_hashes[key] = _sha256(annotation)
+        if key not in offline:
+            raise RuntimeError('Finalization is missing frame: ' + key)
+        final_row = offline[key]
+        geometry_row = dict(
+            frame_key=key, gt_box=np.asarray(boxes[0], dtype=np.float64),
+            base_v3_box=online_row['detector_components']['base_v3_box'])
+        for method in METHODS:
+            observations = online_row['observations'][method]
+            for component in COMPONENTS:
+                value = observations[component]['value']
+                actual = (None if value is None else
+                          _error_from_value(value, geometry_row, component))
+                expected = final_row['offline_errors'][method][component]
+                if (actual is None) != (expected is None):
+                    raise RuntimeError(
+                        'GT audit value presence differs: {} {} {}'.format(
+                            key, method, component))
+                if actual is not None:
+                    _record_gt_difference(
+                        comparisons[component], actual, expected, epsilon,
+                        key, method)
+            reconstructed = _reconstruct_obb(geometry_row, observations)
+            actual_riou = (None if reconstructed is None else
+                           compute_riou(reconstructed, boxes[0]))
+            expected_riou = final_row['offline_riou'][method]
+            if (actual_riou is None) != (expected_riou is None):
+                raise RuntimeError(
+                    'GT audit RIoU presence differs: {} {}'.format(key, method))
+            if actual_riou is not None:
+                _record_gt_difference(
+                    comparisons['riou'], actual_riou, expected_riou,
+                    epsilon, key, method)
+    manifest_raw = ''.join(
+        '{} {}\n'.format(key, annotation_hashes[key])
+        for key in sorted(annotation_hashes)).encode('utf-8')
+    difference_count = sum(
+        values['difference_count'] for values in comparisons.values())
+    return dict(
+        protocol='base_v3_obb_gt_consistency_audit_v1',
+        status=('EXACT_WITHIN_EPSILON' if difference_count == 0 else
+                'LOCAL_RECOMPUTATION_DIFFERENCES_PRESENT'),
+        descriptive_audit_only=True,
+        changes_bound_results=False,
+        comparison_epsilon=epsilon,
+        frame_count=len(annotation_hashes),
+        annotation_set=dict(
+            directory=os.fspath(annotation_dir),
+            file_count=len(annotation_hashes),
+            manifest_sha256=hashlib.sha256(manifest_raw).hexdigest()),
+        inputs=copy.deepcopy(bundle['identities']),
+        comparisons=comparisons,
+        interpretation=(
+            'Local GT parsing reproduced the bound per-frame metrics within '
+            'the configured epsilon.' if difference_count == 0 else
+            'Differences were measured but not applied to the bound reports; '
+            'the GT/parser/geometry source must be reconciled before claiming '
+            'an independent local reproduction.'))
+
+
+def _record_gt_difference(summary, actual, expected, epsilon, frame_key, method):
+    difference = abs(float(actual)-float(expected))
+    summary['comparison_count'] += 1
+    if difference > epsilon:
+        summary['difference_count'] += 1
+    if difference > summary['max_abs_difference']:
+        summary['max_abs_difference'] = difference
+        summary['worst_case'] = dict(
+            frame_key=frame_key, method=method,
+            local_recomputed=float(actual), bound_server=float(expected),
+            abs_difference=difference)
+
+
+def write_gt_consistency_audit(bundle, config, root, out_dir):
+    audit = build_gt_consistency_audit(bundle, config, root)
+    output = Path(out_dir) / config['gt_consistency_audit']['output']
+    return _write_exact(output, audit)
 
 
 def validate_full_inputs(config, root):
@@ -1069,7 +1284,8 @@ def parse_args():
     parser.add_argument('--config', required=True)
     parser.add_argument(
         '--mode', choices=(
-            'validate', 'infer', 'evaluate', 'report', 'visualize', 'full'),
+            'validate', 'infer', 'evaluate', 'report', 'visualize',
+            'audit-gt', 'full'),
         default='report')
     parser.add_argument(
         '--input-dir', help=(
@@ -1090,6 +1306,8 @@ def main():
             raise ValueError(
                 '--out-dir is required for {} mode so a fresh evidence '
                 'directory is used'.format(args.mode))
+    if args.mode == 'audit-gt' and args.out_dir is None:
+        raise ValueError('--out-dir is required for audit-gt mode')
     if args.mode == 'infer':
         inferred = run_inference(config, root, args.out_dir, args.device)
         result = dict(
@@ -1116,6 +1334,9 @@ def main():
             inputs=bundle['identities'])
     elif args.mode == 'visualize':
         result = write_visualizations(bundle, config, root, args.out_dir)
+    elif args.mode == 'audit-gt':
+        result = write_gt_consistency_audit(
+            bundle, config, root, args.out_dir)
     else:
         result = write_reports(
             bundle, config, root, args.out_dir,

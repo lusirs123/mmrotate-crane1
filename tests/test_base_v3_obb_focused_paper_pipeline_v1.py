@@ -48,7 +48,8 @@ def test_report_mode_writes_complete_and_separate_reliability_outputs(
     outputs = pipeline.write_reports(bundle, config, ROOT, tmp_path)
     assert set(outputs) == {
         'model_json', 'model_markdown',
-        'reliability_json', 'reliability_markdown'}
+        'reliability_json', 'reliability_markdown',
+        'reliability_detail_markdown'}
     model = json.loads((tmp_path / config['outputs'][
         'model_report_json']).read_text(encoding='utf-8'))
     reliability = json.loads((tmp_path / config['outputs'][
@@ -70,6 +71,13 @@ def test_report_mode_writes_complete_and_separate_reliability_outputs(
         'metric_definitions']['valid']
     assert '## 自定义检测与时序指标' in (tmp_path / config['outputs'][
         'model_report_markdown']).read_text(encoding='utf-8')
+    concise = (tmp_path / config['outputs'][
+        'reliability_report_markdown']).read_text(encoding='utf-8')
+    detail = (tmp_path / config['outputs'][
+        'reliability_detail_markdown']).read_text(encoding='utf-8')
+    assert '表格单元均为“输出率 / 输出准确率”' in concise
+    assert '## 尺度同覆盖率比较' not in concise
+    assert '## 尺度同覆盖率比较' in detail
 
 
 def test_bound_source_hash_mismatch_is_rejected():
@@ -87,12 +95,31 @@ def test_visualization_selects_states_without_gt_or_error_ranking(tmp_path):
     manifest = json.loads(Path(result['manifest']['path']).read_text(
         encoding='utf-8'))
     assert manifest['gt_or_error_used_for_selection'] is False
-    assert manifest['selected_frame_count'] == len(result['images'])
+    assert manifest['rendered_image_count'] == len(result['images'])
     assert manifest['selected_frame_count'] >= 3
     tuples = [tuple(row['state_tuple']) for row in manifest['records']]
     assert len(tuples) == len(set(tuples))
     assert all(Path(row['output']['path']).is_file()
                for row in manifest['records'])
+    assert all(row['context_frames'] for row in manifest['records'])
+    assert all(Path(context['output']['path']).is_file()
+               for row in manifest['records']
+               for context in row['context_frames'])
+
+
+def test_gt_consistency_audit_is_read_only_and_records_actual_differences(
+        tmp_path):
+    config = _config()
+    bundle = pipeline.load_report_sources(config, ROOT)
+    result = pipeline.write_gt_consistency_audit(
+        bundle, config, ROOT, tmp_path)
+    audit = json.loads(Path(result['path']).read_text(encoding='utf-8'))
+    assert audit['protocol'] == 'base_v3_obb_gt_consistency_audit_v1'
+    assert audit['frame_count'] == 992
+    assert audit['changes_bound_results'] is False
+    assert audit['status'] == 'LOCAL_RECOMPUTATION_DIFFERENCES_PRESENT'
+    assert audit['comparisons']['center']['max_abs_difference'] > 0
+    assert audit['comparisons']['riou']['max_abs_difference'] > 0
 
 
 def test_full_run_diagnostic_is_rebuilt_from_current_online_records():
@@ -127,7 +154,8 @@ def test_cli_report_is_a_minimal_end_to_end_entrypoint(tmp_path):
     receipt = json.loads(completed.stdout)
     assert set(receipt) == {
         'model_json', 'model_markdown',
-        'reliability_json', 'reliability_markdown'}
+        'reliability_json', 'reliability_markdown',
+        'reliability_detail_markdown'}
     for item in receipt.values():
         assert Path(item['path']).is_file()
         assert len(item['sha256']) == 64

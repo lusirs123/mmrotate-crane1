@@ -120,14 +120,21 @@
     "method": "v51_hybrid",
     "selection_rule": "first_frame_per_component_state_tuple_without_gt_or_error_ranking",
     "max_frames": 8,
+    "context_radius_frames": 2,
     "directory": "work_dirs/base_v3_obb_reliability_baseline_v1/focused_paper_visualization_v1",
     "manifest": "visualization_manifest_v1.json"
+  },
+  "gt_consistency_audit": {
+    "annotation_dir": "crane_project/data/crane_grab/test/annfiles",
+    "output": "gt_consistency_audit_v1.json",
+    "comparison_epsilon": 1e-12
   },
   "outputs": {
     "directory": "work_dirs/base_v3_obb_reliability_baseline_v1",
     "model_report_json": "fixed_test_focused_paper_model_pipeline_v1.json",
     "model_report_markdown": "fixed_test_focused_paper_model_pipeline_v1.md",
     "reliability_report_json": "fixed_test_focused_paper_reliability_v1.json",
-    "reliability_report_markdown": "fixed_test_focused_paper_reliability_v1.md"
+    "reliability_report_markdown": "fixed_test_focused_paper_reliability_v1.md",
+    "reliability_detail_markdown": "fixed_test_focused_paper_reliability_detail_v1.md"
   }
 }

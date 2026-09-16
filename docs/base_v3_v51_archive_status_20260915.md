@@ -1,6 +1,6 @@
 # Base V3 + V5.1 归档交接状态
 
-更新时间：2026-09-15
+更新时间：2026-09-16
 
 ## 当前版本
 
@@ -80,3 +80,13 @@
 - 实际验证：统一入口、自定义指标和离线记录测试合计 `20 passed`；相关在线 pipeline、finalization、paper metrics、诊断、论文 finalization 和 V5.1 eval 回归合计 `45 passed`；全部顶层项目测试 `372 passed`。生成目录 `validate --input-dir` 成功；动态 `report --input-dir` 成功生成四份报告并包含 `real/R_center(%)`。
 - `pytest tests` 的全树收集在本地 Python 3.13 环境出现 15 个依赖导入错误，均来自上游 MMRotate 数据、模型和工具测试缺少 `mmcv`/`mmdet`，没有进入测试执行。这不是本轮代码断言失败；应在服务器 `mmrotljj` 环境补跑所需上游测试。
 - 本地未执行 CUDA 推理和真实 `evaluate`，因为缺少服务器上的 attribution 与 all-lane audit 两份重建输入。服务器应先同步本节列出的源码、配置、测试与文档，再执行回归和新的分阶段或 `full` 命令。
+
+## 小论文流程精简修订（2026-09-16）
+
+- 本轮不优化 DINO、Base V3 或 V5.1 性能，不训练、不推理、不调参，也不建立可靠性正式消融入口。下一性能阶段优先处理 DINO 检测问题。
+- 模型 Markdown 收敛为完整框主结果和已有自定义指标；可靠性 Markdown 收敛为真实、仿真和全部数据的“输出率 / 输出准确率”。完整可靠性 JSON不删，并新增 `fixed_test_focused_paper_reliability_detail_v1.md` 保存全部诊断表。
+- 新增 `audit-gt` 只读入口，输出 `gt_consistency_audit_v1.json`。它重新解析本地992份标注并比较绑定服务器逐帧值，不回写正式报告。当前确认存在历史同量级差异，状态为 `LOCAL_RECOMPUTATION_DIFFERENCES_PRESENT`。
+- `visualize` 的状态组合选择仍不使用 GT 或误差排序；每个中心案例增加前后各2帧的同序列上下文，manifest绑定全部图像身份，可直接检查测量、保持和缺测转换。
+- 本地已从下载的 `unified_staged_archive_v2` 生成可审阅目录 `unified_staged_archive_v2_paper_flow_v2`。精简模型 Markdown SHA256 为 `fed3e7160b6d299c29f43c38b9397f53b74957a04fcaab178782afca24b3d73d`，可靠性主 Markdown 为 `99bdb1dc73eb4cccc89a8761bc22ac6df341927c8c5ccc0d8cd1deb3b140342d`，可靠性详细 Markdown 为 `5f684f8223b9034ef8b16bce4c58d23ad9e03df042d00f15a739734d40531afa`，GT审计 JSON 为 `54c1f7f6725fcf729eb54d0738b15f02c7b6c35d530968e2c4dcc77e9fdd99b6`，连续状态 manifest 为 `ad5a9d7d3875d22287aaf4ac2f180a570b96488a7d0c6516bf9787fdcbe4fe6a`。
+- 新增和更新后的相关回归为 `16 passed`。实际检查还包括动态报告生成、GT审计CLI、`git diff --check`及真实下载结果加载。服务器 Python 3.8仍需执行同一组回归。
+- 旧报告及本节以前记录的SHA256继续作为历史证据。精简版必须写入新目录，避免安全写入机制拒绝覆盖或混淆历史文件。
