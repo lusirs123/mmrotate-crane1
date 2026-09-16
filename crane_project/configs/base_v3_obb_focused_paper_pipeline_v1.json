@@ -60,10 +60,15 @@
     "annotation_dir": "crane_project/data/crane_grab/test/annfiles",
     "outputs": {
       "online_pipeline": "unified_true_online_pipeline_v1.json",
+      "inference_receipt": "unified_inference_receipt_v1.json",
       "online_finalization": "unified_true_online_finalization_v2.json",
       "observation_csv": "unified_true_online_observations_v2.csv",
       "paper_metrics": "unified_true_online_paper_metrics_v3.json",
-      "reliability_diagnostic": "unified_reliability_diagnostic_v31_r1.json"
+      "reliability_diagnostic": "unified_reliability_diagnostic_v31_r1.json",
+      "runtime_finalization_contract": "runtime_true_online_finalization_contract_v2.json",
+      "runtime_paper_metrics_contract": "runtime_true_online_paper_metrics_contract_v3.json",
+      "runtime_diagnostic_input": "runtime_reliability_diagnostic_input_v51.json",
+      "runtime_diagnostic_contract": "runtime_reliability_diagnostic_contract_v51.json"
     }
   },
   "metric_inventory": {
@@ -96,6 +101,18 @@
       "scale_matched_coverage",
       "angle_hold_pair_audit",
       "rejection_recovery"
+    ],
+    "custom_temporal_metrics": [
+      "R_center(%)",
+      "mean_RIoU",
+      "A-RMSE(deg)",
+      "DFR(%/frame)",
+      "ACI",
+      "TDR_w10(%)",
+      "MCML_max(frames)",
+      "MCML_mean(frames)",
+      "MCML_pass(limit=5)",
+      "MRF(frames)"
     ]
   },
   "visualization": {

@@ -22,6 +22,8 @@ EXPECTED = {
     'unified_true_online_pipeline_v1.json': 'ef5487b9b20cc8f7723fd06f5004b330060f101637b3f68ebdbec23ac1a158ac',
 }
 
+METHODS = ('raw', 'score_rejection_only', 'v51_hybrid')
+
 def frozen_metrics(records):
     """Protocol-2 aggregation, using bound server errors instead of re-parsed GT.
 
@@ -82,6 +84,65 @@ def frozen_metrics(records):
     return metrics
 
 
+def build_custom_metrics(online, final, paper_metrics):
+    """Build protocol-2 custom metrics from one bound evaluation bundle.
+
+    Static center/angle errors and RIoU come from the finalization report;
+    temporal DFR/ACI use the exact online boxes.  No annotation is read here.
+    """
+    offline = {row['frame_key']: row for row in final.get('records', [])}
+    online_records = online.get('records', [])
+    if len(offline) != len(online_records):
+        raise ValueError('Online and finalization frame counts differ')
+    records = {method: [] for method in METHODS}
+    for row in online_records:
+        key = row['frame_key']
+        if key not in offline:
+            raise ValueError('Finalization is missing online frame: ' + key)
+        detector = row['detector_components']
+        reconstruction_row = dict(
+            frame_key=key, base_v3_box=detector['base_v3_box'])
+        for method in METHODS:
+            observations = row['observations'][method]
+            box = _reconstruct_obb(reconstruction_row, observations)
+            records[method].append(dict(
+                domain=row['domain'], seq_id=row['sequence'],
+                frame_id=int(row['frame']), pred_box=box,
+                server_errors=offline[key]['offline_errors'][method],
+                server_iou=offline[key]['offline_riou'][method]))
+    custom = {method: frozen_metrics(records[method]) for method in METHODS}
+    for table in paper_metrics['paper_tables']['complete_obb_metrics']:
+        if table['group'] in ('real', 'sim'):
+            expected = round(
+                table['available_obb_coverage'] *
+                table['mean_available_riou'], 4)
+            actual = custom[table['method']][table['group'] + '/mean_RIoU']
+            if actual != expected:
+                raise RuntimeError(
+                    'Custom mean RIoU disagrees with bound paper table')
+    return dict(
+        protocol='base_v3_obb_custom_temporal_metrics_v1',
+        source='bound_finalization_errors_and_riou_plus_online_boxes',
+        evaluator_protocol_version=2,
+        settings=dict(
+            center_threshold_px=15,
+            sim_angle_center_threshold_px=10,
+            angle_normalization_deg=35,
+            riou_hit_threshold=0.5,
+            window_frames=10,
+            mcml_limit=5),
+        values=custom,
+        notes=[
+            'Custom metrics use complete OBBs; partial components count as missing.',
+            'R_center is all-positive-GT-frame recall at 15 px.',
+            'mean_RIoU includes zero for missing output.',
+            'DFR and ACI use consecutive available pairs and reset at gaps or missing frames.',
+            'A-RMSE is sim only with a 90-degree penalty for missing output or center error >=10 px.',
+            'MCML_mean averages the maximum miss run of each contiguous clip.',
+            'MRF excludes terminal miss runs that never recover.',
+            'DEP is unavailable because this pure-vision run has no physical depth reference.'])
+
+
 def main():
     root = Path('work_dirs/base_v3_obb_reliability_baseline_v1/unified_full_run_v1')
     for name, digest in EXPECTED.items():
@@ -93,7 +154,7 @@ def main():
     diag = load('unified_reliability_diagnostic_v31_r1.json')
     metrics = load('unified_true_online_paper_metrics_v3.json')
     offline = {r['frame_key']:r for r in final['records']}
-    methods = ('raw', 'score_rejection_only', 'v51_hybrid')
+    methods = METHODS
     records = {m:[] for m in methods}
     annotations = {}
     max_delta = 0.0
@@ -130,12 +191,8 @@ def main():
             records[m].append(dict(domain=r['domain'],seq_id=r['sequence'],
                                    frame_id=r['frame'],pred_box=box,
                                    server_errors=offline[key]['offline_errors'][m],server_iou=expected_iou))
-    custom = {m:frozen_metrics(records[m]) for m in methods}
-    for table in metrics['paper_tables']['complete_obb_metrics']:
-        if table['group'] in ('real','sim'):
-            expected_mean = round(table['available_obb_coverage']*table['mean_available_riou'],4)
-            if custom[table['method']][table['group']+'/mean_RIoU'] != expected_mean:
-                raise RuntimeError('Custom mean RIoU disagrees with bound paper table')
+    custom_report = build_custom_metrics(online, final, metrics)
+    custom = custom_report['values']
     report = dict(protocol='unified_full_run_verified_custom_metrics_v1',
         verified_input_sha256=EXPECTED, annotation_sha256=annotations,
         local_gt_server_metric_max_abs_delta=max_delta,
@@ -144,19 +201,12 @@ def main():
         custom_metric_source='bound_server_per_frame_errors_and_riou_plus_online_boxes',
         model_report=load('fixed_test_focused_paper_model_pipeline_v1.json'),
         evaluator_sha256=hashlib.sha256(Path('crane_project/tools/eval_crane_offline.py').read_bytes()).hexdigest(),
-        settings=dict(center_threshold_px=15,sim_angle_center_threshold_px=10,
-                      angle_normalization_deg=35,riou_hit_threshold=0.5,window_frames=10,mcml_limit=5),
+        settings=custom_report['settings'],
         custom_metrics=custom, paper_tables=metrics['paper_tables'],
         reliability=dict(component_metrics=final['component_metrics'],
             joint=diag['joint_component_availability'],scale=diag['scale_matched_coverage'],
             angle=diag['angle_hold_pair_audit']),runtime=final['runtime_measurement'],
-        notes=['Custom metrics use complete OBBs; partial components count as missing here.',
-               'R_center is all-positive-GT-frame recall at 15px under current evaluator.',
-               'mean_RIoU includes zero for missing output; differs from mean_available_riou.',
-               'DFR and ACI use consecutive available pairs, reset at gaps and missing frames.',
-               'A-RMSE is sim only with 90-degree penalty for missing or center error >=10px.',
-               'MCML_mean is mean of per-contiguous-clip maxima; MRF excludes unrecovered terminal runs.',
-               'DEP unavailable: no physical depth reference; no PLC input used.'])
+        notes=custom_report['notes'])
     _write_exact(root/'verified_custom_metrics_v1.json',report)
     fields = sorted(set(k for v in custom.values() for k in v))
     lines = ['# 本次完整运行：自定义指标补充核验','',

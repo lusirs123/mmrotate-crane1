@@ -72,11 +72,13 @@ crane_project/configs/base_v3_obb_focused_paper_pipeline_v1.json
 crane_project/tools/base_v3_obb_focused_paper_pipeline_v1.py
 ```
 
-固定 TEST 自定义指标补充入口：
+固定 TEST 自定义指标实现与 V1 历史审计入口：
 
 ```text
 crane_project/tools/analyze_unified_full_run_v1.py
 ```
+
+自定义指标已经接入统一入口生成的模型总报告；该脚本仍负责 V1 下载文件的固定 SHA256 审计和本地 GT 差异记录。
 
 对应回归测试：
 
@@ -90,10 +92,11 @@ tests/test_eval_crane_offline_records.py
 
 | 文件 | 当前本地 SHA256 |
 | --- | --- |
-| `base_v3_obb_focused_paper_pipeline_v1.json` | `dd419ac316d6e2a9ed58074b335bb058e4769f8358193c4a02cfe1a4f04b4a75` |
-| `base_v3_obb_focused_paper_pipeline_v1.py` | `7a4a42f3ddfdc74b39e7e8df23e7e31c380d0e719ece311dff62f36d7b7f22c5` |
-| `analyze_unified_full_run_v1.py` | `172ff39d57e20aee8f05538afb41df8948271e28db506e1c774c1d871204684b` |
-| `test_base_v3_obb_focused_paper_pipeline_v1.py` | `b3723233646ea8982d53125840ed9d566bb066368e72754142813ec8027ec263` |
+| `base_v3_obb_focused_paper_pipeline_v1.json` | `185cf88bad05716ac3fcad6287dca6d1d0c50bfa814397f4b2d1742b96e239da` |
+| `base_v3_obb_focused_paper_pipeline_v1.py` | `50cdef26a53cc8944516e681ed96f73724980f511864f9bb7c6b03bfa6073af8` |
+| `analyze_unified_full_run_v1.py` | `fe63b0f7269a74a83537bf299e44c5a899d63c3fdb870212d9d0e8b108d22eb2` |
+| `base_v3_obb_true_online_finalization_v2.py` | `9b27215f614ae473f54256c834232221dcd7d38c4616c6af840d6c89e9c6b935` |
+| `test_base_v3_obb_focused_paper_pipeline_v1.py` | `693c808037f26200c13a7a0a00642572b554877591c39a65574e5caebc144b06` |
 | `test_analyze_unified_full_run_v1.py` | `71f15d5c758c1901be025b330078e2e75a38a188dc01a4be835aeebf967df2b9` |
 
 ## 4. 模型链逐级说明
@@ -208,16 +211,25 @@ V5.1 的目标是允许分量级输出，而不是保证每帧都有完整 OBB�
 
 ## 6. 在线推理与后验评估隔离
 
-统一 `full` 模式按以下顺序执行：
+统一入口现在分为三个可独立执行的阶段：
+
+```text
+infer（无 GT） → evaluate（推理后连接 GT） → report（只读结果生成报告）
+```
+
+`full` 模式依次调用这三个阶段。执行顺序如下：
 
 1. 读取 RGB 图像并进行严格时间顺序推理。
 2. 生成在线 JSON；这一阶段不读取 GT。
 3. 推理结束后加载固定标注及历史结果身份。
 4. 将在线观测与 GT 对齐，计算逐帧中心、尺度、方向误差和完整 OBB RIoU。
-5. 导出长格式观测 CSV。
-6. 生成论文指标 JSON。
-7. 从本次运行自己的在线记录和后验误差重新生成 V3.1-r1 可靠性诊断。
-8. 生成模型总报告和独立可靠性报告。
+5. 导出或核对长格式观测 CSV。
+6. 为本次在线 JSON 生成 finalization 运行时契约，并绑定其实际 SHA256。
+7. 生成 finalization JSON 后，为实际 finalization、在线 JSON 和 CSV 生成论文指标运行时契约。
+8. 生成论文指标 JSON。
+9. 保存诊断输入及诊断运行时契约，再从本次逐帧记录生成 V3.1-r1 可靠性诊断。
+10. 从同一绑定结果自动计算 R_center、A-RMSE、DFR、ACI、TDR、MCML、MRF。
+11. 生成模型总报告和独立可靠性报告。
 
 该隔离用于保证 GT 只参与后验度量，不进入在线判定。固定 TEST 已暴露这一事实仍然存在，所以隔离并不会重新赋予该 TEST 独立验证资格。
 
@@ -330,6 +342,18 @@ work_dirs/base_v3_obb_reliability_baseline_v1/unified_full_run_v1
 
 原始 9 份服务器文件均保持不变。补充文件使用新文件名，没有覆盖历史报告。
 
+新分阶段入口在新运行目录中还会生成：
+
+| 文件 | 用途 |
+| --- | --- |
+| `unified_inference_receipt_v1.json` | 绑定无 GT 在线 JSON、观测 CSV、命令和推理计时 |
+| `runtime_true_online_finalization_contract_v2.json` | 绑定本次在线 JSON 的实际 SHA256 |
+| `runtime_true_online_paper_metrics_contract_v3.json` | 绑定本次 finalization、在线 JSON 和 CSV 的实际 SHA256 |
+| `runtime_reliability_diagnostic_input_v51.json` | 保存本次诊断使用的逐帧输入 |
+| `runtime_reliability_diagnostic_contract_v51.json` | 绑定诊断输入和论文指标身份 |
+
+这些文件解决了原 `full` 实现只在内存中改写 CSV 绑定、却仍在结果里引用模板契约身份的问题。模板契约保持冻结；每次新运行另存自己的运行时契约。
+
 ## 10. 核心结果
 
 ### 10.1 全体 992 帧的完整 OBB
@@ -433,9 +457,9 @@ fallback 的联合正确覆盖率为 0，含义是在这 146 帧中没有完整�
 - 平均：1.921348 s/frame。
 - 平均吞吐：0.520468 frame/s。
 - 未使用多 GPU 并行。
-- 测量范围：`full_command_model_init_detector_image_io_and_reporting`。
+- 历史报告记录的范围标签：`full_command_model_init_detector_image_io_and_reporting`。
 
-该范围包含模型初始化、图像 I/O、检测、后验处理和报告写入。因此不能把 0.520468 frame/s 写成纯检测 FPS，也不能据此声称可靠性模块自身的开销。
+复核代码后确认，这个历史计时实际包围在线推理子进程，包含模型初始化、图像 I/O、检测与在线 JSON 生成，没有包含随后执行的 GT 后验评估和最终报告写入。旧标签的 `and_reporting` 过宽。新入口使用 `model_init_detector_image_io_and_online_json_generation`，并把计时写入 inference receipt。该速度仍不能当作稳态纯检测 FPS，也不能代表可靠性模块单独开销。
 
 ## 11. 复现与一致性审计
 
@@ -476,7 +500,7 @@ fallback 的联合正确覆盖率为 0，含义是在这 146 帧中没有完整�
 
 ## 12. 正式复现命令
 
-### 12.1 本地或服务器验证冻结报告输入
+### 12.1 验证历史冻结报告输入
 
 ```bash
 cd /media/omnisky/personal_files/ljj/symEOOD
@@ -489,18 +513,69 @@ python -m crane_project.tools.base_v3_obb_focused_paper_pipeline_v1 \
 
 `validate` 只校验协议和 SHA256，不运行模型。
 
-### 12.2 使用冻结结果重新生成报告
+验证指定的新运行目录时增加 `--input-dir`：
 
 ```bash
 PYTHONPATH="$PWD" PYTHONDONTWRITEBYTECODE=1 \
 python -m crane_project.tools.base_v3_obb_focused_paper_pipeline_v1 \
   --config crane_project/configs/base_v3_obb_focused_paper_pipeline_v1.json \
-  --mode report
+  --mode validate \
+  --input-dir \
+    work_dirs/base_v3_obb_reliability_baseline_v1/unified_staged_run_v2
 ```
 
-该模式读取配置中绑定的历史正式输入，不运行模型。输出目标已有不同内容时会拒绝覆盖。
+### 12.2 只运行无 GT 在线推理
 
-### 12.3 服务器完整运行
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+conda activate mmrotljj
+
+PYTHONPATH="$PWD" PYTHONDONTWRITEBYTECODE=1 \
+python -m crane_project.tools.base_v3_obb_focused_paper_pipeline_v1 \
+  --config crane_project/configs/base_v3_obb_focused_paper_pipeline_v1.json \
+  --mode infer \
+  --device cuda:0 \
+  --out-dir \
+    work_dirs/base_v3_obb_reliability_baseline_v1/unified_staged_run_v2
+```
+
+该阶段只生成在线 JSON、无 GT 观测 CSV 和 inference receipt。它不读取标注，不生成正确性标签。新目录中已有不同文件时会拒绝覆盖。
+
+### 12.3 对已有在线输出进行 GT 后验评估并生成报告
+
+```bash
+PYTHONPATH="$PWD" PYTHONDONTWRITEBYTECODE=1 \
+python -m crane_project.tools.base_v3_obb_focused_paper_pipeline_v1 \
+  --config crane_project/configs/base_v3_obb_focused_paper_pipeline_v1.json \
+  --mode evaluate \
+  --input-dir \
+    work_dirs/base_v3_obb_reliability_baseline_v1/unified_staged_run_v2
+```
+
+不提供 `--out-dir` 时，评估结果写入输入运行目录。若要把在线输出和评估归档分开，可增加一个新的 `--out-dir`。该阶段会：
+
+- 核对无 GT 观测 CSV 与在线 JSON 的对应输出。
+- 连接固定标注并生成逐帧误差。
+- 写入 finalization、论文指标、诊断输入和三份运行时契约。
+- 自动生成自定义时序指标。
+- 生成模型总报告和独立可靠性报告。
+
+### 12.4 从绑定结果重新生成报告
+
+```bash
+PYTHONPATH="$PWD" PYTHONDONTWRITEBYTECODE=1 \
+python -m crane_project.tools.base_v3_obb_focused_paper_pipeline_v1 \
+  --config crane_project/configs/base_v3_obb_focused_paper_pipeline_v1.json \
+  --mode report \
+  --input-dir \
+    work_dirs/base_v3_obb_reliability_baseline_v1/unified_staged_run_v2 \
+  --out-dir \
+    work_dirs/base_v3_obb_reliability_baseline_v1/unified_staged_report_v2
+```
+
+该模式不运行模型，也不重新连接 GT。它核对生成结果之间的 SHA256 绑定，并从绑定文件重新生成总报告。省略 `--input-dir` 时读取配置里冻结的历史正式输入。
+
+### 12.5 服务器一键完整运行
 
 完整运行必须使用新的输出目录，避免覆盖历史报告：
 
@@ -514,12 +589,12 @@ python -m crane_project.tools.base_v3_obb_focused_paper_pipeline_v1 \
   --mode full \
   --device cuda:0 \
   --out-dir \
-    work_dirs/base_v3_obb_reliability_baseline_v1/unified_full_run_v1
+    work_dirs/base_v3_obb_reliability_baseline_v1/unified_full_run_v2
 ```
 
-如果该目录已经含有不同结果，入口会拒绝覆盖。再次运行时应使用新的修订目录，例如 `unified_full_run_v2`，并重新记录全部 SHA256。
+`full` 依次执行 infer、evaluate 和 report，自定义指标已经自动进入模型报告。输出目录已经含有不同结果时会拒绝覆盖；不能覆盖 V1 历史产物。
 
-### 12.4 自定义指标补充
+### 12.6 V1 历史下载文件的额外审计
 
 当前补充脚本固定核对 `unified_full_run_v1` 的 9 份 SHA256：
 
@@ -538,9 +613,9 @@ verified_custom_metrics_v1.json
 verified_custom_metrics_v1.md
 ```
 
-它是本批固定 SHA 文件的补充分析入口。当前统一 `full` 命令尚未自动调用该脚本；如生成新的 `unified_full_run_v2`，应先建立对应的新输入绑定和新修订脚本或把自定义指标正式纳入统一入口，不能直接改写 V1 的预期哈希。
+该脚本继续用于固定核对 V1 的 9 份 SHA256、保存本地标注身份并记录本地 GT 重算差异。新 `infer/evaluate/full/report` 流程已经直接调用其中的通用自定义指标实现，无需再运行这个 V1 专用入口才能获得自定义指标。
 
-### 12.5 回归测试
+### 12.7 回归测试
 
 ```bash
 cd /media/omnisky/personal_files/ljj/symEOOD
@@ -552,9 +627,11 @@ python -m pytest -q -p no:cacheprovider \
   tests/test_eval_crane_offline_records.py
 ```
 
-本轮新增自定义汇总测试和已有离线记录测试合计 7 项已在本地通过。统一入口自身测试在清理后的版本中为 8 项通过；服务器 Python 3.8 上应执行上面的组合命令并记录实际数量，不用测试数量替代真实入口与文件 SHA 校验。
+当前这三份测试在本地合计 20 项通过，覆盖历史与新运行目录加载、内嵌 SHA256、运行时契约不修改模板、无 GT 推理导出、自定义指标入报告、CSV 重复写入一致性和不同内容拒绝。相关在线及诊断回归合计 45 项通过，全部顶层项目测试为 372 项通过。
 
-### 12.6 本地与服务器源码、契约比较
+`pytest tests` 全树收集在本地 Python 3.13 环境因缺少 `mmcv` 和 `mmdet` 出现 15 个上游 MMRotate 测试导入错误，未进入执行。这不属于本轮断言失败；服务器 Python 3.8 的 `mmrotljj` 环境应补跑受影响测试并记录实际结果。测试数量不能替代真实入口和文件身份校验。
+
+### 12.8 本地与服务器源码、契约比较
 
 服务器执行：
 

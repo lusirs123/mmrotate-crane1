@@ -4,6 +4,7 @@
 import argparse
 import copy
 import csv
+import io
 import json
 import math
 from collections import Counter
@@ -268,13 +269,20 @@ def _csv_rows(records):
 def write_observation_csv(path,records):
     absolute=Path(path).resolve(); absolute.parent.mkdir(parents=True,exist_ok=True)
     rows=list(_csv_rows(records)); fields=list(rows[0])
-    with absolute.open('w',encoding='utf-8',newline='') as stream:
-        writer=csv.DictWriter(stream,fieldnames=fields)
-        writer.writeheader(); writer.writerows(rows)
+    stream=io.StringIO(newline='')
+    writer=csv.DictWriter(stream,fieldnames=fields)
+    writer.writeheader(); writer.writerows(rows)
+    raw=stream.getvalue().encode('utf-8')
+    if absolute.exists() and absolute.read_bytes()!=raw:
+        raise RuntimeError('Refusing to overwrite different observation CSV: '
+                           +str(absolute))
+    if not absolute.exists():
+        absolute.write_bytes(raw)
     return _identity(absolute)
 
 
-def run(online,paper,historical_rows,contract,inputs,wall_clock_seconds=None):
+def run(online,paper,historical_rows,contract,inputs,wall_clock_seconds=None,
+        runtime_scope='full_command_model_init_detector_image_io_and_reporting'):
     online_records=validate_reports(online,paper,contract)
     current=_current_rows(online_records,historical_rows)
     historical=sorted(historical_rows,key=lambda r:(
@@ -296,7 +304,7 @@ def run(online,paper,historical_rows,contract,inputs,wall_clock_seconds=None):
         if not math.isfinite(seconds) or seconds<=0:
             raise ValueError('wall-clock seconds must be positive and finite')
         runtime=dict(
-            scope='full_command_model_init_detector_image_io_and_reporting',
+            scope=str(runtime_scope),
             wall_clock_seconds=seconds,average_frames_per_second=len(current)/seconds,
             average_seconds_per_frame=seconds/len(current),multi_gpu_parallelism=False)
     return dict(

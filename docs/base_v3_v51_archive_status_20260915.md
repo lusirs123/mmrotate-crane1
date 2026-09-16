@@ -67,3 +67,16 @@
 - 实际验证：`tests/test_analyze_unified_full_run_v1.py` 与 `tests/test_eval_crane_offline_records.py` 合计 7 passed；合成序列验证冻结误差汇总与原几何评估器一致，覆盖缺测、帧号间断、顺序变化和非法记录。本地真实补充入口执行成功，并对 real/sim 的自定义平均 RIoU 与服务器完整框表交叉核验。
 - 本轮没有运行模型推理、训练或服务器 Python 3.8 验证。统一 full 入口尚未自动调用本次补充脚本；补充入口专用于这批 SHA 绑定产物。在仓库根目录执行 `PYTHONPATH="$PWD" PYTHONDONTWRITEBYTECODE=1 python -m crane_project.tools.analyze_unified_full_run_v1` 可在当前本地标注环境复现。
 - 使用范围：可作为冻结实现的固定 TEST 结果；不能宣称整篇论文实验已齐备、V5.1 整体优于置信度筛选或未知序列泛化成立。运行时间包含初始化、图像 I/O、检测与报告，不等于纯推理或可靠性模块单独开销。
+
+## 统一入口分阶段修订
+
+- 统一入口新增 `infer` 和 `evaluate`，形成 `infer → evaluate → report` 三阶段；`full` 依次复用三阶段。`infer` 输出在线 JSON、无 GT 观测 CSV 和 inference receipt；`evaluate` 只在在线输出完成后连接 GT。
+- `report`、`validate` 和 `visualize` 可通过 `--input-dir` 读取指定运行目录，不再只能使用配置中冻结的历史报告。
+- 自定义 R_center、mean_RIoU、A-RMSE、DFR、ACI、TDR、MCML、MRF 已进入统一模型 JSON/Markdown；可靠性报告继续单独输出。DEP 因没有物理深度真值保持不可用。
+- 新评估会保存 finalization 运行时契约、paper-metrics 运行时契约、诊断输入和诊断运行时契约。每份契约绑定本次实际在线 JSON、CSV 或上游报告 SHA256，模板契约不在内存外被改写。
+- 在线观测 CSV 改为精确写入：相同内容可重复验证，目标存在不同内容时拒绝覆盖。
+- 修正运行时间语义：旧 V1 标签写成包含 reporting，但计时代码实际只包围在线推理子进程。新 inference receipt 使用 `model_init_detector_image_io_and_online_json_generation`，不把 GT 后验评估或最终报告写入计入该时间。
+- 同一次运行生成的论文角度指标和诊断角度指标明确标记为同一逐帧来源；历史不同来源仍保留“待逐帧解释”的限制。
+- 实际验证：统一入口、自定义指标和离线记录测试合计 `20 passed`；相关在线 pipeline、finalization、paper metrics、诊断、论文 finalization 和 V5.1 eval 回归合计 `45 passed`；全部顶层项目测试 `372 passed`。生成目录 `validate --input-dir` 成功；动态 `report --input-dir` 成功生成四份报告并包含 `real/R_center(%)`。
+- `pytest tests` 的全树收集在本地 Python 3.13 环境出现 15 个依赖导入错误，均来自上游 MMRotate 数据、模型和工具测试缺少 `mmcv`/`mmdet`，没有进入测试执行。这不是本轮代码断言失败；应在服务器 `mmrotljj` 环境补跑所需上游测试。
+- 本地未执行 CUDA 推理和真实 `evaluate`，因为缺少服务器上的 attribution 与 all-lane audit 两份重建输入。服务器应先同步本节列出的源码、配置、测试与文档，再执行回归和新的分阶段或 `full` 命令。

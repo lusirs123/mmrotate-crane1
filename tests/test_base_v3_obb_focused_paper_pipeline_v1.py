@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from crane_project.tools import base_v3_obb_focused_paper_pipeline_v1 as pipeline
+from crane_project.tools import base_v3_obb_true_online_finalization_v2 as finalization
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -57,12 +58,18 @@ def test_report_mode_writes_complete_and_separate_reliability_outputs(
     assert len(model['metrics']['complete_obb']) == 9
     assert len(model['metrics']['components']) == 27
     assert len(model['metrics']['anchor_sources']) == 6
+    assert model['metrics']['custom_temporal']['protocol'] == (
+        'base_v3_obb_custom_temporal_metrics_v1')
+    assert model['metrics']['custom_temporal']['values']['raw'][
+        'real/R_center(%)'] == 97.38
     assert reliability['joint_component_availability'][
         'v51_hybrid']['all']['partial_valid_count'] == 202
     assert reliability['matched_coverage_scale']['all'][
         'matched_coverage_tie_count'] == 1
     assert '不是基于 GT 的正确性标签' in reliability[
         'metric_definitions']['valid']
+    assert '## 自定义检测与时序指标' in (tmp_path / config['outputs'][
+        'model_report_markdown']).read_text(encoding='utf-8')
 
 
 def test_bound_source_hash_mismatch_is_rejected():
@@ -136,3 +143,89 @@ def test_cli_full_mode_requires_a_fresh_output_directory():
         cwd=os.fspath(ROOT), env=environment, capture_output=True, text=True)
     assert completed.returncode != 0
     assert '--out-dir is required for full mode' in completed.stderr
+
+
+def test_generated_run_can_be_loaded_and_all_embedded_hashes_validate():
+    config = _config()
+    directory = ROOT / (
+        'work_dirs/base_v3_obb_reliability_baseline_v1/unified_full_run_v1')
+    bundle = pipeline.load_run_sources(config, ROOT, directory)
+    pipeline.validate_report_sources(bundle, config)
+    assert bundle['online']['leakage_controls']['annotations_or_gt_read'] is False
+    reliability = pipeline.build_reliability_report(bundle, config)
+    assert '同一逐帧运行记录' in reliability['limits'][2]
+
+
+def test_runtime_contract_updates_hashes_without_mutating_template():
+    template = json.loads((ROOT / (
+        'crane_project/data_contracts/'
+        'base_v3_obb_true_online_paper_metrics_v3.json')).read_text(
+            encoding='utf-8'))
+    original = copy.deepcopy(template)
+    runtime = pipeline._runtime_contract(
+        template, dict(
+            true_online_finalization_sha256='1' * 64,
+            true_online_pipeline_sha256='2' * 64,
+            online_observation_csv_sha256='3' * 64),
+        dict(path='template.json', sha256='4' * 64, size_bytes=1),
+        'evaluate')
+    assert template == original
+    assert runtime['expected_inputs']['true_online_finalization_sha256'] == (
+        '1' * 64)
+    assert runtime['runtime_binding']['stage'] == 'evaluate'
+    assert runtime['runtime_binding']['template_contract']['sha256'] == '4' * 64
+
+
+def test_infer_stage_exports_no_gt_observations_and_receipt(
+        tmp_path, monkeypatch):
+    config = _config()
+    online = pipeline.load_report_sources(config, ROOT)['online']
+
+    def fake_run(command, cwd, check):
+        output = Path(command[command.index('--out-json') + 1])
+        output.write_text(json.dumps(online), encoding='utf-8')
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(pipeline, 'validate_inference_inputs',
+                        lambda config, root: None)
+    monkeypatch.setattr(pipeline.subprocess, 'run', fake_run)
+    result = pipeline.run_inference(config, ROOT, tmp_path, 'cpu')
+    receipt = result['inference_receipt']
+    assert receipt['gt_or_annotations_read'] is False
+    assert receipt['online_pipeline']['sha256'] == (
+        result['online_identity']['sha256'])
+    header = Path(result['observation_csv_identity']['path']).read_text(
+        encoding='utf-8').splitlines()[0]
+    assert 'gt' not in header.lower()
+    assert len(header.split(',')) >= 10
+
+
+def test_observation_csv_refuses_overwriting_different_content(tmp_path):
+    config = _config()
+    online = pipeline.load_report_sources(config, ROOT)['online']
+    path = tmp_path / 'observations.csv'
+    first = finalization.write_observation_csv(path, online['records'])
+    second = finalization.write_observation_csv(path, online['records'])
+    assert first['sha256'] == second['sha256']
+    path.write_text('different\n', encoding='utf-8')
+    with pytest.raises(RuntimeError, match='Refusing to overwrite different'):
+        finalization.write_observation_csv(path, online['records'])
+
+
+def test_cli_infer_and_evaluate_require_stage_directories():
+    environment = dict(os.environ)
+    environment['PYTHONPATH'] = os.fspath(ROOT)
+    infer = subprocess.run([
+        sys.executable, '-m',
+        'crane_project.tools.base_v3_obb_focused_paper_pipeline_v1',
+        '--config', os.fspath(CONFIG), '--mode', 'infer'],
+        cwd=os.fspath(ROOT), env=environment, capture_output=True, text=True)
+    evaluate = subprocess.run([
+        sys.executable, '-m',
+        'crane_project.tools.base_v3_obb_focused_paper_pipeline_v1',
+        '--config', os.fspath(CONFIG), '--mode', 'evaluate'],
+        cwd=os.fspath(ROOT), env=environment, capture_output=True, text=True)
+    assert infer.returncode != 0
+    assert '--out-dir is required for infer mode' in infer.stderr
+    assert evaluate.returncode != 0
+    assert '--input-dir is required for evaluate mode' in evaluate.stderr

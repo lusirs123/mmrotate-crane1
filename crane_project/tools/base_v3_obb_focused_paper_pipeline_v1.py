@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Run or report the focused-paper RGB-to-component-observation pipeline.
 
-The JSON config is the single entrypoint.  ``report`` consumes the frozen,
-SHA256-bound outputs without model inference.  ``full`` runs true-online model
-inference first, attaches GT only afterwards, rebuilds the paper metrics, and
-then writes the same model and reliability reports.
+The JSON config is the single entrypoint. ``infer`` produces GT-free online
+observations, ``evaluate`` attaches GT afterwards and creates runtime-bound
+contracts, and ``report`` consumes bound outputs without model inference.
+``full`` executes those stages in order.
 """
 
 import argparse
@@ -123,6 +123,21 @@ def validate_config(config):
         raise ValueError('Visualization selection rule changed')
     if int(visualization.get('max_frames', 0)) <= 0:
         raise ValueError('Visualization max_frames must be positive')
+    full_outputs = config.get('full_run', {}).get('outputs', {})
+    required_full_outputs = {
+        'online_pipeline', 'inference_receipt', 'online_finalization',
+        'observation_csv', 'paper_metrics', 'reliability_diagnostic',
+        'runtime_finalization_contract', 'runtime_paper_metrics_contract',
+        'runtime_diagnostic_input', 'runtime_diagnostic_contract'}
+    if set(full_outputs) != required_full_outputs:
+        raise ValueError('Full-run output inventory changed')
+    custom = inventory.get('custom_temporal_metrics', [])
+    required_custom = {
+        'R_center(%)', 'mean_RIoU', 'A-RMSE(deg)', 'DFR(%/frame)',
+        'ACI', 'TDR_w10(%)', 'MCML_max(frames)',
+        'MCML_mean(frames)', 'MCML_pass(limit=5)', 'MRF(frames)'}
+    if set(custom) != required_custom:
+        raise ValueError('Custom temporal metric inventory changed')
 
 
 def load_report_sources(config, root):
@@ -144,6 +159,63 @@ def load_report_sources(config, root):
             online_pipeline=online_id, online_finalization=finalization_id,
             paper_metrics=metrics_id, reliability_diagnostic=diagnostic_id,
             observation_csv=csv_id))
+
+
+def load_run_sources(config, root, directory):
+    """Load one generated run by its own embedded identities."""
+    directory = Path(directory).resolve()
+    names = config['full_run']['outputs']
+    roles = {
+        'online': ('online_pipeline', ONLINE_PROTOCOL),
+        'finalization': ('online_finalization', FINALIZATION_PROTOCOL),
+        'metrics': ('paper_metrics', PAPER_METRICS_PROTOCOL),
+        'diagnostic': ('reliability_diagnostic', DIAGNOSTIC_PROTOCOL)}
+    payloads = {}
+    identities = {}
+    identity_names = {
+        'online': 'online_pipeline',
+        'finalization': 'online_finalization',
+        'metrics': 'paper_metrics',
+        'diagnostic': 'reliability_diagnostic'}
+    for role, (name_key, protocol) in roles.items():
+        path = directory / names[name_key]
+        if not path.is_file():
+            raise RuntimeError('Missing generated {}: {}'.format(role, path))
+        payload = json.loads(path.read_text(encoding='utf-8'))
+        if payload.get('protocol') != protocol:
+            raise RuntimeError('Unexpected generated {} protocol'.format(role))
+        payloads[role] = payload
+        identities[identity_names[role]] = _relative_identity(root, path)
+    csv_path = directory / names['observation_csv']
+    if not csv_path.is_file():
+        raise RuntimeError('Missing generated observation CSV: ' + os.fspath(csv_path))
+    identities['observation_csv'] = _relative_identity(root, csv_path)
+    optional = {
+        'inference_receipt': 'inference_receipt',
+        'runtime_finalization_contract': 'runtime_finalization_contract',
+        'runtime_paper_metrics_contract': 'runtime_paper_metrics_contract',
+        'runtime_diagnostic_input': 'runtime_diagnostic_input',
+        'runtime_diagnostic_contract': 'runtime_diagnostic_contract'}
+    for role, name_key in optional.items():
+        path = directory / names[name_key]
+        if path.is_file():
+            identities[role] = _relative_identity(root, path)
+    receipt_path = directory / names['inference_receipt']
+    if receipt_path.is_file():
+        receipt = json.loads(receipt_path.read_text(encoding='utf-8'))
+        if receipt.get('protocol') != (
+                'base_v3_obb_focused_paper_inference_receipt_v1'):
+            raise RuntimeError('Unexpected inference receipt protocol')
+        if receipt['online_pipeline']['sha256'] != identities[
+                'online_pipeline']['sha256']:
+            raise RuntimeError('Inference receipt online SHA256 mismatch')
+        if receipt['observation_csv']['sha256'] != identities[
+                'observation_csv']['sha256']:
+            raise RuntimeError('Inference receipt CSV SHA256 mismatch')
+    return dict(
+        online=payloads['online'], finalization=payloads['finalization'],
+        metrics=payloads['metrics'], diagnostic=payloads['diagnostic'],
+        identities=identities)
 
 
 def validate_report_sources(bundle, config):
@@ -183,6 +255,38 @@ def validate_report_sources(bundle, config):
     csv_sha = bundle['identities']['observation_csv']['sha256']
     if finalization.get('online_observation_export', {}).get('sha256') != csv_sha:
         raise RuntimeError('Finalization does not bind the observation CSV')
+    bound = (
+        (finalization.get('inputs', {}).get('true_online_report'),
+         bundle['identities']['online_pipeline'],
+         'Finalization online input'),
+        (metrics.get('inputs', {}).get('true_online_finalization_v2'),
+         bundle['identities']['online_finalization'],
+         'Paper metrics finalization input'),
+        (metrics.get('inputs', {}).get('true_online_report'),
+         bundle['identities']['online_pipeline'],
+         'Paper metrics online input'))
+    for recorded, actual, role in bound:
+        if recorded is not None and recorded.get('sha256') != actual['sha256']:
+            raise RuntimeError(role + ' SHA256 mismatch')
+    diagnostic_input = diagnostic.get('input', {})
+    recorded_metric = diagnostic_input.get('paper_metrics')
+    if (recorded_metric is not None and recorded_metric.get('sha256') !=
+            bundle['identities']['paper_metrics']['sha256']):
+        raise RuntimeError('Diagnostic paper metrics SHA256 mismatch')
+    optional_bindings = (
+        (finalization.get('inputs', {}).get('contract'),
+         'runtime_finalization_contract', 'Finalization runtime contract'),
+        (metrics.get('inputs', {}).get('contract'),
+         'runtime_paper_metrics_contract', 'Paper-metrics runtime contract'),
+        (diagnostic.get('runtime_artifacts', {}).get('input'),
+         'runtime_diagnostic_input', 'Diagnostic runtime input'),
+        (diagnostic.get('runtime_artifacts', {}).get('contract'),
+         'runtime_diagnostic_contract', 'Diagnostic runtime contract'))
+    for recorded, identity_key, role in optional_bindings:
+        actual = bundle['identities'].get(identity_key)
+        if recorded is not None and actual is not None:
+            if recorded.get('sha256') != actual['sha256']:
+                raise RuntimeError(role + ' SHA256 mismatch')
 
 
 def _table_index(rows):
@@ -219,6 +323,8 @@ def build_reliability_report(bundle, config):
     joint = diagnostic['joint_component_availability']
     angle = diagnostic['angle_hold_pair_audit']['all']
     scale = diagnostic['scale_matched_coverage']
+    same_run_diagnostic = diagnostic.get('generation_mode') == (
+        'from_current_full_run_online_records')
     interpretation = [
         dict(
             topic='complete_obb_tradeoff',
@@ -291,12 +397,14 @@ def build_reliability_report(bundle, config):
         limits=[
             'V5.1 尚未被证实为整体最优方法。',
             '固定 TEST 已经暴露，不能据此调参。',
-            '完成逐帧比较前，两种角度报告来源之间的差异仍未解释。',
+            ('本次角度诊断与论文指标来自同一逐帧运行记录。'
+             if same_run_diagnostic else
+             '完成逐帧比较前，两种角度报告来源之间的差异仍未解释。'),
             '当前不支持新的未知序列泛化、校准不确定性、物理状态或控制结论。'],
         runtime_measurement=copy.deepcopy(finalization['runtime_measurement']))
 
 
-def build_model_report(bundle, config, reliability_identity):
+def build_model_report(bundle, config, reliability_identity, custom_temporal):
     metrics = bundle['metrics']
     online = bundle['online']
     return dict(
@@ -322,7 +430,8 @@ def build_model_report(bundle, config, reliability_identity):
             anchor_sources=copy.deepcopy(
                 metrics['paper_tables']['anchor_source_metrics']),
             custom_diagnostics=copy.deepcopy(
-                metrics['supporting_diagnostics'])),
+                metrics['supporting_diagnostics']),
+            custom_temporal=copy.deepcopy(custom_temporal)),
         runtime_measurement=copy.deepcopy(metrics['runtime_measurement']),
         observation_export=copy.deepcopy(metrics['online_observation_export']),
         reliability_report=copy.deepcopy(reliability_identity),
@@ -389,6 +498,22 @@ def model_markdown(report):
         'mean_available_riou', 'riou_hit_coverage',
         'jointly_correct_coverage', 'false_all_components_valid_rate']
     lines.extend(_markdown_table(report['metrics']['anchor_sources'], anchor_fields))
+    custom = report['metrics']['custom_temporal']
+    lines.extend(['', '## 自定义检测与时序指标', '',
+                  '完整 OBB 口径；部分分量观测在本表中计为缺少完整框。', ''])
+    values = custom['values']
+    custom_rows = []
+    fields = sorted(set(
+        key for method_values in values.values() for key in method_values))
+    for metric in fields:
+        custom_rows.append(dict(
+            metric=metric, raw=values['raw'].get(metric),
+            score_rejection_only=values['score_rejection_only'].get(metric),
+            v51_hybrid=values['v51_hybrid'].get(metric)))
+    lines.extend(_markdown_table(custom_rows, [
+        'metric', 'raw', 'score_rejection_only', 'v51_hybrid']))
+    lines.extend(['', '### 自定义指标口径', ''])
+    lines.extend('- ' + note for note in custom['notes'])
     runtime = report['runtime_measurement']
     lines.extend(['', '## 运行时间', ''])
     if runtime is None:
@@ -487,6 +612,18 @@ def _write_text_exact(path, text):
         path.write_bytes(raw)
     return dict(path=os.fspath(path), sha256=hashlib.sha256(raw).hexdigest(),
                 size_bytes=len(raw))
+
+
+def _copy_exact(source, destination):
+    source = Path(source).resolve(); destination = Path(destination).resolve()
+    raw = source.read_bytes()
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.exists() and destination.read_bytes() != raw:
+        raise RuntimeError('Refusing to overwrite different copied input: '
+                           + os.fspath(destination))
+    if not destination.exists():
+        destination.write_bytes(raw)
+    return _identity(destination)
 
 
 def _find_image(image_dir, frame_key):
@@ -601,7 +738,12 @@ def write_reports(bundle, config, root, out_dir=None, config_identity=None):
               if key != 'path'},
         markdown={key: value for key, value in reliability_md.items()
                   if key != 'path'})
-    model = build_model_report(bundle, config, reliability_identity)
+    from crane_project.tools.analyze_unified_full_run_v1 import (
+        build_custom_metrics)
+    custom_temporal = build_custom_metrics(
+        bundle['online'], bundle['finalization'], bundle['metrics'])
+    model = build_model_report(
+        bundle, config, reliability_identity, custom_temporal)
     model_json = _write_exact(
         directory / outputs['model_report_json'], model)
     model_md = _write_text_exact(
@@ -612,22 +754,53 @@ def write_reports(bundle, config, root, out_dir=None, config_identity=None):
         reliability_markdown=reliability_md)
 
 
-def validate_full_inputs(config, root):
-    required = copy.deepcopy(config['full_run'])
-    required.pop('outputs')
+def _validate_paths(config, root, roles):
+    full = config['full_run']
     missing = []
-    for role, value in required.items():
-        if role == 'expected_frame_count':
-            continue
-        path = _resolve(root, value)
+    for role in roles:
+        path = _resolve(root, full[role])
         if not path.exists():
             missing.append('{}={}'.format(role, path))
     if missing:
-        raise RuntimeError('Missing full-run inputs:\n' + '\n'.join(missing))
+        raise RuntimeError('Missing pipeline inputs:\n' + '\n'.join(missing))
+
+
+def validate_inference_inputs(config, root):
+    _validate_paths(config, root, (
+        'image_dir', 'dino_config', 'dino_checkpoint', 'base_v3_config',
+        'runtime_calibration_v51', 'online_contract', 'paper_final_report'))
+
+
+def validate_evaluation_inputs(config, root):
+    _validate_paths(config, root, (
+        'paper_final_report', 'fixed_test_attribution', 'v51_eval_contract',
+        'finalization_contract', 'paper_metrics_contract', 'base_v3_results',
+        'k1_results', 'all_lane_audit', 'annotation_dir'))
+
+
+def validate_full_inputs(config, root):
+    validate_inference_inputs(config, root)
+    validate_evaluation_inputs(config, root)
+
+
+def _require_sha(identity, expected, role):
+    if identity['sha256'] != expected:
+        raise RuntimeError(
+            '{} SHA256 mismatch: expected {}, got {}'.format(
+                role, expected, identity['sha256']))
+
+
+def _runtime_contract(template, updates, template_identity, stage):
+    contract = copy.deepcopy(template)
+    contract['expected_inputs'].update(updates)
+    contract['runtime_binding'] = dict(
+        stage=stage, template_contract=copy.deepcopy(template_identity),
+        generated_by=CONFIG_PROTOCOL)
+    return contract
 
 
 def build_current_diagnostic(online, final_payload, metric_contract,
-                             metric_identity):
+                             metric_identity, return_runtime=False):
     """Rebuild reliability diagnostics from this run's own frame records."""
     from crane_project.tools import base_v3_obb_hybrid_fixed_test_diagnostic_v51 as diagnostic
     from crane_project.tools import base_v3_obb_true_online_paper_metrics_v3 as paper_metrics
@@ -659,23 +832,15 @@ def build_current_diagnostic(online, final_payload, metric_contract,
             source='current_full_run_online_and_post_inference_metrics',
             paper_metrics=metric_identity))
     payload['generation_mode'] = 'from_current_full_run_online_records'
+    if return_runtime:
+        return payload, diagnostic_input, diagnostic_contract
     return payload
 
 
-def run_full(config, root, out_dir, device):
-    """Execute inference and derive fresh post-inference metrics.
-
-    Frozen threshold/config contracts are reused semantically. Their original
-    expected result hashes are not edited; this run is bound by the unified
-    config and by identities embedded in the newly generated outputs.
-    """
-    validate_full_inputs(config, root)
+def run_inference(config, root, out_dir, device):
+    """Run the chronological model stage without reading annotations or GT."""
+    validate_inference_inputs(config, root)
     from crane_project.tools import base_v3_obb_true_online_finalization_v2 as finalization
-    from crane_project.tools import base_v3_obb_true_online_paper_metrics_v3 as paper_metrics
-    from crane_project.tools.base_v3_obb_fixed_test_eval import build_records
-    from crane_project.tools.base_v3_obb_hybrid_fixed_test_eval_v51 import (
-        validate_contract as validate_v51_contract)
-
     full = config['full_run']
     run_outputs = full['outputs']
     out_dir = Path(out_dir).resolve()
@@ -699,17 +864,104 @@ def run_full(config, root, out_dir, device):
     subprocess.run(command, cwd=os.fspath(root), check=True)
     wall_clock = time.perf_counter() - started
     online = json.loads(online_path.read_text(encoding='utf-8'))
+    if online.get('leakage_controls', {}).get('annotations_or_gt_read') is not False:
+        raise RuntimeError('Inference output does not prove GT isolation')
+    if online.get('summary', {}).get('frame_count') != int(
+            full['expected_frame_count']):
+        raise RuntimeError('Inference output frame count changed')
+    csv_path = out_dir / run_outputs['observation_csv']
+    csv_identity = finalization.write_observation_csv(csv_path, online['records'])
+    online_identity = _relative_identity(root, online_path)
+    receipt = dict(
+        protocol='base_v3_obb_focused_paper_inference_receipt_v1',
+        stage='infer', gt_or_annotations_read=False,
+        online_pipeline=online_identity,
+        observation_csv=csv_identity,
+        runtime_measurement=dict(
+            scope='model_init_detector_image_io_and_online_json_generation',
+            wall_clock_seconds=wall_clock,
+            average_frames_per_second=len(online['records'])/wall_clock,
+            average_seconds_per_frame=wall_clock/len(online['records']),
+            multi_gpu_parallelism=False),
+        command=command)
+    receipt_identity = _write_exact(
+        out_dir / run_outputs['inference_receipt'], receipt)
+    return dict(
+        online=online, online_identity=online_identity,
+        observation_csv_identity=csv_identity,
+        inference_receipt=receipt,
+        inference_receipt_identity=receipt_identity)
+
+
+def _load_inference(config, root, input_dir):
+    full = config['full_run']; names = full['outputs']
+    input_dir = Path(input_dir).resolve()
+    online_path = input_dir / names['online_pipeline']
+    if not online_path.is_file():
+        raise RuntimeError('Missing inference output: ' + os.fspath(online_path))
+    online = json.loads(online_path.read_text(encoding='utf-8'))
+    if online.get('protocol') != ONLINE_PROTOCOL:
+        raise RuntimeError('Unexpected inference output protocol')
+    receipt_path = input_dir / names['inference_receipt']
+    receipt = None
+    if receipt_path.is_file():
+        receipt = json.loads(receipt_path.read_text(encoding='utf-8'))
+        if receipt.get('protocol') != (
+                'base_v3_obb_focused_paper_inference_receipt_v1'):
+            raise RuntimeError('Unexpected inference receipt protocol')
+        if receipt['online_pipeline']['sha256'] != _sha256(online_path):
+            raise RuntimeError('Inference receipt online SHA256 mismatch')
+    return dict(
+        online=online, online_path=online_path, receipt=receipt,
+        input_observation_csv=input_dir / names['observation_csv'])
+
+
+def run_evaluation(config, root, input_dir, out_dir=None):
+    """Attach GT after inference and generate a fully bound result bundle."""
+    validate_evaluation_inputs(config, root)
+    from crane_project.tools import base_v3_obb_true_online_finalization_v2 as finalization
+    from crane_project.tools import base_v3_obb_true_online_paper_metrics_v3 as paper_metrics
+    from crane_project.tools.base_v3_obb_fixed_test_eval import build_records
+    from crane_project.tools.base_v3_obb_hybrid_fixed_test_eval_v51 import (
+        validate_contract as validate_v51_contract)
+
+    full = config['full_run']; names = full['outputs']
+    inferred = _load_inference(config, root, input_dir)
+    online = inferred['online']; source_online_path = inferred['online_path']
+    out_dir = Path(input_dir if out_dir is None else out_dir).resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    online_path = out_dir / names['online_pipeline']
+    online_identity = _copy_exact(source_online_path, online_path)
+    receipt_identity = None
+    source_receipt = Path(input_dir).resolve() / names['inference_receipt']
+    if source_receipt.is_file():
+        receipt_identity = _copy_exact(
+            source_receipt, out_dir / names['inference_receipt'])
 
     final_contract_path = _resolve(root, full['finalization_contract'])
-    final_contract = json.loads(final_contract_path.read_text(encoding='utf-8'))
+    final_template = json.loads(final_contract_path.read_text(encoding='utf-8'))
+    final_template_id = _identity(final_contract_path)
+    final_contract = _runtime_contract(
+        final_template,
+        {'true_online_sha256': online_identity['sha256']},
+        final_template_id, 'evaluate')
     finalization.validate_contract(final_contract)
     paper_path = _resolve(root, full['paper_final_report'])
     attribution_path = _resolve(root, full['fixed_test_attribution'])
     v51_path = _resolve(root, full['v51_eval_contract'])
+    expected = final_contract['expected_inputs']
+    for identity, field, role in (
+            (_identity(paper_path), 'paper_report_sha256', 'paper report'),
+            (_identity(attribution_path), 'attribution_sha256', 'attribution'),
+            (_identity(v51_path), 'v51_eval_contract_sha256', 'V5.1 contract')):
+        _require_sha(identity, expected[field], role)
     paper = json.loads(paper_path.read_text(encoding='utf-8'))
     attribution = json.loads(attribution_path.read_text(encoding='utf-8'))
     v51 = json.loads(v51_path.read_text(encoding='utf-8'))
     validate_v51_contract(v51)
+    finalization.validate_evaluation_alignment(final_contract, v51)
+    final_contract_id = _write_exact(
+        out_dir / names['runtime_finalization_contract'], final_contract)
     reconstruction_args = SimpleNamespace(
         base_v3_results=os.fspath(_resolve(root, full['base_v3_results'])),
         k1_results=os.fspath(_resolve(root, full['k1_results'])),
@@ -722,52 +974,106 @@ def run_full(config, root, out_dir, device):
         paper_final_report=_identity(paper_path),
         fixed_test_attribution=_identity(attribution_path),
         v51_eval_contract=_identity(v51_path),
-        contract=_identity(final_contract_path),
+        contract=final_contract_id,
+        template_contract=final_template_id,
         historical_reconstruction=reconstruction)
+    runtime = None
+    runtime_scope = 'inference_runtime_not_available'
+    if inferred['receipt'] is not None:
+        runtime_measurement = inferred['receipt']['runtime_measurement']
+        runtime = runtime_measurement['wall_clock_seconds']
+        runtime_scope = runtime_measurement['scope']
     final_payload = finalization.run(
-        online, paper, historical, final_contract, final_inputs, wall_clock)
-    csv_path = out_dir / run_outputs['observation_csv']
+        online, paper, historical, final_contract, final_inputs, runtime,
+        runtime_scope=runtime_scope)
+    csv_path = out_dir / names['observation_csv']
     csv_identity = finalization.write_observation_csv(csv_path, online['records'])
+    input_csv = inferred['input_observation_csv']
+    if input_csv.is_file() and _sha256(input_csv) != csv_identity['sha256']:
+        raise RuntimeError('Evaluation observation CSV differs from inference export')
     final_payload['online_observation_export'] = csv_identity
-    final_path = out_dir / run_outputs['online_finalization']
+    final_path = out_dir / names['online_finalization']
     final_identity = _write_exact(final_path, final_payload)
 
     metric_contract_path = _resolve(root, full['paper_metrics_contract'])
-    metric_contract = json.loads(metric_contract_path.read_text(encoding='utf-8'))
-    metric_contract = copy.deepcopy(metric_contract)
-    metric_contract['expected_inputs']['online_observation_csv_sha256'] = (
-        csv_identity['sha256'])
+    metric_template = json.loads(metric_contract_path.read_text(encoding='utf-8'))
+    metric_template_id = _identity(metric_contract_path)
+    metric_contract = _runtime_contract(
+        metric_template, dict(
+            true_online_finalization_sha256=final_identity['sha256'],
+            true_online_pipeline_sha256=online_identity['sha256'],
+            online_observation_csv_sha256=csv_identity['sha256']),
+        metric_template_id, 'evaluate')
+    paper_metrics.validate_contract(metric_contract)
+    metric_contract_id = _write_exact(
+        out_dir / names['runtime_paper_metrics_contract'], metric_contract)
     metric_inputs = dict(
         true_online_finalization_v2=final_identity,
         true_online_report=_identity(online_path),
-        contract=_identity(metric_contract_path),
+        contract=metric_contract_id, template_contract=metric_template_id,
         unified_config_runtime_binding=True)
     metric_payload = paper_metrics.run(
         final_payload, online, metric_contract, metric_inputs)
-    metric_path = out_dir / run_outputs['paper_metrics']
+    metric_path = out_dir / names['paper_metrics']
     metric_identity = _write_exact(metric_path, metric_payload)
-    diagnostic_payload = build_current_diagnostic(
-        online, final_payload, metric_contract, metric_identity)
-    diagnostic_path = out_dir / run_outputs['reliability_diagnostic']
+    _diagnostic_preview, diagnostic_input, diagnostic_contract = (
+        build_current_diagnostic(
+            online, final_payload, metric_contract, metric_identity,
+            return_runtime=True))
+    diagnostic_input_id = _write_exact(
+        out_dir / names['runtime_diagnostic_input'], diagnostic_input)
+    diagnostic_contract['expected_input']['sha256'] = (
+        diagnostic_input_id['sha256'])
+    diagnostic_contract['runtime_binding'] = dict(
+        stage='evaluate', input=diagnostic_input_id,
+        paper_metrics=metric_identity, generated_by=CONFIG_PROTOCOL)
+    diagnostic_contract_id = _write_exact(
+        out_dir / names['runtime_diagnostic_contract'], diagnostic_contract)
+    from crane_project.tools import base_v3_obb_hybrid_fixed_test_diagnostic_v51 as diagnostic
+    diagnostic_payload = diagnostic.run(
+        diagnostic_input, diagnostic_contract, diagnostic_input_id)
+    diagnostic_payload['generation_mode'] = (
+        'from_current_full_run_online_records')
+    diagnostic_payload['runtime_artifacts'] = dict(
+        input=diagnostic_input_id, contract=diagnostic_contract_id)
+    diagnostic_path = out_dir / names['reliability_diagnostic']
     diagnostic_identity = _write_exact(diagnostic_path, diagnostic_payload)
+    identities = dict(
+        online_pipeline=_relative_identity(root, online_path),
+        online_finalization=_relative_identity(root, final_path),
+        paper_metrics=_relative_identity(root, metric_path),
+        reliability_diagnostic=_relative_identity(root, diagnostic_path),
+        observation_csv=_relative_identity(root, csv_path),
+        runtime_finalization_contract=final_contract_id,
+        runtime_paper_metrics_contract=metric_contract_id,
+        runtime_diagnostic_input=diagnostic_input_id,
+        runtime_diagnostic_contract=diagnostic_contract_id)
+    if receipt_identity is not None:
+        identities['inference_receipt'] = receipt_identity
     bundle = dict(
         online=online, finalization=final_payload, metrics=metric_payload,
         diagnostic=diagnostic_payload,
-        identities=dict(
-            online_pipeline=_relative_identity(root, online_path),
-            online_finalization=_relative_identity(root, final_path),
-            paper_metrics=_relative_identity(root, metric_path),
-            reliability_diagnostic=_relative_identity(root, diagnostic_path),
-            observation_csv=_relative_identity(root, csv_path)))
+        identities=identities)
     return bundle
+
+
+def run_full(config, root, out_dir, device):
+    """Run inference, post-inference evaluation, and bound reporting inputs."""
+    validate_full_inputs(config, root)
+    run_inference(config, root, out_dir, device)
+    return run_evaluation(config, root, out_dir, out_dir)
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--config', required=True)
     parser.add_argument(
-        '--mode', choices=('validate', 'report', 'visualize', 'full'),
+        '--mode', choices=(
+            'validate', 'infer', 'evaluate', 'report', 'visualize', 'full'),
         default='report')
+    parser.add_argument(
+        '--input-dir', help=(
+            'Generated run directory consumed by evaluate/report/validate'))
     parser.add_argument('--out-dir')
     parser.add_argument('--device', default='cuda:0')
     return parser.parse_args()
@@ -779,15 +1085,30 @@ def main():
     root = Path.cwd().resolve()
     config = json.loads(config_path.read_text(encoding='utf-8'))
     validate_config(config)
-    if args.mode == 'full':
+    if args.mode in ('infer', 'full'):
         if args.out_dir is None:
             raise ValueError(
-                '--out-dir is required for full mode so a fresh evidence '
-                'directory is used')
-        output_dir = args.out_dir
-        bundle = run_full(config, root, output_dir, args.device)
+                '--out-dir is required for {} mode so a fresh evidence '
+                'directory is used'.format(args.mode))
+    if args.mode == 'infer':
+        inferred = run_inference(config, root, args.out_dir, args.device)
+        result = dict(
+            online_pipeline=inferred['online_identity'],
+            observation_csv=inferred['observation_csv_identity'],
+            inference_receipt=inferred['inference_receipt_identity'])
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+    if args.mode == 'evaluate':
+        if args.input_dir is None:
+            raise ValueError('--input-dir is required for evaluate mode')
+        output_dir = args.input_dir if args.out_dir is None else args.out_dir
+        bundle = run_evaluation(config, root, args.input_dir, output_dir)
+    elif args.mode == 'full':
+        bundle = run_full(config, root, args.out_dir, args.device)
     else:
-        bundle = load_report_sources(config, root)
+        bundle = (load_run_sources(config, root, args.input_dir)
+                  if args.input_dir is not None else
+                  load_report_sources(config, root))
     validate_report_sources(bundle, config)
     if args.mode == 'validate':
         result = dict(
