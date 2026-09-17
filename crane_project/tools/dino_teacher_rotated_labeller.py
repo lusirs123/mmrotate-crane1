@@ -3515,7 +3515,9 @@ def native_candidate_trace_frame(heads, feature: torch.Tensor,
     elif not usable_post_valid:
         resolved_stage = 'VALID_CONTENT_FILTER'
     else:
-        resolved_stage = 'USABLE_CANDIDATE_SURVIVES'
+        resolved_stage = (
+            'TOP1_SUCCESS' if final_metrics['top1_hit']
+            else 'FINAL_ORDERING')
     return dict(
         thresholds=dict(
             riou=threshold, roi_score=0.0,
@@ -3596,7 +3598,8 @@ def validate_native_trace_reproduction(
     allowed = {
         'ROI_REGRESSION': {'ROI_REGRESSION'},
         'ROI_ORDERING_OR_NMS': {
-            'NMS_SUPPRESSION', 'SCORE_OR_MAX_DETECTIONS_FILTER'},
+            'NMS_SUPPRESSION', 'SCORE_OR_MAX_DETECTIONS_FILTER',
+            'VALID_CONTENT_FILTER', 'FINAL_ORDERING'},
     }
     if actual_stage not in allowed.get(expected_stage, set()):
         raise RuntimeError(

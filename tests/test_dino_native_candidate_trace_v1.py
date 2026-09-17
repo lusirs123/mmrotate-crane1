@@ -154,7 +154,7 @@ def test_trace_summary_keeps_regression_and_nms_failures_separate():
     def row(attribution, decoded, post_nms, suppressed, wrong):
         stage = ('ROI_REGRESSION' if not decoded else
                  'NMS_SUPPRESSION' if not post_nms else
-                 'USABLE_CANDIDATE_SURVIVES')
+                 'FINAL_ORDERING')
         return dict(
             attribution=dict(attribution=attribution),
             trace=dict(
@@ -199,3 +199,6 @@ def test_trace_reproduction_requires_same_metrics_and_failure_stage():
     trace['resolved_failure_stage'] = 'ROI_REGRESSION'
     with pytest.raises(RuntimeError, match='stage disagrees'):
         labeller.validate_native_trace_reproduction(trace, attribution)
+
+    trace['resolved_failure_stage'] = 'FINAL_ORDERING'
+    labeller.validate_native_trace_reproduction(trace, attribution)
