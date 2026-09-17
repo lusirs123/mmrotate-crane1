@@ -639,6 +639,22 @@ def parse_args():
             'the selected head, DINO checkpoint, source validation split, '
             'and source-small definition.'))
     parser.add_argument(
+        '--source-native-quality-cache-only', action='store_true',
+        help=(
+            'Require every source-validation DINO feature to exist in the '
+            'frozen cache, then run the audit without loading DINO on GPU.'))
+    parser.add_argument(
+        '--source-native-quality-cache-preflight-only', action='store_true',
+        help=(
+            'Validate all source feature caches on CPU, write a preflight '
+            'JSON, and exit before any CUDA model is allocated.'))
+    parser.add_argument(
+        '--source-native-quality-roi-chunk-size', type=int, default=256,
+        help='Maximum ROI candidates per forward in the safe source audit.')
+    parser.add_argument(
+        '--source-native-quality-empty-cache-interval', type=int, default=10,
+        help='Frames between CUDA allocator cache releases in the safe audit.')
+    parser.add_argument(
         '--skip-target-eval', action='store_true',
         help='Train/select on source only; run target evaluation separately.')
     parser.add_argument('--seed', type=int, default=0)
@@ -709,6 +725,18 @@ def validate_source_native_quality_feasibility_args(args):
     if not args.source_train_datasets or not args.source_val_datasets:
         raise ValueError(
             'Source native quality audit requires formal source datasets')
+    if not bool(getattr(args, 'source_native_quality_cache_only', False)):
+        raise ValueError(
+            'Source native quality audit requires cache-only safe mode')
+    roi_chunk = int(getattr(
+        args, 'source_native_quality_roi_chunk_size', 256))
+    if roi_chunk <= 0 or roi_chunk > 256:
+        raise ValueError(
+            'Source native quality ROI chunk size must be in [1, 256]')
+    if int(getattr(
+            args, 'source_native_quality_empty_cache_interval', 10)) <= 0:
+        raise ValueError(
+            'Source native quality empty-cache interval must be positive')
     locked = dict(
         patch_size=(int(args.patch_size), 14),
         dino_height=(int(args.dino_height), 600),
@@ -756,7 +784,10 @@ def validate_args(args):
         parse_dataset_specs(args.source_val_datasets)
     if not args.dino_gpus:
         raise ValueError('At least one DINO GPU is required')
-    if args.head_gpu in args.dino_gpus:
+    cache_only_source_audit = bool(getattr(
+        args, 'source_native_quality_feasibility_audit', False)) and bool(
+            getattr(args, 'source_native_quality_cache_only', False))
+    if args.head_gpu in args.dino_gpus and not cache_only_source_audit:
         raise ValueError(
             'Head GPU must be separate from sharded DINO GPUs on 8GB cards')
     s7_enabled = bool(getattr(args, 's7_residual', False))
@@ -3062,6 +3093,11 @@ def extract_or_load_feature(dino, record: Dict, args,
                     and bool(torch.isfinite(feature.float()).all().item())):
                 return feature, payload['dino_meta'], True
 
+    if dino is None:
+        raise RuntimeError(
+            'Cache-only audit found a missing or invalid feature: {}'.format(
+                path))
+
     image = cv2.imread(record['image'])
     if image is None:
         raise RuntimeError('Cannot read {}'.format(record['image']))
@@ -3079,6 +3115,41 @@ def extract_or_load_feature(dino, record: Dict, args,
         dino_meta=dino_meta, frozen_dinov2=True), path)
     del tensor, feature
     return feature_cpu, dino_meta, False
+
+
+def validate_source_feature_cache(records: Sequence[Dict], args) -> Dict:
+    """Validate every source feature on CPU before allocating a CUDA model."""
+    channels = None
+    total_bytes = 0
+    for index, record in enumerate(records):
+        path = cache_path(record, args)
+        if not os.path.isfile(path):
+            raise RuntimeError(
+                'Source feature cache is incomplete at {}/{}: {}'.format(
+                    index + 1, len(records), path))
+        payload = torch.load(path, map_location='cpu')
+        if payload.get('signature') != cache_signature(record, args):
+            raise RuntimeError(
+                'Source feature cache signature mismatch: {}'.format(path))
+        feature = payload.get('feature')
+        if (not isinstance(feature, torch.Tensor) or feature.ndim != 4
+                or int(feature.shape[0]) != 1
+                or not bool(torch.isfinite(feature.float()).all().item())):
+            raise RuntimeError(
+                'Source feature cache tensor is invalid: {}'.format(path))
+        current_channels = int(feature.shape[1])
+        if channels is None:
+            channels = current_channels
+        elif current_channels != channels:
+            raise RuntimeError(
+                'Source feature cache channel count changed: {}'.format(path))
+        total_bytes += int(feature.numel() * feature.element_size())
+        del payload, feature
+    if channels is None:
+        raise RuntimeError('Source validation feature cache is empty')
+    return dict(
+        frame_count=int(len(records)), in_channels=int(channels),
+        total_bytes=int(total_bytes), all_entries_valid=True)
 
 
 PAIRED_VIEW_VERSION = 1
@@ -3450,16 +3521,21 @@ def native_candidate_trace_frame(heads, feature: torch.Tensor,
     if set(sources) != {'native_s14'}:
         raise RuntimeError('Native trace received a non-native proposal lane')
     proposals = sources['native_s14']
-    decoded, _logits, scores, _embedding = heads._decode_roi_candidates(
-        feature, img_meta, proposals, rescale=True)
+    safe_source_audit = bool(getattr(
+        args, 'source_native_quality_feasibility_audit', False))
+    if safe_source_audit:
+        decoded, _logits, scores, _embedding = (
+            heads._decode_roi_candidates_chunked(
+                feature, img_meta, proposals, rescale=True,
+                chunk_size=int(
+                    args.source_native_quality_roi_chunk_size)))
+    else:
+        decoded, _logits, scores, _embedding = (
+            heads._decode_roi_candidates(
+                feature, img_meta, proposals, rescale=True))
     if int(decoded.shape[0]) != int(proposals.shape[0]):
         raise RuntimeError('Proposal and decoded candidate counts disagree')
-
-    official_results = heads.roi_head.simple_test(
-        features, [proposals], [img_meta], rescale=True)
-    if len(official_results) != 1 or len(official_results[0]) != 1:
-        raise RuntimeError('Unexpected official native ROI result')
-    official = np.asarray(official_results[0][0], dtype=np.float32)
+    del _logits, _embedding
 
     all_nms, all_keep = nms_rotated(
         decoded, scores, float(args.roi_nms_iou_thr))
@@ -3468,20 +3544,35 @@ def native_candidate_trace_frame(heads, feature: torch.Tensor,
     kept = all_keep[:max_detections]
     reconstructed_np = reconstructed.detach().cpu().numpy().astype(
         np.float32, copy=False)
-    reconstruction = dict(
-        shape_equal=bool(reconstructed_np.shape == official.shape),
-        allclose_atol_1e_4=bool(
-            reconstructed_np.shape == official.shape
-            and np.allclose(reconstructed_np, official, atol=1e-4,
-                            rtol=0.0)),
-        max_abs_diff=(
-            None if reconstructed_np.shape != official.shape
-            or official.size == 0 else
-            float(np.max(np.abs(reconstructed_np - official)))),
-        expected_count=int(official.shape[0]),
-        reconstructed_count=int(reconstructed_np.shape[0]))
-    if not reconstruction['allclose_atol_1e_4']:
-        raise RuntimeError('Native candidate trace did not reproduce ROI output')
+    if safe_source_audit:
+        official = reconstructed_np
+        reconstruction = dict(
+            verification='aggregate_frozen_source_metrics',
+            duplicate_official_forward_executed=False,
+            reconstructed_count=int(reconstructed_np.shape[0]))
+    else:
+        official_results = heads.roi_head.simple_test(
+            features, [proposals], [img_meta], rescale=True)
+        if len(official_results) != 1 or len(official_results[0]) != 1:
+            raise RuntimeError('Unexpected official native ROI result')
+        official = np.asarray(official_results[0][0], dtype=np.float32)
+        reconstruction = dict(
+            verification='per_frame_duplicate_official_forward',
+            duplicate_official_forward_executed=True,
+            shape_equal=bool(reconstructed_np.shape == official.shape),
+            allclose_atol_1e_4=bool(
+                reconstructed_np.shape == official.shape
+                and np.allclose(reconstructed_np, official, atol=1e-4,
+                                rtol=0.0)),
+            max_abs_diff=(
+                None if reconstructed_np.shape != official.shape
+                or official.size == 0 else
+                float(np.max(np.abs(reconstructed_np - official)))),
+            expected_count=int(official.shape[0]),
+            reconstructed_count=int(reconstructed_np.shape[0]))
+        if not reconstruction['allclose_atol_1e_4']:
+            raise RuntimeError(
+                'Native candidate trace did not reproduce ROI output')
 
     proposal_boxes = _proposals_in_original_image(proposals, img_meta)
     rpn_riou = _candidate_overlap(proposal_boxes, original)
@@ -3924,11 +4015,14 @@ def summarize_source_native_quality_support(
 
 def build_source_native_quality_feasibility_audit(
         dino, heads, source_val: Sequence[Dict], reference: Dict,
-        source_protocol: Dict, args, dino_device, head_device) -> Dict:
+        source_protocol: Dict, cache_validation: Dict, args,
+        dino_device, head_device) -> Dict:
     """Measure source support without training or reading exposed target data."""
     heads.eval()
-    dino_versions = common.module_parameter_versions(dino)
+    dino_versions = (
+        None if dino is None else common.module_parameter_versions(dino))
     head_versions = common.module_parameter_versions(heads)
+    torch.cuda.reset_peak_memory_stats(head_device)
     threshold = float(args.riou_thr)
     small_threshold = float(reference['small_token_threshold'])
     rows = []
@@ -3962,6 +4056,11 @@ def build_source_native_quality_feasibility_audit(
                     path=os.path.abspath(record['annotation']),
                     sha256=annotation_sha)
             rows.append(row)
+            del trace, feature, _gt_boxes, _gt_labels
+            interval = int(
+                args.source_native_quality_empty_cache_interval)
+            if (index + 1) % interval == 0:
+                torch.cuda.empty_cache()
             if ((index + 1) % 25 == 0
                     or index + 1 == len(source_val)):
                 print('[source-native-quality-audit] {}/{} conflicts={}'
@@ -3969,8 +4068,8 @@ def build_source_native_quality_feasibility_audit(
                           index + 1, len(source_val), sum(
                               item['trace']['actionable_quality_conflict']
                               for item in rows)))
-            del feature, _gt_boxes, _gt_labels
     dino_unchanged = (
+        True if dino is None else
         dino_versions == common.module_parameter_versions(dino))
     heads_unchanged = (
         head_versions == common.module_parameter_versions(heads))
@@ -3989,6 +4088,10 @@ def build_source_native_quality_feasibility_audit(
     summary['frozen_source_reproduction'] = dict(
         expected=reference['expected_summary'], checks=reproduced,
         passed=True)
+    summary['cuda_memory'] = dict(
+        device=str(head_device),
+        max_allocated_bytes=int(torch.cuda.max_memory_allocated(head_device)),
+        max_reserved_bytes=int(torch.cuda.max_memory_reserved(head_device)))
     passed = bool(summary['support_gate']['passed'])
     decision = (
         'SOURCE_NATIVE_QUALITY_SUPPORT_SUFFICIENT_FOR_NEW_SOURCE_ONLY_'
@@ -4010,9 +4113,16 @@ def build_source_native_quality_feasibility_audit(
                 'data_support_gate_before_any_new_quality_model'),
             target_read=False, parameter_update=False,
             threshold_search=False, checkpoint_selection=False,
+            cache_only=True, dino_loaded_on_gpu=False,
+            roi_chunk_size=int(
+                args.source_native_quality_roi_chunk_size),
+            duplicate_official_roi_forward=False,
+            cuda_empty_cache_interval=int(
+                args.source_native_quality_empty_cache_interval),
             report_contains_all_frames_but_candidate_pairs_only_for_actionable_conflicts=True),
         isolation=dict(
-            dino_frozen=True, dino_parameters_unchanged=dino_unchanged,
+            dino_frozen=True, dino_loaded=False,
+            dino_parameters_unchanged=dino_unchanged,
             detector_parameters_unchanged=heads_unchanged,
             read_only_evaluation=True, parameter_updates_performed=False,
             checkpoint_written=False, target_data_discovered=False,
@@ -4031,7 +4141,8 @@ def build_source_native_quality_feasibility_audit(
                 definition=(
                     'sha256_of_ordered_split_seq_frame_image_sha_'
                     'annotation_sha_lines'),
-                frame_count=len(rows), sha256=manifest.hexdigest())),
+                frame_count=len(rows), sha256=manifest.hexdigest()),
+            source_feature_cache_validation=cache_validation),
         summary=summary, rows=rows, decision=decision)
 
 
@@ -4591,6 +4702,25 @@ class FrozenDinoRotatedHeads(nn.Module):
             img_meta['scale_factor'], rescale=rescale, cfg=None)
         return (decoded, roi_foreground_log_odds(cls_score),
                 torch.softmax(cls_score, dim=1)[:, 0], embedding)
+
+    def _decode_roi_candidates_chunked(
+            self, feature: torch.Tensor, img_meta: Dict,
+            proposals: torch.Tensor, rescale: bool,
+            chunk_size: int):
+        """Decode independent ROIs in bounded chunks without changing order."""
+        if int(chunk_size) <= 0:
+            raise ValueError('ROI chunk size must be positive')
+        if int(proposals.shape[0]) <= int(chunk_size):
+            return self._decode_roi_candidates(
+                feature, img_meta, proposals, rescale)
+        outputs = [[], [], [], []]
+        for start in range(0, int(proposals.shape[0]), int(chunk_size)):
+            chunk = proposals[start:start + int(chunk_size)]
+            decoded = self._decode_roi_candidates(
+                feature, img_meta, chunk, rescale)
+            for target, value in zip(outputs, decoded):
+                target.append(value)
+        return tuple(torch.cat(values, dim=0) for values in outputs)
 
     def _nms_candidate_lane(self, boxes: torch.Tensor,
                             foreground_scores: torch.Tensor):
@@ -13333,18 +13463,65 @@ def main():
         assert_training_target_isolation(
             list(source_train) + list(source_val), targets)
 
-    dino, loaded_patch_size = common.load_frozen_dinov2(
-        args.dinov2_repo, args.dinov2_checkpoint,
-        args.dinov2_model, dino_devices,
-        args.legacy_sdpa_query_chunk)
-    if int(loaded_patch_size) != int(args.patch_size):
-        raise RuntimeError('Unexpected DINO patch size')
-    dino_versions = common.module_parameter_versions(dino)
-    in_channels = int(getattr(dino, 'embed_dim', 0))
-    if in_channels <= 0:
-        sample_feature, _meta, _cached = extract_or_load_feature(
-            dino, source_train[0], args, dino_device)
-        in_channels = int(sample_feature.shape[1])
+    safe_cache_only_audit = bool(getattr(
+        args, 'source_native_quality_feasibility_audit', False)) and bool(
+            getattr(args, 'source_native_quality_cache_only', False))
+    cache_validation = None
+    if safe_cache_only_audit:
+        cache_validation = validate_source_feature_cache(source_val, args)
+        dino = None
+        dino_versions = None
+        in_channels = int(cache_validation['in_channels'])
+        print('[source-native-quality-audit] cache_preflight={} frames={} '
+              'bytes={} dino_gpu_load=disabled'.format(
+                  cache_validation['all_entries_valid'],
+                  cache_validation['frame_count'],
+                  cache_validation['total_bytes']))
+        if bool(getattr(
+                args, 'source_native_quality_cache_preflight_only', False)):
+            result = dict(
+                audit=(
+                    'Frozen DINO Native-S14 Source Quality Cache '
+                    'Preflight V1'),
+                protocol_version=1,
+                protocol=dict(
+                    operation='cpu_only_feature_cache_preflight',
+                    cuda_model_allocated=False, target_read=False,
+                    parameter_update=False, checkpoint_written=False),
+                inputs=dict(
+                    source_interpolation_reference=dict(
+                        path=source_quality_reference['path'],
+                        sha256=source_quality_reference['sha256']),
+                    dino_head_checkpoint=dict(
+                        path=os.path.abspath(args.eval_only_checkpoint),
+                        sha256=source_quality_reference[
+                            'checkpoint_sha256']),
+                    dinov2_checkpoint=dict(
+                        path=os.path.abspath(args.dinov2_checkpoint),
+                        sha256=source_quality_reference[
+                            'dinov2_checkpoint_sha256'])),
+                source_feature_cache_validation=cache_validation,
+                decision=(
+                    'SOURCE_FEATURE_CACHE_PREFLIGHT_PASSED_'
+                    'NO_CUDA_MODEL_ALLOCATED'))
+            replacements = common.write_json_atomic(args.out_json, result)
+            print('[dino-labeller] {}'.format(result['decision']))
+            print('[json] nonfinite_replacements={}'.format(replacements))
+            print('[out] {}'.format(args.out_json))
+            return
+    else:
+        dino, loaded_patch_size = common.load_frozen_dinov2(
+            args.dinov2_repo, args.dinov2_checkpoint,
+            args.dinov2_model, dino_devices,
+            args.legacy_sdpa_query_chunk)
+        if int(loaded_patch_size) != int(args.patch_size):
+            raise RuntimeError('Unexpected DINO patch size')
+        dino_versions = common.module_parameter_versions(dino)
+        in_channels = int(getattr(dino, 'embed_dim', 0))
+        if in_channels <= 0:
+            sample_feature, _meta, _cached = extract_or_load_feature(
+                dino, source_train[0], args, dino_device)
+            in_channels = int(sample_feature.shape[1])
     heads = FrozenDinoRotatedHeads(in_channels, args).to(head_device)
     trainable_names = configure_trainable_components(
         heads, args.train_components)
@@ -13360,7 +13537,8 @@ def main():
             parameter.requires_grad = False
         result = build_source_native_quality_feasibility_audit(
             dino, heads, source_val, source_quality_reference,
-            source_protocol, args, dino_device, head_device)
+            source_protocol, cache_validation, args,
+            dino_device, head_device)
         replacements = common.write_json_atomic(args.out_json, result)
         print('[dino-labeller] {}'.format(result['decision']))
         print('[source-native-quality-audit] frames={} small={} '

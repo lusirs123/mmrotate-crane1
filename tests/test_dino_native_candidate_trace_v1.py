@@ -2,6 +2,7 @@ import hashlib
 import json
 import sys
 import types
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -53,6 +54,8 @@ def _trace_args(tmp_path):
         native_candidate_trace_groups=['seq03_small'],
         s7_residual=False, skip_target_eval=False,
         patch_size=14, dino_height=600, dino_max_long_side=1333,
+        dinov2_model='dinov2_vitl14',
+        feature_cache_dir=str(tmp_path / 'feature_cache'),
         proposal_count=2000, max_detections=2000,
         roi_nms_iou_thr=0.5, riou_thr=0.5, feature_strides=None,
         out_json=str(tmp_path / 'trace.json'))
@@ -209,11 +212,16 @@ def _source_audit_args(tmp_path, head, dino):
         eval_only_checkpoint=str(head), dinov2_checkpoint=str(dino),
         source_native_quality_reference_json=str(tmp_path / 'reference.json'),
         source_native_quality_feasibility_audit=True,
+        source_native_quality_cache_only=True,
+        source_native_quality_roi_chunk_size=256,
+        source_native_quality_empty_cache_interval=10,
         native_candidate_trace_audit=False,
         skip_target_eval=True, s7_residual=False,
         source_train_datasets=['train:train'],
         source_val_datasets=['val:val'],
         patch_size=14, dino_height=600, dino_max_long_side=1333,
+        dinov2_model='dinov2_vitl14',
+        feature_cache_dir=str(tmp_path / 'feature_cache'),
         proposal_count=2000, max_detections=2000,
         roi_nms_iou_thr=0.5, riou_thr=0.5, feature_strides=None,
         out_json=str(tmp_path / 'source_quality.json'))
@@ -268,9 +276,56 @@ def test_source_quality_audit_requires_target_skip_and_refuses_overwrite(
     with pytest.raises(ValueError, match='requires --skip-target-eval'):
         labeller.validate_source_native_quality_feasibility_args(args)
     args.skip_target_eval = True
+    args.source_native_quality_cache_only = False
+    with pytest.raises(ValueError, match='requires cache-only safe mode'):
+        labeller.validate_source_native_quality_feasibility_args(args)
+    args.source_native_quality_cache_only = True
     (tmp_path / 'source_quality.json').write_text('{}')
     with pytest.raises(ValueError, match='Refusing to overwrite'):
         labeller.validate_source_native_quality_feasibility_args(args)
+
+
+def test_source_quality_cache_preflight_requires_all_valid_entries(tmp_path):
+    head = tmp_path / 'head.pth'
+    dino = tmp_path / 'dino.pth'
+    image = tmp_path / 'val_seq01_00001.jpg'
+    annotation = tmp_path / 'val_seq01_00001.txt'
+    head.write_bytes(b'head')
+    dino.write_bytes(b'dino')
+    image.write_bytes(b'image')
+    annotation.write_text('annotation')
+    args = _source_audit_args(tmp_path, head, dino)
+    record = dict(
+        split='val', seq='val_seq01', frame=1,
+        image=str(image), annotation=str(annotation))
+    with pytest.raises(RuntimeError, match='cache is incomplete'):
+        labeller.validate_source_feature_cache([record], args)
+
+    cache = Path(labeller.cache_path(record, args))
+    cache.parent.mkdir(parents=True)
+    torch.save(dict(
+        signature=labeller.cache_signature(record, args),
+        feature=torch.ones((1, 1024, 4, 5), dtype=torch.float16),
+        dino_meta={}), cache)
+    result = labeller.validate_source_feature_cache([record], args)
+    assert result['all_entries_valid'] is True
+    assert result['in_channels'] == 1024
+
+
+def test_chunked_roi_decode_preserves_candidate_order():
+    class FakeHeads:
+        def _decode_roi_candidates(
+                self, feature, img_meta, proposals, rescale):
+            del feature, img_meta, rescale
+            value = proposals[:, :1]
+            return value, value + 10, value + 20, value + 30
+
+    proposals = torch.arange(10, dtype=torch.float32).reshape(5, 2)
+    outputs = labeller.FrozenDinoRotatedHeads._decode_roi_candidates_chunked(
+        FakeHeads(), torch.empty(0), {}, proposals, True, 2)
+    assert len(outputs) == 4
+    assert outputs[0].reshape(-1).tolist() == [0, 2, 4, 6, 8]
+    assert outputs[3].reshape(-1).tolist() == [30, 32, 34, 36, 38]
 
 
 def _candidate(candidate_id, riou, score, disposition,
