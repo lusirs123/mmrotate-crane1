@@ -4,6 +4,7 @@ import sys
 import types
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 import torch
 
@@ -148,6 +149,52 @@ def test_suppressor_mapping_uses_actual_keep_and_higher_score(monkeypatch):
     assert result[1]['candidate_id'] == 0
     assert result[1]['post_nms_rank'] == 1
     assert result[1]['rotated_iou'] == pytest.approx(0.8)
+
+
+def test_source_quality_trace_skips_duplicate_official_roi_forward():
+    class _RoiHead:
+        def simple_test(self, *args, **kwargs):
+            raise AssertionError('source audit must not repeat ROI forward')
+
+    reconstructed = np.asarray(
+        [[10.0, 20.0, 30.0, 40.0, 0.1, 0.9]], dtype=np.float32)
+    official, audit = labeller._native_trace_official_output(
+        SimpleNamespace(roi_head=_RoiHead()), object(), object(), {},
+        reconstructed, True)
+    assert official is reconstructed
+    assert audit['duplicate_official_forward_executed'] is False
+    assert audit['verification'] == 'frozen_aggregate_source_metrics'
+
+
+def test_normal_trace_keeps_exact_official_roi_reproduction_check():
+    reconstructed = np.asarray(
+        [[10.0, 20.0, 30.0, 40.0, 0.1, 0.9]], dtype=np.float32)
+
+    class _RoiHead:
+        calls = 0
+
+        def simple_test(self, features, proposals, metas, rescale):
+            del features, proposals, metas
+            assert rescale is True
+            self.calls += 1
+            return [[reconstructed.copy()]]
+
+    roi_head = _RoiHead()
+    official, audit = labeller._native_trace_official_output(
+        SimpleNamespace(roi_head=roi_head), object(), object(), {},
+        reconstructed, False)
+    assert np.array_equal(official, reconstructed)
+    assert roi_head.calls == 1
+    assert audit['duplicate_official_forward_executed'] is True
+    assert audit['verification'] == 'per_frame_official_roi_output'
+
+    wrong = reconstructed.copy()
+    wrong[0, 0] += 1.0
+    with pytest.raises(RuntimeError, match='did not reproduce ROI output'):
+        labeller._native_trace_official_output(
+            SimpleNamespace(roi_head=SimpleNamespace(
+                simple_test=lambda *args, **kwargs: [[wrong]])),
+            object(), object(), {}, reconstructed, False)
 
 
 def test_trace_summary_keeps_regression_and_nms_failures_separate():

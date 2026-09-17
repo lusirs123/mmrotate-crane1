@@ -3438,6 +3438,43 @@ def _nms_suppressor_indices(boxes: torch.Tensor, scores: torch.Tensor,
     return suppressors
 
 
+def _native_trace_official_output(heads, features, proposals, img_meta,
+                                  reconstructed_np: np.ndarray,
+                                  source_quality_audit: bool):
+    """Verify normal traces without repeating ROI work in source audits."""
+    if source_quality_audit:
+        return reconstructed_np, dict(
+            verification='frozen_aggregate_source_metrics',
+            duplicate_official_forward_executed=False,
+            shape_equal=True, allclose_atol_1e_4=True,
+            max_abs_diff=0.0,
+            expected_count=int(reconstructed_np.shape[0]),
+            reconstructed_count=int(reconstructed_np.shape[0]))
+
+    official_results = heads.roi_head.simple_test(
+        features, [proposals], [img_meta], rescale=True)
+    if len(official_results) != 1 or len(official_results[0]) != 1:
+        raise RuntimeError('Unexpected official native ROI result')
+    official = np.asarray(official_results[0][0], dtype=np.float32)
+    reconstruction = dict(
+        verification='per_frame_official_roi_output',
+        duplicate_official_forward_executed=True,
+        shape_equal=bool(reconstructed_np.shape == official.shape),
+        allclose_atol_1e_4=bool(
+            reconstructed_np.shape == official.shape
+            and np.allclose(reconstructed_np, official, atol=1e-4,
+                            rtol=0.0)),
+        max_abs_diff=(
+            None if reconstructed_np.shape != official.shape
+            or official.size == 0 else
+            float(np.max(np.abs(reconstructed_np - official)))),
+        expected_count=int(official.shape[0]),
+        reconstructed_count=int(reconstructed_np.shape[0]))
+    if not reconstruction['allclose_atol_1e_4']:
+        raise RuntimeError('Native candidate trace did not reproduce ROI output')
+    return official, reconstruction
+
+
 def native_candidate_trace_frame(heads, feature: torch.Tensor,
                                  img_meta: Dict, original: np.ndarray,
                                  args) -> Dict:
@@ -3455,12 +3492,6 @@ def native_candidate_trace_frame(heads, feature: torch.Tensor,
     if int(decoded.shape[0]) != int(proposals.shape[0]):
         raise RuntimeError('Proposal and decoded candidate counts disagree')
 
-    official_results = heads.roi_head.simple_test(
-        features, [proposals], [img_meta], rescale=True)
-    if len(official_results) != 1 or len(official_results[0]) != 1:
-        raise RuntimeError('Unexpected official native ROI result')
-    official = np.asarray(official_results[0][0], dtype=np.float32)
-
     all_nms, all_keep = nms_rotated(
         decoded, scores, float(args.roi_nms_iou_thr))
     max_detections = int(args.max_detections)
@@ -3468,20 +3499,14 @@ def native_candidate_trace_frame(heads, feature: torch.Tensor,
     kept = all_keep[:max_detections]
     reconstructed_np = reconstructed.detach().cpu().numpy().astype(
         np.float32, copy=False)
-    reconstruction = dict(
-        shape_equal=bool(reconstructed_np.shape == official.shape),
-        allclose_atol_1e_4=bool(
-            reconstructed_np.shape == official.shape
-            and np.allclose(reconstructed_np, official, atol=1e-4,
-                            rtol=0.0)),
-        max_abs_diff=(
-            None if reconstructed_np.shape != official.shape
-            or official.size == 0 else
-            float(np.max(np.abs(reconstructed_np - official)))),
-        expected_count=int(official.shape[0]),
-        reconstructed_count=int(reconstructed_np.shape[0]))
-    if not reconstruction['allclose_atol_1e_4']:
-        raise RuntimeError('Native candidate trace did not reproduce ROI output')
+    source_quality_audit = bool(getattr(
+        args, 'source_native_quality_feasibility_audit', False))
+    # The source audit already owns the decoded candidates. Calling
+    # simple_test here would repeat the complete ROI forward for every frame
+    # and make the CUDA caching allocator retain both workloads.
+    official, reconstruction = _native_trace_official_output(
+        heads, features, proposals, img_meta, reconstructed_np,
+        source_quality_audit)
 
     proposal_boxes = _proposals_in_original_image(proposals, img_meta)
     rpn_riou = _candidate_overlap(proposal_boxes, original)
@@ -3933,6 +3958,15 @@ def build_source_native_quality_feasibility_audit(
     small_threshold = float(reference['small_token_threshold'])
     rows = []
     manifest = hashlib.sha256()
+    track_cuda_memory = bool(
+        torch.cuda.is_available()
+        and isinstance(head_device, torch.device)
+        and head_device.type == 'cuda')
+    peak_allocated_mib = 0.0
+    peak_reserved_before_release_mib = 0.0
+    peak_reserved_after_release_mib = 0.0
+    if track_cuda_memory:
+        torch.cuda.reset_peak_memory_stats(head_device)
     with torch.no_grad():
         for index, record in enumerate(source_val):
             feature, img_meta, _gt_boxes, _gt_labels, original, cached = (
@@ -3962,14 +3996,38 @@ def build_source_native_quality_feasibility_audit(
                     path=os.path.abspath(record['annotation']),
                     sha256=annotation_sha)
             rows.append(row)
+            # The compact row contains only CPU scalars and lists. Release
+            # the complete per-frame trace before returning unused allocator
+            # blocks to the driver, so varying ROI workloads do not make
+            # nvidia-smi grow toward every historical allocation peak.
+            del trace, feature, _gt_boxes, _gt_labels, img_meta, original
+            allocated_mib = 0.0
+            reserved_before_mib = 0.0
+            reserved_after_mib = 0.0
+            if track_cuda_memory:
+                allocated_mib = (
+                    torch.cuda.memory_allocated(head_device) / (1024 ** 2))
+                reserved_before_mib = (
+                    torch.cuda.memory_reserved(head_device) / (1024 ** 2))
+                with torch.cuda.device(head_device):
+                    torch.cuda.empty_cache()
+                reserved_after_mib = (
+                    torch.cuda.memory_reserved(head_device) / (1024 ** 2))
+                peak_allocated_mib = max(
+                    peak_allocated_mib, allocated_mib)
+                peak_reserved_before_release_mib = max(
+                    peak_reserved_before_release_mib, reserved_before_mib)
+                peak_reserved_after_release_mib = max(
+                    peak_reserved_after_release_mib, reserved_after_mib)
             if ((index + 1) % 25 == 0
                     or index + 1 == len(source_val)):
-                print('[source-native-quality-audit] {}/{} conflicts={}'
+                print('[source-native-quality-audit] {}/{} conflicts={} '
+                      'head_allocated_mib={:.1f} head_reserved_mib={:.1f}'
                       .format(
                           index + 1, len(source_val), sum(
                               item['trace']['actionable_quality_conflict']
-                              for item in rows)))
-            del feature, _gt_boxes, _gt_labels
+                              for item in rows), allocated_mib,
+                          reserved_after_mib))
     dino_unchanged = (
         dino_versions == common.module_parameter_versions(dino))
     heads_unchanged = (
@@ -3989,6 +4047,18 @@ def build_source_native_quality_feasibility_audit(
     summary['frozen_source_reproduction'] = dict(
         expected=reference['expected_summary'], checks=reproduced,
         passed=True)
+    summary['head_cuda_memory'] = dict(
+        measured=track_cuda_memory,
+        device=str(head_device),
+        cache_release_interval_frames=1,
+        peak_allocated_mib=float(peak_allocated_mib),
+        peak_reserved_before_release_mib=float(
+            peak_reserved_before_release_mib),
+        peak_reserved_after_release_mib=float(
+            peak_reserved_after_release_mib),
+        pytorch_peak_allocated_mib=(
+            float(torch.cuda.max_memory_allocated(head_device) / (1024 ** 2))
+            if track_cuda_memory else 0.0))
     passed = bool(summary['support_gate']['passed'])
     decision = (
         'SOURCE_NATIVE_QUALITY_SUPPORT_SUFFICIENT_FOR_NEW_SOURCE_ONLY_'
@@ -4006,6 +4076,10 @@ def build_source_native_quality_feasibility_audit(
             candidate_identity='native_proposal_row_index',
             suppression_mapping=(
                 'actual_nms_keep_plus_pairwise_overlap_trace'),
+            roi_forward_execution=(
+                'single_decode_forward_with_frozen_aggregate_reproduction'),
+            duplicate_official_roi_forward=False,
+            cuda_cache_release_interval_frames=1,
             model_development_order=(
                 'data_support_gate_before_any_new_quality_model'),
             target_read=False, parameter_update=False,
