@@ -613,6 +613,20 @@ def parse_args():
         '--source-val-results-out',
         help='Optional one-class result pickle for read-only source probes.')
     parser.add_argument(
+        '--native-candidate-trace-audit', action='store_true',
+        help=('Trace decoded native-S14 candidates through rotated NMS and '
+              'the valid-content filter. This is a read-only diagnostic of '
+              'frames selected by an existing failure-attribution report.'))
+    parser.add_argument(
+        '--native-candidate-trace-attribution-json',
+        help=('Frozen-DINO failure-attribution V1 report that locks the '
+              'checkpoint identity and review frame list.'))
+    parser.add_argument(
+        '--native-candidate-trace-groups', nargs='+',
+        default=['seq03_small'],
+        help=('Failure-attribution groups to trace. The default restricts '
+              'the diagnostic to the exposed small-target slice.'))
+    parser.add_argument(
         '--skip-target-eval', action='store_true',
         help='Train/select on source only; run target evaluation separately.')
     parser.add_argument('--seed', type=int, default=0)
@@ -620,9 +634,56 @@ def parse_args():
     return parser.parse_args()
 
 
+def validate_native_candidate_trace_args(args):
+    if not args.eval_only_checkpoint:
+        raise ValueError(
+            'Native candidate trace requires --eval-only-checkpoint')
+    if not args.native_candidate_trace_attribution_json:
+        raise ValueError(
+            'Native candidate trace requires its attribution JSON')
+    if bool(getattr(args, 's7_residual', False)):
+        raise ValueError('Native candidate trace requires S7 disabled')
+    if bool(getattr(args, 'skip_target_eval', False)):
+        raise ValueError(
+            'Native candidate trace reads exposed diagnosis frames')
+    groups = list(getattr(
+        args, 'native_candidate_trace_groups', []) or [])
+    if not groups or len(groups) != len(set(groups)):
+        raise ValueError(
+            'Native candidate trace groups must be non-empty and unique')
+    locked = dict(
+        patch_size=(int(args.patch_size), 14),
+        dino_height=(int(args.dino_height), 600),
+        dino_max_long_side=(int(args.dino_max_long_side), 1333),
+        proposal_count=(int(args.proposal_count), 2000),
+        max_detections=(int(args.max_detections), 2000))
+    mismatched = [name for name, (actual, expected) in locked.items()
+                  if actual != expected]
+    if mismatched:
+        raise ValueError(
+            'Native candidate trace baseline mismatch: {}'.format(
+                ', '.join(mismatched)))
+    if not math.isclose(
+            float(args.roi_nms_iou_thr), 0.5,
+            rel_tol=0.0, abs_tol=1e-12):
+        raise ValueError('Native candidate trace locks ROI NMS IoU to 0.5')
+    if not math.isclose(
+            float(args.riou_thr), 0.5,
+            rel_tol=0.0, abs_tol=1e-12):
+        raise ValueError('Native candidate trace locks RIoU to 0.5')
+    if getattr(args, 'feature_strides', None) not in (None, [14]):
+        raise ValueError('Native candidate trace requires native stride 14')
+    if os.path.exists(args.out_json):
+        raise ValueError(
+            'Refusing to overwrite candidate trace: {}'.format(
+                args.out_json))
+
+
 def validate_args(args):
     if args.seed != 0:
         raise ValueError('The protocol requires --seed 0')
+    if bool(getattr(args, 'native_candidate_trace_audit', False)):
+        validate_native_candidate_trace_args(args)
     if args.source_val_modulus < 2:
         raise ValueError('--source-val-modulus must be at least 2')
     if bool(args.source_train_datasets) != bool(args.source_val_datasets):
@@ -3203,6 +3264,415 @@ def assert_training_target_isolation(source_records: Sequence[Dict],
         raise RuntimeError(
             'Target-dev image leaked into source training: {}'.format(
                 overlap[0]))
+
+
+def load_native_candidate_trace_spec(path: str, args) -> Dict:
+    """Load the immutable small-target frame list for a read-only trace."""
+    with open(path, 'r', encoding='utf-8') as handle:
+        payload = json.load(handle)
+    if payload.get('protocol') != (
+            'frozen_dino_native_s14_failure_attribution_v1'):
+        raise RuntimeError('Unexpected failure-attribution protocol')
+    boundary = payload.get('evidence_boundary') or {}
+    if (not bool(boundary.get('target_slices_are_exposed'))
+            or bool(boundary.get('target_results_authorize_tuning'))):
+        raise RuntimeError('Failure-attribution evidence boundary is invalid')
+    identity = payload.get('model_identity') or {}
+    if bool(identity.get('s7_enabled')):
+        raise RuntimeError('Failure attribution is not a native-S14 report')
+    checkpoint_sha = common.file_sha256(args.eval_only_checkpoint)
+    if identity.get('dino_head_checkpoint_sha256') != checkpoint_sha:
+        raise RuntimeError('DINO head checkpoint identity mismatch')
+    dino_sha = common.file_sha256(args.dinov2_checkpoint)
+    if identity.get('frozen_dinov2_checkpoint_sha256') != dino_sha:
+        raise RuntimeError('DINOv2 checkpoint identity mismatch')
+    groups = set(args.native_candidate_trace_groups)
+    known_groups = {
+        str(row.get('group')) for row in payload.get('records', [])}
+    unknown = sorted(groups - known_groups)
+    if unknown:
+        raise RuntimeError(
+            'Unknown failure-attribution group: {}'.format(unknown[0]))
+    selected = [
+        row for row in payload.get('records', [])
+        if (str(row.get('group')) in groups
+            and bool(row.get('review_required')))]
+    if not selected:
+        raise RuntimeError('No review-required frames selected for tracing')
+    keys = [
+        (str(row['split']), str(row['sequence']), int(row['frame']))
+        for row in selected]
+    if len(keys) != len(set(keys)):
+        raise RuntimeError('Failure-attribution frame list has duplicates')
+    diag = common.entry_probe.get_diag()
+    records = []
+    selected_by_key = {key: row for key, row in zip(keys, selected)}
+    for split, seq, frame in sorted(keys):
+        image, annotation = diag.find_files(
+            args.data_root, split, seq, frame)
+        if image is None or annotation is None:
+            raise RuntimeError(
+                'Missing trace frame {}|{}|{}'.format(split, seq, frame))
+        records.append(dict(
+            split=split, seq=seq, frame=frame,
+            image=image, annotation=annotation,
+            attribution=selected_by_key[(split, seq, frame)]))
+    return dict(
+        path=os.path.abspath(path), sha256=common.file_sha256(path),
+        groups=sorted(groups), checkpoint_sha256=checkpoint_sha,
+        dinov2_checkpoint_sha256=dino_sha, records=records)
+
+
+def _candidate_overlap(boxes: torch.Tensor,
+                       gt_original: np.ndarray) -> torch.Tensor:
+    if int(boxes.shape[0]) == 0:
+        return boxes.new_zeros((0,))
+    if int(gt_original.shape[0]) == 0:
+        return boxes.new_zeros((int(boxes.shape[0]),))
+    from mmcv.ops import box_iou_rotated
+
+    gt = torch.as_tensor(
+        gt_original[:, :5], dtype=boxes.dtype, device=boxes.device)
+    return box_iou_rotated(boxes[:, :5], gt).max(dim=1).values
+
+
+def _proposals_in_original_image(proposals: torch.Tensor,
+                                 img_meta: Dict) -> torch.Tensor:
+    boxes = proposals[:, :5].clone()
+    scale = torch.as_tensor(
+        img_meta['scale_factor'][:4], dtype=boxes.dtype,
+        device=boxes.device).reshape(1, 4)
+    boxes[:, :4] = boxes[:, :4] / scale
+    return boxes
+
+
+def _nms_suppressor_indices(boxes: torch.Tensor, scores: torch.Tensor,
+                            keep: torch.Tensor, nms_iou_thr: float) -> Dict:
+    """Infer the kept candidate responsible for each actual NMS removal."""
+    if int(boxes.shape[0]) == 0 or int(keep.numel()) == 0:
+        return {}
+    from mmcv.ops import box_iou_rotated
+
+    kept_boxes = boxes[keep]
+    overlaps = box_iou_rotated(boxes, kept_boxes)
+    keep_set = {int(value) for value in keep.detach().cpu().tolist()}
+    suppressors = {}
+    for candidate in range(int(boxes.shape[0])):
+        if candidate in keep_set:
+            continue
+        eligible = []
+        for kept_rank, kept_index in enumerate(
+                keep.detach().cpu().tolist()):
+            overlap = float(overlaps[candidate, kept_rank].item())
+            if (overlap > float(nms_iou_thr)
+                    and float(scores[int(kept_index)].item())
+                    >= float(scores[candidate].item())):
+                eligible.append((kept_rank, int(kept_index), overlap))
+        if eligible:
+            kept_rank, kept_index, overlap = min(eligible)
+            suppressors[candidate] = dict(
+                candidate_id=kept_index,
+                post_nms_rank=int(kept_rank + 1),
+                rotated_iou=float(overlap))
+    return suppressors
+
+
+def native_candidate_trace_frame(heads, feature: torch.Tensor,
+                                 img_meta: Dict, original: np.ndarray,
+                                 args) -> Dict:
+    """Trace native candidates while reproducing the formal ROI output."""
+    if heads.s7_enabled or heads.s7_inference_enabled():
+        raise RuntimeError('Native candidate trace cannot run with S7')
+    from mmcv.ops import nms_rotated
+
+    features, sources = heads.proposal_sources(feature, img_meta)
+    if set(sources) != {'native_s14'}:
+        raise RuntimeError('Native trace received a non-native proposal lane')
+    proposals = sources['native_s14']
+    decoded, _logits, scores, _embedding = heads._decode_roi_candidates(
+        feature, img_meta, proposals, rescale=True)
+    if int(decoded.shape[0]) != int(proposals.shape[0]):
+        raise RuntimeError('Proposal and decoded candidate counts disagree')
+
+    official_results = heads.roi_head.simple_test(
+        features, [proposals], [img_meta], rescale=True)
+    if len(official_results) != 1 or len(official_results[0]) != 1:
+        raise RuntimeError('Unexpected official native ROI result')
+    official = np.asarray(official_results[0][0], dtype=np.float32)
+
+    all_nms, all_keep = nms_rotated(
+        decoded, scores, float(args.roi_nms_iou_thr))
+    max_detections = int(args.max_detections)
+    reconstructed = all_nms[:max_detections]
+    kept = all_keep[:max_detections]
+    reconstructed_np = reconstructed.detach().cpu().numpy().astype(
+        np.float32, copy=False)
+    reconstruction = dict(
+        shape_equal=bool(reconstructed_np.shape == official.shape),
+        allclose_atol_1e_4=bool(
+            reconstructed_np.shape == official.shape
+            and np.allclose(reconstructed_np, official, atol=1e-4,
+                            rtol=0.0)),
+        max_abs_diff=(
+            None if reconstructed_np.shape != official.shape
+            or official.size == 0 else
+            float(np.max(np.abs(reconstructed_np - official)))),
+        expected_count=int(official.shape[0]),
+        reconstructed_count=int(reconstructed_np.shape[0]))
+    if not reconstruction['allclose_atol_1e_4']:
+        raise RuntimeError('Native candidate trace did not reproduce ROI output')
+
+    proposal_boxes = _proposals_in_original_image(proposals, img_meta)
+    rpn_riou = _candidate_overlap(proposal_boxes, original)
+    decoded_riou = _candidate_overlap(decoded, original)
+    nms_iou_thr = float(args.roi_nms_iou_thr)
+    suppressors = _nms_suppressor_indices(
+        decoded, scores, all_keep, nms_iou_thr)
+    all_keep_list = [int(value) for value in all_keep.detach().cpu().tolist()]
+    kept_list = [int(value) for value in kept.detach().cpu().tolist()]
+    all_keep_rank = {candidate: rank + 1
+                     for rank, candidate in enumerate(all_keep_list)}
+    kept_rank = {candidate: rank + 1
+                 for rank, candidate in enumerate(kept_list)}
+    valid_mask = valid_rotated_detection_mask(
+        reconstructed_np, img_meta, args.valid_content_tolerance)
+    valid_rank = {}
+    next_rank = 1
+    for post_rank, candidate in enumerate(kept_list):
+        if bool(valid_mask[post_rank]):
+            valid_rank[candidate] = next_rank
+            next_rank += 1
+
+    proposal_scores = proposals[:, 5] if int(proposals.shape[1]) > 5 else None
+    candidate_rows = []
+    for candidate in range(int(decoded.shape[0])):
+        if candidate in kept_rank:
+            disposition = ('POST_VALID_CONTENT'
+                           if candidate in valid_rank
+                           else 'VALID_CONTENT_FILTERED')
+        elif candidate in all_keep_rank:
+            disposition = 'MAX_DETECTIONS_TRUNCATED'
+        else:
+            disposition = 'NMS_SUPPRESSED'
+        suppressor = suppressors.get(candidate)
+        candidate_rows.append(dict(
+            candidate_id=int(candidate),
+            proposal_obb=[float(x) for x in
+                          proposal_boxes[candidate].detach().cpu().tolist()],
+            proposal_score=(None if proposal_scores is None else float(
+                proposal_scores[candidate].item())),
+            proposal_gt_riou=float(rpn_riou[candidate].item()),
+            decoded_obb=[float(x) for x in
+                         decoded[candidate].detach().cpu().tolist()],
+            foreground_score=float(scores[candidate].item()),
+            decoded_gt_riou=float(decoded_riou[candidate].item()),
+            decoded_score_rank=None,
+            disposition=disposition,
+            post_nms_rank=kept_rank.get(candidate),
+            post_valid_rank=valid_rank.get(candidate),
+            suppressor=suppressor))
+    score_order = sorted(
+        range(len(candidate_rows)),
+        key=lambda index: (-candidate_rows[index]['foreground_score'], index))
+    for rank, candidate in enumerate(score_order, start=1):
+        candidate_rows[candidate]['decoded_score_rank'] = int(rank)
+
+    threshold = float(args.riou_thr)
+    usable_decoded = [
+        row for row in candidate_rows
+        if row['decoded_gt_riou'] >= threshold]
+    usable_post_nms = [
+        row for row in usable_decoded if row['post_nms_rank'] is not None]
+    usable_post_valid = [
+        row for row in usable_decoded if row['post_valid_rank'] is not None]
+    suppressed_usable = [
+        row for row in usable_decoded
+        if row['disposition'] == 'NMS_SUPPRESSED']
+    by_id = {row['candidate_id']: row for row in candidate_rows}
+    wrong_suppressor_count = sum(
+        row['suppressor'] is not None
+        and by_id[row['suppressor']['candidate_id']]['decoded_gt_riou']
+        < threshold
+        for row in suppressed_usable)
+    best_decoded = max(
+        candidate_rows, key=lambda row: row['decoded_gt_riou'])
+    official_metrics = ranked_detection_metrics(
+        official, original, threshold, args.deployment_score_thr)
+    filtered, filter_stats = filter_valid_rotated_detections(
+        official, img_meta, args.valid_content_tolerance)
+    final_metrics = ranked_detection_metrics(
+        filtered, original, threshold, args.deployment_score_thr)
+    best_rpn_riou = (0.0 if not candidate_rows else float(max(
+        row['proposal_gt_riou'] for row in candidate_rows)))
+    if not usable_decoded:
+        resolved_stage = (
+            'ROI_REGRESSION'
+            if best_rpn_riou >= threshold else 'CANDIDATE_GENERATION')
+    elif not usable_post_nms:
+        resolved_stage = (
+            'NMS_SUPPRESSION'
+            if suppressed_usable else 'SCORE_OR_MAX_DETECTIONS_FILTER')
+    elif not usable_post_valid:
+        resolved_stage = 'VALID_CONTENT_FILTER'
+    else:
+        resolved_stage = 'USABLE_CANDIDATE_SURVIVES'
+    return dict(
+        thresholds=dict(
+            riou=threshold, roi_score=0.0,
+            roi_nms_iou=nms_iou_thr,
+            max_detections=max_detections,
+            valid_content_tolerance=float(args.valid_content_tolerance)),
+        counts=dict(
+            proposals=int(proposals.shape[0]),
+            decoded=int(decoded.shape[0]),
+            nms_survivors_before_limit=int(all_keep.numel()),
+            post_nms=int(reconstructed_np.shape[0]),
+            post_valid=int(filtered.shape[0]),
+            decoded_usable=int(len(usable_decoded)),
+            post_nms_usable=int(len(usable_post_nms)),
+            post_valid_usable=int(len(usable_post_valid)),
+            nms_suppressed_usable=int(len(suppressed_usable)),
+            nms_suppressed_usable_by_wrong_candidate=int(
+                wrong_suppressor_count)),
+        gt_obbs=[[float(value) for value in box[:5]]
+                 for box in np.asarray(original).tolist()],
+        resolved_failure_stage=resolved_stage,
+        best_rpn_riou=best_rpn_riou,
+        best_decoded_candidate_id=int(best_decoded['candidate_id']),
+        best_decoded_riou=float(best_decoded['decoded_gt_riou']),
+        best_decoded_disposition=str(best_decoded['disposition']),
+        official_post_nms_metrics=official_metrics,
+        final_post_valid_metrics=final_metrics,
+        valid_content_filter=filter_stats,
+        reconstruction=reconstruction,
+        candidates=candidate_rows)
+
+
+def summarize_native_candidate_trace(rows: Sequence[Dict]) -> Dict:
+    stages = collections.Counter(
+        row['trace']['resolved_failure_stage'] for row in rows)
+    return dict(
+        frame_count=int(len(rows)),
+        reconstruction_pass_count=int(sum(
+            row['trace']['reconstruction']['allclose_atol_1e_4']
+            for row in rows)),
+        decoded_usable_frame_count=int(sum(
+            row['trace']['counts']['decoded_usable'] > 0 for row in rows)),
+        post_nms_usable_frame_count=int(sum(
+            row['trace']['counts']['post_nms_usable'] > 0 for row in rows)),
+        post_valid_usable_frame_count=int(sum(
+            row['trace']['counts']['post_valid_usable'] > 0 for row in rows)),
+        nms_suppressed_usable_candidate_count=int(sum(
+            row['trace']['counts']['nms_suppressed_usable'] for row in rows)),
+        frames_with_usable_suppressed_by_wrong_candidate=int(sum(
+            row['trace']['counts'][
+                'nms_suppressed_usable_by_wrong_candidate'] > 0
+            for row in rows)),
+        resolved_failure_stage_counts=dict(sorted(stages.items())),
+        attributed_roi_regression_count=int(sum(
+            row['attribution']['attribution'] == 'ROI_REGRESSION'
+            for row in rows)),
+        attributed_roi_ordering_or_nms_count=int(sum(
+            row['attribution']['attribution'] == 'ROI_ORDERING_OR_NMS'
+            for row in rows)))
+
+
+def validate_native_trace_reproduction(
+        trace: Dict, attribution: Dict, tolerance: float = 1e-4):
+    if bool(trace['final_post_valid_metrics']['top1_hit']):
+        raise RuntimeError(
+            'Candidate trace did not reproduce the selected final failure')
+    comparisons = (
+        ('rpn_best_riou', trace['best_rpn_riou']),
+        ('decoded_best_riou', trace['best_decoded_riou']))
+    for field, actual in comparisons:
+        expected = float(attribution[field])
+        if abs(float(actual) - expected) > float(tolerance):
+            raise RuntimeError(
+                'Candidate trace did not reproduce {}: expected {} found {}'
+                .format(field, expected, actual))
+    expected_stage = str(attribution['attribution'])
+    actual_stage = str(trace['resolved_failure_stage'])
+    allowed = {
+        'ROI_REGRESSION': {'ROI_REGRESSION'},
+        'ROI_ORDERING_OR_NMS': {
+            'NMS_SUPPRESSION', 'SCORE_OR_MAX_DETECTIONS_FILTER'},
+    }
+    if actual_stage not in allowed.get(expected_stage, set()):
+        raise RuntimeError(
+            'Candidate trace stage disagrees with attribution: {} -> {}'
+            .format(expected_stage, actual_stage))
+
+
+def build_native_candidate_trace_audit(
+        dino, heads, spec: Dict, args, dino_device, head_device) -> Dict:
+    heads.eval()
+    dino_versions = common.module_parameter_versions(dino)
+    head_versions = common.module_parameter_versions(heads)
+    rows = []
+    with torch.no_grad():
+        for index, record in enumerate(spec['records']):
+            feature, img_meta, _gt_boxes, _gt_labels, original, cached = (
+                prepare_record(dino, record, args, dino_device, head_device))
+            trace = native_candidate_trace_frame(
+                heads, feature, img_meta, original, args)
+            validate_native_trace_reproduction(
+                trace, record['attribution'])
+            rows.append(dict(
+                role='exposed_target_diagnosis_only',
+                split=record['split'], seq=record['seq'],
+                frame=int(record['frame']),
+                image=dict(
+                    path=os.path.abspath(record['image']),
+                    sha256=common.file_sha256(record['image'])),
+                annotation=dict(
+                    path=os.path.abspath(record['annotation']),
+                    sha256=common.file_sha256(record['annotation'])),
+                feature_cache_hit=bool(cached),
+                attribution=record['attribution'], trace=trace))
+            print('[native-candidate-trace] {}/{} seq={} frame={} '
+                  'decoded_usable={} post_nms_usable={}'.format(
+                      index + 1, len(spec['records']), record['seq'],
+                      record['frame'], trace['counts']['decoded_usable'],
+                      trace['counts']['post_nms_usable']))
+            del feature, _gt_boxes, _gt_labels
+    dino_unchanged = (
+        dino_versions == common.module_parameter_versions(dino))
+    heads_unchanged = (
+        head_versions == common.module_parameter_versions(heads))
+    if not dino_unchanged or not heads_unchanged:
+        raise RuntimeError('Native candidate trace changed frozen parameters')
+    return dict(
+        audit='Frozen DINO Native-S14 Candidate Trace Audit V1',
+        protocol_version=1,
+        protocol=dict(
+            operation='read_only_candidate_trace',
+            groups=spec['groups'],
+            frame_selection='review_required_from_failure_attribution_v1',
+            target_role='exposed_target_diagnosis_only',
+            target_authorizes_training=False,
+            target_authorizes_checkpoint_selection=False,
+            target_authorizes_threshold_tuning=False,
+            candidate_identity='native_proposal_row_index',
+            suppression_mapping='actual_nms_keep_plus_pairwise_overlap_trace'),
+        isolation=dict(
+            dino_frozen=True, dino_parameters_unchanged=dino_unchanged,
+            detector_parameters_unchanged=heads_unchanged,
+            parameter_updates_performed=False, checkpoint_written=False,
+            target_used_for_training=False,
+            target_used_for_checkpoint_selection=False),
+        inputs=dict(
+            failure_attribution=dict(
+                path=spec['path'], sha256=spec['sha256']),
+            dino_head_checkpoint=dict(
+                path=os.path.abspath(args.eval_only_checkpoint),
+                sha256=spec['checkpoint_sha256']),
+            dinov2_checkpoint=dict(
+                path=os.path.abspath(args.dinov2_checkpoint),
+                sha256=spec['dinov2_checkpoint_sha256'])),
+        summary=summarize_native_candidate_trace(rows),
+        rows=rows,
+        decision='SMALL_TARGET_CANDIDATE_TRACE_COMPLETE_DIAGNOSIS_ONLY')
 
 
 def feature_strides(args) -> List[int]:
@@ -12484,7 +12954,15 @@ def main():
             mode=('highres_roi_ranker'
                   if args.train_components == 's7_highres_roi_ranker'
                   else 's7_merge'))
-    targets = [] if args.skip_target_eval else target_records(args)
+    native_trace_spec = (
+        load_native_candidate_trace_spec(
+            args.native_candidate_trace_attribution_json, args)
+        if bool(getattr(args, 'native_candidate_trace_audit', False))
+        else None)
+    targets = (
+        list(native_trace_spec['records'])
+        if native_trace_spec is not None else
+        [] if args.skip_target_eval else target_records(args))
     if targets:
         assert_training_target_isolation(
             list(source_train) + list(source_val), targets)
@@ -12504,6 +12982,28 @@ def main():
     heads = FrozenDinoRotatedHeads(in_channels, args).to(head_device)
     trainable_names = configure_trainable_components(
         heads, args.train_components)
+    if bool(getattr(args, 'native_candidate_trace_audit', False)):
+        spec = native_trace_spec
+        checkpoint_payload = torch.load(
+            args.eval_only_checkpoint, map_location='cpu')
+        validate_checkpoint(
+            checkpoint_payload, in_channels, args,
+            allow_training_mode_mismatch=True)
+        load_heads_checkpoint_state(heads, checkpoint_payload)
+        for parameter in heads.parameters():
+            parameter.requires_grad = False
+        result = build_native_candidate_trace_audit(
+            dino, heads, spec, args, dino_device, head_device)
+        replacements = common.write_json_atomic(args.out_json, result)
+        print('[dino-labeller] {}'.format(result['decision']))
+        print('[native-candidate-trace] frames={} suppressed_usable={}'
+              .format(
+                  result['summary']['frame_count'],
+                  result['summary'][
+                      'nms_suppressed_usable_candidate_count']))
+        print('[json] nonfinite_replacements={}'.format(replacements))
+        print('[out] {}'.format(args.out_json))
+        return
     if bool(getattr(args, 'source_highres_margin_audit', False)):
         spec = args.source_highres_margin_audit_spec
         checkpoint_payload = torch.load(
