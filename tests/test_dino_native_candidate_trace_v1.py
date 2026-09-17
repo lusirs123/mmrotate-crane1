@@ -202,3 +202,138 @@ def test_trace_reproduction_requires_same_metrics_and_failure_stage():
 
     trace['resolved_failure_stage'] = 'FINAL_ORDERING'
     labeller.validate_native_trace_reproduction(trace, attribution)
+
+
+def _source_audit_args(tmp_path, head, dino):
+    return SimpleNamespace(
+        eval_only_checkpoint=str(head), dinov2_checkpoint=str(dino),
+        source_native_quality_reference_json=str(tmp_path / 'reference.json'),
+        source_native_quality_feasibility_audit=True,
+        native_candidate_trace_audit=False,
+        skip_target_eval=True, s7_residual=False,
+        source_train_datasets=['train:train'],
+        source_val_datasets=['val:val'],
+        patch_size=14, dino_height=600, dino_max_long_side=1333,
+        proposal_count=2000, max_detections=2000,
+        roi_nms_iou_thr=0.5, riou_thr=0.5, feature_strides=None,
+        out_json=str(tmp_path / 'source_quality.json'))
+
+
+def test_source_quality_reference_locks_model_and_source_identity(tmp_path):
+    head = tmp_path / 'head.pth'
+    dino = tmp_path / 'dino.pth'
+    head.write_bytes(b'head')
+    dino.write_bytes(b'dino')
+    args = _source_audit_args(tmp_path, head, dino)
+    payload = dict(
+        selector='Frozen DINO ROI Classifier Source Interpolation Selector V1',
+        selected_checkpoint_sha256=_sha(head),
+        dinov2_checkpoint_sha256=_sha(dino), selected_alpha=0.5,
+        protocol=dict(
+            source_val_datasets=['val:val'],
+            source_small_definition=dict(
+                definition='source_train_short_token_lower_tertile',
+                short_token_threshold=1.67),
+            target_data_discovered=False, target_data_read=False,
+            target_used_for_selection=False),
+        isolation=dict(dino_frozen=True),
+        source=dict(candidates=[dict(
+            alpha=0.5,
+            source_full_summary=dict(frame_count=738, top1_hits=677),
+            source_small_summary=dict(frame_count=350, top1_hits=303))]))
+    reference = tmp_path / 'reference.json'
+    reference.write_text(json.dumps(payload))
+    labeller.validate_source_native_quality_feasibility_args(args)
+    spec = labeller.load_source_native_quality_reference(
+        str(reference), args)
+    assert spec['checkpoint_sha256'] == _sha(head)
+    assert spec['small_token_threshold'] == pytest.approx(1.67)
+    assert spec['expected_summary']['top1_hit_count'] == 677
+
+    payload['protocol']['source_val_datasets'] = ['other:other']
+    reference.write_text(json.dumps(payload))
+    with pytest.raises(RuntimeError, match='validation dataset identity'):
+        labeller.load_source_native_quality_reference(
+            str(reference), args)
+
+
+def test_source_quality_audit_requires_target_skip_and_refuses_overwrite(
+        tmp_path):
+    head = tmp_path / 'head.pth'
+    dino = tmp_path / 'dino.pth'
+    head.write_bytes(b'head')
+    dino.write_bytes(b'dino')
+    args = _source_audit_args(tmp_path, head, dino)
+    args.skip_target_eval = False
+    with pytest.raises(ValueError, match='requires --skip-target-eval'):
+        labeller.validate_source_native_quality_feasibility_args(args)
+    args.skip_target_eval = True
+    (tmp_path / 'source_quality.json').write_text('{}')
+    with pytest.raises(ValueError, match='Refusing to overwrite'):
+        labeller.validate_source_native_quality_feasibility_args(args)
+
+
+def _candidate(candidate_id, riou, score, disposition,
+               post_valid_rank=None, suppressor=None):
+    return dict(
+        candidate_id=candidate_id, decoded_gt_riou=riou,
+        foreground_score=score, disposition=disposition,
+        post_nms_rank=post_valid_rank, post_valid_rank=post_valid_rank,
+        suppressor=suppressor)
+
+
+def test_source_quality_compaction_records_wrong_nms_and_ordering_pairs():
+    nms_trace = dict(
+        candidates=[
+            _candidate(
+                0, 0.61, 0.40, 'NMS_SUPPRESSED',
+                suppressor=dict(candidate_id=1, rotated_iou=0.7)),
+            _candidate(1, 0.45, 0.90, 'POST_VALID_CONTENT', 1)],
+        resolved_failure_stage='NMS_SUPPRESSION', best_rpn_riou=0.55,
+        best_decoded_riou=0.61,
+        final_post_valid_metrics=dict(top1_hit=False),
+        counts=dict(post_nms_usable=0, post_valid_usable=0))
+    compact = labeller._native_quality_compact_row(nms_trace, 0.5)
+    assert compact['actionable_quality_conflict'] is True
+    assert compact['wrong_nms_pair_count'] == 1
+    assert compact['representative_wrong_nms_pairs'][0][
+        'suppressor_riou'] == pytest.approx(0.45)
+
+    ordering_trace = dict(
+        candidates=[
+            _candidate(0, 0.40, 0.90, 'POST_VALID_CONTENT', 1),
+            _candidate(1, 0.65, 0.20, 'POST_VALID_CONTENT', 2)],
+        resolved_failure_stage='FINAL_ORDERING', best_rpn_riou=0.6,
+        best_decoded_riou=0.65,
+        final_post_valid_metrics=dict(top1_hit=False),
+        counts=dict(post_nms_usable=1, post_valid_usable=1))
+    compact = labeller._native_quality_compact_row(ordering_trace, 0.5)
+    assert compact['ordering_pair_present'] is True
+    assert compact['final_ordering_pair']['usable_post_valid_rank'] == 2
+
+
+def test_source_quality_support_gate_stops_when_cross_sequence_data_missing():
+    def row(seq, conflict, pairs=0, small=True, hit=False):
+        return dict(
+            seq=seq, source_small=small,
+            trace=dict(
+                resolved_failure_stage=(
+                    'FINAL_ORDERING' if conflict else 'TOP1_SUCCESS'),
+                final_top1_hit=hit,
+                actionable_quality_conflict=conflict,
+                wrong_nms_pair_count=pairs,
+                ordering_pair_present=bool(conflict and pairs == 0)))
+
+    one_sequence = [row('seq_a', True, 2) for _ in range(20)]
+    summary = labeller.summarize_source_native_quality_support(one_sequence)
+    assert summary['support_gate']['passed'] is False
+    assert summary['support_gate']['checks'][
+        'minimum_cross_sequence_support'] is False
+
+    supported = (
+        [row('seq_a', True, 2) for _ in range(10)]
+        + [row('seq_b', True, 2) for _ in range(10)])
+    summary = labeller.summarize_source_native_quality_support(supported)
+    assert summary['source_small_actionable_conflict_frame_count'] == 20
+    assert summary['source_small_actionable_pair_count'] == 40
+    assert summary['support_gate']['passed'] is True

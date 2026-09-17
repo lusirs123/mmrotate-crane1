@@ -627,6 +627,18 @@ def parse_args():
         help=('Failure-attribution groups to trace. The default restricts '
               'the diagnostic to the exposed small-target slice.'))
     parser.add_argument(
+        '--source-native-quality-feasibility-audit', action='store_true',
+        help=(
+            'Read-only native-S14 candidate-quality support audit on the '
+            'formal source validation split. It never reads target data, '
+            'trains a model, changes thresholds, or writes a checkpoint.'))
+    parser.add_argument(
+        '--source-native-quality-reference-json',
+        help=(
+            'Frozen ROI classifier source-interpolation result used to bind '
+            'the selected head, DINO checkpoint, source validation split, '
+            'and source-small definition.'))
+    parser.add_argument(
         '--skip-target-eval', action='store_true',
         help='Train/select on source only; run target evaluation separately.')
     parser.add_argument('--seed', type=int, default=0)
@@ -679,11 +691,60 @@ def validate_native_candidate_trace_args(args):
                 args.out_json))
 
 
+def validate_source_native_quality_feasibility_args(args):
+    """Lock the source-only feasibility audit to the deployed native head."""
+    if not args.eval_only_checkpoint:
+        raise ValueError(
+            'Source native quality audit requires --eval-only-checkpoint')
+    if not args.source_native_quality_reference_json:
+        raise ValueError(
+            'Source native quality audit requires its reference JSON')
+    if not bool(getattr(args, 'skip_target_eval', False)):
+        raise ValueError(
+            'Source native quality audit requires --skip-target-eval')
+    if bool(getattr(args, 's7_residual', False)):
+        raise ValueError('Source native quality audit requires S7 disabled')
+    if bool(getattr(args, 'native_candidate_trace_audit', False)):
+        raise ValueError('Source and target candidate audits are exclusive')
+    if not args.source_train_datasets or not args.source_val_datasets:
+        raise ValueError(
+            'Source native quality audit requires formal source datasets')
+    locked = dict(
+        patch_size=(int(args.patch_size), 14),
+        dino_height=(int(args.dino_height), 600),
+        dino_max_long_side=(int(args.dino_max_long_side), 1333),
+        proposal_count=(int(args.proposal_count), 2000),
+        max_detections=(int(args.max_detections), 2000))
+    mismatched = [name for name, (actual, expected) in locked.items()
+                  if actual != expected]
+    if mismatched:
+        raise ValueError(
+            'Source native quality baseline mismatch: {}'.format(
+                ', '.join(mismatched)))
+    if not math.isclose(
+            float(args.roi_nms_iou_thr), 0.5,
+            rel_tol=0.0, abs_tol=1e-12):
+        raise ValueError('Source native quality audit locks ROI NMS IoU to 0.5')
+    if not math.isclose(
+            float(args.riou_thr), 0.5,
+            rel_tol=0.0, abs_tol=1e-12):
+        raise ValueError('Source native quality audit locks RIoU to 0.5')
+    if getattr(args, 'feature_strides', None) not in (None, [14]):
+        raise ValueError('Source native quality audit requires native stride 14')
+    if os.path.exists(args.out_json):
+        raise ValueError(
+            'Refusing to overwrite source quality audit: {}'.format(
+                args.out_json))
+
+
 def validate_args(args):
     if args.seed != 0:
         raise ValueError('The protocol requires --seed 0')
     if bool(getattr(args, 'native_candidate_trace_audit', False)):
         validate_native_candidate_trace_args(args)
+    if bool(getattr(
+            args, 'source_native_quality_feasibility_audit', False)):
+        validate_source_native_quality_feasibility_args(args)
     if args.source_val_modulus < 2:
         raise ValueError('--source-val-modulus must be at least 2')
     if bool(args.source_train_datasets) != bool(args.source_val_datasets):
@@ -3676,6 +3737,302 @@ def build_native_candidate_trace_audit(
         summary=summarize_native_candidate_trace(rows),
         rows=rows,
         decision='SMALL_TARGET_CANDIDATE_TRACE_COMPLETE_DIAGNOSIS_ONLY')
+
+
+def load_source_native_quality_reference(path: str, args) -> Dict:
+    """Bind a source-only audit to the selected native-S14 checkpoint."""
+    with open(path, 'r', encoding='utf-8') as handle:
+        payload = json.load(handle)
+    if payload.get('selector') != (
+            'Frozen DINO ROI Classifier Source Interpolation Selector V1'):
+        raise RuntimeError('Unexpected source interpolation reference')
+    protocol = payload.get('protocol') or {}
+    isolation = payload.get('isolation') or {}
+    if (bool(protocol.get('target_data_discovered'))
+            or bool(protocol.get('target_data_read'))
+            or bool(protocol.get('target_used_for_selection'))):
+        raise RuntimeError('Source interpolation reference read target data')
+    if not bool(isolation.get('dino_frozen')):
+        raise RuntimeError('Source interpolation reference did not freeze DINO')
+    selected_sha = common.file_sha256(args.eval_only_checkpoint)
+    if payload.get('selected_checkpoint_sha256') != selected_sha:
+        raise RuntimeError('Source-selected head checkpoint identity mismatch')
+    dino_sha = common.file_sha256(args.dinov2_checkpoint)
+    if payload.get('dinov2_checkpoint_sha256') != dino_sha:
+        raise RuntimeError('Source-selected DINO checkpoint identity mismatch')
+    expected_val = list(protocol.get('source_val_datasets') or [])
+    actual_val = list(args.source_val_datasets or [])
+    if expected_val != actual_val:
+        raise RuntimeError('Source validation dataset identity mismatch')
+    small = protocol.get('source_small_definition') or {}
+    if small.get('definition') != 'source_train_short_token_lower_tertile':
+        raise RuntimeError('Unexpected source-small definition')
+    threshold = small.get('short_token_threshold')
+    if threshold is None or not math.isfinite(float(threshold)):
+        raise RuntimeError('Source-small threshold is missing or non-finite')
+    selected_alpha = payload.get('selected_alpha')
+    if not math.isclose(
+            float(selected_alpha), 0.5, rel_tol=0.0, abs_tol=1e-12):
+        raise RuntimeError('Source interpolation alpha is not the frozen 0.5')
+    selected_rows = [
+        row for row in (payload.get('source') or {}).get('candidates', [])
+        if math.isclose(
+            float(row.get('alpha', float('nan'))), float(selected_alpha),
+            rel_tol=0.0, abs_tol=1e-12)]
+    if len(selected_rows) != 1:
+        raise RuntimeError('Selected source interpolation summary is missing')
+    selected_source = selected_rows[0]
+    full_summary = selected_source.get('source_full_summary') or {}
+    small_summary = selected_source.get('source_small_summary') or {}
+    expected_summary = dict(
+        frame_count=int(full_summary['frame_count']),
+        top1_hit_count=int(full_summary['top1_hits']),
+        source_small_frame_count=int(small_summary['frame_count']),
+        source_small_top1_hit_count=int(small_summary['top1_hits']))
+    return dict(
+        path=os.path.abspath(path), sha256=common.file_sha256(path),
+        checkpoint_sha256=selected_sha,
+        dinov2_checkpoint_sha256=dino_sha,
+        selected_alpha=float(selected_alpha),
+        source_val_datasets=actual_val,
+        source_small_definition=small,
+        small_token_threshold=float(threshold),
+        expected_summary=expected_summary)
+
+
+def _native_quality_compact_row(trace: Dict, threshold: float) -> Dict:
+    """Keep only evidence needed to decide whether source supports a model."""
+    candidates = trace['candidates']
+    by_id = {row['candidate_id']: row for row in candidates}
+    usable = [
+        row for row in candidates
+        if float(row['decoded_gt_riou']) >= float(threshold)]
+    valid = sorted(
+        (row for row in candidates if row['post_valid_rank'] is not None),
+        key=lambda row: int(row['post_valid_rank']))
+    valid_usable = [
+        row for row in valid
+        if float(row['decoded_gt_riou']) >= float(threshold)]
+    top = valid[0] if valid else None
+    best_valid_usable = valid_usable[0] if valid_usable else None
+    nms_pairs = []
+    for row in usable:
+        suppressor_spec = row.get('suppressor')
+        if row.get('disposition') != 'NMS_SUPPRESSED' or not suppressor_spec:
+            continue
+        suppressor = by_id[int(suppressor_spec['candidate_id'])]
+        if float(suppressor['decoded_gt_riou']) >= float(threshold):
+            continue
+        nms_pairs.append(dict(
+            usable_candidate_id=int(row['candidate_id']),
+            usable_riou=float(row['decoded_gt_riou']),
+            usable_score=float(row['foreground_score']),
+            suppressor_candidate_id=int(suppressor['candidate_id']),
+            suppressor_riou=float(suppressor['decoded_gt_riou']),
+            suppressor_score=float(suppressor['foreground_score']),
+            pair_riou=float(suppressor_spec['rotated_iou'])))
+    nms_pairs.sort(key=lambda row: (-row['usable_riou'],
+                                    row['usable_candidate_id']))
+    ordering_pair = None
+    if (top is not None and best_valid_usable is not None
+            and float(top['decoded_gt_riou']) < float(threshold)):
+        ordering_pair = dict(
+            usable_candidate_id=int(best_valid_usable['candidate_id']),
+            usable_riou=float(best_valid_usable['decoded_gt_riou']),
+            usable_score=float(best_valid_usable['foreground_score']),
+            usable_post_valid_rank=int(
+                best_valid_usable['post_valid_rank']),
+            top_candidate_id=int(top['candidate_id']),
+            top_riou=float(top['decoded_gt_riou']),
+            top_score=float(top['foreground_score']))
+    actionable = bool(nms_pairs or ordering_pair is not None)
+    return dict(
+        resolved_failure_stage=str(trace['resolved_failure_stage']),
+        final_top1_hit=bool(
+            trace['final_post_valid_metrics']['top1_hit']),
+        best_rpn_riou=float(trace['best_rpn_riou']),
+        best_decoded_riou=float(trace['best_decoded_riou']),
+        decoded_usable_count=int(len(usable)),
+        post_nms_usable_count=int(
+            trace['counts']['post_nms_usable']),
+        post_valid_usable_count=int(
+            trace['counts']['post_valid_usable']),
+        wrong_nms_pair_count=int(len(nms_pairs)),
+        ordering_pair_present=bool(ordering_pair is not None),
+        actionable_quality_conflict=actionable,
+        representative_wrong_nms_pairs=nms_pairs[:3],
+        final_ordering_pair=ordering_pair)
+
+
+def summarize_source_native_quality_support(
+        rows: Sequence[Dict]) -> Dict:
+    """Apply a fixed data-support gate before any new quality model exists."""
+    minimum_conflict_frames = 20
+    minimum_pair_count = 40
+    minimum_qualifying_sequences = 2
+    minimum_conflicts_per_sequence = 5
+    full_stages = collections.Counter(
+        row['trace']['resolved_failure_stage'] for row in rows)
+    small_rows = [row for row in rows if row['source_small']]
+    small_stages = collections.Counter(
+        row['trace']['resolved_failure_stage'] for row in small_rows)
+    conflicts = [
+        row for row in small_rows
+        if row['trace']['actionable_quality_conflict']]
+    by_sequence = collections.Counter(row['seq'] for row in conflicts)
+    qualifying_sequences = sorted(
+        seq for seq, count in by_sequence.items()
+        if int(count) >= minimum_conflicts_per_sequence)
+    pair_count = int(sum(
+        row['trace']['wrong_nms_pair_count']
+        + int(row['trace']['ordering_pair_present'])
+        for row in conflicts))
+    checks = dict(
+        minimum_source_small_conflict_frames=(
+            len(conflicts) >= minimum_conflict_frames),
+        minimum_source_small_conflict_pairs=(
+            pair_count >= minimum_pair_count),
+        minimum_cross_sequence_support=(
+            len(qualifying_sequences) >= minimum_qualifying_sequences))
+    passed = bool(all(checks.values()))
+    return dict(
+        frame_count=int(len(rows)),
+        source_small_frame_count=int(len(small_rows)),
+        top1_hit_count=int(sum(
+            row['trace']['final_top1_hit'] for row in rows)),
+        source_small_top1_hit_count=int(sum(
+            row['trace']['final_top1_hit'] for row in small_rows)),
+        resolved_stage_counts=dict(sorted(full_stages.items())),
+        source_small_resolved_stage_counts=dict(sorted(
+            small_stages.items())),
+        source_small_actionable_conflict_frame_count=int(len(conflicts)),
+        source_small_actionable_pair_count=pair_count,
+        source_small_conflict_frames_by_sequence=dict(sorted(
+            by_sequence.items())),
+        qualifying_sequences=qualifying_sequences,
+        support_gate=dict(
+            thresholds=dict(
+                minimum_source_small_conflict_frames=(
+                    minimum_conflict_frames),
+                minimum_source_small_conflict_pairs=minimum_pair_count,
+                minimum_qualifying_sequences=(
+                    minimum_qualifying_sequences),
+                minimum_conflicts_per_qualifying_sequence=(
+                    minimum_conflicts_per_sequence)),
+            checks=checks, passed=passed))
+
+
+def build_source_native_quality_feasibility_audit(
+        dino, heads, source_val: Sequence[Dict], reference: Dict,
+        source_protocol: Dict, args, dino_device, head_device) -> Dict:
+    """Measure source support without training or reading exposed target data."""
+    heads.eval()
+    dino_versions = common.module_parameter_versions(dino)
+    head_versions = common.module_parameter_versions(heads)
+    threshold = float(args.riou_thr)
+    small_threshold = float(reference['small_token_threshold'])
+    rows = []
+    manifest = hashlib.sha256()
+    with torch.no_grad():
+        for index, record in enumerate(source_val):
+            feature, img_meta, _gt_boxes, _gt_labels, original, cached = (
+                prepare_record(
+                    dino, record, args, dino_device, head_device))
+            trace = native_candidate_trace_frame(
+                heads, feature, img_meta, original, args)
+            compact = _native_quality_compact_row(trace, threshold)
+            image_sha = common.file_sha256(record['image'])
+            annotation_sha = common.file_sha256(record['annotation'])
+            manifest.update((
+                '{}|{}|{}|{}|{}\n'.format(
+                    record['split'], record['seq'], int(record['frame']),
+                    image_sha, annotation_sha)).encode('utf-8'))
+            short_token = record_short_token(record, args)
+            row = dict(
+                role='source_validation_read_only',
+                split=record['split'], seq=record['seq'],
+                frame=int(record['frame']),
+                source_small=bool(short_token <= small_threshold),
+                short_token=float(short_token),
+                feature_cache_hit=bool(cached), trace=compact)
+            if compact['actionable_quality_conflict']:
+                row['image'] = dict(
+                    path=os.path.abspath(record['image']), sha256=image_sha)
+                row['annotation'] = dict(
+                    path=os.path.abspath(record['annotation']),
+                    sha256=annotation_sha)
+            rows.append(row)
+            if ((index + 1) % 25 == 0
+                    or index + 1 == len(source_val)):
+                print('[source-native-quality-audit] {}/{} conflicts={}'
+                      .format(
+                          index + 1, len(source_val), sum(
+                              item['trace']['actionable_quality_conflict']
+                              for item in rows)))
+            del feature, _gt_boxes, _gt_labels
+    dino_unchanged = (
+        dino_versions == common.module_parameter_versions(dino))
+    heads_unchanged = (
+        head_versions == common.module_parameter_versions(heads))
+    if not dino_unchanged or not heads_unchanged:
+        raise RuntimeError('Source native quality audit changed parameters')
+    summary = summarize_source_native_quality_support(rows)
+    reproduced = {
+        name: int(summary[name]) == int(expected)
+        for name, expected in reference['expected_summary'].items()}
+    if not all(reproduced.values()):
+        raise RuntimeError(
+            'Source native quality audit did not reproduce the frozen '
+            'source interpolation result: {}'.format(', '.join(
+                name for name, passed in sorted(reproduced.items())
+                if not passed)))
+    summary['frozen_source_reproduction'] = dict(
+        expected=reference['expected_summary'], checks=reproduced,
+        passed=True)
+    passed = bool(summary['support_gate']['passed'])
+    decision = (
+        'SOURCE_NATIVE_QUALITY_SUPPORT_SUFFICIENT_FOR_NEW_SOURCE_ONLY_'
+        'DEVELOPMENT_TARGET_NOT_READ' if passed else
+        'SOURCE_NATIVE_QUALITY_SUPPORT_INSUFFICIENT_COLLECT_NEW_LABELED_'
+        'SEQUENCES_TARGET_NOT_READ')
+    return dict(
+        audit='Frozen DINO Native-S14 Source Quality Feasibility Audit V1',
+        protocol_version=1,
+        protocol=dict(
+            operation='read_only_source_validation_candidate_audit',
+            source_data=source_protocol,
+            source_small_definition=reference[
+                'source_small_definition'],
+            candidate_identity='native_proposal_row_index',
+            suppression_mapping=(
+                'actual_nms_keep_plus_pairwise_overlap_trace'),
+            model_development_order=(
+                'data_support_gate_before_any_new_quality_model'),
+            target_read=False, parameter_update=False,
+            threshold_search=False, checkpoint_selection=False,
+            report_contains_all_frames_but_candidate_pairs_only_for_actionable_conflicts=True),
+        isolation=dict(
+            dino_frozen=True, dino_parameters_unchanged=dino_unchanged,
+            detector_parameters_unchanged=heads_unchanged,
+            read_only_evaluation=True, parameter_updates_performed=False,
+            checkpoint_written=False, target_data_discovered=False,
+            target_data_read=False, target_used_for_training=False,
+            target_used_for_checkpoint_selection=False),
+        inputs=dict(
+            source_interpolation_reference=dict(
+                path=reference['path'], sha256=reference['sha256']),
+            dino_head_checkpoint=dict(
+                path=os.path.abspath(args.eval_only_checkpoint),
+                sha256=reference['checkpoint_sha256']),
+            dinov2_checkpoint=dict(
+                path=os.path.abspath(args.dinov2_checkpoint),
+                sha256=reference['dinov2_checkpoint_sha256']),
+            source_validation_manifest=dict(
+                definition=(
+                    'sha256_of_ordered_split_seq_frame_image_sha_'
+                    'annotation_sha_lines'),
+                frame_count=len(rows), sha256=manifest.hexdigest())),
+        summary=summary, rows=rows, decision=decision)
 
 
 def feature_strides(args) -> List[int]:
@@ -12962,6 +13319,12 @@ def main():
             args.native_candidate_trace_attribution_json, args)
         if bool(getattr(args, 'native_candidate_trace_audit', False))
         else None)
+    source_quality_reference = (
+        load_source_native_quality_reference(
+            args.source_native_quality_reference_json, args)
+        if bool(getattr(
+            args, 'source_native_quality_feasibility_audit', False))
+        else None)
     targets = (
         list(native_trace_spec['records'])
         if native_trace_spec is not None else
@@ -12985,6 +13348,33 @@ def main():
     heads = FrozenDinoRotatedHeads(in_channels, args).to(head_device)
     trainable_names = configure_trainable_components(
         heads, args.train_components)
+    if bool(getattr(
+            args, 'source_native_quality_feasibility_audit', False)):
+        checkpoint_payload = torch.load(
+            args.eval_only_checkpoint, map_location='cpu')
+        validate_checkpoint(
+            checkpoint_payload, in_channels, args,
+            allow_training_mode_mismatch=True)
+        load_heads_checkpoint_state(heads, checkpoint_payload)
+        for parameter in heads.parameters():
+            parameter.requires_grad = False
+        result = build_source_native_quality_feasibility_audit(
+            dino, heads, source_val, source_quality_reference,
+            source_protocol, args, dino_device, head_device)
+        replacements = common.write_json_atomic(args.out_json, result)
+        print('[dino-labeller] {}'.format(result['decision']))
+        print('[source-native-quality-audit] frames={} small={} '
+              'conflicts={} pairs={} gate={}'.format(
+                  result['summary']['frame_count'],
+                  result['summary']['source_small_frame_count'],
+                  result['summary'][
+                      'source_small_actionable_conflict_frame_count'],
+                  result['summary'][
+                      'source_small_actionable_pair_count'],
+                  result['summary']['support_gate']['passed']))
+        print('[json] nonfinite_replacements={}'.format(replacements))
+        print('[out] {}'.format(args.out_json))
+        return
     if bool(getattr(args, 'native_candidate_trace_audit', False)):
         spec = native_trace_spec
         checkpoint_payload = torch.load(
