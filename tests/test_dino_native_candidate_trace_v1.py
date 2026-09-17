@@ -163,7 +163,12 @@ def test_source_quality_trace_skips_duplicate_official_roi_forward():
         reconstructed, True)
     assert official is reconstructed
     assert audit['duplicate_official_forward_executed'] is False
-    assert audit['verification'] == 'frozen_aggregate_source_metrics'
+    assert audit['verification'] == (
+        'not_run_covered_by_sampled_and_aggregate_checks')
+    assert audit['shape_equal'] is None
+    assert audit['allclose_atol_1e_4'] is None
+    assert audit['max_abs_diff'] is None
+    assert audit['expected_count'] is None
 
 
 def test_normal_trace_keeps_exact_official_roi_reproduction_check():
@@ -195,6 +200,19 @@ def test_normal_trace_keeps_exact_official_roi_reproduction_check():
             SimpleNamespace(roi_head=SimpleNamespace(
                 simple_test=lambda *args, **kwargs: [[wrong]])),
             object(), object(), {}, reconstructed, False)
+
+
+def test_best_decoded_candidate_summary_handles_empty_candidates():
+    assert labeller._best_decoded_candidate_summary([]) == dict(
+        candidate_id=None, riou=0.0, disposition=None)
+    assert labeller._best_decoded_candidate_summary([
+        dict(candidate_id=2, decoded_gt_riou=0.4,
+             disposition='NMS_SUPPRESSED'),
+        dict(candidate_id=5, decoded_gt_riou=0.7,
+             disposition='POST_VALID_CONTENT'),
+    ]) == dict(
+        candidate_id=5, riou=0.7,
+        disposition='POST_VALID_CONTENT')
 
 
 def test_trace_summary_keeps_regression_and_nms_failures_separate():

@@ -3444,11 +3444,10 @@ def _native_trace_official_output(heads, features, proposals, img_meta,
     """Verify normal traces without repeating ROI work in source audits."""
     if source_quality_audit:
         return reconstructed_np, dict(
-            verification='frozen_aggregate_source_metrics',
+            verification='not_run_covered_by_sampled_and_aggregate_checks',
             duplicate_official_forward_executed=False,
-            shape_equal=True, allclose_atol_1e_4=True,
-            max_abs_diff=0.0,
-            expected_count=int(reconstructed_np.shape[0]),
+            shape_equal=None, allclose_atol_1e_4=None,
+            max_abs_diff=None, expected_count=None,
             reconstructed_count=int(reconstructed_np.shape[0]))
 
     official_results = heads.roi_head.simple_test(
@@ -3475,9 +3474,21 @@ def _native_trace_official_output(heads, features, proposals, img_meta,
     return official, reconstruction
 
 
+def _best_decoded_candidate_summary(candidate_rows: Sequence[Dict]) -> Dict:
+    """Return a stable summary even when the RPN produced no candidates."""
+    if not candidate_rows:
+        return dict(candidate_id=None, riou=0.0, disposition=None)
+    best = max(candidate_rows, key=lambda row: row['decoded_gt_riou'])
+    return dict(
+        candidate_id=int(best['candidate_id']),
+        riou=float(best['decoded_gt_riou']),
+        disposition=str(best['disposition']))
+
+
 def native_candidate_trace_frame(heads, feature: torch.Tensor,
                                  img_meta: Dict, original: np.ndarray,
-                                 args) -> Dict:
+                                 args,
+                                 verify_official_output: bool = False) -> Dict:
     """Trace native candidates while reproducing the formal ROI output."""
     if heads.s7_enabled or heads.s7_inference_enabled():
         raise RuntimeError('Native candidate trace cannot run with S7')
@@ -3499,8 +3510,9 @@ def native_candidate_trace_frame(heads, feature: torch.Tensor,
     kept = all_keep[:max_detections]
     reconstructed_np = reconstructed.detach().cpu().numpy().astype(
         np.float32, copy=False)
-    source_quality_audit = bool(getattr(
-        args, 'source_native_quality_feasibility_audit', False))
+    source_quality_audit = bool(
+        getattr(args, 'source_native_quality_feasibility_audit', False)
+        and not verify_official_output)
     # The source audit already owns the decoded candidates. Calling
     # simple_test here would repeat the complete ROI forward for every frame
     # and make the CUDA caching allocator retain both workloads.
@@ -3580,8 +3592,7 @@ def native_candidate_trace_frame(heads, feature: torch.Tensor,
         and by_id[row['suppressor']['candidate_id']]['decoded_gt_riou']
         < threshold
         for row in suppressed_usable)
-    best_decoded = max(
-        candidate_rows, key=lambda row: row['decoded_gt_riou'])
+    best_decoded = _best_decoded_candidate_summary(candidate_rows)
     official_metrics = ranked_detection_metrics(
         official, original, threshold, args.deployment_score_thr)
     filtered, filter_stats = filter_valid_rotated_detections(
@@ -3626,9 +3637,9 @@ def native_candidate_trace_frame(heads, feature: torch.Tensor,
                  for box in np.asarray(original).tolist()],
         resolved_failure_stage=resolved_stage,
         best_rpn_riou=best_rpn_riou,
-        best_decoded_candidate_id=int(best_decoded['candidate_id']),
-        best_decoded_riou=float(best_decoded['decoded_gt_riou']),
-        best_decoded_disposition=str(best_decoded['disposition']),
+        best_decoded_candidate_id=best_decoded['candidate_id'],
+        best_decoded_riou=best_decoded['riou'],
+        best_decoded_disposition=best_decoded['disposition'],
         official_post_nms_metrics=official_metrics,
         final_post_valid_metrics=final_metrics,
         valid_content_filter=filter_stats,
@@ -3957,12 +3968,14 @@ def build_source_native_quality_feasibility_audit(
     threshold = float(args.riou_thr)
     small_threshold = float(reference['small_token_threshold'])
     rows = []
+    verified_sequence_keys = set()
+    official_roi_verification = []
     manifest = hashlib.sha256()
     track_cuda_memory = bool(
         torch.cuda.is_available()
         and isinstance(head_device, torch.device)
         and head_device.type == 'cuda')
-    peak_allocated_mib = 0.0
+    peak_post_frame_allocated_mib = 0.0
     peak_reserved_before_release_mib = 0.0
     peak_reserved_after_release_mib = 0.0
     if track_cuda_memory:
@@ -3972,8 +3985,27 @@ def build_source_native_quality_feasibility_audit(
             feature, img_meta, _gt_boxes, _gt_labels, original, cached = (
                 prepare_record(
                     dino, record, args, dino_device, head_device))
+            sequence_key = (record['split'], record['seq'])
+            verify_official_output = sequence_key not in verified_sequence_keys
             trace = native_candidate_trace_frame(
-                heads, feature, img_meta, original, args)
+                heads, feature, img_meta, original, args,
+                verify_official_output=verify_official_output)
+            if verify_official_output:
+                reconstruction = trace['reconstruction']
+                if not reconstruction['allclose_atol_1e_4']:
+                    raise RuntimeError(
+                        'Sampled source ROI output reproduction failed')
+                official_roi_verification.append(dict(
+                    split=record['split'], seq=record['seq'],
+                    frame=int(record['frame']),
+                    shape_equal=bool(reconstruction['shape_equal']),
+                    allclose_atol_1e_4=bool(
+                        reconstruction['allclose_atol_1e_4']),
+                    max_abs_diff=reconstruction['max_abs_diff'],
+                    expected_count=int(reconstruction['expected_count']),
+                    reconstructed_count=int(
+                        reconstruction['reconstructed_count'])))
+                verified_sequence_keys.add(sequence_key)
             compact = _native_quality_compact_row(trace, threshold)
             image_sha = common.file_sha256(record['image'])
             annotation_sha = common.file_sha256(record['annotation'])
@@ -4013,8 +4045,8 @@ def build_source_native_quality_feasibility_audit(
                     torch.cuda.empty_cache()
                 reserved_after_mib = (
                     torch.cuda.memory_reserved(head_device) / (1024 ** 2))
-                peak_allocated_mib = max(
-                    peak_allocated_mib, allocated_mib)
+                peak_post_frame_allocated_mib = max(
+                    peak_post_frame_allocated_mib, allocated_mib)
                 peak_reserved_before_release_mib = max(
                     peak_reserved_before_release_mib, reserved_before_mib)
                 peak_reserved_after_release_mib = max(
@@ -4051,14 +4083,24 @@ def build_source_native_quality_feasibility_audit(
         measured=track_cuda_memory,
         device=str(head_device),
         cache_release_interval_frames=1,
-        peak_allocated_mib=float(peak_allocated_mib),
-        peak_reserved_before_release_mib=float(
+        peak_post_frame_allocated_mib=float(
+            peak_post_frame_allocated_mib),
+        peak_reserved_before_cache_release_mib=float(
             peak_reserved_before_release_mib),
-        peak_reserved_after_release_mib=float(
+        peak_reserved_after_cache_release_mib=float(
             peak_reserved_after_release_mib),
-        pytorch_peak_allocated_mib=(
+        pytorch_peak_allocated_during_frame_mib=(
             float(torch.cuda.max_memory_allocated(head_device) / (1024 ** 2))
             if track_cuda_memory else 0.0))
+    summary['official_roi_sampled_verification'] = dict(
+        policy='first_frame_per_source_validation_sequence',
+        sequence_count=len(verified_sequence_keys),
+        checked_frame_count=len(official_roi_verification),
+        all_passed=bool(
+            official_roi_verification
+            and all(row['allclose_atol_1e_4']
+                    for row in official_roi_verification)),
+        records=official_roi_verification)
     passed = bool(summary['support_gate']['passed'])
     decision = (
         'SOURCE_NATIVE_QUALITY_SUPPORT_SUFFICIENT_FOR_NEW_SOURCE_ONLY_'
@@ -4066,8 +4108,8 @@ def build_source_native_quality_feasibility_audit(
         'SOURCE_NATIVE_QUALITY_SUPPORT_INSUFFICIENT_COLLECT_NEW_LABELED_'
         'SEQUENCES_TARGET_NOT_READ')
     return dict(
-        audit='Frozen DINO Native-S14 Source Quality Feasibility Audit V1',
-        protocol_version=1,
+        audit='Frozen DINO Native-S14 Source Quality Feasibility Audit V2',
+        protocol_version=2,
         protocol=dict(
             operation='read_only_source_validation_candidate_audit',
             source_data=source_protocol,
@@ -4077,8 +4119,12 @@ def build_source_native_quality_feasibility_audit(
             suppression_mapping=(
                 'actual_nms_keep_plus_pairwise_overlap_trace'),
             roi_forward_execution=(
-                'single_decode_forward_with_frozen_aggregate_reproduction'),
-            duplicate_official_roi_forward=False,
+                'single_decode_forward_with_first_frame_per_sequence_'
+                'official_roi_verification_and_frozen_aggregate_'
+                'reproduction'),
+            duplicate_official_roi_forward_for_all_frames=False,
+            sampled_official_roi_forward=(
+                'first_frame_per_source_validation_sequence'),
             cuda_cache_release_interval_frames=1,
             model_development_order=(
                 'data_support_gate_before_any_new_quality_model'),
