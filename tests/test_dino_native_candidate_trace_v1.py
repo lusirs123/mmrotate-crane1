@@ -55,15 +55,15 @@ def _trace_args(tmp_path):
         s7_residual=False, skip_target_eval=False,
         patch_size=14, dino_height=600, dino_max_long_side=1333,
         proposal_count=2000, max_detections=2000,
-        roi_nms_iou_thr=0.5, riou_thr=0.5, feature_strides=None,
+        roi_nms_iou_thr=0.1, riou_thr=0.5, feature_strides=None,
         out_json=str(tmp_path / 'trace.json'))
 
 
 def test_trace_args_lock_formal_native_baseline(tmp_path):
     args = _trace_args(tmp_path)
     labeller.validate_native_candidate_trace_args(args)
-    args.roi_nms_iou_thr = 0.1
-    with pytest.raises(ValueError, match='locks ROI NMS IoU to 0.5'):
+    args.roi_nms_iou_thr = 0.5
+    with pytest.raises(ValueError, match='locks ROI NMS IoU to 0.1'):
         labeller.validate_native_candidate_trace_args(args)
 
     args = _trace_args(tmp_path)
@@ -145,11 +145,36 @@ def test_trace_spec_can_select_all_records_without_repartitioning(
 
 
 def test_trace_reproduction_accepts_locked_success_record():
-    trace = {'final_post_valid_metrics': {'top1_hit': True}}
+    trace = {
+        'best_rpn_riou': 0.55, 'best_decoded_riou': 0.67,
+        'counts': dict(
+            proposals=10, decoded=10, post_nms=4, post_valid=3),
+        'final_post_valid_metrics': {'top1_hit': True}}
     result = labeller.validate_native_trace_reproduction(
-        trace, {'attribution': 'SUCCESS_TOP1'})
+        trace, {
+            'attribution': 'SUCCESS_TOP1',
+            'rpn_best_riou': 0.55, 'decoded_best_riou': 0.67,
+            'candidate_counts': dict(
+                rpn_proposals=10, roi_decoded=10,
+                post_nms=4, post_valid=3)})
     assert result['passed'] is True
-    assert result['metrics'] == {}
+    assert result['candidate_counts']['post_nms']['matches'] is True
+
+
+def test_trace_reproduction_rejects_postprocessing_count_mismatch():
+    trace = {
+        'best_rpn_riou': 0.55, 'best_decoded_riou': 0.67,
+        'counts': dict(
+            proposals=10, decoded=10, post_nms=8, post_valid=6),
+        'final_post_valid_metrics': {'top1_hit': True}}
+    attribution = {
+        'attribution': 'SUCCESS_TOP1',
+        'rpn_best_riou': 0.55, 'decoded_best_riou': 0.67,
+        'candidate_counts': dict(
+            rpn_proposals=10, roi_decoded=10,
+            post_nms=4, post_valid=3)}
+    with pytest.raises(RuntimeError, match='post_nms count'):
+        labeller.validate_native_trace_reproduction(trace, attribution)
 
 
 def test_trace_spec_rejects_checkpoint_or_evidence_boundary(
@@ -268,7 +293,9 @@ def test_trace_summary_keeps_regression_and_nms_failures_separate():
             reproduction=dict(
                 passed=True,
                 metrics=dict(
-                    decoded_best_riou=dict(absolute_delta=1e-4))),
+                    decoded_best_riou=dict(absolute_delta=1e-4)),
+                candidate_counts=dict(
+                    post_nms=dict(matches=True))),
             trace=dict(
                 resolved_failure_stage=stage,
                 reconstruction=dict(allclose_atol_1e_4=True),
@@ -289,6 +316,8 @@ def test_trace_summary_keeps_regression_and_nms_failures_separate():
     assert summary['frames_with_usable_suppressed_by_wrong_candidate'] == 1
     assert summary['metric_reproduction_absolute_tolerance'] == 1e-3
     assert summary['metric_reproduction_max_absolute_delta'] == 1e-4
+    assert summary['candidate_count_reproduction_check_count'] == 2
+    assert summary['candidate_count_reproduction_pass_count'] == 2
     assert summary['resolved_failure_stage_counts'] == {
         'NMS_SUPPRESSION': 1, 'ROI_REGRESSION': 1}
     assert summary['attributed_roi_regression_count'] == 1
@@ -298,6 +327,7 @@ def test_trace_summary_keeps_regression_and_nms_failures_separate():
 def test_trace_reproduction_requires_same_metrics_and_failure_stage():
     trace = dict(
         best_rpn_riou=0.55, best_decoded_riou=0.67,
+        counts={},
         resolved_failure_stage='NMS_SUPPRESSION',
         final_post_valid_metrics=dict(top1_hit=False))
     attribution = dict(

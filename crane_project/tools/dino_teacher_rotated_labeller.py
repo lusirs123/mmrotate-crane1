@@ -682,9 +682,11 @@ def validate_native_candidate_trace_args(args):
             'Native candidate trace baseline mismatch: {}'.format(
                 ', '.join(mismatched)))
     if not math.isclose(
-            float(args.roi_nms_iou_thr), 0.5,
+            float(args.roi_nms_iou_thr), 0.1,
             rel_tol=0.0, abs_tol=1e-12):
-        raise ValueError('Native candidate trace locks ROI NMS IoU to 0.5')
+        raise ValueError(
+            'Native candidate trace locks ROI NMS IoU to 0.1 to reproduce '
+            'the bound attrition audit')
     if not math.isclose(
             float(args.riou_thr), 0.5,
             rel_tol=0.0, abs_tol=1e-12):
@@ -3411,6 +3413,27 @@ def _candidate_overlap(boxes: torch.Tensor,
     return box_iou_rotated(boxes[:, :5], gt).max(dim=1).values
 
 
+def prepare_native_candidate_trace_record(
+        dino, record: Dict, args, dino_device, head_device):
+    """Reproduce the bound attrition audit's fresh-fp32 target features."""
+    image = cv2.imread(record['image'])
+    if image is None:
+        raise RuntimeError('Cannot read {}'.format(record['image']))
+    tensor, dino_meta = common.resize_and_normalize_bgr(
+        image, args.dino_height, args.patch_size,
+        args.dino_max_long_side)
+    tensor = tensor.to(dino_device)
+    feature = common.extract_patch_grid(dino, tensor, args.patch_size)
+    if not bool(torch.isfinite(feature).all().item()):
+        raise RuntimeError('Non-finite DINO feature')
+    feature = feature.detach().to(device=head_device, dtype=torch.float32)
+    img_meta = feature_meta(record['image'], dino_meta)
+    gt_boxes, gt_labels, original = scaled_gt_tensors(
+        record['annotation'], float(dino_meta['scale']), head_device)
+    del tensor
+    return feature, img_meta, gt_boxes, gt_labels, original
+
+
 def _proposals_in_original_image(proposals: torch.Tensor,
                                  img_meta: Dict) -> torch.Tensor:
     boxes = proposals[:, :5].clone()
@@ -3668,12 +3691,18 @@ def summarize_native_candidate_trace(rows: Sequence[Dict]) -> Dict:
         float(metric['absolute_delta'])
         for row in rows
         for metric in row['reproduction']['metrics'].values()]
+    count_checks = [
+        bool(count['matches'])
+        for row in rows
+        for count in row['reproduction']['candidate_counts'].values()]
     return dict(
         frame_count=int(len(rows)),
         metric_reproduction_absolute_tolerance=float(
             NATIVE_TRACE_METRIC_REPRODUCTION_ATOL),
         metric_reproduction_max_absolute_delta=(
             max(metric_deltas) if metric_deltas else 0.0),
+        candidate_count_reproduction_check_count=int(len(count_checks)),
+        candidate_count_reproduction_pass_count=int(sum(count_checks)),
         reconstruction_pass_count=int(sum(
             row['trace']['reconstruction']['allclose_atol_1e_4']
             for row in rows)),
@@ -3705,16 +3734,10 @@ def validate_native_trace_reproduction(
     expected_top1 = attribution.get('top1_hit')
     if expected_top1 is None:
         expected_top1 = (str(attribution.get('attribution')) == 'SUCCESS_TOP1')
-    if expected_top1 is True:
-        if not actual_top1_hit:
-            raise RuntimeError(
-                'Candidate trace did not reproduce the selected SUCCESS_TOP1')
-        return dict(
-            passed=True, absolute_tolerance=float(tolerance),
-            expected_top1_hit=True, actual_top1_hit=True, metrics={})
-    if actual_top1_hit:
+    if bool(expected_top1) != actual_top1_hit:
         raise RuntimeError(
-            'Candidate trace did not reproduce the selected final failure')
+            'Candidate trace did not reproduce top1_hit: expected {} found {}'
+            .format(bool(expected_top1), actual_top1_hit))
     comparisons = (
         ('rpn_best_riou', trace['best_rpn_riou']),
         ('decoded_best_riou', trace['best_decoded_riou']))
@@ -3730,6 +3753,30 @@ def validate_native_trace_reproduction(
                 'Candidate trace did not reproduce {} within absolute '
                 'tolerance {}: expected {} found {} delta {}'
                 .format(field, tolerance, expected, actual, absolute_delta))
+    count_mapping = (
+        ('rpn_proposals', 'proposals'),
+        ('roi_decoded', 'decoded'),
+        ('post_nms', 'post_nms'),
+        ('post_valid', 'post_valid'))
+    expected_counts = attribution.get('candidate_counts') or {}
+    count_reproduction = {}
+    for expected_field, actual_field in count_mapping:
+        if expected_field not in expected_counts:
+            continue
+        expected = int(expected_counts[expected_field])
+        actual = int(trace['counts'][actual_field])
+        count_reproduction[expected_field] = dict(
+            expected=expected, actual=actual, matches=expected == actual)
+        if expected != actual:
+            raise RuntimeError(
+                'Candidate trace did not reproduce {} count: expected {} '
+                'found {}'.format(expected_field, expected, actual))
+    if expected_top1 is True:
+        return dict(
+            passed=True, absolute_tolerance=float(tolerance),
+            expected_top1_hit=True, actual_top1_hit=True,
+            metrics=metric_reproduction,
+            candidate_counts=count_reproduction)
     expected_stage = str(attribution['attribution'])
     actual_stage = str(trace['resolved_failure_stage'])
     allowed = {
@@ -3747,7 +3794,8 @@ def validate_native_trace_reproduction(
         expected_top1_hit=False, actual_top1_hit=False,
         expected_failure_stage=expected_stage,
         actual_failure_stage=actual_stage,
-        metrics=metric_reproduction)
+        metrics=metric_reproduction,
+        candidate_counts=count_reproduction)
 
 
 def build_native_candidate_trace_audit(
@@ -3758,8 +3806,9 @@ def build_native_candidate_trace_audit(
     rows = []
     with torch.no_grad():
         for index, record in enumerate(spec['records']):
-            feature, img_meta, _gt_boxes, _gt_labels, original, cached = (
-                prepare_record(dino, record, args, dino_device, head_device))
+            feature, img_meta, _gt_boxes, _gt_labels, original = (
+                prepare_native_candidate_trace_record(
+                    dino, record, args, dino_device, head_device))
             trace = native_candidate_trace_frame(
                 heads, feature, img_meta, original, args)
             reproduction = validate_native_trace_reproduction(
@@ -3774,7 +3823,8 @@ def build_native_candidate_trace_audit(
                 annotation=dict(
                     path=os.path.abspath(record['annotation']),
                     sha256=common.file_sha256(record['annotation'])),
-                feature_cache_hit=bool(cached),
+                feature_cache_hit=False,
+                feature_mode='fresh_fp32',
                 attribution=record['attribution'],
                 reproduction=reproduction, trace=trace))
             print('[native-candidate-trace] {}/{} seq={} frame={} '
@@ -3790,8 +3840,8 @@ def build_native_candidate_trace_audit(
     if not dino_unchanged or not heads_unchanged:
         raise RuntimeError('Native candidate trace changed frozen parameters')
     return dict(
-        audit='Frozen DINO Native-S14 Candidate Trace Audit V2',
-        protocol_version=2,
+        audit='Frozen DINO Native-S14 Candidate Trace Audit V3',
+        protocol_version=3,
         protocol=dict(
             operation='read_only_candidate_trace',
             groups=spec['groups'],
@@ -3805,6 +3855,9 @@ def build_native_candidate_trace_audit(
             target_authorizes_threshold_tuning=False,
             candidate_identity='native_proposal_row_index',
             suppression_mapping='actual_nms_keep_plus_pairwise_overlap_trace',
+            feature_mode='fresh_fp32_matching_bound_attrition_audit',
+            bound_roi_nms_iou_threshold=0.1,
+            candidate_count_reproduction_required=True,
             metric_reproduction_absolute_tolerance=float(
                 NATIVE_TRACE_METRIC_REPRODUCTION_ATOL)),
         isolation=dict(
