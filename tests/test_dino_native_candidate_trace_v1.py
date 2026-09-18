@@ -101,13 +101,53 @@ def test_trace_spec_locks_identity_and_selects_review_small_frames(
         labeller.common.entry_probe, 'get_diag', lambda: _Diag())
     args = SimpleNamespace(
         eval_only_checkpoint=str(head), dinov2_checkpoint=str(dino),
-        native_candidate_trace_groups=['seq03_small'], data_root='unused')
+        native_candidate_trace_groups=['seq03_small'], data_root='unused',
+        native_candidate_trace_all_records=False)
     spec = labeller.load_native_candidate_trace_spec(
         str(attribution), args)
     assert spec['groups'] == ['seq03_small']
     assert [row['frame'] for row in spec['records']] == [144, 145]
     assert all(row['attribution']['review_required']
                for row in spec['records'])
+
+
+def test_trace_spec_can_select_all_records_without_repartitioning(
+        tmp_path, monkeypatch):
+    head = tmp_path / 'head.pth'
+    dino = tmp_path / 'dino.pth'
+    head.write_bytes(b'head')
+    dino.write_bytes(b'dino')
+    attribution = tmp_path / 'attribution.json'
+    attribution.write_text(json.dumps(
+        _attribution_payload(_sha(head), _sha(dino))))
+
+    class _Diag:
+        def find_files(self, data_root, split, seq, frame):
+            del data_root
+            image = tmp_path / '{}_{}_{}.jpg'.format(split, seq, frame)
+            annotation = tmp_path / '{}_{}_{}.txt'.format(
+                split, seq, frame)
+            image.write_bytes(b'image-' + str(frame).encode())
+            annotation.write_text('annotation')
+            return str(image), str(annotation)
+
+    monkeypatch.setattr(
+        labeller.common.entry_probe, 'get_diag', lambda: _Diag())
+    args = SimpleNamespace(
+        eval_only_checkpoint=str(head), dinov2_checkpoint=str(dino),
+        native_candidate_trace_groups=['seq03_small'], data_root='unused',
+        native_candidate_trace_all_records=True)
+    spec = labeller.load_native_candidate_trace_spec(
+        str(attribution), args)
+    assert spec['selection_mode'] == 'all_records'
+    assert [row['frame'] for row in spec['records']] == [144, 145, 146]
+    assert spec['records'][-1]['attribution']['attribution'] == 'SUCCESS_TOP1'
+
+
+def test_trace_reproduction_accepts_locked_success_record():
+    trace = {'final_post_valid_metrics': {'top1_hit': True}}
+    labeller.validate_native_trace_reproduction(
+        trace, {'attribution': 'SUCCESS_TOP1'})
 
 
 def test_trace_spec_rejects_checkpoint_or_evidence_boundary(
@@ -121,7 +161,8 @@ def test_trace_spec_rejects_checkpoint_or_evidence_boundary(
     attribution.write_text(json.dumps(payload))
     args = SimpleNamespace(
         eval_only_checkpoint=str(head), dinov2_checkpoint=str(dino),
-        native_candidate_trace_groups=['seq03_small'], data_root='unused')
+        native_candidate_trace_groups=['seq03_small'], data_root='unused',
+        native_candidate_trace_all_records=False)
     with pytest.raises(RuntimeError, match='head checkpoint identity'):
         labeller.load_native_candidate_trace_spec(str(attribution), args)
 

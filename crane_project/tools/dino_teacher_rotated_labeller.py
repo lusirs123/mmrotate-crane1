@@ -627,6 +627,11 @@ def parse_args():
         help=('Failure-attribution groups to trace. The default restricts '
               'the diagnostic to the exposed small-target slice.'))
     parser.add_argument(
+        '--native-candidate-trace-all-records', action='store_true',
+        help=('Trace every record in the selected failure-attribution groups, '
+              'including SUCCESS_TOP1 records. Without this flag only '
+              'review_required failure frames are traced.'))
+    parser.add_argument(
         '--source-native-quality-feasibility-audit', action='store_true',
         help=(
             'Read-only native-S14 candidate-quality support audit on the '
@@ -3354,11 +3359,14 @@ def load_native_candidate_trace_spec(path: str, args) -> Dict:
     if unknown:
         raise RuntimeError(
             'Unknown failure-attribution group: {}'.format(unknown[0]))
+    all_records = bool(getattr(args, 'native_candidate_trace_all_records', False))
     selected = [
         row for row in payload.get('records', [])
         if (str(row.get('group')) in groups
-            and bool(row.get('review_required')))]
+            and (all_records or bool(row.get('review_required'))))]
     if not selected:
+        if all_records:
+            raise RuntimeError('No records selected for tracing')
         raise RuntimeError('No review-required frames selected for tracing')
     keys = [
         (str(row['split']), str(row['sequence']), int(row['frame']))
@@ -3381,7 +3389,9 @@ def load_native_candidate_trace_spec(path: str, args) -> Dict:
     return dict(
         path=os.path.abspath(path), sha256=common.file_sha256(path),
         groups=sorted(groups), checkpoint_sha256=checkpoint_sha,
-        dinov2_checkpoint_sha256=dino_sha, records=records)
+        dinov2_checkpoint_sha256=dino_sha,
+        selection_mode=('all_records' if all_records else 'review_required'),
+        records=records)
 
 
 def _candidate_overlap(boxes: torch.Tensor,
@@ -3678,7 +3688,16 @@ def summarize_native_candidate_trace(rows: Sequence[Dict]) -> Dict:
 
 def validate_native_trace_reproduction(
         trace: Dict, attribution: Dict, tolerance: float = 1e-4):
-    if bool(trace['final_post_valid_metrics']['top1_hit']):
+    actual_top1_hit = bool(trace['final_post_valid_metrics']['top1_hit'])
+    expected_top1 = attribution.get('top1_hit')
+    if expected_top1 is None:
+        expected_top1 = (str(attribution.get('attribution')) == 'SUCCESS_TOP1')
+    if expected_top1 is True:
+        if not actual_top1_hit:
+            raise RuntimeError(
+                'Candidate trace did not reproduce the selected SUCCESS_TOP1')
+        return
+    if actual_top1_hit:
         raise RuntimeError(
             'Candidate trace did not reproduce the selected final failure')
     comparisons = (
@@ -3748,7 +3767,10 @@ def build_native_candidate_trace_audit(
         protocol=dict(
             operation='read_only_candidate_trace',
             groups=spec['groups'],
-            frame_selection='review_required_from_failure_attribution_v1',
+            frame_selection=(
+                'all_records_from_failure_attribution_v1'
+                if spec.get('selection_mode') == 'all_records'
+                else 'review_required_from_failure_attribution_v1'),
             target_role='exposed_target_diagnosis_only',
             target_authorizes_training=False,
             target_authorizes_checkpoint_selection=False,
