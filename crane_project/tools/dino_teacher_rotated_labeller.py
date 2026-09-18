@@ -763,7 +763,10 @@ def validate_args(args):
         raise ValueError('At least one DINO GPU is required')
     if args.head_gpu in args.dino_gpus:
         raise ValueError(
-            'Head GPU must be separate from sharded DINO GPUs on 8GB cards')
+            'Head GPU {} overlaps DINO GPU list {}. On 8GB cards use '
+            'separate logical devices, for example --head-gpu 0 '
+            '--dino-gpus 1 2 with CUDA_VISIBLE_DEVICES=0,1,2.'
+            .format(args.head_gpu, list(args.dino_gpus)))
     s7_enabled = bool(getattr(args, 's7_residual', False))
     s7_positive = (
         getattr(args, 's7_channels', 128),

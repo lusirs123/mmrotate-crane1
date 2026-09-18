@@ -117,8 +117,15 @@ def _record(tmp_path, frame):
 
 
 def test_validate_requires_disjoint_head_and_dino_gpus(tmp_path):
-    with pytest.raises(ValueError, match='separate'):
+    with pytest.raises(
+            ValueError,
+            match=r'Head GPU 1 overlaps DINO GPU list \[1, 2\]'):
         labeller.validate_args(_args(tmp_path, head_gpu=1))
+
+
+def test_validate_accepts_three_card_head_dino_split(tmp_path):
+    labeller.validate_args(
+        _args(tmp_path, head_gpu=0, dino_gpus=[1, 2]))
 
 
 def test_source_sequence_gain_requires_more_than_one_source_sequence():
