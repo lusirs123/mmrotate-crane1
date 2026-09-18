@@ -146,8 +146,10 @@ def test_trace_spec_can_select_all_records_without_repartitioning(
 
 def test_trace_reproduction_accepts_locked_success_record():
     trace = {'final_post_valid_metrics': {'top1_hit': True}}
-    labeller.validate_native_trace_reproduction(
+    result = labeller.validate_native_trace_reproduction(
         trace, {'attribution': 'SUCCESS_TOP1'})
+    assert result['passed'] is True
+    assert result['metrics'] == {}
 
 
 def test_trace_spec_rejects_checkpoint_or_evidence_boundary(
@@ -263,6 +265,10 @@ def test_trace_summary_keeps_regression_and_nms_failures_separate():
                  'FINAL_ORDERING')
         return dict(
             attribution=dict(attribution=attribution),
+            reproduction=dict(
+                passed=True,
+                metrics=dict(
+                    decoded_best_riou=dict(absolute_delta=1e-4))),
             trace=dict(
                 resolved_failure_stage=stage,
                 reconstruction=dict(allclose_atol_1e_4=True),
@@ -281,6 +287,8 @@ def test_trace_summary_keeps_regression_and_nms_failures_separate():
     assert summary['post_nms_usable_frame_count'] == 0
     assert summary['nms_suppressed_usable_candidate_count'] == 3
     assert summary['frames_with_usable_suppressed_by_wrong_candidate'] == 1
+    assert summary['metric_reproduction_absolute_tolerance'] == 1e-3
+    assert summary['metric_reproduction_max_absolute_delta'] == 1e-4
     assert summary['resolved_failure_stage_counts'] == {
         'NMS_SUPPRESSION': 1, 'ROI_REGRESSION': 1}
     assert summary['attributed_roi_regression_count'] == 1
@@ -295,6 +303,14 @@ def test_trace_reproduction_requires_same_metrics_and_failure_stage():
     attribution = dict(
         rpn_best_riou=0.55001, decoded_best_riou=0.67001,
         attribution='ROI_ORDERING_OR_NMS')
+    result = labeller.validate_native_trace_reproduction(trace, attribution)
+    assert result['absolute_tolerance'] == pytest.approx(1e-3)
+    assert result['metrics']['decoded_best_riou']['absolute_delta'] == (
+        pytest.approx(1e-5))
+
+    # Multi-GPU and single-GPU executions can differ slightly in decoded
+    # geometry. The formal tolerance accepts the observed 1.28e-4 drift.
+    trace['best_decoded_riou'] = attribution['decoded_best_riou'] - 1.2821e-4
     labeller.validate_native_trace_reproduction(trace, attribution)
 
     trace['best_decoded_riou'] = 0.68

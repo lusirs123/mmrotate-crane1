@@ -46,6 +46,7 @@ S7_QUALITY_MIN_FULL_TOP1 = 688
 S7_QUALITY_MIN_SMALL_TOP1 = 311
 S7_QUALITY_MIN_RISK_PAIRS = 1
 SOURCE_TEMPORAL_ANGLE_LIMIT_DEG = 35.0
+NATIVE_TRACE_METRIC_REPRODUCTION_ATOL = 1e-3
 PAPER_URL = (
     'https://openaccess.thecvf.com/content/CVPR2025/html/'
     'Lavoie_Large_Self-Supervised_Models_Bridge_the_Gap_in_Domain_Adaptive_'
@@ -3663,8 +3664,16 @@ def native_candidate_trace_frame(heads, feature: torch.Tensor,
 def summarize_native_candidate_trace(rows: Sequence[Dict]) -> Dict:
     stages = collections.Counter(
         row['trace']['resolved_failure_stage'] for row in rows)
+    metric_deltas = [
+        float(metric['absolute_delta'])
+        for row in rows
+        for metric in row['reproduction']['metrics'].values()]
     return dict(
         frame_count=int(len(rows)),
+        metric_reproduction_absolute_tolerance=float(
+            NATIVE_TRACE_METRIC_REPRODUCTION_ATOL),
+        metric_reproduction_max_absolute_delta=(
+            max(metric_deltas) if metric_deltas else 0.0),
         reconstruction_pass_count=int(sum(
             row['trace']['reconstruction']['allclose_atol_1e_4']
             for row in rows)),
@@ -3690,7 +3699,8 @@ def summarize_native_candidate_trace(rows: Sequence[Dict]) -> Dict:
 
 
 def validate_native_trace_reproduction(
-        trace: Dict, attribution: Dict, tolerance: float = 1e-4):
+        trace: Dict, attribution: Dict,
+        tolerance: float = NATIVE_TRACE_METRIC_REPRODUCTION_ATOL) -> Dict:
     actual_top1_hit = bool(trace['final_post_valid_metrics']['top1_hit'])
     expected_top1 = attribution.get('top1_hit')
     if expected_top1 is None:
@@ -3699,19 +3709,27 @@ def validate_native_trace_reproduction(
         if not actual_top1_hit:
             raise RuntimeError(
                 'Candidate trace did not reproduce the selected SUCCESS_TOP1')
-        return
+        return dict(
+            passed=True, absolute_tolerance=float(tolerance),
+            expected_top1_hit=True, actual_top1_hit=True, metrics={})
     if actual_top1_hit:
         raise RuntimeError(
             'Candidate trace did not reproduce the selected final failure')
     comparisons = (
         ('rpn_best_riou', trace['best_rpn_riou']),
         ('decoded_best_riou', trace['best_decoded_riou']))
+    metric_reproduction = {}
     for field, actual in comparisons:
         expected = float(attribution[field])
-        if abs(float(actual) - expected) > float(tolerance):
+        absolute_delta = abs(float(actual) - expected)
+        metric_reproduction[field] = dict(
+            expected=expected, actual=float(actual),
+            absolute_delta=float(absolute_delta))
+        if absolute_delta > float(tolerance):
             raise RuntimeError(
-                'Candidate trace did not reproduce {}: expected {} found {}'
-                .format(field, expected, actual))
+                'Candidate trace did not reproduce {} within absolute '
+                'tolerance {}: expected {} found {} delta {}'
+                .format(field, tolerance, expected, actual, absolute_delta))
     expected_stage = str(attribution['attribution'])
     actual_stage = str(trace['resolved_failure_stage'])
     allowed = {
@@ -3724,6 +3742,12 @@ def validate_native_trace_reproduction(
         raise RuntimeError(
             'Candidate trace stage disagrees with attribution: {} -> {}'
             .format(expected_stage, actual_stage))
+    return dict(
+        passed=True, absolute_tolerance=float(tolerance),
+        expected_top1_hit=False, actual_top1_hit=False,
+        expected_failure_stage=expected_stage,
+        actual_failure_stage=actual_stage,
+        metrics=metric_reproduction)
 
 
 def build_native_candidate_trace_audit(
@@ -3738,7 +3762,7 @@ def build_native_candidate_trace_audit(
                 prepare_record(dino, record, args, dino_device, head_device))
             trace = native_candidate_trace_frame(
                 heads, feature, img_meta, original, args)
-            validate_native_trace_reproduction(
+            reproduction = validate_native_trace_reproduction(
                 trace, record['attribution'])
             rows.append(dict(
                 role='exposed_target_diagnosis_only',
@@ -3751,7 +3775,8 @@ def build_native_candidate_trace_audit(
                     path=os.path.abspath(record['annotation']),
                     sha256=common.file_sha256(record['annotation'])),
                 feature_cache_hit=bool(cached),
-                attribution=record['attribution'], trace=trace))
+                attribution=record['attribution'],
+                reproduction=reproduction, trace=trace))
             print('[native-candidate-trace] {}/{} seq={} frame={} '
                   'decoded_usable={} post_nms_usable={}'.format(
                       index + 1, len(spec['records']), record['seq'],
@@ -3765,8 +3790,8 @@ def build_native_candidate_trace_audit(
     if not dino_unchanged or not heads_unchanged:
         raise RuntimeError('Native candidate trace changed frozen parameters')
     return dict(
-        audit='Frozen DINO Native-S14 Candidate Trace Audit V1',
-        protocol_version=1,
+        audit='Frozen DINO Native-S14 Candidate Trace Audit V2',
+        protocol_version=2,
         protocol=dict(
             operation='read_only_candidate_trace',
             groups=spec['groups'],
@@ -3779,7 +3804,9 @@ def build_native_candidate_trace_audit(
             target_authorizes_checkpoint_selection=False,
             target_authorizes_threshold_tuning=False,
             candidate_identity='native_proposal_row_index',
-            suppression_mapping='actual_nms_keep_plus_pairwise_overlap_trace'),
+            suppression_mapping='actual_nms_keep_plus_pairwise_overlap_trace',
+            metric_reproduction_absolute_tolerance=float(
+                NATIVE_TRACE_METRIC_REPRODUCTION_ATOL)),
         isolation=dict(
             dino_frozen=True, dino_parameters_unchanged=dino_unchanged,
             detector_parameters_unchanged=heads_unchanged,
