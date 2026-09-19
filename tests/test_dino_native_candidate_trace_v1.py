@@ -1,5 +1,6 @@
 import hashlib
 import json
+import pathlib
 import sys
 import types
 from types import SimpleNamespace
@@ -9,6 +10,9 @@ import pytest
 import torch
 
 from crane_project.tools import dino_teacher_rotated_labeller as labeller
+
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 
 def _sha(path):
@@ -75,6 +79,23 @@ def test_trace_args_lock_formal_native_baseline(tmp_path):
     (tmp_path / 'trace.json').write_text('{}')
     with pytest.raises(ValueError, match='Refusing to overwrite'):
         labeller.validate_native_candidate_trace_args(args)
+
+
+def test_formal_native_config_is_bound_and_rejects_policy_drift(tmp_path):
+    config = ROOT / 'crane_project/configs/' \
+        'crane_symeood_formal_dino_native_s14_v1.py'
+    identity = labeller.load_formal_native_nms_config_identity(str(config))
+    assert identity['verified_fields']['roi_nms_iou_thr'] == 0.5
+    assert identity['verified_fields']['feature_strides'] == [14]
+    assert identity['verified_fields']['s7_residual'] is False
+
+    changed = tmp_path / 'changed_config.py'
+    changed.write_text(
+        config.read_text(encoding='utf-8').replace(
+            'roi_nms_iou_thr=0.5', 'roi_nms_iou_thr=0.3'),
+        encoding='utf-8')
+    with pytest.raises(ValueError, match='roi_nms_iou_thr'):
+        labeller.load_formal_native_nms_config_identity(str(changed))
 
 
 def test_trace_spec_locks_identity_and_selects_review_small_frames(
@@ -322,6 +343,85 @@ def test_trace_summary_keeps_regression_and_nms_failures_separate():
         'NMS_SUPPRESSION': 1, 'ROI_REGRESSION': 1}
     assert summary['attributed_roi_regression_count'] == 1
     assert summary['attributed_roi_ordering_or_nms_count'] == 1
+
+
+def test_formal_nms_counterfactual_reuses_decoded_candidates(monkeypatch):
+    ops = types.ModuleType('mmcv.ops')
+
+    def fake_nms(boxes, scores, threshold):
+        assert threshold == pytest.approx(0.5)
+        keep = torch.tensor([0, 1], dtype=torch.long)
+        return torch.cat([boxes[keep], scores[keep, None]], dim=1), keep
+
+    ops.nms_rotated = fake_nms
+    monkeypatch.setitem(sys.modules, 'mmcv.ops', ops)
+    monkeypatch.setattr(
+        labeller, '_candidate_overlap',
+        lambda boxes, original: torch.tensor(
+            [0.4, 0.7, 0.2], dtype=boxes.dtype))
+    monkeypatch.setattr(
+        labeller, '_nms_suppressor_indices',
+        lambda boxes, scores, keep, threshold: {})
+    monkeypatch.setattr(
+        labeller, 'valid_rotated_detection_mask',
+        lambda detections, meta, tolerance: np.ones(
+            detections.shape[0], dtype=bool))
+    monkeypatch.setattr(
+        labeller, 'filter_valid_rotated_detections',
+        lambda detections, meta, tolerance: (
+            detections, {'kept': int(detections.shape[0])}))
+    monkeypatch.setattr(
+        labeller, 'ranked_detection_metrics',
+        lambda detections, original, threshold, score_threshold: dict(
+            top1_hit=False))
+
+    result = labeller.native_nms_counterfactual(
+        torch.zeros((3, 5), dtype=torch.float32),
+        torch.tensor([0.9, 0.8, 0.1]),
+        np.zeros((1, 5), dtype=np.float32), {},
+        SimpleNamespace(
+            max_detections=2000, riou_thr=0.5,
+            valid_content_tolerance=1e-3,
+            deployment_score_thr=0.05),
+        nms_iou_thr=0.5)
+    assert result['decoded_candidate_count'] == 3
+    assert result['post_nms_usable_count'] == 1
+    assert result['post_valid_usable_count'] == 1
+    assert result['nms_suppressed_usable_count'] == 0
+    assert result['resolved_failure_stage'] == 'FINAL_ORDERING'
+
+
+def test_formal_nms_paired_summary_reports_transitions_and_groups():
+    def row(group, historical_hit, formal_hit, historical_stage,
+            formal_stage):
+        return dict(
+            attribution=dict(group=group),
+            trace=dict(
+                resolved_failure_stage=historical_stage,
+                final_post_valid_metrics=dict(top1_hit=historical_hit),
+                formal_nms_paired_audit=dict(
+                    resolved_failure_stage=formal_stage,
+                    post_nms_usable_count=int(
+                        formal_stage not in ('NMS_SUPPRESSION',
+                                             'ROI_REGRESSION')),
+                    final_post_valid_metrics=dict(top1_hit=formal_hit))))
+
+    summary = labeller.summarize_formal_nms_paired_audit([
+        row('seq03_small', False, True,
+            'NMS_SUPPRESSION', 'TOP1_SUCCESS'),
+        row('seq03_small', False, False,
+            'NMS_SUPPRESSION', 'FINAL_ORDERING'),
+        row('seq02_far', True, True,
+            'TOP1_SUCCESS', 'TOP1_SUCCESS'),
+    ])
+    assert summary['historical_top1_hit_count'] == 1
+    assert summary['formal_top1_hit_count'] == 2
+    assert summary['top1_transitions'] == {
+        'both_fail': 1, 'both_success': 1,
+        'historical_fail_to_formal_success': 1}
+    assert summary['formal_nms_suppression_failure_count'] == 0
+    assert summary['by_group']['seq03_small']['frame_count'] == 2
+    assert summary['by_group']['seq02_far']['formal_top1_hit_count'] == 1
 
 
 def test_trace_reproduction_requires_same_metrics_and_failure_stage():

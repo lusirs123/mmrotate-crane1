@@ -9,6 +9,7 @@ read after the source-selected checkpoint has been fixed.
 """
 
 import argparse
+import ast
 import collections
 import copy
 import glob
@@ -633,6 +634,22 @@ def parse_args():
               'including SUCCESS_TOP1 records. Without this flag only '
               'review_required failure frames are traced.'))
     parser.add_argument(
+        '--native-candidate-trace-formal-nms-paired-audit',
+        action='store_true',
+        help=(
+            'On the same decoded candidates, compare the historical bound '
+            'NMS IoU 0.1 output with the already source-selected formal NMS '
+            'IoU 0.5 output. This is a read-only target diagnosis; it cannot '
+            'select or tune either threshold.'))
+    parser.add_argument(
+        '--native-candidate-trace-formal-config',
+        default=(
+            'crane_project/configs/'
+            'crane_symeood_formal_dino_native_s14_v1.py'),
+        help=(
+            'Formal native-S14 config whose fixed NMS policy is bound into '
+            'the paired-audit report.'))
+    parser.add_argument(
         '--source-native-quality-feasibility-audit', action='store_true',
         help=(
             'Read-only native-S14 candidate-quality support audit on the '
@@ -693,10 +710,57 @@ def validate_native_candidate_trace_args(args):
         raise ValueError('Native candidate trace locks RIoU to 0.5')
     if getattr(args, 'feature_strides', None) not in (None, [14]):
         raise ValueError('Native candidate trace requires native stride 14')
+    if bool(getattr(
+            args, 'native_candidate_trace_formal_nms_paired_audit', False)):
+        load_formal_native_nms_config_identity(
+            args.native_candidate_trace_formal_config)
     if os.path.exists(args.out_json):
         raise ValueError(
             'Refusing to overwrite candidate trace: {}'.format(
-                args.out_json))
+            args.out_json))
+
+
+def load_formal_native_nms_config_identity(path: str) -> Dict:
+    """Validate the formal config fields needed by the paired NMS audit."""
+    if not path or not os.path.isfile(path):
+        raise ValueError('Formal native-S14 config does not exist: {}'.format(
+            path))
+    with open(path, 'r', encoding='utf-8') as handle:
+        source = handle.read()
+    tree = ast.parse(source, filename=path)
+    values = collections.defaultdict(list)
+    fields = {
+        'patch_size', 'height', 'max_long_side', 'proposal_count',
+        'max_detections', 'roi_nms_iou_thr', 'feature_strides',
+        's7_residual', 's7_protected_merge'}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.keyword) or node.arg not in fields:
+            continue
+        try:
+            values[node.arg].append(ast.literal_eval(node.value))
+        except (ValueError, TypeError):
+            raise ValueError(
+                'Formal config field {} must be a literal'.format(node.arg))
+    expected = dict(
+        patch_size=14, height=600, max_long_side=1333,
+        proposal_count=2000, max_detections=2000,
+        roi_nms_iou_thr=0.5, feature_strides=[14],
+        s7_residual=False, s7_protected_merge=False)
+    mismatched = []
+    observed = {}
+    for name, expected_value in expected.items():
+        candidates = values.get(name, [])
+        if len(candidates) != 1 or candidates[0] != expected_value:
+            mismatched.append(name)
+        else:
+            observed[name] = candidates[0]
+    if mismatched:
+        raise ValueError(
+            'Formal native-S14 config mismatch: {}'.format(
+                ', '.join(sorted(mismatched))))
+    return dict(
+        path=os.path.abspath(path), sha256=common.file_sha256(path),
+        verified_fields=observed)
 
 
 def validate_source_native_quality_feasibility_args(args):
@@ -748,6 +812,13 @@ def validate_source_native_quality_feasibility_args(args):
 def validate_args(args):
     if args.seed != 0:
         raise ValueError('The protocol requires --seed 0')
+    if (bool(getattr(
+            args, 'native_candidate_trace_formal_nms_paired_audit', False))
+            and not bool(getattr(
+                args, 'native_candidate_trace_audit', False))):
+        raise ValueError(
+            'Formal NMS paired audit requires '
+            '--native-candidate-trace-audit')
     if bool(getattr(args, 'native_candidate_trace_audit', False)):
         validate_native_candidate_trace_args(args)
     if bool(getattr(
@@ -3392,10 +3463,17 @@ def load_native_candidate_trace_spec(path: str, args) -> Dict:
             split=split, seq=seq, frame=frame,
             image=image, annotation=annotation,
             attribution=selected_by_key[(split, seq, frame)]))
+    formal_config = (
+        load_formal_native_nms_config_identity(
+            args.native_candidate_trace_formal_config)
+        if bool(getattr(
+            args, 'native_candidate_trace_formal_nms_paired_audit', False))
+        else None)
     return dict(
         path=os.path.abspath(path), sha256=common.file_sha256(path),
         groups=sorted(groups), checkpoint_sha256=checkpoint_sha,
         dinov2_checkpoint_sha256=dino_sha,
+        formal_config=formal_config,
         selection_mode=('all_records' if all_records else 'review_required'),
         records=records)
 
@@ -3520,6 +3598,81 @@ def _best_decoded_candidate_summary(candidate_rows: Sequence[Dict]) -> Dict:
         candidate_id=int(best['candidate_id']),
         riou=float(best['decoded_gt_riou']),
         disposition=str(best['disposition']))
+
+
+def native_nms_counterfactual(
+        decoded: torch.Tensor, scores: torch.Tensor,
+        original: np.ndarray, img_meta: Dict, args,
+        nms_iou_thr: float) -> Dict:
+    """Evaluate one preregistered NMS threshold on fixed decoded candidates.
+
+    This function performs no model forward and changes no score.  It exists
+    so the historical 0.1 trace and the already source-selected formal 0.5
+    policy can be compared on identical candidate tensors.
+    """
+    from mmcv.ops import nms_rotated
+
+    all_nms, all_keep = nms_rotated(
+        decoded, scores, float(nms_iou_thr))
+    max_detections = int(args.max_detections)
+    detections = all_nms[:max_detections]
+    kept = all_keep[:max_detections]
+    detections_np = detections.detach().cpu().numpy().astype(
+        np.float32, copy=False)
+    filtered, filter_stats = filter_valid_rotated_detections(
+        detections_np, img_meta, args.valid_content_tolerance)
+
+    decoded_riou = _candidate_overlap(decoded, original)
+    threshold = float(args.riou_thr)
+    usable = {
+        int(index) for index in torch.nonzero(
+            decoded_riou >= threshold, as_tuple=False
+        ).flatten().detach().cpu().tolist()}
+    all_kept = {
+        int(index) for index in all_keep.detach().cpu().tolist()}
+    limited_kept = [
+        int(index) for index in kept.detach().cpu().tolist()]
+    valid_mask = valid_rotated_detection_mask(
+        detections_np, img_meta, args.valid_content_tolerance)
+    valid_kept = {
+        candidate for rank, candidate in enumerate(limited_kept)
+        if bool(valid_mask[rank])}
+    suppressed_usable = usable - all_kept
+    suppressors = _nms_suppressor_indices(
+        decoded, scores, all_keep, float(nms_iou_thr))
+    wrong_suppressor_count = sum(
+        candidate in suppressors
+        and float(decoded_riou[
+            suppressors[candidate]['candidate_id']].item()) < threshold
+        for candidate in suppressed_usable)
+    metrics = ranked_detection_metrics(
+        filtered, original, threshold, args.deployment_score_thr)
+
+    if not usable:
+        stage = 'ROI_REGRESSION'
+    elif not (usable & all_kept):
+        stage = 'NMS_SUPPRESSION'
+    elif not (usable & set(limited_kept)):
+        stage = 'MAX_DETECTIONS_TRUNCATED'
+    elif not (usable & valid_kept):
+        stage = 'VALID_CONTENT_FILTER'
+    else:
+        stage = 'TOP1_SUCCESS' if metrics['top1_hit'] else 'FINAL_ORDERING'
+    return dict(
+        nms_iou_threshold=float(nms_iou_thr),
+        decoded_candidate_count=int(decoded.shape[0]),
+        nms_survivor_count_before_limit=int(all_keep.numel()),
+        post_nms_count=int(detections_np.shape[0]),
+        post_valid_count=int(filtered.shape[0]),
+        decoded_usable_count=int(len(usable)),
+        post_nms_usable_count=int(len(usable & set(limited_kept))),
+        post_valid_usable_count=int(len(usable & valid_kept)),
+        nms_suppressed_usable_count=int(len(suppressed_usable)),
+        nms_suppressed_usable_by_wrong_candidate_count=int(
+            wrong_suppressor_count),
+        resolved_failure_stage=stage,
+        final_post_valid_metrics=metrics,
+        valid_content_filter=filter_stats)
 
 
 def native_candidate_trace_frame(heads, feature: torch.Tensor,
@@ -3652,7 +3805,7 @@ def native_candidate_trace_frame(heads, feature: torch.Tensor,
         resolved_stage = (
             'TOP1_SUCCESS' if final_metrics['top1_hit']
             else 'FINAL_ORDERING')
-    return dict(
+    result = dict(
         thresholds=dict(
             riou=threshold, roi_score=0.0,
             roi_nms_iou=nms_iou_thr,
@@ -3682,6 +3835,15 @@ def native_candidate_trace_frame(heads, feature: torch.Tensor,
         valid_content_filter=filter_stats,
         reconstruction=reconstruction,
         candidates=candidate_rows)
+    if bool(getattr(
+            args, 'native_candidate_trace_formal_nms_paired_audit', False)):
+        formal = native_nms_counterfactual(
+            decoded, scores, original, img_meta, args,
+            nms_iou_thr=0.5)
+        if not usable_decoded:
+            formal['resolved_failure_stage'] = resolved_stage
+        result['formal_nms_paired_audit'] = formal
+    return result
 
 
 def summarize_native_candidate_trace(rows: Sequence[Dict]) -> Dict:
@@ -3725,6 +3887,61 @@ def summarize_native_candidate_trace(rows: Sequence[Dict]) -> Dict:
         attributed_roi_ordering_or_nms_count=int(sum(
             row['attribution']['attribution'] == 'ROI_ORDERING_OR_NMS'
             for row in rows)))
+
+
+def _summarize_formal_nms_pair_rows(rows: Sequence[Dict]) -> Dict:
+    transitions = collections.Counter()
+    formal_stages = collections.Counter()
+    historical_stages = collections.Counter()
+    for row in rows:
+        historical = row['trace']
+        formal = historical['formal_nms_paired_audit']
+        historical_hit = bool(
+            historical['final_post_valid_metrics']['top1_hit'])
+        formal_hit = bool(formal['final_post_valid_metrics']['top1_hit'])
+        transition = (
+            'historical_fail_to_formal_success'
+            if not historical_hit and formal_hit else
+            'historical_success_to_formal_fail'
+            if historical_hit and not formal_hit else
+            'both_success' if historical_hit else 'both_fail')
+        transitions[transition] += 1
+        historical_stages[historical['resolved_failure_stage']] += 1
+        formal_stages[formal['resolved_failure_stage']] += 1
+    return dict(
+        frame_count=int(len(rows)),
+        historical_nms_iou_threshold=0.1,
+        formal_nms_iou_threshold=0.5,
+        top1_transitions=dict(sorted(transitions.items())),
+        historical_failure_stage_counts=dict(sorted(
+            historical_stages.items())),
+        formal_failure_stage_counts=dict(sorted(formal_stages.items())),
+        historical_top1_hit_count=int(sum(
+            row['trace']['final_post_valid_metrics']['top1_hit']
+            for row in rows)),
+        formal_top1_hit_count=int(sum(
+            row['trace']['formal_nms_paired_audit'][
+                'final_post_valid_metrics']['top1_hit']
+            for row in rows)),
+        formal_post_nms_usable_frame_count=int(sum(
+            row['trace']['formal_nms_paired_audit'][
+                'post_nms_usable_count'] > 0 for row in rows)),
+        formal_nms_suppression_failure_count=int(sum(
+            row['trace']['formal_nms_paired_audit'][
+                'resolved_failure_stage'] == 'NMS_SUPPRESSION'
+            for row in rows)))
+
+
+def summarize_formal_nms_paired_audit(rows: Sequence[Dict]) -> Dict:
+    """Summarize the fixed 0.1-vs-0.5 comparison globally and by group."""
+    summary = _summarize_formal_nms_pair_rows(rows)
+    grouped = collections.defaultdict(list)
+    for row in rows:
+        grouped[str(row['attribution']['group'])].append(row)
+    summary['by_group'] = {
+        group: _summarize_formal_nms_pair_rows(group_rows)
+        for group, group_rows in sorted(grouped.items())}
+    return summary
 
 
 def validate_native_trace_reproduction(
@@ -3828,10 +4045,14 @@ def build_native_candidate_trace_audit(
                 attribution=record['attribution'],
                 reproduction=reproduction, trace=trace))
             print('[native-candidate-trace] {}/{} seq={} frame={} '
-                  'decoded_usable={} post_nms_usable={}'.format(
+                  'decoded_usable={} post_nms_usable={}{}'.format(
                       index + 1, len(spec['records']), record['seq'],
                       record['frame'], trace['counts']['decoded_usable'],
-                      trace['counts']['post_nms_usable']))
+                      trace['counts']['post_nms_usable'],
+                      ('' if 'formal_nms_paired_audit' not in trace else
+                       ' formal_nms_0.5_usable={}'.format(
+                           trace['formal_nms_paired_audit'][
+                               'post_nms_usable_count']))))
             del feature, _gt_boxes, _gt_labels
     dino_unchanged = (
         dino_versions == common.module_parameter_versions(dino))
@@ -3839,9 +4060,14 @@ def build_native_candidate_trace_audit(
         head_versions == common.module_parameter_versions(heads))
     if not dino_unchanged or not heads_unchanged:
         raise RuntimeError('Native candidate trace changed frozen parameters')
-    return dict(
-        audit='Frozen DINO Native-S14 Candidate Trace Audit V3',
-        protocol_version=3,
+    paired_audit = bool(getattr(
+        args, 'native_candidate_trace_formal_nms_paired_audit', False))
+    result = dict(
+        audit=(
+            'Frozen DINO Native-S14 Formal NMS Paired Audit V4'
+            if paired_audit else
+            'Frozen DINO Native-S14 Candidate Trace Audit V3'),
+        protocol_version=(4 if paired_audit else 3),
         protocol=dict(
             operation='read_only_candidate_trace',
             groups=spec['groups'],
@@ -3857,6 +4083,11 @@ def build_native_candidate_trace_audit(
             suppression_mapping='actual_nms_keep_plus_pairwise_overlap_trace',
             feature_mode='fresh_fp32_matching_bound_attrition_audit',
             bound_roi_nms_iou_threshold=0.1,
+            formal_source_selected_roi_nms_iou_threshold=(
+                0.5 if paired_audit else None),
+            paired_threshold_role=(
+                'fixed_historical_vs_already_source_selected_formal_policy'
+                if paired_audit else None),
             candidate_count_reproduction_required=True,
             metric_reproduction_absolute_tolerance=float(
                 NATIVE_TRACE_METRIC_REPRODUCTION_ATOL)),
@@ -3874,10 +4105,19 @@ def build_native_candidate_trace_audit(
                 sha256=spec['checkpoint_sha256']),
             dinov2_checkpoint=dict(
                 path=os.path.abspath(args.dinov2_checkpoint),
-                sha256=spec['dinov2_checkpoint_sha256'])),
+                sha256=spec['dinov2_checkpoint_sha256']),
+            formal_native_s14_config=(
+                spec.get('formal_config') if paired_audit else None)),
         summary=summarize_native_candidate_trace(rows),
         rows=rows,
-        decision='SMALL_TARGET_CANDIDATE_TRACE_COMPLETE_DIAGNOSIS_ONLY')
+        decision=(
+            'FORMAL_NMS_PAIRED_DIAGNOSIS_COMPLETE_NO_THRESHOLD_SELECTION'
+            if paired_audit else
+            'SMALL_TARGET_CANDIDATE_TRACE_COMPLETE_DIAGNOSIS_ONLY'))
+    if paired_audit:
+        result['formal_nms_paired_summary'] = (
+            summarize_formal_nms_paired_audit(rows))
+    return result
 
 
 def load_source_native_quality_reference(path: str, args) -> Dict:
@@ -13619,6 +13859,14 @@ def main():
                   result['summary']['frame_count'],
                   result['summary'][
                       'nms_suppressed_usable_candidate_count']))
+        if result.get('formal_nms_paired_summary') is not None:
+            paired = result['formal_nms_paired_summary']
+            print('[formal-nms-paired] historical_top1={}/{} '
+                  'formal_top1={}/{} formal_nms_failures={}'.format(
+                      paired['historical_top1_hit_count'],
+                      paired['frame_count'], paired['formal_top1_hit_count'],
+                      paired['frame_count'],
+                      paired['formal_nms_suppression_failure_count']))
         print('[json] nonfinite_replacements={}'.format(replacements))
         print('[out] {}'.format(args.out_json))
         return
