@@ -1,8 +1,9 @@
 """Small trainable refinement for frozen native DINO feature maps.
 
-The adapter is intentionally residual and zero initialized.  At initialization
-it is an exact identity, so a checkpoint loaded into the new route reproduces
-the audited native S14 detector before source-only optimization.
+The adapter is intentionally residual with a zero output projection.  At
+initialization it is an exact identity, so a checkpoint loaded into the new
+route reproduces the audited native S14 detector before source-only
+optimization, while the projection still has a usable gradient.
 """
 
 import torch
@@ -26,7 +27,12 @@ class NativeSpatialAdapter(nn.Module):
             nn.GELU(),
             nn.Conv2d(hidden_channels, channels, 1, bias=False),
         )
-        self.residual_gate = nn.Parameter(torch.zeros(()))
+        # Keep the initial mapping exactly identity because the output
+        # projection is zero, while leaving a gradient path open through the
+        # residual branch.  A zero gate together with a zero output
+        # projection would multiply both gradients by zero and make the
+        # adapter permanently untrainable.
+        self.residual_gate = nn.Parameter(torch.ones(()))
         nn.init.zeros_(self.refinement[-1].weight)
 
     def forward(self, feature: torch.Tensor) -> torch.Tensor:

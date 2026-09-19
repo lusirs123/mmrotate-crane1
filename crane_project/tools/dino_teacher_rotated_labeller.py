@@ -12288,6 +12288,8 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                     args, 'native_spatial_adapter_hidden', 128)),
                 same_stride=True,
                 zero_initialized_residual=True,
+                zero_initialized_output_projection=True,
+                residual_gate_initial_value=1.0,
                 feeds=['native_rpn', 'native_roi'])),
         s7_inference_enabled=bool(heads.s7_inference_enabled()),
         roi_cls_teacher_state=heads.roi_cls_teacher_state(),
@@ -13025,7 +13027,13 @@ def train_source_only(dino, heads, train_records, val_records, args,
         s7_rpn_mode or s7_merge_mode or s7_lane_mode or s7_quality_mode
         or s7_temporal_mode or s7_student_mode or s7_static_mode
         or s7_selective_mode or s7_highres_mode)
-    protected_source_mode = bool(roi_cls_mode or s7_mode)
+    # Native spatial adapter training is also a protected source-only stage:
+    # it must be compared with its pre-adaptation native-S14 baseline and
+    # must report exact old-correct-frame retention plus small-object results.
+    native_spatial_adapter_mode = (
+        args.train_components == 'native_spatial_adapter')
+    protected_source_mode = bool(
+        roi_cls_mode or s7_mode or native_spatial_adapter_mode)
     args.s7_student_teacher_reproduction_gate = None
     trainable_names = configure_trainable_components(
         heads, args.train_components)

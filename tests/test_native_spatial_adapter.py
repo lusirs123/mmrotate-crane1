@@ -11,6 +11,16 @@ def test_adapter_identity_and_gradient_path():
     assert torch.equal(y.detach(), x.detach())
     y.square().mean().backward()
     assert module.residual_gate.grad is not None
+    # Identity at initialization must not mean a dead residual branch.  The
+    # zero output projection receives a usable gradient; after it moves, the
+    # gate and earlier layers can receive gradients on the next step.
+    assert module.refinement[-1].weight.grad is not None
+    assert module.refinement[-1].weight.grad.abs().max().item() > 0.0
+    optimizer = torch.optim.SGD(module.parameters(), lr=0.1)
+    optimizer.step()
+    module.zero_grad(set_to_none=True)
+    module(x).square().mean().backward()
+    assert module.residual_gate.grad.abs().max().item() > 0.0
 
 
 def test_adapter_rejects_non_image_tensor():
