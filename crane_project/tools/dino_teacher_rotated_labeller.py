@@ -13562,7 +13562,8 @@ def train_source_only(dino, heads, train_records, val_records, args,
         source_domain_summary = None
         protected_gate = None
         if val_summary is not None and protected_source_mode:
-            if args.train_components in pairwise_modes or s7_mode:
+            if (args.train_components in pairwise_modes or s7_mode
+                    or native_spatial_adapter_mode):
                 retention_summary = source_top1_retention_summary(
                     source_baseline_correct_keys, val_rows)
                 if s7_highres_mode and bool(getattr(
