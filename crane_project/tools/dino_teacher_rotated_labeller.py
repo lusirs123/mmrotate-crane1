@@ -37,6 +37,8 @@ if PROJ_ROOT not in sys.path:
 from crane_project.tools import dino_teacher_common as common  # noqa: E402
 from crane_project.utils import rotated_geometry_quality as geometry  # noqa: E402
 from crane_project.utils import s7_temporal_association as temporal  # noqa: E402
+from crane_project.utils.native_spatial_adapter import (  # noqa: E402
+    NativeSpatialAdapter)
 
 
 LABELLER_NAME = 'Frozen DINOv2 Oriented RPN/ROI Source Labeller V1'
@@ -98,6 +100,11 @@ def parse_args():
     parser.add_argument('--patch-size', type=int, default=14)
     parser.add_argument('--rpn-feat-channels', type=int, default=256)
     parser.add_argument('--roi-fc-channels', type=int, default=1024)
+    parser.add_argument('--native-spatial-adapter-hidden', type=int, default=128)
+    parser.add_argument(
+        '--native-spatial-adapter', action='store_true',
+        help='Instantiate the learned native feature refinement for inference '
+             'or native_spatial_adapter training.')
     parser.add_argument('--roi-samples', type=int, default=256)
     parser.add_argument('--proposal-count', type=int, default=2000)
     parser.add_argument('--max-detections', type=int, default=2000)
@@ -157,6 +164,7 @@ def parse_args():
         '--train-components',
         choices=['all', 'roi_cls', 'roi_cls_pairwise',
                  'roi_cls_pairwise_v2', 's7_rpn', 's7_merge',
+                 'native_spatial_adapter',
                  's7_lane_arbitration', 's7_quality_suppression',
                  's7_temporal_association', 's7_temporal_student',
                  's7_static_domain_ranker', 's7_selective_promotion',
@@ -2162,6 +2170,25 @@ def validate_args(args):
         raise ValueError(
             'S7 source-only stages are limited to 4 epochs; extend only after '
             'source validation shows the selected component is improving')
+    if args.train_components == 'native_spatial_adapter':
+        if not (args.init_checkpoint or args.resume_checkpoint
+                or args.eval_only_checkpoint):
+            raise ValueError(
+                'native_spatial_adapter requires an initialized native S14 '
+                'checkpoint')
+        if not args.source_train_datasets or not args.source_val_datasets:
+            raise ValueError(
+                'native_spatial_adapter requires formal source train/val '
+                'datasets')
+        if not getattr(args, 'skip_target_eval', False):
+            raise ValueError(
+                'native_spatial_adapter is source-only; pass '
+                '--skip-target-eval')
+        if args.source_retain_max_top1_drop != 0:
+            raise ValueError(
+                'native_spatial_adapter requires exact source retention')
+        if int(getattr(args, 'native_spatial_adapter_hidden', 128)) <= 0:
+            raise ValueError('--native-spatial-adapter-hidden must be positive')
     if args.train_components == 'roi_cls_pairwise_v2':
         if args.epochs > PAIRWISE_V2_MAX_EPOCHS:
             raise ValueError(
@@ -2212,6 +2239,12 @@ def configure_trainable_components(heads, train_components: str) -> List[str]:
         for module in (heads.s7_readout, heads.s7_rpn_head):
             for parameter in module.parameters():
                 parameter.requires_grad_(True)
+    elif train_components == 'native_spatial_adapter':
+        if heads.native_spatial_adapter is None:
+            raise RuntimeError(
+                'native_spatial_adapter mode did not instantiate its module')
+        for parameter in heads.native_spatial_adapter.parameters():
+            parameter.requires_grad_(True)
     elif train_components == 's7_merge':
         if (not getattr(heads, 's7_protected_merge', False)
                 or heads.s7_score_calibrator is None):
@@ -2319,6 +2352,13 @@ def optimization_loss_total(losses: Dict, train_components: str):
         if 'loss_cls' not in losses:
             raise RuntimeError('ROI classification loss is missing')
         return loss_total({'loss_cls': losses['loss_cls']})
+    if train_components == 'native_spatial_adapter':
+        required = ('loss_rpn_cls', 'loss_rpn_bbox', 'loss_cls', 'loss_bbox')
+        missing = [name for name in required if name not in losses]
+        if missing:
+            raise RuntimeError('Native adapter losses missing: {}'.format(
+                ', '.join(missing)))
+        return loss_total({name: losses[name] for name in required})
     if train_components == 's7_rpn':
         required = ('loss_s7_rpn_cls', 'loss_s7_rpn_bbox')
         missing = [name for name in required if name not in losses]
@@ -2466,6 +2506,8 @@ def optimization_loss_component_names(
         return ['loss_rpn_cls', 'loss_rpn_bbox', 'loss_cls', 'loss_bbox']
     if train_components == 's7_rpn':
         return ['loss_s7_rpn_cls', 'loss_s7_rpn_bbox']
+    if train_components == 'native_spatial_adapter':
+        return ['loss_rpn_cls', 'loss_rpn_bbox', 'loss_cls', 'loss_bbox']
     if train_components == 's7_merge':
         return [
             'loss_s7_merge_retention', 'loss_s7_merge_gain',
@@ -4806,6 +4848,13 @@ class FrozenDinoRotatedHeads(nn.Module):
         self.roi_head = build_head(ConfigDict(roi_config(in_channels, args)))
         self.rpn_head.init_weights()
         self.roi_head.init_weights()
+        self.native_spatial_adapter = (
+            NativeSpatialAdapter(
+                int(in_channels),
+                int(getattr(args, 'native_spatial_adapter_hidden', 128)))
+            if (getattr(args, 'native_spatial_adapter', False)
+                or getattr(args, 'train_components', '') ==
+                'native_spatial_adapter') else None)
         self.proposal_cfg = ConfigDict(rpn_proposal_config(args))
         self.s7_enabled = bool(getattr(args, 's7_residual', False))
         self.s7_protected_merge = bool(getattr(
@@ -5559,6 +5608,9 @@ class FrozenDinoRotatedHeads(nn.Module):
         RPN/ROI weights are still trained source-only when this option is
         enabled.
         """
+        adapter = getattr(self, 'native_spatial_adapter', None)
+        if adapter is not None:
+            feature = adapter(feature)
         strides = feature_strides(self._args)
         if strides == [int(self._args.patch_size)]:
             return [feature]
@@ -6898,6 +6950,8 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                 heads, 's7_highres_native_relative_risk_head', None)
             if risk_head is not None:
                 risk_head.train()
+    elif args.train_components == 'native_spatial_adapter':
+        heads.native_spatial_adapter.train()
     if head_device.type == 'cuda':
         torch.cuda.reset_peak_memory_stats(head_device)
     ordered = ordered_source_training_records(records, args, epoch)
@@ -7092,6 +7146,9 @@ def train_epoch(dino, heads, optimizer, records: Sequence[Dict], epoch: int,
                     or bool(getattr(
                         args, 's7_highres_pairwise_takeover_v2', False))):
                 output['s7_highres_augmented'] = int(static_augmented)
+        elif args.train_components == 'native_spatial_adapter':
+            output = heads.forward_train(
+                feature, img_meta, gt_boxes, gt_labels)
         elif args.train_components == 'roi_cls':
             output = heads.forward_roi_cls_hard_train(
                 feature, img_meta, gt_boxes, args.roi_samples,
@@ -11830,7 +11887,8 @@ def load_heads_checkpoint_state(heads, payload: Dict,
                                 allow_temporal_student_initialization: bool = False,
                                 allow_static_domain_initialization: bool = False,
                                 allow_selective_promotion_initialization: bool = False,
-                                allow_highres_roi_initialization: bool = False):
+                                allow_highres_roi_initialization: bool = False,
+                                allow_native_spatial_adapter_initialization: bool = False):
     """Load a checkpoint while allowing only explicitly new branch keys."""
     if (allow_s7_base_initialization
             or allow_lane_arbitration_initialization
@@ -11839,7 +11897,8 @@ def load_heads_checkpoint_state(heads, payload: Dict,
             or allow_temporal_student_initialization
             or allow_static_domain_initialization
             or allow_selective_promotion_initialization
-            or allow_highres_roi_initialization):
+            or allow_highres_roi_initialization
+            or allow_native_spatial_adapter_initialization):
         incompatible = heads.load_state_dict(
             payload['heads_state_dict'], strict=False)
         allowed_prefixes = []
@@ -11865,6 +11924,8 @@ def load_heads_checkpoint_state(heads, payload: Dict,
                 's7_highres_candidate_quality_head.',
                 's7_highres_pairwise_takeover_head.',
                 's7_highres_native_relative_risk_head.'))
+        if allow_native_spatial_adapter_initialization:
+            allowed_prefixes.append('native_spatial_adapter.')
         disallowed_missing = [
             name for name in incompatible.missing_keys
             if not any(name.startswith(prefix) for prefix in allowed_prefixes)]
@@ -11896,7 +11957,23 @@ def load_heads_checkpoint_state(heads, payload: Dict,
         if allow_temporal_student_initialization:
             heads.initialize_temporal_student_from_teacher()
         return
-    heads.load_state_dict(payload['heads_state_dict'], strict=True)
+    try:
+        heads.load_state_dict(payload['heads_state_dict'], strict=True)
+    except RuntimeError:
+        if getattr(heads, 'native_spatial_adapter', None) is None:
+            raise
+        incompatible = heads.load_state_dict(
+            payload['heads_state_dict'], strict=False)
+        allowed = ['native_spatial_adapter.']
+        if (incompatible.missing_keys
+                and all(any(name.startswith(prefix) for prefix in allowed)
+                        for name in incompatible.missing_keys)
+                and not incompatible.unexpected_keys):
+            heads.set_s7_inference_enabled(bool(payload.get(
+                's7_inference_enabled',
+                payload.get('s7_architecture', {}).get('enabled', False))))
+            return
+        raise
     enabled = bool(payload.get(
         's7_inference_enabled',
         payload.get('s7_architecture', {}).get('enabled', False)))
@@ -12203,6 +12280,15 @@ def checkpoint_payload(heads, optimizer, scheduler, epoch: int,
                 implementation_scope='inspired_lightweight_residual_readout')
             if bool(getattr(args, 's7_residual', False)) else None),
         s7_architecture=s7_architecture(args),
+        native_spatial_adapter=(
+            None if getattr(heads, 'native_spatial_adapter', None) is None
+            else dict(
+                enabled=True,
+                hidden_channels=int(getattr(
+                    args, 'native_spatial_adapter_hidden', 128)),
+                same_stride=True,
+                zero_initialized_residual=True,
+                feeds=['native_rpn', 'native_roi'])),
         s7_inference_enabled=bool(heads.s7_inference_enabled()),
         roi_cls_teacher_state=heads.roi_cls_teacher_state(),
         training_protocol=dict(
