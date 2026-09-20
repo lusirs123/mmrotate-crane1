@@ -34,3 +34,19 @@ def test_measurement_validity_rejects_non_fixed_or_overlapping_intervals():
         assert 'fixed-test' in str(exc)
     else:
         raise AssertionError('expected fixed-test validation failure')
+
+
+def test_measurement_validity_can_slice_online_component_states():
+    report = {
+        'fixed_test_read': True,
+        'evaluation_thresholds': {'center_error_threshold_px': 5.0},
+        'records': [{'frame_key': 'seq_00001',
+                     'offline_errors': {'raw': {'center': 1.0}},
+                     'offline_riou': {'raw': 0.5}}]}
+    online = {'records': [{'frame_key': 'seq_00001', 'observations': {
+        'raw': {component: {'state': 'measurement'}
+                for component in ('center', 'scale', 'angle')}}}]}
+    audit = build_audit(report, {}, online_report=online)
+    assert audit['online_component_states_included'] is True
+    assert audit['methods']['raw']['component_raw']['center'][
+        'output_coverage'] == 1.0

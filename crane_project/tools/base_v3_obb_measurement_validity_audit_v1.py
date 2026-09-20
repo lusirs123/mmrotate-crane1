@@ -64,7 +64,35 @@ def _metric(rows, method):
     }
 
 
-def build_audit(report, intervals):
+def _state_metric(rows, online_by_key, method, component, threshold):
+    states = []
+    errors = []
+    for row in rows:
+        observation = online_by_key[row['frame_key']]['observations'][method][component]
+        states.append(observation.get('state'))
+        value = row.get('offline_errors', {}).get(method, {}).get(component)
+        if value is not None:
+            errors.append(float(value))
+    longest = current = 0
+    for state in states:
+        current = current + 1 if state == 'unavailable' else 0
+        longest = max(longest, current)
+    bad = sum(value > threshold for value in errors)
+    return {
+        'frame_count': len(rows),
+        'measurement_count': states.count('measurement'),
+        'prediction_count': states.count('prediction'),
+        'unavailable_count': states.count('unavailable'),
+        'output_coverage': ((len(rows) - states.count('unavailable')) / len(rows)
+                            if rows else 0.0),
+        'longest_unavailable_run': longest,
+        'bad_available_output_rate': bad / len(errors) if errors else None,
+        'correct_output_coverage': ((len(errors) - bad) / len(rows)
+                                    if rows else 0.0),
+    }
+
+
+def build_audit(report, intervals, online_report=None):
     if report.get('fixed_test_read') is not True:
         raise RuntimeError('Input must be a fixed-test finalization report')
     _validate_intervals(intervals)
@@ -75,6 +103,12 @@ def build_audit(report, intervals):
                       row.get('offline_errors', {})})
     if not methods:
         raise RuntimeError('Input report contains no offline method records')
+    online_by_key = None
+    if online_report is not None:
+        online_records = online_report.get('records') or []
+        online_by_key = {row.get('frame_key'): row for row in online_records}
+        if set(online_by_key) != {row.get('frame_key') for row in records}:
+            raise RuntimeError('Online and finalization frame keys differ')
     excluded = []
     valid = []
     for row in records:
@@ -90,6 +124,12 @@ def build_audit(report, intervals):
                         else None))
         (excluded if item['exclusion_reason'] else valid).append(item)
     by_method = {}
+    thresholds = report.get('evaluation_thresholds') or {}
+    component_thresholds = {
+        'center': float(thresholds.get('center_error_threshold_px', 5.0)),
+        'scale': float(thresholds.get('scale_relative_error_threshold', 0.1)),
+        'angle': float(thresholds.get('angle_error_threshold_deg', 3.0)),
+    }
     for method in methods:
         all_rows = records
         valid_keys = {r['frame_key'] for r in valid}
@@ -101,6 +141,17 @@ def build_audit(report, intervals):
             'measurement_valid': _metric(valid_rows, method),
             'excluded_interval': _metric(excluded_rows, method),
         }
+        if online_by_key is not None:
+            by_method[method]['component_raw'] = {
+                component: _state_metric(
+                    all_rows, online_by_key, method, component,
+                    component_thresholds[component])
+                for component in component_thresholds}
+            by_method[method]['component_measurement_valid'] = {
+                component: _state_metric(
+                    valid_rows, online_by_key, method, component,
+                    component_thresholds[component])
+                for component in component_thresholds}
     return {
         'protocol': PROTOCOL,
         'input_protocol': report.get('protocol'),
@@ -112,6 +163,7 @@ def build_audit(report, intervals):
             'mean_riou'],
         'full_temporal_metrics_remain_in_source_report': [
             'DFR', 'ACI', 'MCML'],
+        'online_component_states_included': online_by_key is not None,
         'excluded_interval_count': len(excluded),
         'excluded_frame_keys': [r['frame_key'] for r in excluded],
         'methods': by_method,
@@ -124,15 +176,24 @@ def main():
     parser.add_argument('--intervals-json', required=True,
                         help='JSON object: sequence -> [[first_frame,last_frame]]')
     parser.add_argument('--out-json', required=True)
+    parser.add_argument('--online-report')
     args = parser.parse_args()
     identity = _identity(args.report)
     report = json.loads(Path(args.report).read_text(encoding='utf-8'))
+    online_report = None
+    online_identity = None
+    if args.online_report:
+        online_identity = _identity(args.online_report)
+        online_report = json.loads(
+            Path(online_identity['path']).read_text(encoding='utf-8'))
     intervals = json.loads(Path(args.intervals_json).read_text(encoding='utf-8'))
     if not isinstance(intervals, dict):
         raise RuntimeError('Intervals must be a JSON object')
-    audit = build_audit(report, intervals)
+    audit = build_audit(report, intervals, online_report=online_report)
     audit['input_identity'] = identity
     audit['intervals'] = intervals
+    if online_identity is not None:
+        audit['online_input_identity'] = online_identity
     out = Path(args.out_json)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(audit, ensure_ascii=False, indent=2) + '\n',
