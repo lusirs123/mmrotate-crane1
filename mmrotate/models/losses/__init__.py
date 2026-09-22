@@ -11,9 +11,11 @@ from .spatial_border_loss import SpatialBorderLoss
 from .sym_kld_calculator import sym_kld
 from .sym_kld_loss import SymKLDLoss
 from .sym_nfl_loss import SymNFLLoss
+from .semantic_feature_distill import SemanticFeatureDistillation
 
 __all__ = [
     'GDLoss', 'GDLoss_v1', 'KFLoss', 'ConvexGIoULoss', 'BCConvexGIoULoss',
     'KLDRepPointsLoss', 'SmoothFocalLoss', 'RotatedIoULoss',
-    'SpatialBorderLoss','sym_kld', 'SymKLDLoss','SymNFLLoss'
+    'SpatialBorderLoss','sym_kld', 'SymKLDLoss','SymNFLLoss',
+    'SemanticFeatureDistillation'
 ]

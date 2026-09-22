@@ -160,6 +160,22 @@ class SymEOODHead(RotatedRetinaHead):
         """
         return [self.aux2_retina_cls(feat) for feat in feats]
 
+    def forward_semantic_distillation_features(self, feats,
+                                               protect_geometry=True):
+        """Return classification-tower features for semantic distillation.
+
+        With ``protect_geometry=True`` the FPN input is detached before the
+        classification tower.  Distillation can update ``cls_convs`` while
+        it cannot update backbone/FPN or the independent regression tower.
+        """
+        outputs = []
+        for feat in feats:
+            cls_feat = feat.detach() if protect_geometry else feat
+            for cls_conv in self.cls_convs:
+                cls_feat = cls_conv(cls_feat)
+            outputs.append(cls_feat)
+        return tuple(outputs)
+
     @force_fp32(apply_to=('cls_scores', 'bbox_preds'))
     def loss(self,
              cls_scores,

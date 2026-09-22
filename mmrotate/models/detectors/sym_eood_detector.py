@@ -8,6 +8,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from mmdet.models.detectors.single_stage import SingleStageDetector
 from mmrotate.models.builder import ROTATED_DETECTORS, build_head, build_loss
+from mmrotate.models.losses.semantic_feature_distill import (
+    SemanticFeatureDistillation)
 from mmrotate.core import build_assigner
 from mmrotate.models.dense_heads.rotated_atss_head import RotatedATSSHead
 from mmrotate.core import rbbox2result
@@ -70,6 +72,7 @@ class SymEOOD(SingleStageDetector):
                  pqa_dark_gamma_range=(0.5, 0.9),
                  pqa_dark_contrast_range=(0.7, 1.1),
                  pqa_dark_noise_std_range=(0.0, 10.0),
+                 semantic_distillation=None,
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None,
@@ -84,6 +87,31 @@ class SymEOOD(SingleStageDetector):
             backbone, neck, bbox_head,
             train_cfg, test_cfg, pretrained, init_cfg
         )
+
+        # Training-only teacher path.  A cached tensor is supplied by the
+        # data pipeline; no DINO model is constructed by this detector and
+        # simple_test therefore remains student-only.
+        self.semantic_distillation = None
+        self.semantic_distillation_scope = 'foreground'
+        self.semantic_distillation_protect_geometry = True
+        if semantic_distillation is not None:
+            cfg = copy.deepcopy(semantic_distillation)
+            enabled = bool(cfg.pop('enabled', True))
+            mode = str(cfg.pop('mode', 'feature'))
+            self.semantic_distillation_scope = str(
+                cfg.pop('scope', 'foreground'))
+            self.semantic_distillation_protect_geometry = bool(
+                cfg.pop('protect_geometry', True))
+            if mode != 'feature':
+                raise ValueError(
+                    "semantic_distillation mode must be 'feature'")
+            if self.semantic_distillation_scope not in ('foreground', 'all'):
+                raise ValueError(
+                    "semantic_distillation scope must be 'foreground' or "
+                    "'all'")
+            if enabled:
+                self.semantic_distillation = SemanticFeatureDistillation(
+                    **cfg)
 
         # Mode A: Anchor-based 辅助头
         if aux_bbox_head is not None:
@@ -292,12 +320,46 @@ class SymEOOD(SingleStageDetector):
             if val is not None:
                 setattr(self, cfg_key, val)
 
+    @staticmethod
+    def _build_distillation_foreground_mask(feature, img_metas,
+                                             gt_bboxes):
+        """Rasterize conservative GT regions in one FPN coordinate frame.
+
+        The mask uses the enclosing rectangle of each OBB.  It selects where
+        semantic knowledge may enter while leaving all box/angle targets and
+        the SymKLD regression loss unchanged.
+        """
+        batch, _, feat_h, feat_w = feature.shape
+        if len(img_metas) != batch or len(gt_bboxes) != batch:
+            raise ValueError('distillation mask batch metadata mismatch')
+        mask = feature.new_zeros((batch, 1, feat_h, feat_w))
+        for index, (meta, boxes) in enumerate(zip(img_metas, gt_bboxes)):
+            if boxes is None or boxes.numel() == 0:
+                continue
+            pad_h, pad_w = meta.get('pad_shape', meta['img_shape'])[:2]
+            sx = float(feat_w) / max(float(pad_w), 1.0)
+            sy = float(feat_h) / max(float(pad_h), 1.0)
+            for box in boxes.detach():
+                cx, cy, width, height = [float(v) for v in box[:4]]
+                x0 = max(0, min(feat_w - 1,
+                                int((cx - width / 2.0) * sx)))
+                x1 = max(x0 + 1, min(feat_w,
+                                     int((cx + width / 2.0) * sx) + 1))
+                y0 = max(0, min(feat_h - 1,
+                                int((cy - height / 2.0) * sy)))
+                y1 = max(y0 + 1, min(feat_h,
+                                     int((cy + height / 2.0) * sy) + 1))
+                mask[index, 0, y0:y1, x0:x1] = 1.0
+        return mask
+
     def forward_train(self,
                       img,
                       img_metas,
                       gt_bboxes,
                       gt_labels,
-                      gt_bboxes_ignore=None):
+                      gt_bboxes_ignore=None,
+                      teacher_features=None,
+                      **kwargs):
         """0.x 标准联合训练入口 + 可选 L_equi / L_invar / degraded-cls.
 
         L_equi: flip(img) 取角度预测, 不参与检测损失.
@@ -428,6 +490,23 @@ class SymEOOD(SingleStageDetector):
             degraded_aux2_cls_scores=degraded_aux2_cls_scores,
             platform_context_map=platform_context_map)
         losses.update(main_losses)
+
+        if self.semantic_distillation is not None:
+            if teacher_features is None:
+                raise RuntimeError(
+                    'semantic_distillation is enabled but teacher_features '
+                    'were not provided by the offline DINO cache pipeline')
+            spatial_mask = None
+            if self.semantic_distillation_scope == 'foreground':
+                level = self.semantic_distillation.feature_level
+                spatial_mask = self._build_distillation_foreground_mask(
+                    x[level], img_metas, gt_bboxes)
+            distill_features = (
+                self.bbox_head.forward_semantic_distillation_features(
+                    x, protect_geometry=(
+                        self.semantic_distillation_protect_geometry)))
+            losses['loss_semantic_distill'] = self.semantic_distillation(
+                distill_features, teacher_features, spatial_mask)
 
         # --- Independent reg-quality training ---
         # Hard detach prevents the quality target/loss from weakening cls or

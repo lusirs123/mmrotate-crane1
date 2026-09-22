@@ -1,11 +1,15 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import hashlib
+import glob
 import json
 import os
 import re
 
 import mmcv
 import numpy as np
+import torch
+import torch.nn.functional as F
+from mmcv.parallel import DataContainer as DC
 from mmdet.datasets.pipelines import LoadImageFromFile
 
 from ..builder import ROTATED_PIPELINES
@@ -14,6 +18,103 @@ from ..builder import ROTATED_PIPELINES
 _SOURCE_OWNED_AUDIT_PROTOCOL = 'source_owned_geometry_union_v2'
 _FRAME_RE = re.compile(
     r'^(?P<sequence>(?:real|sim)_seq\d+)_(?P<frame>\d+)$')
+
+
+@ROTATED_PIPELINES.register_module()
+class LoadDinoFeatureFromCache:
+    """Load a frozen DINO patch grid without running DINO during training.
+
+    The cache format is the one written by
+    ``dino_teacher_rotated_labeller.extract_or_load_feature``.  Exactly one
+    cache file must match each image.  The grid is transformed according to
+    the already-applied random flip and resized to a fixed shape so MMCV can
+    collate a batch without retaining variable-resolution teacher tensors.
+    """
+
+    def __init__(self, cache_dir, output_key='teacher_features',
+                 output_size=(64, 64), expected_channels=1024,
+                 expected_model='dinov2_vitl14',
+                 strict_image_identity=True):
+        self.cache_dir = os.path.abspath(os.fspath(cache_dir))
+        self.output_key = str(output_key)
+        self.output_size = tuple(int(value) for value in output_size)
+        self.expected_channels = int(expected_channels)
+        self.expected_model = str(expected_model)
+        self.strict_image_identity = bool(strict_image_identity)
+        if (len(self.output_size) != 2
+                or min(self.output_size) <= 0
+                or self.expected_channels <= 0):
+            raise ValueError('invalid DINO cache output shape/channels')
+
+    @staticmethod
+    def _load(path):
+        try:
+            return torch.load(path, map_location='cpu', weights_only=False)
+        except TypeError:
+            return torch.load(path, map_location='cpu')
+
+    def __call__(self, results):
+        filename = results.get('filename', results.get('ori_filename'))
+        if not filename:
+            raise RuntimeError('Image filename is unavailable to DINO cache')
+        stem = os.path.splitext(os.path.basename(os.fspath(filename)))[0]
+        if _FRAME_RE.match(stem) is None:
+            raise RuntimeError(
+                'Image filename does not encode sequence/frame: ' + stem)
+        candidates = sorted(glob.glob(os.path.join(
+            self.cache_dir, '*', stem + '_*.pth')))
+        matching = []
+        stat = os.stat(filename)
+        for path in candidates:
+            payload = self._load(path)
+            signature = payload.get('signature') or {}
+            identity = signature.get('image') or {}
+            same_size = int(identity.get('size', -1)) == int(stat.st_size)
+            same_name = (os.path.basename(str(identity.get('path', '')))
+                         == os.path.basename(os.fspath(filename)))
+            same_mtime = int(identity.get('mtime_ns', -1)) == int(
+                getattr(stat, 'st_mtime_ns', int(stat.st_mtime * 1e9)))
+            clean_feature = 'paired_view' not in signature
+            expected_model = signature.get('dinov2_model') == self.expected_model
+            if clean_feature and expected_model and same_size and same_name and (
+                    same_mtime or not self.strict_image_identity):
+                matching.append((path, payload))
+        if len(matching) != 1:
+            raise RuntimeError(
+                'Expected one valid DINO cache for {}, found {}'.format(
+                    filename, len(matching)))
+        path, payload = matching[0]
+        feature = payload.get('feature')
+        if (not payload.get('frozen_dinov2')
+                or not isinstance(feature, torch.Tensor)
+                or feature.ndim != 4 or feature.size(0) != 1
+                or feature.size(1) != self.expected_channels
+                or not bool(torch.isfinite(feature.float()).all().item())):
+            raise RuntimeError('Invalid frozen DINO feature cache: ' + path)
+        feature = feature[0].float()
+        direction = results.get('flip_direction') if results.get('flip') else None
+        if direction in ('horizontal', 'diagonal'):
+            feature = torch.flip(feature, dims=(-1,))
+        if direction in ('vertical', 'diagonal'):
+            feature = torch.flip(feature, dims=(-2,))
+        if direction not in (None, 'horizontal', 'vertical', 'diagonal'):
+            raise RuntimeError('Unsupported DINO feature flip: ' + str(direction))
+        feature = F.interpolate(
+            feature.unsqueeze(0), size=self.output_size, mode='bilinear',
+            align_corners=False)[0].half().contiguous()
+        results[self.output_key] = DC(feature, stack=True)
+        results['dino_feature_cache_path'] = path
+        with open(path, 'rb') as handle:
+            results['dino_feature_cache_sha256'] = hashlib.sha256(
+                handle.read()).hexdigest()
+        return results
+
+    def __repr__(self):
+        return ('{}(cache_dir={!r}, output_size={!r}, '
+                'expected_channels={!r}, expected_model={!r})').format(
+                    self.__class__.__name__, self.cache_dir,
+                    self.output_size, self.expected_channels,
+                    self.expected_model)
 
 
 def dino_invocation_encoding(record, box_key='dino_native_box'):
