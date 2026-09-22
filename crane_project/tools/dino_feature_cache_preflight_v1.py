@@ -1,11 +1,13 @@
 """CPU-only completeness/identity check for DINO feature distillation cache."""
 
 import argparse
+import gc
 import glob
 import hashlib
 import json
 import os
 import re
+import resource
 from pathlib import Path
 
 import torch
@@ -60,42 +62,72 @@ def image_files(data_root, datasets):
     return rows
 
 
+def _peak_rss_mib():
+    # Linux reports KiB, macOS reports bytes.  The server target is Linux;
+    # keep the platform distinction for local tests and diagnostics.
+    value = float(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+    return value / (1024.0 if os.uname().sysname == 'Linux' else 1024.0 ** 2)
+
+
 def inspect_cache(data_root, cache_dir, datasets, expected_channels=1024,
-                  expected_model='dinov2_vitl14'):
+                  expected_model='dinov2_vitl14', progress_interval=0):
     records = []
     valid = 0
+    load_error_count = 0
     annotation_splits = [item[0] for item in parse_dataset_specs(datasets)]
     split_counts = {str(split): 0 for split in annotation_splits}
-    for split, image in image_files(data_root, datasets):
+    images = image_files(data_root, datasets)
+    for image_index, (split, image) in enumerate(images, 1):
         split_counts[split] += 1
         stem = Path(image).stem
         candidates = sorted(glob.glob(os.path.join(
             cache_dir, split, stem + '_*.pth')))
         matched = []
+        load_errors = []
         stat = os.stat(image)
         for path in candidates:
-            payload = torch_load(path)
-            signature = payload.get('signature') or {}
-            identity = signature.get('image') or {}
-            feature = payload.get('feature')
-            okay = (
-                payload.get('frozen_dinov2') is True
-                and 'paired_view' not in signature
-                and signature.get('dinov2_model') == expected_model
-                and int(identity.get('size', -1)) == int(stat.st_size)
-                and int(identity.get('mtime_ns', -1)) == int(
-                    getattr(stat, 'st_mtime_ns', int(stat.st_mtime * 1e9)))
-                and isinstance(feature, torch.Tensor)
-                and feature.ndim == 4 and feature.size(0) == 1
-                and feature.size(1) == int(expected_channels)
-                and bool(torch.isfinite(feature.float()).all().item()))
-            if okay:
-                matched.append(path)
+            try:
+                with torch.no_grad():
+                    payload = torch_load(path)
+                    signature = payload.get('signature') or {}
+                    identity = signature.get('image') or {}
+                    feature = payload.get('feature')
+                    # isfinite supports FP16 CPU tensors; do not create the
+                    # former full-size feature.float() temporary.
+                    finite = (isinstance(feature, torch.Tensor)
+                              and bool(torch.isfinite(feature).all().item()))
+                    okay = (
+                        payload.get('frozen_dinov2') is True
+                        and 'paired_view' not in signature
+                        and signature.get('dinov2_model') == expected_model
+                        and int(identity.get('size', -1)) == int(stat.st_size)
+                        and int(identity.get('mtime_ns', -1)) == int(
+                            getattr(stat, 'st_mtime_ns',
+                                    int(stat.st_mtime * 1e9)))
+                        and isinstance(feature, torch.Tensor)
+                        and feature.ndim == 4 and feature.size(0) == 1
+                        and feature.size(1) == int(expected_channels)
+                        and finite)
+                    if okay:
+                        matched.append(path)
+                del feature, payload
+            except (EOFError, OSError, RuntimeError, ValueError) as error:
+                load_errors.append(dict(path=path, error=str(error)))
+                load_error_count += 1
         status = 'valid' if len(matched) == 1 else (
             'missing' if not matched else 'ambiguous')
         valid += int(status == 'valid')
         records.append(dict(split=split, image=image, status=status,
-                            matching_cache_files=matched))
+                            matching_cache_files=matched,
+                            cache_load_errors=load_errors))
+        if progress_interval and (
+                image_index % int(progress_interval) == 0
+                or image_index == len(images)):
+            gc.collect()
+            print('[cache-preflight] {}/{} valid={} load_errors={} '
+                  'peak_rss_mib={:.1f}'.format(
+                      image_index, len(images), valid, load_error_count,
+                      _peak_rss_mib()), flush=True)
     missing_splits = sorted(
         split for split, count in split_counts.items() if count == 0)
     return dict(
@@ -107,6 +139,8 @@ def inspect_cache(data_root, cache_dir, datasets, expected_channels=1024,
         expected_model=str(expected_model),
         images_by_split=split_counts, missing_splits=missing_splits,
         image_count=len(records), valid_count=valid,
+        cache_load_error_count=load_error_count,
+        peak_process_rss_mib=_peak_rss_mib(),
         missing_or_ambiguous_count=len(records) - valid,
         complete=(bool(records) and not missing_splits
                   and valid == len(records)), records=records)
@@ -129,11 +163,13 @@ def main():
                         default=['train:train', 'train_sim:train'])
     parser.add_argument('--expected-channels', type=int, default=1024)
     parser.add_argument('--expected-model', default='dinov2_vitl14')
+    parser.add_argument('--progress-interval', type=int, default=25)
     parser.add_argument('--out-json', required=True)
     args = parser.parse_args()
     report = inspect_cache(
         args.data_root, args.cache_dir, args.datasets,
-        args.expected_channels, args.expected_model)
+        args.expected_channels, args.expected_model,
+        args.progress_interval)
     write_exact(args.out_json, report)
     print(json.dumps(dict(
         decision=('CACHE_COMPLETE' if report['complete'] else
