@@ -56,9 +56,9 @@ train_pipeline = [
 dataset_type = 'CraneDataset'
 data_root = 'crane_project/data/crane_grab/'
 data = dict(
-    # Start with one sample per GPU.  Offline 64x64 FP16 teacher features add
-    # about 8 MiB/sample before activations and avoid any live DINO graph.
-    samples_per_gpu=1,
+    # Match the ordinary K1 baseline exactly.  The offline 64x64 FP16 teacher
+    # feature adds about 8 MiB/sample and no live DINO graph is constructed.
+    samples_per_gpu=2,
     workers_per_gpu=2,
     train=[
         dict(type=dataset_type, data_root=data_root,

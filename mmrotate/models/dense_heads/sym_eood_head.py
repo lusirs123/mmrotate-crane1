@@ -170,7 +170,8 @@ class SymEOODHead(RotatedRetinaHead):
         return [self.aux2_retina_cls(feat) for feat in feats]
 
     def forward_semantic_distillation_features(self, feats,
-                                               protect_geometry=True):
+                                               protect_geometry=True,
+                                               feature_level=0):
         """Return classification-tower features for semantic distillation.
 
         With ``protect_geometry=True`` the FPN input is detached before the
@@ -180,11 +181,13 @@ class SymEOODHead(RotatedRetinaHead):
         if not self.use_semantic_cls_adapter:
             raise RuntimeError(
                 'semantic distillation requires use_semantic_cls_adapter')
-        outputs = []
-        for feat in feats:
-            base = feat.detach() if protect_geometry else feat
-            cls_feat = base + self.semantic_cls_adapter(base)
-            outputs.append(cls_feat)
+        feature_level = int(feature_level)
+        if feature_level < 0 or feature_level >= len(feats):
+            raise ValueError('semantic distillation feature level is invalid')
+        outputs = [None] * len(feats)
+        feat = feats[feature_level]
+        base = feat.detach() if protect_geometry else feat
+        outputs[feature_level] = base + self.semantic_cls_adapter(base)
         return tuple(outputs)
 
     def forward_single(self, x):

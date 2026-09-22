@@ -99,6 +99,16 @@ class LoadDinoFeatureFromCache:
             feature = torch.flip(feature, dims=(-2,))
         if direction not in (None, 'horizontal', 'vertical', 'diagonal'):
             raise RuntimeError('Unsupported DINO feature flip: ' + str(direction))
+        # Both pipelines preserve aspect ratio and pad on the bottom/right.
+        # Pad the non-square DINO grid before producing a fixed square tensor;
+        # directly resizing HxW to 64x64 would distort token coordinates and
+        # misalign them with the student's square 1024x1024 canvas.
+        feature_h, feature_w = feature.shape[-2:]
+        square_side = max(int(feature_h), int(feature_w))
+        feature = F.pad(
+            feature,
+            (0, square_side - int(feature_w),
+             0, square_side - int(feature_h)))
         feature = F.interpolate(
             feature.unsqueeze(0), size=self.output_size, mode='bilinear',
             align_corners=False)[0].half().contiguous()

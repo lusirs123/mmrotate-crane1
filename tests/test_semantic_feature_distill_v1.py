@@ -142,7 +142,7 @@ def test_config_and_inference_keep_teacher_out_of_student_path():
     head = (ROOT / 'mmrotate/models/dense_heads/'
             'sym_eood_head.py').read_text()
     assert "protect_geometry=True" in config
-    assert "samples_per_gpu=1" in config
+    assert "samples_per_gpu=2" in config
     simple_test = detector.split('    def simple_test(', 1)[1]
     simple_test = simple_test.split('    def ', 1)[0]
     assert 'teacher_features' not in simple_test
@@ -152,7 +152,14 @@ def test_config_and_inference_keep_teacher_out_of_student_path():
     assert 'base = feat.detach() if protect_geometry else feat' in method
     assert 'base + self.semantic_cls_adapter(base)' in method
     assert 'cls_convs' not in method
+    assert 'outputs = [None] * len(feats)' in method
     assert 'bbox_pred = self.retina_reg(x)' in head
+    loader = (ROOT / 'mmrotate/datasets/pipelines/loading.py').read_text()
+    cache_loader = loader.split('class LoadDinoFeatureFromCache', 1)[1]
+    cache_loader = cache_loader.split(
+        'def dino_invocation_encoding', 1)[0]
+    assert 'square_side = max(int(feature_h), int(feature_w))' in cache_loader
+    assert 'feature = F.pad(' in cache_loader
 
 
 def test_student_export_strips_only_training_adapter():

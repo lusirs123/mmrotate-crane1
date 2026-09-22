@@ -501,15 +501,16 @@ class SymEOOD(SingleStageDetector):
                 raise RuntimeError(
                     'semantic_distillation is enabled but teacher_features '
                     'were not provided by the offline DINO cache pipeline')
+            level = self.semantic_distillation.feature_level
             spatial_mask = None
             if self.semantic_distillation_scope == 'foreground':
-                level = self.semantic_distillation.feature_level
                 spatial_mask = self._build_distillation_foreground_mask(
                     x[level], img_metas, gt_bboxes)
             distill_features = (
                 self.bbox_head.forward_semantic_distillation_features(
                     x, protect_geometry=(
-                        self.semantic_distillation_protect_geometry)))
+                        self.semantic_distillation_protect_geometry),
+                    feature_level=level))
             losses['loss_semantic_distill'] = self.semantic_distillation(
                 distill_features, teacher_features, spatial_mask)
 
