@@ -84,7 +84,9 @@ def main():
         protocol=PROTOCOL,
         source_checkpoint=dict(path=source, sha256=sha256(source)),
         student_checkpoint=dict(path=output, sha256=sha256(output)),
-        inference_config='crane_project/configs/crane_symeood_k1.py',
+        inference_config=(
+            'crane_project/configs/'
+            'crane_symeood_k1_dino_semantic_student_v1.py'),
         removed_parameter_keys=removed,
         frozen_dino_required_at_inference=False,
         distillation_adapter_required_at_inference=False)

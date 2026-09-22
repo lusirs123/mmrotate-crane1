@@ -130,7 +130,10 @@ def test_config_and_inference_keep_teacher_out_of_student_path():
     method = head.split(
         '    def forward_semantic_distillation_features', 1)[1]
     method = method.split('    @force_fp32', 1)[0]
-    assert 'feat.detach() if protect_geometry else feat' in method
+    assert 'base = feat.detach() if protect_geometry else feat' in method
+    assert 'base + self.semantic_cls_adapter(base)' in method
+    assert 'cls_convs' not in method
+    assert 'bbox_pred = self.retina_reg(x)' in head
 
 
 def test_student_export_strips_only_training_adapter():
@@ -138,12 +141,14 @@ def test_student_export_strips_only_training_adapter():
         state_dict={
             'backbone.layer.weight': torch.ones(1),
             'bbox_head.cls.weight': torch.ones(1) * 2,
+            'bbox_head.semantic_cls_adapter.weight': torch.ones(1) * 4,
             'semantic_distillation.project.weight': torch.ones(1) * 3},
         meta={'epoch': 2}, optimizer={'state': {}})
     output, removed = exporter.student_only_payload(payload)
     assert removed == ['semantic_distillation.project.weight']
     assert set(output['state_dict']) == {
-        'backbone.layer.weight', 'bbox_head.cls.weight'}
+        'backbone.layer.weight', 'bbox_head.cls.weight',
+        'bbox_head.semantic_cls_adapter.weight'}
     assert output['meta']['epoch'] == 2
     assert 'optimizer' not in output
     assert output['meta']['student_only_export_protocol'] == exporter.PROTOCOL

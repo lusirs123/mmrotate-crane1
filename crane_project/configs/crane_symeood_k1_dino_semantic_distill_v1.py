@@ -11,6 +11,7 @@ dino_feature_cache = (
     'work_dirs/dino_teacher_scoped_lowlight_v1_formal8/feature_cache')
 
 model = dict(
+    bbox_head=dict(use_semantic_cls_adapter=True),
     semantic_distillation=dict(
         enabled=True,
         mode='feature',

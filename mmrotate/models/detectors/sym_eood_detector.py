@@ -110,6 +110,11 @@ class SymEOOD(SingleStageDetector):
                     "semantic_distillation scope must be 'foreground' or "
                     "'all'")
             if enabled:
+                if not getattr(
+                        self.bbox_head, 'use_semantic_cls_adapter', False):
+                    raise ValueError(
+                        'semantic_distillation requires bbox_head.'
+                        'use_semantic_cls_adapter=True')
                 self.semantic_distillation = SemanticFeatureDistillation(
                     **cfg)
 

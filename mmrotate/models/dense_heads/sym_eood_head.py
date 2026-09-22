@@ -76,6 +76,7 @@ class SymEOODHead(RotatedRetinaHead):
                  use_score_context_modulation: bool = False,
                  score_context_gate_init: float = 0.0,
                  score_context_gate_scale: float = 0.05,
+                 use_semantic_cls_adapter: bool = False,
                  filter_padding_anchors: bool = False,
                  **kwargs):
         super().__init__(*args, **kwargs)
@@ -120,6 +121,11 @@ class SymEOODHead(RotatedRetinaHead):
         # Gate is sigmoid-bounded: effective_gate = gate_scale * σ(gate_alpha),
         # so the max bias is gate_scale (prevents unbounded growth).
         self.use_score_context_modulation = use_score_context_modulation
+        self.use_semantic_cls_adapter = bool(use_semantic_cls_adapter)
+        if self.use_semantic_cls_adapter:
+            # Classification-only residual.  It never feeds retina_reg.
+            self.semantic_cls_adapter = nn.Conv2d(
+                self.feat_channels, self.feat_channels, 1, bias=False)
         self.score_context_gate_scale = score_context_gate_scale
         # Coordinate-safe padding guard.  It only filters candidates whose
         # source anchor center lies outside img_shape (inside pad_shape).
@@ -143,6 +149,9 @@ class SymEOODHead(RotatedRetinaHead):
 
     def init_weights(self):
         super().init_weights()
+        if self.use_semantic_cls_adapter:
+            # Preserve the ordinary K1 classifier at initialization.
+            torch.nn.init.zeros_(self.semantic_cls_adapter.weight)
         if self.use_sigmoid_cls and hasattr(self, 'retina_cls') and self.retina_cls.bias is not None:
             bias_cls = bias_init_with_prob(0.01)
             torch.nn.init.constant_(self.retina_cls.bias, bias_cls)
@@ -165,16 +174,27 @@ class SymEOODHead(RotatedRetinaHead):
         """Return classification-tower features for semantic distillation.
 
         With ``protect_geometry=True`` the FPN input is detached before the
-        classification tower.  Distillation can update ``cls_convs`` while
-        it cannot update backbone/FPN or the independent regression tower.
+        classification adapter.  Distillation can update that adapter while
+        it cannot update backbone/FPN or the independent regression branch.
         """
+        if not self.use_semantic_cls_adapter:
+            raise RuntimeError(
+                'semantic distillation requires use_semantic_cls_adapter')
         outputs = []
         for feat in feats:
-            cls_feat = feat.detach() if protect_geometry else feat
-            for cls_conv in self.cls_convs:
-                cls_feat = cls_conv(cls_feat)
+            base = feat.detach() if protect_geometry else feat
+            cls_feat = base + self.semantic_cls_adapter(base)
             outputs.append(cls_feat)
         return tuple(outputs)
+
+    def forward_single(self, x):
+        """Keep OBB regression on the original FPN feature."""
+        cls_feat = x
+        if self.use_semantic_cls_adapter:
+            cls_feat = x + self.semantic_cls_adapter(x)
+        cls_score = self.retina_cls(cls_feat)
+        bbox_pred = self.retina_reg(x)
+        return cls_score, bbox_pred
 
     @force_fp32(apply_to=('cls_scores', 'bbox_preds'))
     def loss(self,

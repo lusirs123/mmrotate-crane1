@@ -14,10 +14,12 @@ DINO 推理链的前提下，改善普通 SymEOOD K1 的分类排序。它不是
 - 教师特征固定为 FP16 `64x64`，只蒸馏 FPN 第 0 层对应的分类塔特征，最多
   使用 4096 个空间 token。
 - 蒸馏区域由训练 GT 的 OBB 外接矩形给出；教师张量始终 detach。
-- 分类塔输入在蒸馏支路先 detach，因此蒸馏梯度只能更新分类塔与训练期投影器，
-  不能更新 backbone、FPN 或回归塔。原有 SymKLD、角度定义和 OBB 目标不变。
-- 推理前导出学生 checkpoint，移除 `semantic_distillation.*`。导出后的权重由
-  `crane_symeood_k1.py` 加载，推理不实例化 DINO 或蒸馏投影器。
+- 原版 head 没有多层分类塔，因此增加零初始化的 `1x1` 分类残差适配器；蒸馏
+  支路在适配器输入前 detach。蒸馏梯度只能更新分类适配器与训练期投影器，不能
+  更新 backbone、FPN 或回归分支。原有 SymKLD、角度定义和 OBB 目标不变。
+- 推理前导出学生 checkpoint，移除 `semantic_distillation.*`，保留轻量分类
+  适配器。导出后的权重由 `crane_symeood_k1_dino_semantic_student_v1.py`
+  加载，推理不实例化 DINO 或蒸馏投影器。
 
 ## 公平比较
 
