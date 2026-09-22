@@ -1,0 +1,31 @@
+{
+  "protocol": "dino_quality_ranking_complementarity_audit_v1_contract",
+  "evidence_role": "source_validation_only",
+  "expected_frame_count": 738,
+  "baseline": {
+    "name": "native_alpha_0_5",
+    "path": "work_dirs/dino_teacher_fc_cls_interpolation_v1/source_interpolation_result.json",
+    "selector": {
+      "kind": "candidate_alpha",
+      "value": 0.5
+    }
+  },
+  "methods": [
+    {
+      "name": "relative_quality_epoch4",
+      "path": "work_dirs/dino_teacher_s7_temporal_relative_quality_v1/train_result.json",
+      "selector": {
+        "kind": "history_epoch",
+        "value": 4
+      }
+    },
+    {
+      "name": "native_spatial_adapter_epoch1",
+      "path": "work_dirs/dino_teacher_fc_cls_interpolation_v1/native_spatial_adapter_v1/native_spatial_adapter_training_v3.json",
+      "selector": {
+        "kind": "history_epoch",
+        "value": 1
+      }
+    }
+  ]
+}

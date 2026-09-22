@@ -12,7 +12,8 @@ import json
 from pathlib import Path
 
 
-PROTOCOL = 'base_v3_obb_measurement_validity_audit_v1'
+PROTOCOL_V1 = 'base_v3_obb_measurement_validity_audit_v1'
+PROTOCOL_V2 = 'base_v3_obb_measurement_validity_audit_v2'
 
 
 def _identity(path):
@@ -31,18 +32,39 @@ def _in_intervals(sequence, frame, intervals):
 
 
 def _validate_intervals(intervals):
+    if not isinstance(intervals, dict):
+        raise RuntimeError('Intervals must be a JSON object')
+    normalized = {}
     for sequence, ranges in intervals.items():
-        previous_end = None
         if not isinstance(sequence, str) or not isinstance(ranges, list):
             raise RuntimeError('Intervals must map sequence names to lists')
-        for pair in sorted(ranges):
-            if (not isinstance(pair, list) or len(pair) != 2
-                    or int(pair[0]) > int(pair[1])):
-                raise RuntimeError('Invalid interval for ' + sequence)
-            start, end = int(pair[0]), int(pair[1])
+        validated = []
+        for index, pair in enumerate(ranges):
+            if not isinstance(pair, list) or len(pair) != 2:
+                raise RuntimeError(
+                    'Invalid interval structure: sequence={} index={} value={!r}'
+                    .format(sequence, index, pair))
+            try:
+                start, end = int(pair[0]), int(pair[1])
+            except (TypeError, ValueError) as exc:
+                raise RuntimeError(
+                    'Invalid interval endpoint: sequence={} index={} value={!r}'
+                    .format(sequence, index, pair)) from exc
+            if start > end:
+                raise RuntimeError(
+                    'Invalid interval order: sequence={} index={} start={} end={}'
+                    .format(sequence, index, start, end))
+            validated.append([start, end])
+        validated.sort(key=lambda pair: (pair[0], pair[1]))
+        previous_end = None
+        for start, end in validated:
             if previous_end is not None and start <= previous_end:
-                raise RuntimeError('Overlapping intervals for ' + sequence)
+                raise RuntimeError(
+                    'Overlapping intervals: sequence={} previous_end={} start={}'
+                    .format(sequence, previous_end, start))
             previous_end = end
+        normalized[sequence] = validated
+    return normalized
 
 
 def _frame_number(frame_key):
@@ -68,8 +90,21 @@ def _state_metric(rows, online_by_key, method, component, threshold):
     states = []
     errors = []
     for row in rows:
-        observation = online_by_key[row['frame_key']]['observations'][method][component]
-        states.append(observation.get('state'))
+        frame_key = row['frame_key']
+        online_row = online_by_key.get(frame_key)
+        observations = (online_row.get('observations')
+                        if isinstance(online_row, dict) else None)
+        method_observations = (observations.get(method)
+                               if isinstance(observations, dict) else None)
+        observation = (method_observations.get(component)
+                       if isinstance(method_observations, dict) else None)
+        state = (observation.get('state')
+                 if isinstance(observation, dict) else None)
+        if state not in {'measurement', 'prediction', 'unavailable'}:
+            raise RuntimeError(
+                'Invalid online observation: frame={} method={} component={} '
+                'state={!r}'.format(frame_key, method, component, state))
+        states.append(state)
         value = row.get('offline_errors', {}).get(method, {}).get(component)
         if value is not None:
             errors.append(float(value))
@@ -95,7 +130,7 @@ def _state_metric(rows, online_by_key, method, component, threshold):
 def build_audit(report, intervals, online_report=None):
     if report.get('fixed_test_read') is not True:
         raise RuntimeError('Input must be a fixed-test finalization report')
-    _validate_intervals(intervals)
+    intervals = _validate_intervals(intervals)
     records = report.get('records')
     if not isinstance(records, list) or not records:
         raise RuntimeError('Input report must contain non-empty records')
@@ -106,7 +141,11 @@ def build_audit(report, intervals, online_report=None):
     online_by_key = None
     if online_report is not None:
         online_records = online_report.get('records') or []
+        if not isinstance(online_records, list):
+            raise RuntimeError('Online report records must be a list')
         online_by_key = {row.get('frame_key'): row for row in online_records}
+        if len(online_by_key) != len(online_records):
+            raise RuntimeError('Online report contains duplicate frame keys')
         if set(online_by_key) != {row.get('frame_key') for row in records}:
             raise RuntimeError('Online and finalization frame keys differ')
     excluded = []
@@ -153,7 +192,7 @@ def build_audit(report, intervals, online_report=None):
                     component_thresholds[component])
                 for component in component_thresholds}
     return {
-        'protocol': PROTOCOL,
+        'protocol': PROTOCOL_V2 if online_by_key is not None else PROTOCOL_V1,
         'input_protocol': report.get('protocol'),
         'fixed_test_read': bool(report.get('fixed_test_read', False)),
         'prediction_or_threshold_selection_performed': False,
@@ -164,6 +203,7 @@ def build_audit(report, intervals, online_report=None):
         'full_temporal_metrics_remain_in_source_report': [
             'DFR', 'ACI', 'MCML'],
         'online_component_states_included': online_by_key is not None,
+        'intervals': intervals,
         'excluded_interval_count': len(excluded),
         'excluded_frame_keys': [r['frame_key'] for r in excluded],
         'methods': by_method,
@@ -186,12 +226,12 @@ def main():
         online_identity = _identity(args.online_report)
         online_report = json.loads(
             Path(online_identity['path']).read_text(encoding='utf-8'))
-    intervals = json.loads(Path(args.intervals_json).read_text(encoding='utf-8'))
-    if not isinstance(intervals, dict):
-        raise RuntimeError('Intervals must be a JSON object')
+    intervals_identity = _identity(args.intervals_json)
+    intervals = json.loads(
+        Path(intervals_identity['path']).read_text(encoding='utf-8'))
     audit = build_audit(report, intervals, online_report=online_report)
     audit['input_identity'] = identity
-    audit['intervals'] = intervals
+    audit['intervals_input_identity'] = intervals_identity
     if online_identity is not None:
         audit['online_input_identity'] = online_identity
     out = Path(args.out_json)
