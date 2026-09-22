@@ -115,6 +115,25 @@ def test_cache_preflight_rejects_requested_split_without_images(tmp_path):
     assert report['missing_splits'] == ['train_sim']
 
 
+def test_cache_preflight_repeat_ignores_legacy_peak_rss(tmp_path):
+    path = tmp_path / 'report.json'
+    legacy = {'protocol': preflight.PROTOCOL, 'complete': True,
+              'peak_process_rss_mib': 321.5}
+    path.write_text(json.dumps(legacy, indent=2) + '\n')
+    preflight.write_exact(
+        path, {'protocol': preflight.PROTOCOL, 'complete': True})
+    assert json.loads(path.read_text()) == legacy
+
+
+def test_cache_preflight_still_rejects_evidence_change(tmp_path):
+    path = tmp_path / 'report.json'
+    preflight.write_exact(
+        path, {'protocol': preflight.PROTOCOL, 'complete': True})
+    with pytest.raises(RuntimeError, match='Refusing to overwrite'):
+        preflight.write_exact(
+            path, {'protocol': preflight.PROTOCOL, 'complete': False})
+
+
 def test_config_and_inference_keep_teacher_out_of_student_path():
     config = (ROOT / 'crane_project/configs/'
               'crane_symeood_k1_dino_semantic_distill_v1.py').read_text()

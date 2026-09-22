@@ -140,17 +140,36 @@ def inspect_cache(data_root, cache_dir, datasets, expected_channels=1024,
         images_by_split=split_counts, missing_splits=missing_splits,
         image_count=len(records), valid_count=valid,
         cache_load_error_count=load_error_count,
-        peak_process_rss_mib=_peak_rss_mib(),
         missing_or_ambiguous_count=len(records) - valid,
         complete=(bool(records) and not missing_splits
                   and valid == len(records)), records=records)
+
+
+def _stable_payload(payload):
+    """Remove legacy runtime-only fields before idempotence comparison."""
+    stable = dict(payload)
+    stable.pop('peak_process_rss_mib', None)
+    return stable
 
 
 def write_exact(path, payload):
     encoded = (json.dumps(payload, indent=2, ensure_ascii=False) + '\n')
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    if path.exists() and path.read_text(encoding='utf-8') != encoded:
+    if path.exists():
+        existing_text = path.read_text(encoding='utf-8')
+        if existing_text == encoded:
+            return
+        try:
+            existing = json.loads(existing_text)
+        except json.JSONDecodeError:
+            existing = None
+        if (isinstance(existing, dict)
+                and _stable_payload(existing) == _stable_payload(payload)):
+            # Preserve the first receipt and its SHA.  Older reports may
+            # contain peak_process_rss_mib, which is diagnostic and naturally
+            # changes between equivalent runs.
+            return
         raise RuntimeError('Refusing to overwrite different output: ' + str(path))
     path.write_text(encoded, encoding='utf-8')
 
