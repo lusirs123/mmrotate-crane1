@@ -222,3 +222,4 @@ verified: roi_pairwise_margin_loss,
 - 正式 NMS 0.5 恢复了更多可用候选，却没有提高 Top-1，证实下一步应优化候选质量排序。
 - native spatial adapter V3 没有通过 source-retention，不能写成已成立创新。
 - 当前正式部署基线不变；候选质量排序实验族已经完成。下一项模型训练必须等待新的独立真实困难序列提供跨序列监督与验证支持；无新数据时只做 seq11 OOF 机制核验和轻量化预算审计。
+- 2026-09-22 的最小帧级互补审计只比较了同一 `677/738` 基线下具有精确逐帧转换记录的 relative-quality epoch 4 与 native spatial adapter epoch 1。relative 为 `691/738、+14/-0`，adapter 为 `676/738、+1/-2`；GT oracle 为 `692/738`，相对最佳单方法仅增加 1 帧（`0.1355` 个百分点）。因此停止 adapter/relative 选择器路线，后续聚焦 relative 的 14 个收益帧机制；该结果不代表 highres、unified 等全部历史方法已经完成互补比较。

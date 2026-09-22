@@ -108,7 +108,7 @@ seq11的251帧困难块OOF属于另一个已有未执行计划：已有block-CV�
 - 未训练、未重跑模型推理、未检查服务器checkpoint字节、未执行全套测试。旧27条排序/接管记录和融合实验主要按已有文档复盘；原始工件不齐的结论保留该限制。
 - 后续需要的关键材料为旧S7/highres/relative/unified/temporal实验的原始逐帧结果与输入身份；优先定位现有服务器工件，不要求重跑全部历史实验。
 
-#### 帧级互补审计入口（已实现，待服务器生成正式结果）
+#### 帧级互补审计（已完成最小对照，停止 adapter 选择器路线）
 
 仓库新增 `crane_project/tools/dino_quality_ranking_complementarity_audit_v1.py` 与示例契约
 `crane_project/data_contracts/dino_quality_ranking_complementarity_audit_v1.example.json`。该入口只读取既有
@@ -119,7 +119,13 @@ source-validation JSON，不加载图像、checkpoint 或 GPU，也不训练、�
 3. 拒绝 target-dependent 结果、未知帧、重复帧、同一帧同时 gain/loss、与基线状态矛盾以及方法名冲突。
 4. 输出各方法 Top-1、gain/loss、分序列转换、两两 gain 交并及 GT-dependent union oracle。oracle 只说明方法错误是否互补，明确不授权运行时选择器。
 
-正式 JSON/Markdown 尚未在服务器生成，因此当前不能声称不同质量排序器已有可用互补规律。若审计显示独有 gain，下一步仍需寻找**无 GT 可观测**且能跨序列复现的选择信号；若 gain 高度重合，则停止叠加同类排序头，转向几何质量输入或候选生成与轻量化预算。无论哪种结果，都不直接修改正式 native-S14 `alpha=0.5` 基线。
+服务器正式结果为 `dino_quality_ranking_complementarity_audit_v1.json`，SHA256
+`f0a5b7c2510d4db409d50cedd493e15cd47fc21da31e7acff201ab601c29650e`；Markdown SHA256
+`12b7dd0fee408d362c78d0d15c30c8243e59aec263dc6bca749795ec6188e061`。本次最小对照只纳入两份能够绑定同一 `677/738` 基线并提供精确逐帧转换的报告：relative-quality epoch 4 为 `691/738`、`+14/-0`；native spatial adapter epoch 1 为 `676/738`、`+1/-2`。两者 gain 不重合，但相对于最佳单方法 relative-quality，GT oracle 只由 `691` 增至 `692`，即多 1 帧（`0.1355` 个百分点）。该单帧空间不足以继续开发 adapter/relative 运行时选择器，adapter 路线停止，正式 native-S14 `alpha=0.5` 基线不因这项诊断改变。
+
+“只比较两项”不表示历史上只有两项出现过正向结果。本轮排除的主要路线及原因如下：FC alpha `0.75/1.0` 属于同一插值族且伴随旧正确帧损失；highres ranker 历史为 `688/738、lost=0`，但未在本次契约中绑定原始逐帧工件；unified hard-pair 为 `696/738、lost=1`，仅通过 bounded-risk research gate；global affine、lane、S7 readout 及 seq11 属于不同协议、模型身份或数据支线；NMS `0.5` 增加候选保留却没有增加最终 Top-1。它们不能与本次两项结果直接拼成融合成绩。后续若取得 highres/unified 的同基线原始逐帧报告，可扩展只读矩阵，但不为补全矩阵重跑训练或 target 推理。
+
+审计入口已修订为 protocol version 2：除 union oracle 外，必须报告最佳单方法、oracle 相对最佳单方法的新增帧数和百分点，并在契约中记录项目继续门槛。本项目把“相对最佳单方法至少新增 2 帧”设为继续研究选择器的最低资源门槛；该门槛只用于安排研究工作，不参与 checkpoint、阈值或模型选择。按该口径，本次结论为 `COMPLEMENTARITY_BELOW_CONTINUATION_THRESHOLD_STOP_SELECTOR_WORK`。下一步只核对 relative-quality 的方法身份与 14 个收益帧机制，寻找可复用于单模型的质量信息；不再围绕 adapter 的唯一收益帧开发融合。
 
 ### 后续单次实验记录格式
 

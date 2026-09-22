@@ -2,6 +2,9 @@
   "protocol": "dino_quality_ranking_complementarity_audit_v1_contract",
   "evidence_role": "source_validation_only",
   "expected_frame_count": 738,
+  "continuation_policy": {
+    "minimum_oracle_incremental_hits_over_best_standalone": 2
+  },
   "baseline": {
     "name": "native_alpha_0_5",
     "path": "work_dirs/dino_teacher_fc_cls_interpolation_v1/source_interpolation_result.json",

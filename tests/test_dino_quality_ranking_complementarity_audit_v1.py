@@ -58,8 +58,29 @@ def test_build_report_counts_unique_and_shared_gains(tmp_path):
     assert pair['left_only_gain_count'] == 1
     assert pair['right_only_gain_count'] == 1
     assert report['oracle_diagnostic']['oracle_hit_count'] == 3
+    assert report['oracle_diagnostic'][
+        'incremental_hit_count_over_best_standalone'] == 1
     assert report['decision'] == (
         'COMPLEMENTARY_GAINS_PRESENT_SELECTOR_NOT_AUTHORIZED')
+
+
+def test_stops_selector_work_below_continuation_threshold(tmp_path):
+    base = tmp_path / 'base.json'
+    first = tmp_path / 'first.json'
+    second = tmp_path / 'second.json'
+    write(base, baseline_payload())
+    write(first, method_payload(1, [], ['val|real_a|2']))
+    write(second, method_payload(2, [], ['val|sim_b|3']))
+    spec = contract(base, first, second)
+    spec['continuation_policy'] = dict(
+        minimum_oracle_incremental_hits_over_best_standalone=2)
+    report = audit.build_report(spec, tmp_path)
+    assert report['oracle_diagnostic']['best_standalone_hit_count'] == 2
+    assert report['oracle_diagnostic'][
+        'incremental_hit_count_over_best_standalone'] == 1
+    assert report['decision'] == (
+        'COMPLEMENTARITY_BELOW_CONTINUATION_THRESHOLD_'
+        'STOP_SELECTOR_WORK')
 
 
 def test_rejects_transition_that_disagrees_with_baseline(tmp_path):

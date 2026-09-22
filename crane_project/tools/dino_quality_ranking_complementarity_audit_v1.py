@@ -174,6 +174,7 @@ def load_entry(spec, repo_root, baseline=None):
     record = dict(
         name=spec['name'], path=str(path.resolve()), sha256=file_sha256(path),
         selector=spec['selector'], source_protocol=payload.get('protocol'),
+        source_protocol_version=payload.get('protocol_version'),
         extraction=None, rows=None, gains=set(), losses=set())
     if outcome_rows is not None:
         rows = normalize_frame_rows(outcome_rows)
@@ -233,7 +234,9 @@ def public_method(record, baseline_hits, frame_count):
     return dict(
         name=record['name'], input=dict(
             path=record['path'], sha256=record['sha256'],
-            selector=record['selector'], extraction=record['extraction']),
+            selector=record['selector'], extraction=record['extraction'],
+            source_protocol=record['source_protocol'],
+            source_protocol_version=record['source_protocol_version']),
         frame_count=frame_count, top1_hit_count=hit_count,
         gained_count=len(record['gains']), lost_count=len(record['losses']),
         net_gain=hit_count - baseline_hits,
@@ -299,44 +302,80 @@ def build_report(contract, repo_root):
     baseline_public.update(gained_count=0, lost_count=0, net_gain=0,
                            gained_frame_keys=[], lost_frame_keys=[],
                            gained_by_sequence={}, lost_by_sequence={})
+    public_methods = [
+        public_method(row, baseline_hits, len(baseline['rows']))
+        for row in methods]
+    standalone = [baseline_public] + public_methods
+    best_standalone = max(
+        standalone,
+        key=lambda row: (row['top1_hit_count'], row['name']))
+    oracle_hit_count = baseline_hits + len(union_gains)
+    incremental_over_best = (
+        oracle_hit_count - best_standalone['top1_hit_count'])
+    policy = contract.get('continuation_policy') or {}
+    minimum_incremental = int(policy.get(
+        'minimum_oracle_incremental_hits_over_best_standalone', 1))
+    if minimum_incremental < 1:
+        raise ValueError('Continuation threshold must be at least one frame')
+    if incremental_over_best >= minimum_incremental:
+        decision = 'COMPLEMENTARY_GAINS_PRESENT_SELECTOR_NOT_AUTHORIZED'
+    elif incremental_over_best > 0:
+        decision = (
+            'COMPLEMENTARITY_BELOW_CONTINUATION_THRESHOLD_'
+            'STOP_SELECTOR_WORK')
+    else:
+        decision = 'NO_INCREMENTAL_COMPLEMENTARITY_STOP_SELECTOR_WORK'
     return dict(
-        protocol=PROTOCOL, protocol_version=1,
+        protocol=PROTOCOL, protocol_version=2,
         evidence_boundary=dict(
             role='source_validation_only', exposed_target_read=False,
             optimizer_steps=0, checkpoint_writes=0,
             oracle_is_gt_dependent=True,
             oracle_authorizes_inference_rule=False,
-            threshold_or_checkpoint_selection_performed=False),
+            threshold_or_checkpoint_selection_performed=False,
+            continuation_threshold_is_project_planning_only=True),
+        comparison_scope=dict(
+            included_method_count=len(methods),
+            only_contract_bound_methods_compared=True,
+            does_not_claim_all_historical_methods_were_compared=True),
         baseline=baseline_public,
-        methods=[public_method(row, baseline_hits, len(baseline['rows']))
-                 for row in methods],
+        methods=public_methods,
         pairwise_gain_complementarity=pairwise(methods),
         oracle_diagnostic=dict(
             definition='baseline_or_any_method_top1_hit_using_source_GT',
             baseline_hit_count=baseline_hits,
             union_gain_count=len(union_gains),
-            oracle_hit_count=baseline_hits + len(union_gains),
+            oracle_hit_count=oracle_hit_count,
             oracle_hit_rate=float(
-                (baseline_hits + len(union_gains)) / len(baseline['rows'])),
+                oracle_hit_count / len(baseline['rows'])),
+            best_standalone_method=best_standalone['name'],
+            best_standalone_hit_count=best_standalone['top1_hit_count'],
+            incremental_hit_count_over_best_standalone=incremental_over_best,
+            incremental_percentage_points_over_best_standalone=float(
+                100.0 * incremental_over_best / len(baseline['rows'])),
             any_method_loss_frame_count=len(union_losses),
             union_gain_frame_keys=sorted(union_gains),
             any_method_loss_frame_keys=sorted(union_losses)),
+        continuation_policy=dict(
+            minimum_oracle_incremental_hits_over_best_standalone=(
+                minimum_incremental),
+            purpose='research_direction_screening_only',
+            authorizes_model_or_checkpoint_selection=False),
         selector_evidence=dict(
             status='OUTCOME_COMPLEMENTARITY_ONLY',
             gt_free_selector_validated=False,
             reason=(
                 'Gain/loss overlap can show complementarity, but outcome '
                 'labels alone cannot define a deployable method selector.')),
-        decision=(
-            'COMPLEMENTARY_GAINS_PRESENT_SELECTOR_NOT_AUTHORIZED'
-            if has_unique_gains(methods) else
-            'NO_UNIQUE_COMPLEMENTARY_GAINS_SELECTOR_NOT_AUTHORIZED'))
+        unique_gain_patterns_present=has_unique_gains(methods),
+        decision=decision)
 
 
 def markdown(report):
     lines = [
         '# DINO quality-ranking frame complementarity audit', '',
         '- Protocol: `{}`'.format(report['protocol']),
+        '- Protocol version: `{}`'.format(report['protocol_version']),
         '- Decision: `{}`'.format(report['decision']),
         '- Evidence: source validation only; no training or target read.', '',
         '| Method | Top-1 | Gain | Loss | Net |',
@@ -371,6 +410,18 @@ def markdown(report):
               '- Baseline: `{}`'.format(oracle['baseline_hit_count']),
               '- Union gains: `{}`'.format(oracle['union_gain_count']),
               '- Oracle Top-1: `{}`'.format(oracle['oracle_hit_count']), '',
+              '- Best standalone method: `{}` (`{}` hits)'.format(
+                  oracle['best_standalone_method'],
+                  oracle['best_standalone_hit_count']),
+              '- Increment over best standalone: `{}` hits '
+              '(`{:.6f}` percentage points)'.format(
+                  oracle['incremental_hit_count_over_best_standalone'],
+                  oracle[
+                      'incremental_percentage_points_over_best_standalone']),
+              '- Continuation threshold: `{}` hits'.format(
+                  report['continuation_policy'][
+                      'minimum_oracle_incremental_hits_over_best_standalone']),
+              '',
               'This upper bound uses source GT and does not authorize a runtime selector.', '']
     return '\n'.join(lines)
 
