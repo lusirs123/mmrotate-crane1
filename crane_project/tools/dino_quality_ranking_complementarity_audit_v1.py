@@ -154,6 +154,18 @@ def load_entry(spec, repo_root, baseline=None):
     path = Path(spec['path'])
     if not path.is_absolute():
         path = Path(repo_root) / path
+    if not path.is_file():
+        candidates = sorted(
+            candidate.resolve() for candidate in
+            Path(repo_root).glob('work_dirs/**/{}'.format(path.name))
+            if candidate.is_file())
+        hint = ''
+        if candidates:
+            hint = ' Existing files with the same name: {}'.format(
+                ', '.join(str(candidate) for candidate in candidates[:10]))
+        raise FileNotFoundError(
+            'Contract input for {} does not exist: {}.{}'.format(
+                spec['name'], path, hint))
     payload = json.loads(path.read_text(encoding='utf-8'))
     if input_uses_target(payload):
         raise ValueError('{} contains target-dependent evidence'.format(spec['name']))

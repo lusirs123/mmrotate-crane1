@@ -21,7 +21,7 @@
     },
     {
       "name": "native_spatial_adapter_epoch1",
-      "path": "work_dirs/dino_teacher_fc_cls_interpolation_v1/native_spatial_adapter_v1/native_spatial_adapter_training_v3.json",
+      "path": "work_dirs/dino_teacher_fc_cls_interpolation_v1/native_spatial_adapter_v3/native_spatial_adapter_training_v3.json",
       "selector": {
         "kind": "history_epoch",
         "value": 1

@@ -86,6 +86,19 @@ def test_rejects_target_dependent_result(tmp_path):
         audit.build_report(contract(base, first, second), tmp_path)
 
 
+def test_missing_input_reports_same_named_candidate(tmp_path):
+    base = tmp_path / 'base.json'
+    first = tmp_path / 'expected' / 'method.json'
+    actual = tmp_path / 'work_dirs' / 'actual' / 'method.json'
+    second = tmp_path / 'second.json'
+    actual.parent.mkdir(parents=True)
+    write(base, baseline_payload())
+    write(actual, method_payload(1, [], ['val|real_a|2']))
+    write(second, method_payload(2, [], ['val|sim_b|3']))
+    with pytest.raises(FileNotFoundError, match='work_dirs/actual/method.json'):
+        audit.build_report(contract(base, first, second), tmp_path)
+
+
 def test_full_frame_outcomes_must_align(tmp_path):
     base = tmp_path / 'base.json'
     first = tmp_path / 'first.json'
