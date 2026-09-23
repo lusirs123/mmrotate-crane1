@@ -26,6 +26,6 @@ def test_report_labels_conditional_and_all_frame_denominators():
                   sources=dict(
         pred_pkl_sha256='a' * 64, gt_annotations_sha256='b' * 64))
     output = markdown(report)
-    assert '中心命中/有输出' in output
-    assert '中心命中/全部' in output
-    assert '旋转 IoU/全部' in output
+    assert '已输出框中心命中率' in output
+    assert '全帧中心检测召回率' in output
+    assert '全帧零填充旋转 IoU' in output

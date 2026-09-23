@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 
 from crane_project.tools.eval_crane_offline import (
-    compute_riou, obb_center, parse_dota_txt)
+    compute_riou, obb_center, parse_dota_txt, parse_seq_frame)
 
 
 PROTOCOL = 'k1_metric_denominator_compatibility_audit_v1'
@@ -54,6 +54,10 @@ def _mean(values):
     return float(np.mean(values)) if values else None
 
 
+def _median(values):
+    return float(np.median(values)) if values else None
+
+
 def audit(gt_dir, pred_dir, pred_pkl):
     gt_paths = sorted(path for path in Path(gt_dir).glob('*.txt')
                       if not path.name.startswith('._'))
@@ -68,6 +72,7 @@ def audit(gt_dir, pred_dir, pred_pkl):
     if not all(path.is_file() for path in pred_paths):
         raise ValueError('Missing or mismatched DOTA prediction files')
     buckets = {}
+    sequence_buckets = {}
     max_center_export_delta_px = 0.0
     conversion_ious = []
     for gt_path, pred_path, result in zip(gt_paths, pred_paths, results):
@@ -95,9 +100,16 @@ def audit(gt_dir, pred_dir, pred_pkl):
                                             exact=[], approx=[]))
         if not gt_boxes:
             continue
+        _, sequence, _ = parse_seq_frame(gt_path.name)
+        sb = sequence_buckets.setdefault(domain + '/' + sequence,
+            dict(gt=0, output=0, short_output=[], short_missing=[]))
+        sb['gt'] += 1
         b['gt'] += 1
         if not pred_boxes:
+            sb['short_missing'].append(float(min(gt_boxes[0][2:4])))
             continue
+        sb['output'] += 1
+        sb['short_output'].append(float(min(gt_boxes[0][2:4])))
         b['output'] += 1
         if float(np.linalg.norm(obb_center(pred_boxes[0]) -
                                 obb_center(gt_boxes[0]))) < 15.0:
@@ -122,6 +134,7 @@ def audit(gt_dir, pred_dir, pred_pkl):
             exact_riou_all_gt_frames=sum(b['exact']) / b['gt'])
     return dict(
         protocol=PROTOCOL,
+        report_revision='r3_explicit_denominators_and_sequences',
         evidence_role='fixed_test_metric_compatibility_diagnosis_only',
         model_inference_performed=False,
         checkpoint_selection_performed=False,
@@ -136,14 +149,24 @@ def audit(gt_dir, pred_dir, pred_pkl):
         max_pkl_to_dota_center_delta_px=max_center_export_delta_px,
         min_pkl_to_dota_geometry_iou=min(conversion_ious),
         mean_pkl_to_dota_geometry_iou=_mean(conversion_ious),
-        by_domain=by_domain)
+        by_domain=by_domain,
+        by_sequence={key: dict(
+            gt_positive_frame_count=b['gt'],
+            output_frame_count=b['output'],
+            missing_output_frame_count=b['gt'] - b['output'],
+            output_coverage=b['output'] / b['gt'],
+            gt_short_edge_median_with_output_px=_median(
+                b['short_output']),
+            gt_short_edge_median_missing_px=_median(
+                b['short_missing']))
+            for key, b in sorted(sequence_buckets.items())})
 
 
 def markdown(report):
     lines = [
         '# K1 指标口径核对', '',
         '该报告只重算已保存的固定 TEST 预测，不选择权重。', '',
-        '| 域 | GT 帧 | 有输出 | 输出覆盖率 | 中心命中/有输出 | 中心命中/全部 | 历史近似 IoU/有输出 | 旋转 IoU/有输出 | 旋转 IoU/全部 |',
+        '| 域 | GT 帧 | 有输出 | 输出覆盖率 | 已输出框中心命中率 | 全帧中心检测召回率 | 历史近似 IoU/有输出 | 已输出框旋转 IoU | 全帧零填充旋转 IoU |',
         '|---|---:|---:|---:|---:|---:|---:|---:|---:|',
     ]
     for domain, b in report['by_domain'].items():
@@ -153,10 +176,19 @@ def markdown(report):
             b['center_hit_all_gt_frames'],
             b['historical_approx_riou_given_output'],
             b['exact_riou_given_output'], b['exact_riou_all_gt_frames']))
+    if report.get('by_sequence'):
+        lines.extend(['', '| 序列 | GT 帧 | 有输出 | 缺测 | 覆盖率 |',
+                      '|---|---:|---:|---:|---:|'])
+        for name, b in report['by_sequence'].items():
+            lines.append('| {} | {} | {} | {} | {:.2%} |'.format(
+                name, b['gt_positive_frame_count'],
+                b['output_frame_count'], b['missing_output_frame_count'],
+                b['output_coverage']))
     lines.extend([
         '',
-        '历史近似 IoU 只为解释旧记录而复现，不能作为修订版旋转 IoU。'
-        '中心命中率和 IoU 应始终注明分母；缺测帧不应被当成有效输出。',
+        '无输出帧没有可计算的中心误差；它只在全帧检测召回率中计为未命中。'
+        '全帧零填充旋转 IoU 是覆盖率加权的系统指标，不能当作已输出框的平均几何质量。'
+        '历史近似 IoU 只为解释旧记录而复现，不能作为修订版旋转 IoU。',
         '',
         '预测 PKL SHA256：`{}`。'.format(
             report['sources']['pred_pkl_sha256']),
