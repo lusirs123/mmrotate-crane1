@@ -37,21 +37,23 @@ CUDA_VISIBLE_DEVICES=0,1 bash tools/dist_train.sh crane_project/configs/crane_sy
 
 三条训练命令应顺序执行，确认上一条成功后再执行下一条；脚本固定 `--seed 0`。`--no-validate` 关闭训练过程中的在线 VAL，仍按配置每 epoch 保存权重；之后独立按原协议扫描 source VAL。先检查三个训练目录中是否各有 `epoch_1.pth` 至 `epoch_4.pth`，以及日志中实际学习率、batch、参数冻结和损失。
 
+选权推理统一使用 `crane_symeood_k1_dino_semantic_student_v1.py`：它保留训练得到的分类适配器，不向推理模型传入训练期 `semantic_distillation` 参数。2026-09-24 修正了 `ckpt_sweep.py` 调用 `tools/test.py` 时缺少仓库根目录 `PYTHONPATH` 的问题；服务器必须同步该脚本后再执行下列 sweep。先前 A/epoch_1 的失败发生在模型构建阶段，没有产生可用 VAL 结果；新 sweep 目录与失败目录隔离，保留其日志。
+
 ```bash
 python crane_project/tools/ckpt_sweep.py \
-  --config crane_project/configs/crane_symeood_k1_dino_fpn_gradient_a_v3.py \
+  --config crane_project/configs/crane_symeood_k1_dino_semantic_student_v1.py \
   --work-dir work_dirs/crane_symeood_k1_dino_fpn_gradient_a_v3 \
-  --sweep-dir work_dirs/crane_symeood_k1_dino_fpn_gradient_a_v3/source_val_sweep_protocol_v2 \
+  --sweep-dir work_dirs/crane_symeood_k1_dino_fpn_gradient_a_v3/source_val_sweep_student_protocol_v2 \
   --epochs 1 2 3 4 --gpu 0
 python crane_project/tools/ckpt_sweep.py \
-  --config crane_project/configs/crane_symeood_k1_dino_fpn_gradient_b_v3.py \
+  --config crane_project/configs/crane_symeood_k1_dino_semantic_student_v1.py \
   --work-dir work_dirs/crane_symeood_k1_dino_fpn_gradient_b_v3 \
-  --sweep-dir work_dirs/crane_symeood_k1_dino_fpn_gradient_b_v3/source_val_sweep_protocol_v2 \
+  --sweep-dir work_dirs/crane_symeood_k1_dino_fpn_gradient_b_v3/source_val_sweep_student_protocol_v2 \
   --epochs 1 2 3 4 --gpu 0
 python crane_project/tools/ckpt_sweep.py \
-  --config crane_project/configs/crane_symeood_k1_dino_fpn_gradient_c_v3.py \
+  --config crane_project/configs/crane_symeood_k1_dino_semantic_student_v1.py \
   --work-dir work_dirs/crane_symeood_k1_dino_fpn_gradient_c_v3 \
-  --sweep-dir work_dirs/crane_symeood_k1_dino_fpn_gradient_c_v3/source_val_sweep_protocol_v2 \
+  --sweep-dir work_dirs/crane_symeood_k1_dino_fpn_gradient_c_v3/source_val_sweep_student_protocol_v2 \
   --epochs 1 2 3 4 --gpu 0
 ```
 

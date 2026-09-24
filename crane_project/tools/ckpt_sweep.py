@@ -100,6 +100,17 @@ sys.path.insert(0, os.path.dirname(__file__))
 from eval_crane_offline import CraneOfflineEvaluator, METRIC_PROTOCOL_VERSION
 
 
+def inference_subprocess_env(gpu=None):
+    """Resolve MMRotate from this checkout, as tools/dist_train.sh does."""
+    env = os.environ.copy()
+    existing = env.get('PYTHONPATH')
+    env['PYTHONPATH'] = (PROJ_ROOT + os.pathsep + existing
+                         if existing else PROJ_ROOT)
+    if gpu is not None:
+        env['CUDA_VISIBLE_DEVICES'] = str(gpu)
+    return env
+
+
 # =====================================================================
 # 0. 选择协议配置
 # =====================================================================
@@ -187,9 +198,8 @@ def run_test_on_val(config, checkpoint, sweep_dir, ckpt_name, gpu=None):
     ]
 
     print(f'  [推理] test.py -> {pkl_path}')
-    env = os.environ.copy()
+    env = inference_subprocess_env(gpu)
     if gpu is not None:
-        env['CUDA_VISIBLE_DEVICES'] = str(gpu)
         print(f'  [GPU] {ckpt_name} 使用 GPU {gpu}')
     result = subprocess.run(
         cmd, capture_output=True, text=True,
@@ -605,7 +615,7 @@ def run_final_test(config, best_ckpt, sweep_dir, center_thresh):
         ]
         result = subprocess.run(
             cmd, capture_output=True, text=True,
-            cwd=PROJ_ROOT, timeout=1200,
+            cwd=PROJ_ROOT, timeout=1200, env=inference_subprocess_env(),
         )
         if result.returncode != 0:
             print('  [错误] test 集推理失败')

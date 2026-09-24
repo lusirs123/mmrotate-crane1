@@ -1,5 +1,6 @@
 """Regression checks for the restored historical K1 selection rule."""
 
+import os
 import pickle
 
 import pytest
@@ -48,3 +49,23 @@ def test_cached_prediction_count_must_match_annotations(tmp_path):
         pickle.dump([], stream)
     with pytest.raises(ValueError, match='count mismatch'):
         ckpt_sweep.pkl_to_dota(str(pred), ['real_seq07_00001'], str(tmp_path))
+
+
+def test_val_subprocess_imports_this_checkout_before_installed_mmrotate(
+        tmp_path, monkeypatch):
+    monkeypatch.setenv('PYTHONPATH', '/other/python/packages')
+    seen = {}
+
+    def fake_run(cmd, **kwargs):
+        seen.update(cmd=cmd, kwargs=kwargs)
+        return type('Result', (), {'returncode': 0})()
+
+    monkeypatch.setattr(ckpt_sweep.subprocess, 'run', fake_run)
+    ckpt_sweep.run_test_on_val(
+        'student.py', 'epoch_1.pth', str(tmp_path), 'epoch_1', gpu=0)
+    env = seen['kwargs']['env']
+    assert env['PYTHONPATH'].split(os.pathsep)[0] == ckpt_sweep.PROJ_ROOT
+    assert env['CUDA_VISIBLE_DEVICES'] == '0'
+    assert seen['kwargs']['cwd'] == ckpt_sweep.PROJ_ROOT
+    assert seen['cmd'][1] == os.path.join(ckpt_sweep.PROJ_ROOT,
+                                         'tools/test.py')
