@@ -64,6 +64,20 @@ def test_empty_foreground_mask_does_not_distill_background():
     assert loss.item() == 0.0
 
 
+def test_single_cell_foreground_survives_teacher_grid_downsampling():
+    module = loss_module.SemanticFeatureDistillation(
+        student_channels=4, teacher_channels=6)
+    student = torch.randn(1, 4, 4, 4, requires_grad=True)
+    teacher = torch.randn(1, 6, 2, 2)
+    mask = torch.zeros(1, 1, 4, 4)
+    mask[0, 0, 1, 1] = 1
+    loss = module((student,), teacher, mask)
+    assert loss.item() > 0
+    loss.backward()
+    assert student.grad is not None
+    assert torch.count_nonzero(student.grad) > 0
+
+
 def make_cache(tmp_path, corrupt=False):
     image_dir = tmp_path / 'data' / 'train' / 'images'
     image_dir.mkdir(parents=True)

@@ -174,15 +174,75 @@ def get_val_img_ids(val_ann_dir):
     return [os.path.splitext(os.path.basename(f))[0] for f in txt_files]
 
 
+def prediction_provenance_path(pkl_path):
+    return pkl_path + '.provenance.json'
+
+
+def dota_export_sha256(task_dir, img_ids):
+    digest = hashlib.sha256()
+    for img_id in img_ids:
+        path = os.path.join(task_dir, img_id + '.txt')
+        digest.update((img_id + '.txt').encode('utf-8'))
+        digest.update(b'\0')
+        with open(path, 'rb') as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+                digest.update(chunk)
+    return digest.hexdigest()
+
+
+def prediction_provenance(config, checkpoint, pkl_path, ann_dir, split):
+    """Describe the exact inputs and output of one completed inference."""
+    return dict(
+        protocol='crane_prediction_provenance_v1', split=split,
+        config=os.path.abspath(config), config_sha256=sha256_file(config),
+        checkpoint=os.path.abspath(checkpoint),
+        checkpoint_sha256=sha256_file(checkpoint),
+        annotations_sha256=annotation_set_sha256(ann_dir),
+        results_pkl=os.path.abspath(pkl_path),
+        results_pkl_sha256=sha256_file(pkl_path))
+
+
+def check_or_record_prediction(config, checkpoint, pkl_path, ann_dir, split,
+                               generated=False):
+    """Never infer a cached PKL's generating checkpoint from its directory."""
+    provenance_path = prediction_provenance_path(pkl_path)
+    if not os.path.isfile(pkl_path):
+        raise RuntimeError('Inference produced no prediction PKL: ' + pkl_path)
+    expected = prediction_provenance(
+        config, checkpoint, pkl_path, ann_dir, split)
+    if generated:
+        # An old sidecar beside a new output is an identity conflict.
+        with open(provenance_path, 'x', encoding='utf-8') as stream:
+            json.dump(expected, stream, indent=2, ensure_ascii=False)
+            stream.write('\n')
+    else:
+        if not os.path.isfile(provenance_path):
+            raise RuntimeError('Cached prediction lacks generation provenance: '
+                               + pkl_path)
+        with open(provenance_path, 'r', encoding='utf-8') as stream:
+            observed = json.load(stream)
+        if observed != expected:
+            raise RuntimeError('Cached prediction provenance mismatch: '
+                               + pkl_path)
+    return pkl_path
+
+
 def run_test_on_val(config, checkpoint, sweep_dir, ckpt_name, gpu=None):
     """调用 test.py 在 val 集上推理，返回 pickle 路径。"""
     preds_dir = os.path.join(sweep_dir, ckpt_name, 'preds')
     os.makedirs(preds_dir, exist_ok=True)
     pkl_path = os.path.join(preds_dir, 'results.pkl')
+    val_ann_dir = os.path.join(
+        PROJ_ROOT, 'crane_project/data/crane_grab/val/annfiles')
 
     if os.path.exists(pkl_path):
+        check_or_record_prediction(
+            config, checkpoint, pkl_path, val_ann_dir, 'source_val')
         print(f'  [跳过] 已有推理结果: {pkl_path}')
         return pkl_path
+    if os.path.exists(prediction_provenance_path(pkl_path)):
+        raise RuntimeError('Prediction provenance exists without PKL: '
+                           + pkl_path)
 
     tmp_work_dir = os.path.join(sweep_dir, ckpt_name)
 
@@ -212,7 +272,9 @@ def run_test_on_val(config, checkpoint, sweep_dir, ckpt_name, gpu=None):
             print(f'    {line}')
         return None
 
-    return pkl_path
+    return check_or_record_prediction(
+        config, checkpoint, pkl_path, val_ann_dir, 'source_val',
+        generated=True)
 
 
 def pkl_to_dota(pkl_path, img_ids, output_dir):
@@ -223,6 +285,11 @@ def pkl_to_dota(pkl_path, img_ids, output_dir):
     """
     import cv2
     task_dir = os.path.join(output_dir, 'Task1_grab')
+    export_identity_path = task_dir + '.provenance.json'
+    source_identity = dict(
+        protocol='crane_dota_export_provenance_v1',
+        results_pkl_sha256=sha256_file(pkl_path),
+        frame_ids=img_ids)
     if os.path.isdir(task_dir) and glob.glob(os.path.join(task_dir, '*.txt')):
         observed = {os.path.splitext(os.path.basename(path))[0]
                     for path in glob.glob(os.path.join(task_dir, '*.txt'))
@@ -230,8 +297,21 @@ def pkl_to_dota(pkl_path, img_ids, output_dir):
         if observed != set(img_ids):
             raise RuntimeError('Incomplete cached DOTA predictions: '
                                + task_dir)
+        if not os.path.isfile(export_identity_path):
+            raise RuntimeError('Cached DOTA export lacks provenance: '
+                               + task_dir)
+        with open(export_identity_path, 'r', encoding='utf-8') as stream:
+            recorded = json.load(stream)
+        expected = dict(source_identity,
+                        dota_sha256=dota_export_sha256(task_dir, img_ids))
+        if recorded != expected:
+            raise RuntimeError('Cached DOTA export provenance mismatch: '
+                               + task_dir)
         print(f'  [跳过] 已有 DOTA 预测: {task_dir} ({len(observed)} 文件)')
         return task_dir
+    if os.path.exists(export_identity_path):
+        raise RuntimeError('DOTA provenance exists without complete export: '
+                           + task_dir)
 
     with open(pkl_path, 'rb') as f:
         results = pickle.load(f)
@@ -264,6 +344,10 @@ def pkl_to_dota(pkl_path, img_ids, output_dir):
                     count += 1
 
     print(f'  [转换] {count} 个预测框 -> {task_dir}')
+    source_identity['dota_sha256'] = dota_export_sha256(task_dir, img_ids)
+    with open(export_identity_path, 'x', encoding='utf-8') as stream:
+        json.dump(source_identity, stream, indent=2, ensure_ascii=False)
+        stream.write('\n')
     return task_dir
 
 
@@ -604,8 +688,15 @@ def run_final_test(config, best_ckpt, sweep_dir, center_thresh):
     preds_dir = os.path.join(final_dir, 'preds')
     os.makedirs(preds_dir, exist_ok=True)
     pkl_path = os.path.join(preds_dir, 'results.pkl')
+    gt_dir = os.path.join(PROJ_ROOT, 'crane_project/data/crane_grab/test/annfiles')
 
-    if not os.path.exists(pkl_path):
+    if os.path.exists(pkl_path):
+        check_or_record_prediction(
+            config, best_ckpt, pkl_path, gt_dir, 'fixed_test')
+    else:
+        if os.path.exists(prediction_provenance_path(pkl_path)):
+            raise RuntimeError('Prediction provenance exists without PKL: '
+                               + pkl_path)
         cmd = [
             sys.executable,
             os.path.join(PROJ_ROOT, 'tools/test.py'),
@@ -622,8 +713,10 @@ def run_final_test(config, best_ckpt, sweep_dir, center_thresh):
             for line in result.stderr.strip().split('\n')[-5:]:
                 print(f'    {line}')
             return None
+        check_or_record_prediction(
+            config, best_ckpt, pkl_path, gt_dir, 'fixed_test',
+            generated=True)
 
-    gt_dir = os.path.join(PROJ_ROOT, 'crane_project/data/crane_grab/test/annfiles')
     img_ids = get_val_img_ids(gt_dir)
     if len(img_ids) != 992:
         raise RuntimeError('Expected the fixed 992-frame TEST; found '

@@ -1,6 +1,7 @@
 # mmrotate/models/detectors/sym_eood_detector.py
 import copy
 import inspect
+import math
 import random
 
 import torch
@@ -345,15 +346,20 @@ class SymEOOD(SingleStageDetector):
             sx = float(feat_w) / max(float(pad_w), 1.0)
             sy = float(feat_h) / max(float(pad_h), 1.0)
             for box in boxes.detach():
-                cx, cy, width, height = [float(v) for v in box[:4]]
+                cx, cy, width, height, theta = [float(v) for v in box[:5]]
+                # Enclose the rotated OBB, including the cells at its edges.
+                half_w = (abs(width * math.cos(theta))
+                          + abs(height * math.sin(theta))) / 2.0
+                half_h = (abs(width * math.sin(theta))
+                          + abs(height * math.cos(theta))) / 2.0
                 x0 = max(0, min(feat_w - 1,
-                                int((cx - width / 2.0) * sx)))
+                                math.floor((cx - half_w) * sx)))
                 x1 = max(x0 + 1, min(feat_w,
-                                     int((cx + width / 2.0) * sx) + 1))
+                                     math.ceil((cx + half_w) * sx)))
                 y0 = max(0, min(feat_h - 1,
-                                int((cy - height / 2.0) * sy)))
+                                math.floor((cy - half_h) * sy)))
                 y1 = max(y0 + 1, min(feat_h,
-                                     int((cy + height / 2.0) * sy) + 1))
+                                     math.ceil((cy + half_h) * sy)))
                 mask[index, 0, y0:y1, x0:x1] = 1.0
         return mask
 

@@ -65,9 +65,17 @@ class SemanticFeatureDistillation(nn.Module):
         if spatial_mask is not None:
             if spatial_mask.ndim != 4 or spatial_mask.size(1) != 1:
                 raise ValueError('spatial_mask must be [B,1,H,W]')
-            mask = F.interpolate(
-                spatial_mask.float(), size=per_token.shape[-2:],
-                mode='nearest')[:, 0] > 0
+            # Nearest downsampling can discard a one-cell foreground object.
+            # A token is supervised if any source cell it covers is foreground.
+            target_size = per_token.shape[-2:]
+            if all(source >= target for source, target in zip(
+                    spatial_mask.shape[-2:], target_size)):
+                mask = F.adaptive_max_pool2d(
+                    spatial_mask.float(), target_size)[:, 0] > 0
+            else:
+                mask = F.interpolate(
+                    spatial_mask.float(), size=target_size,
+                    mode='nearest')[:, 0] > 0
             if bool(mask.any()):
                 per_token = per_token[mask]
             else:

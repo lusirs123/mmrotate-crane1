@@ -3,6 +3,7 @@
 import os
 import pickle
 
+import numpy as np
 import pytest
 
 from crane_project.tools import ckpt_sweep
@@ -54,6 +55,8 @@ def test_cached_prediction_count_must_match_annotations(tmp_path):
 def test_val_subprocess_imports_this_checkout_before_installed_mmrotate(
         tmp_path, monkeypatch):
     monkeypatch.setenv('PYTHONPATH', '/other/python/packages')
+    monkeypatch.setattr(ckpt_sweep, 'check_or_record_prediction',
+                        lambda *args, **kwargs: args[2])
     seen = {}
 
     def fake_run(cmd, **kwargs):
@@ -69,3 +72,39 @@ def test_val_subprocess_imports_this_checkout_before_installed_mmrotate(
     assert seen['kwargs']['cwd'] == ckpt_sweep.PROJ_ROOT
     assert seen['cmd'][1] == os.path.join(ckpt_sweep.PROJ_ROOT,
                                          'tools/test.py')
+
+
+def test_cached_prediction_requires_generation_provenance(tmp_path):
+    config = tmp_path / 'student.py'
+    checkpoint = tmp_path / 'epoch_1.pth'
+    pkl = tmp_path / 'results.pkl'
+    ann = tmp_path / 'annfiles'
+    ann.mkdir()
+    (ann / 'real_seq01_00001.txt').write_text('GT')
+    config.write_text('config')
+    checkpoint.write_bytes(b'weights')
+    pkl.write_bytes(b'prediction')
+    with pytest.raises(RuntimeError, match='lacks generation provenance'):
+        ckpt_sweep.check_or_record_prediction(
+            str(config), str(checkpoint), str(pkl), str(ann), 'fixed_test')
+    ckpt_sweep.check_or_record_prediction(
+        str(config), str(checkpoint), str(pkl), str(ann), 'fixed_test',
+        generated=True)
+    assert ckpt_sweep.check_or_record_prediction(
+        str(config), str(checkpoint), str(pkl), str(ann), 'fixed_test') == str(pkl)
+    pkl.write_bytes(b'different prediction')
+    with pytest.raises(RuntimeError, match='provenance mismatch'):
+        ckpt_sweep.check_or_record_prediction(
+            str(config), str(checkpoint), str(pkl), str(ann), 'fixed_test')
+
+
+def test_cached_dota_export_rejects_changed_prediction_pkl(tmp_path):
+    pkl = tmp_path / 'results.pkl'
+    with pkl.open('wb') as stream:
+        pickle.dump([[np.array([[10., 10., 4., 2., 0., .8]])]], stream)
+    ckpt_sweep.pkl_to_dota(str(pkl), ['real_seq01_00001'], str(tmp_path))
+    ckpt_sweep.pkl_to_dota(str(pkl), ['real_seq01_00001'], str(tmp_path))
+    with pkl.open('wb') as stream:
+        pickle.dump([[np.array([[11., 10., 4., 2., 0., .8]])]], stream)
+    with pytest.raises(RuntimeError, match='export provenance mismatch'):
+        ckpt_sweep.pkl_to_dota(str(pkl), ['real_seq01_00001'], str(tmp_path))
