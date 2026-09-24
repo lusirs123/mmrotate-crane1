@@ -1,0 +1,156 @@
+{
+  "archive": "/Users/mac/Downloads/k1_dino_warmstart_test_analysis_20260923.tar.gz",
+  "archive_sha256": "47a9c479d8f6e1ed8ff81013e945071f833ac315d56f9a99f4ae27c57dfdabe9",
+  "files": [
+    {
+      "archive_path": "work_dirs/crane_symeood_k1_dino_semantic_distill_fair_2gpu_v1/paired_test_audit_v1.json",
+      "sha256": "5ef70baf2897f1a79fc62cfbaa4b13ede95b6afab12435d484174d6be785f6f3",
+      "size_bytes": 539919
+    },
+    {
+      "archive_path": "work_dirs/crane_symeood_k1_dino_semantic_distill_fair_2gpu_v1/paired_test_audit_v1.md",
+      "sha256": "31ec202580a44a52c2cdd577eb602ce92e98ca33e9b9e264c861fe0b1f4d14f7",
+      "size_bytes": 2038
+    },
+    {
+      "archive_path": "work_dirs/crane_symeood_k1_dino_warmstart_control_v2/ckpt_sweep_metric_v3/final_test/epoch_1/final_test_metrics_v2.json",
+      "sha256": "28710b5189d5a5b0c06217fd48088269551c7e4586d7261805572b77e8fae5c1",
+      "size_bytes": 1656
+    },
+    {
+      "archive_path": "work_dirs/crane_symeood_k1_dino_warmstart_control_v2/ckpt_sweep_metric_v3/sweep_results.json",
+      "sha256": "d120c5f2901ce65de1bad00936352b05e4a1cb4f374485369040dbb8c7579d2e",
+      "size_bytes": 6943
+    },
+    {
+      "archive_path": "work_dirs/crane_symeood_k1_dino_warmstart_distill_v2/ckpt_sweep_metric_v3/final_test/epoch_1/final_test_metrics_v2.json",
+      "sha256": "fa05f6c97cacafb96de4b369fd3701b5a1ecf5a7fab4f40d894101de982c0db8",
+      "size_bytes": 1656
+    },
+    {
+      "archive_path": "work_dirs/crane_symeood_k1_dino_warmstart_distill_v2/ckpt_sweep_metric_v3/sweep_results.json",
+      "sha256": "ec37d1cc886140756da96b3f1bb94e8fd5a455798ad3e5c203bf61fa645b4d65",
+      "size_bytes": 6953
+    },
+    {
+      "archive_path": "work_dirs/crane_symeood_k1_dino_warmstart_v2_paired_test_audit.json",
+      "sha256": "0ebb6915c465c93a79d83490f508a2974ab7d2a0bc179c2595f14ebe076c540b",
+      "size_bytes": 542628
+    },
+    {
+      "archive_path": "work_dirs/crane_symeood_k1_dino_warmstart_v2_paired_test_audit.md",
+      "sha256": "018381f5c52ae32c4bdbab836c2455b77fa91e7806c48d4093d573281992d0cc",
+      "size_bytes": 2032
+    },
+    {
+      "archive_path": "work_dirs/depth_raw_opt_v1/calibration_train_03_tilt_obb/formal_dino_native_s14/calibration_train_audit.json",
+      "sha256": "9ee47c8796185bd8136fc726903460e67f2ac586613014f3795b344fc80af8c8",
+      "size_bytes": 7556
+    },
+    {
+      "archive_path": "work_dirs/depth_raw_opt_v1/calibration_train_03_tilt_obb/formal_dino_native_s14/predictions_full.jsonl.manifest.json",
+      "sha256": "3c4e7cf13f45d311798e176597ada6b44d0b6b9dd9b3ca777010b7b58c756738",
+      "size_bytes": 1529
+    },
+    {
+      "archive_path": "work_dirs/depth_raw_opt_v1/calibration_train_03_tilt_obb/formal_dino_native_s14/predictions_smoke20.jsonl.manifest.json",
+      "sha256": "0b4143cf52d5031873042b7991cf18976a176afb5a8f79e857d639792e64880f",
+      "size_bytes": 1528
+    },
+    {
+      "archive_path": "work_dirs/dino_teacher_fc_cls_interpolation_v1/native_candidate_trace_all_v4/frozen_dino_native_s14_formal_nms_paired_all_v4.json",
+      "sha256": "82b863f60052607697540b080018f0dac9037f2fa9931a947e3f9e2fba08ccb5",
+      "size_bytes": 173194309
+    },
+    {
+      "archive_path": "work_dirs/dino_teacher_scoped_lowlight_v1_formal8/formal_integrated_nms05/checkpoint_eval_summary.json",
+      "sha256": "a2fa75355eb49839b5aaa16b2653f2faef635be98f13cd0560a550d0910cad77",
+      "size_bytes": 909
+    },
+    {
+      "archive_path": "work_dirs/dino_teacher_scoped_lowlight_v1_formal8/formal_integrated_nms05/eval_20260729_100843.json",
+      "sha256": "5cf02862bb1c1c35e72e81215f43f4b6c897a158942c7a1e999f46b7b2ffbf5c",
+      "size_bytes": 907
+    },
+    {
+      "archive_path": "work_dirs/dino_teacher_scoped_lowlight_v1_formal8/formal_integrated_test_refactor/checkpoint_eval_summary.json",
+      "sha256": "f09f5c477c066779ef08677f6e1192edea4ebd72deebc2a3185ef39ef485a13e",
+      "size_bytes": 903
+    },
+    {
+      "archive_path": "work_dirs/dino_teacher_scoped_lowlight_v1_formal8/formal_integrated_test_refactor/eval_20260727_100900.json",
+      "sha256": "0efff6b918e7153707fccbfd72566cfc4f520848d9bbe6dab350626ab217cc87",
+      "size_bytes": 901
+    },
+    {
+      "archive_path": "work_dirs/dino_teacher_scoped_lowlight_v1_formal8/full_test_diagnosis/result.json",
+      "sha256": "aab35a3d69c5deef0cc088778ea316aae637e4527a4a79eada7d4cb089f1bea8",
+      "size_bytes": 13538
+    },
+    {
+      "archive_path": "work_dirs/dino_teacher_scoped_lowlight_v1_formal8/full_test_diagnosis_v2/box_stability_audit_v1.json",
+      "sha256": "07b6f231b007169501f21610d2a2fe7d2e027059a53e36f9e8449accfda83642",
+      "size_bytes": 25657
+    },
+    {
+      "archive_path": "work_dirs/dino_teacher_scoped_lowlight_v1_formal8/full_test_diagnosis_v2/causal_stabilization_probe_v1.json",
+      "sha256": "017e35420661f6ffb4e6acdc518f39e412934a138034696040d583ae2a3dec96",
+      "size_bytes": 48966
+    },
+    {
+      "archive_path": "work_dirs/dino_teacher_scoped_lowlight_v1_formal8/full_test_diagnosis_v2/result.json",
+      "sha256": "bfbaab0845d8ce76ca456f7702338d20c8290271c091162714c9f2842efc29af",
+      "size_bytes": 15430
+    },
+    {
+      "archive_path": "work_dirs/dino_teacher_scoped_lowlight_v1_formal8/full_test_stabilized_v2/result.json",
+      "sha256": "1a5c6b0a417ccf56ab5eee75c7a3a725454418ba7a1c1f2fbd62bf5eaee5e4a0",
+      "size_bytes": 24457
+    },
+    {
+      "archive_path": "work_dirs/dino_teacher_scoped_lowlight_v1_formal8/multiscale_rpn_coverage_p7p14_v2.json",
+      "sha256": "d60d755a1b87a38a42bdd2c40615620f34597c5180285ee00d93688f22b8ea21",
+      "size_bytes": 4815276
+    },
+    {
+      "archive_path": "work_dirs/dino_teacher_scoped_lowlight_v1_formal8/multiscale_rpn_coverage_v1.json",
+      "sha256": "35aa317ef76a4edba5250941e5d772c00bf5c6ff76605c6e061423c70f2b0a63",
+      "size_bytes": 4815275
+    },
+    {
+      "archive_path": "work_dirs/dino_teacher_scoped_lowlight_v1_formal8/nms_retention_audit_v1.json",
+      "sha256": "e26761a7eea086e7ec9ed7cca6337fc719aafc3979388f572e7f258509af47ea",
+      "size_bytes": 3276038
+    },
+    {
+      "archive_path": "work_dirs/dino_teacher_scoped_lowlight_v1_formal8/refactor_verify/result.json",
+      "sha256": "0756bdb9f5be16cbf436b392f8263cf468f24332c8baf0eb854f50f2d4692c4e",
+      "size_bytes": 9410
+    },
+    {
+      "archive_path": "work_dirs/dino_teacher_scoped_lowlight_v1_formal8/rpn_roi_attrition_latency_audit_v1.json",
+      "sha256": "2d6c1b4b4b6498803d13dd354aa0fab62fd9e6cdaed28512066d7ed5cbae07eb",
+      "size_bytes": 3070877
+    },
+    {
+      "archive_path": "work_dirs/dino_teacher_scoped_lowlight_v1_formal8/source_val_export_stability_v1.json",
+      "sha256": "4d87b50d13b6feb1585e5d492e3ed4c6d208ac4f5ac0048e28f599198044cbe7",
+      "size_bytes": 9415
+    },
+    {
+      "archive_path": "work_dirs/dino_teacher_scoped_lowlight_v1_formal8/target_dev_test_result.json",
+      "sha256": "1ae545018c58bfbc9d63aacf8dfb870724c99b513d873200601b778025e6904b",
+      "size_bytes": 435580
+    },
+    {
+      "archive_path": "work_dirs/dino_teacher_scoped_lowlight_v1_formal8/token_scale_rpn_coverage_audit_v1.json",
+      "sha256": "6eef2056f67185fe97991547582ff31b11d35c2aa87bb32f98d5f4238acd44ef",
+      "size_bytes": 4810939
+    },
+    {
+      "archive_path": "work_dirs/dino_teacher_scoped_lowlight_v1_formal8/train_result.json",
+      "sha256": "82856f4da78ed0f3ef1aa1b7c082cedbb149dadde581a73b38301cf7cb675ce1",
+      "size_bytes": 24032
+    }
+  ]
+}
