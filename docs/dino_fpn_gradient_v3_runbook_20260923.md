@@ -173,3 +173,40 @@ tar -czf dino_corrected_mask_ac_v4_source_results.tar.gz \
   work_dirs/crane_symeood_k1_dino_corrected_mask_a_v4 \
   work_dirs/crane_symeood_k1_dino_corrected_mask_c_v4
 ```
+
+## 2026-09-25：对象—邻近背景关系蒸馏的短 source 检查 V5
+
+V4 的 A/C 均在 source VAL 选中 epoch 1；固定 TEST 上 real 均输出 305/420 帧，其中 297 帧中心误差小于 15 px，输出帧中心命中率均为 297/305=97.38%，最长连续 RIoU 失败均为 38 帧。C 的特征损失下降，但输出帧集合、中心命中状态和 RIoU 达标状态与 A 完全相同。本项目后续把“中心命中率”用于**有输出帧**的条件定位评价，并同时单列输出覆盖率、连续失败；旧报告中的全帧 `R_center` 保留原标签及分母，不能直接与条件命中率相减。
+
+本探针只检查下一种监督是否值得进入受控实验，核心问题是：**教师的对象—邻近背景关系是否具有可留出的区分信息，学生分类适配器能否在匹配的短更新中学习该关系，并改善对象相对背景的分类响应，同时保留原有检测输出。** 它不把非零梯度或同图损失下降单独当作可行性结论。
+
+`probe_k1_dino_object_background_source_v5.py` 复用现有 K1 `epoch_20.pth` 和 DINO 缓存，按标注预先选择 real/sim 各两个序列中的 fit 与 held-out 图像：每个域各取 fit 两张、held-out 两张，按 GT 短边的 25%/75% 分位选取。选择不读取预测，fit 与 held-out 按序列分离，避免用结果挑样本。每帧只接受一个 GT 对象；旋转框内部作为对象区域，在一格间隔外取近邻背景环，并排除 padding。教师区分度用对象 token 的交替留出子集构造原型，报告 held-out 对象相对背景的 gap/AUC；对象 token 不足时记为不可用。
+
+探针包含两个完全匹配的短更新分支：
+
+* `control`：K1 主检测损失；
+* `relation`：同一主检测损失，加 `0.05 ×` 对象/背景等权关系 MSE。
+
+两组都从同一个 K1 权重开始，只让分类适配器可训练，FPN、回归分支和其余参数冻结；每组 10 步，使用原 K1 SGD 的动量、权重衰减和梯度裁剪，固定使用原 K1 基础学习率 `0.0025`，不使用 warmup。这是短的设计探针，不等价于 K1 的 24 epoch 训练，也不保存 checkpoint。每一步在 real/sim fit 图像间交替，held-out 图像只用于评估。脚本恢复适配器、检测损失计数器和缓冲区后再运行另一分支。
+
+判据预先写在脚本中，属于小样本探索性门槛，不是统计显著性检验。继续做受控训练至少需要两个域都满足：教师 held-out AUC≥0.6 且 gap≥0.02；relation 分支相对 control 的 held-out 关系 MSE 至少改善 1%；对象相对背景的分类 score gap 有正增量；学生 held-out AUC/gap 不低于 control；对象 score 不下降；输出、15 px 中心命中和 RIoU 命中均没有丢失。任何教师 AUC≤0.5、检测输出或命中丢失、或分类 gap 下降，记为本探针未支持。其余情况记为证据不足。`automatic_training_authorized` 永远为 `false`。此外，脚本记录关系损失到适配器的独立梯度范数，并对 baseline/control/relation 的回归分支做 SHA256 一致性检查，防止把回归改变误归因于分类关系监督。
+
+服务器在仓库根目录同步新探针后运行以下单条命令：
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+conda activate mmrotljj
+PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" CUDA_VISIBLE_DEVICES=0 python \
+  crane_project/tools/probe_k1_dino_object_background_source_v5.py \
+  --project-root . --gpu 0 \
+  --out-json work_dirs/crane_symeood_k1_dino_object_background_source_probe_v5_r2.json
+```
+
+脚本拒绝覆盖已有 JSON。重点查看 `assessment.status`、每个域的 `teacher_auc`/`teacher_gap`、`relative_mse_gain_over_control`、`student_auc_gain_over_control`、`score_gap_gain_over_control`、`lost_outputs`/`lost_center_hits`/`lost_riou_hits`，以及首步 `relation_adapter_gradient_norm`。不要把 `supports_next_controlled_experiment` 解释成正式训练已获批准；它只表示这组短 source 证据达到预先门槛。探针不读取 VAL/TEST，不选择 checkpoint，不调整 TEST 阈值。若证据不足或未支持，先记录限制，不重新做全量教师诊断。
+
+如需把报告下载到本地，可在服务器仓库根目录打包：
+
+```bash
+tar -czf dino_object_background_source_probe_v5_r2.tar.gz \
+  work_dirs/crane_symeood_k1_dino_object_background_source_probe_v5_r2.json
+```
