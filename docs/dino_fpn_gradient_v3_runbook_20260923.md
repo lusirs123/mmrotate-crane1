@@ -180,7 +180,7 @@ V4 的 A/C 均在 source VAL 选中 epoch 1；固定 TEST 上 real 均输出 305
 
 本探针只检查下一种监督是否值得进入受控实验，核心问题是：**教师的对象—邻近背景关系是否具有可留出的区分信息，学生分类适配器能否在匹配的短更新中学习该关系，并改善对象相对背景的分类响应，同时保留原有检测输出。** 它不把非零梯度或同图损失下降单独当作可行性结论。
 
-`probe_k1_dino_object_background_source_v5.py` 复用现有 K1 `epoch_20.pth` 和 DINO 缓存，按标注预先选择 real/sim 各两个序列中的 fit 与 held-out 图像：每个域各取 fit 两张、held-out 两张，按 GT 短边的 25%/75% 分位选取。选择不读取预测，fit 与 held-out 按序列分离，避免用结果挑样本。每帧只接受一个 GT 对象；旋转框内部作为对象区域，在一格间隔外取近邻背景环，并排除 padding。教师区分度用对象 token 的交替留出子集构造原型，报告 held-out 对象相对背景的 gap/AUC；对象 token 不足时记为不可用。
+`probe_k1_dino_object_background_source_v5.py` 复用现有 K1 `epoch_20.pth` 和 DINO 缓存，按标注预先选择 fit 与 held-out 图像：real 使用交替的完整序列分离，sim 当前只有 `sim_seq08`，因此使用按帧号前后半段的明确 fallback，并在报告中标记 `single_sequence_frame_block_split`。每个域各取 fit 两张、held-out 两张，按 GT 短边的 25%/75% 分位选取。选择不读取预测。sim 的 fallback 不是序列独立泛化证据，只用于检查关系监督链路是否能学习。每帧只接受一个 GT 对象；旋转框内部作为对象区域，在一格间隔外取近邻背景环，并排除 padding。教师区分度用对象 token 的交替留出子集构造原型，报告 held-out 对象相对背景的 gap/AUC；对象 token 不足时记为不可用。
 
 探针包含两个完全匹配的短更新分支：
 

@@ -2,11 +2,13 @@
 
 import math
 
+import numpy as np
 import torch
 
 from crane_project.tools.probe_k1_dino_object_background_source_v5 import (
     assess_evidence, balanced_relation_loss, heldout_relation_stats,
-    heldout_teacher_gap, object_background_masks, relation_measure)
+    heldout_teacher_gap, object_background_masks, relation_measure,
+    select_source_records)
 
 
 def test_rotated_object_and_ring_stay_inside_image():
@@ -96,3 +98,17 @@ def test_relation_loss_balances_object_and_background_counts():
     assert torch.isclose(
         balanced_relation_loss(student, teacher, obj, bg),
         torch.tensor(2.5))
+
+
+def test_single_sim_sequence_uses_disclosed_frame_block_fallback():
+    infos = []
+    for frame in range(8):
+        infos.append(dict(
+            filename='sim_seq08_{:05d}.jpg'.format(frame),
+            ann=dict(bboxes=np.array([[10., 10., 8., 6., 0.]], dtype=np.float32))))
+    selected = select_source_records(infos, 'sim', 0)
+    assert {row['selection_mode'] for row in selected} == {
+        'single_sequence_frame_block_split'}
+    assert {row['role'] for row in selected} == {'fit', 'heldout'}
+    assert {row['frame_number'] for row in selected if row['role'] == 'fit'} <= set(range(4))
+    assert {row['frame_number'] for row in selected if row['role'] == 'heldout'} <= set(range(4, 8))

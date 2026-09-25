@@ -117,20 +117,39 @@ def select_source_records(infos, domain, offset):
         if not name.startswith(domain + '_'):
             raise ValueError('Unexpected domain in source annotations')
         sequence = name.rsplit('_', 1)[0]
+        try:
+            frame_number = int(name.rsplit('_', 1)[1])
+        except (IndexError, ValueError):
+            raise ValueError('Cannot parse source frame number: ' + name)
         candidates.append(dict(index=offset + index, sequence=sequence,
-                               domain=domain, image=info['filename'],
+                               frame_number=frame_number, domain=domain,
+                               image=info['filename'],
                                original_short_edge=float(min(boxes[0][2:4]))))
     sequences = sorted({r['sequence'] for r in candidates})
-    if len(sequences) < 2:
-        raise ValueError('Need two source sequences for ' + domain)
     selected = []
-    for role, seqs in [('fit', sequences[::2]), ('heldout', sequences[1::2])]:
-        pool = sorted([r for r in candidates if r['sequence'] in seqs],
-                      key=lambda r: (r['original_short_edge'], r['image']))
+    if len(sequences) >= 2:
+        # Preferred split: whole sequences are disjoint between fit/held-out.
+        role_pools = [('fit', sequences[::2]), ('heldout', sequences[1::2])]
+        selection_mode = 'sequence_disjoint'
+        pools = [(role, [r for r in candidates if r['sequence'] in seqs])
+                 for role, seqs in role_pools]
+    elif len(sequences) == 1:
+        # train_sim currently contains only sim_seq08. Keep the probe usable,
+        # but disclose that its held-out half is a frame-block split, not a
+        # sequence-independent test. The split is made before predictions.
+        ordered = sorted(candidates, key=lambda r: (r['frame_number'], r['image']))
+        midpoint = len(ordered) // 2
+        selection_mode = 'single_sequence_frame_block_split'
+        pools = [('fit', ordered[:midpoint]), ('heldout', ordered[midpoint:])]
+    else:
+        raise ValueError('No single-object source frames for ' + domain)
+    for role, pool in pools:
+        pool = sorted(pool, key=lambda r: (r['original_short_edge'], r['image']))
         if len(pool) < 2:
             raise ValueError('Not enough source images for ' + domain + '/' + role)
         for fraction in (0.25, 0.75):
-            record = dict(pool[round((len(pool) - 1) * fraction)], role=role)
+            record = dict(pool[round((len(pool) - 1) * fraction)], role=role,
+                          selection_mode=selection_mode)
             selected.append(record)
     if len({r['index'] for r in selected}) != 4:
         raise ValueError('Source selection duplicated an image')
@@ -461,6 +480,12 @@ def probe(project_root, gpu):
                     raise ValueError('Regression branch changed across probe arms')
     finally:
         restore()
+    selection_modes = sorted({r['selection_mode'] for r in records})
+    selection_rule = ('alternating whole sequences; 25/75 percentiles of GT '
+                      'short edge'
+                      if selection_modes == ['sequence_disjoint'] else
+                      'sequence-disjoint real; frame-block sim fallback; '
+                      '25/75 percentiles of GT short edge')
     samples_report = [{k: v for k, v in record.items() if k not in
                       ('features', 'obj', 'bg', 'teacher_map', 'boxes', 'labels', 'meta')}
                      for record in records]
@@ -474,7 +499,7 @@ def probe(project_root, gpu):
         probe_sha256=sha256(Path(__file__)),
         config=str(cfg_path), config_sha256=sha256(cfg_path),
         k1_config_sha256=sha256(k1_cfg_path),
-        selection_rule='alternating sequences; 25/75 percentiles of GT short edge',
+        selection_rule=selection_rule, selection_modes=selection_modes,
         sample_count=len(records), training_epochs=0,
         temporary_steps_per_arm=steps if complete else 0,
         total_temporary_optimizer_steps=2 * steps if complete else 0,
