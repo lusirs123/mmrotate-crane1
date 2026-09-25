@@ -118,3 +118,58 @@ PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" CUDA_VISIBLE_DEVICES=0 python \
 ```
 
 脚本拒绝覆盖既有 JSON。核对报告中的 `corrected_teacher_tokens`、`fpn_gradients`（尤其范数比和余弦）及 `temporary_distillation_step_response`，先判断修正后的监督是否在 source 样本上影响学生用于检测的表示与分类分数。只采样两帧，结果是设计诊断，不能据此声明总体检测性能提升。后续若需正式实验，应另起新编号、保留同预算无蒸馏对照，并只用 source VAL 选权。
+
+## 2026-09-25：修正掩码后的 A/C 同预算对照 V4
+
+短 source 探针的服务器结果使用同一 K1 `epoch_20.pth`（SHA256 `3ab0885159294beb820da1445c38045a342fd4956c3d094eeaaadf78deb745c2`），运行时证实旋转框掩码与最大池化缩小已生效。两帧合并后，蒸馏梯度确实进入 FPN：蒸馏/检测梯度范数比约 `0.01444`，余弦约 `0.01460`；一次仅沿蒸馏梯度的临时更新改变了 P3 与分类输出。该探针只有两帧、零训练轮，不能证明检测收益，也不支持按梯度范数比直接放大蒸馏权重。
+
+本次只训练两个新组，专门验证**修正后的原特征损失**在相同预算下是否带来任务收益。A/C 均继承 V3 公共配置：同一 K1 初始化，冻结 ResNet-50，FPN、检测头与分类适配器可训练；同一 source `train + train_sim` 和 DINO 缓存管线；4 epoch、每卡 batch 2、SGD `lr=0.00025`、相同学习率计划、梯度裁剪与 seed 0。A 无蒸馏损失；C 使用原前景特征余弦损失 `loss_weight=0.05`，且 `protect_geometry=False`。两组只在蒸馏设置及各自输出目录不同。掩码修复位于模型和损失实现中，旧 V3 权重不属于此实验。B 不重训，因为当前要回答的是修正后 C 相对无蒸馏 A 的额外收益。
+
+同步两份新配置、`preflight_k1_dino_corrected_mask_ac_v4.py` 和当前掩码/损失实现到服务器后，在仓库根目录依次执行。预检使用一张 source 图像对 A/C 各做一次临时优化，检查 K1 SHA、完整配置一致性、掩码修复运行时、参数冻结、A 无蒸馏损失、C 的蒸馏梯度进入 FPN、同图同缓存及输出变化；不保存训练权重。`CORRECTED_MASK_AC_READY` 出现后再训练。新目录应为空，避免混入旧产物。
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+conda activate mmrotljj
+test ! -e work_dirs/crane_symeood_k1_dino_corrected_mask_a_v4
+test ! -e work_dirs/crane_symeood_k1_dino_corrected_mask_c_v4
+PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" CUDA_VISIBLE_DEVICES=0 python \
+  crane_project/tools/preflight_k1_dino_corrected_mask_ac_v4.py \
+  --config-a crane_project/configs/crane_symeood_k1_dino_corrected_mask_a_v4.py \
+  --config-c crane_project/configs/crane_symeood_k1_dino_corrected_mask_c_v4.py \
+  --gpu 0 \
+  --out-json work_dirs/crane_symeood_k1_dino_corrected_mask_ac_v4_preflight.json
+```
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1 bash tools/dist_train.sh \
+  crane_project/configs/crane_symeood_k1_dino_corrected_mask_a_v4.py 2 --no-validate
+CUDA_VISIBLE_DEVICES=0,1 bash tools/dist_train.sh \
+  crane_project/configs/crane_symeood_k1_dino_corrected_mask_c_v4.py 2 --no-validate
+```
+
+确认每组都有 `epoch_1.pth` 至 `epoch_4.pth`，且训练日志无 NaN、学习率和轮数符合配置，然后逐组独立扫描 source VAL。推理统一使用保留分类适配器的学生配置，训练期投影器不会进入推理模型；`ckpt_sweep.py` 会为新预测写入 provenance。此阶段不传 `--run-final-test`。
+
+```bash
+python crane_project/tools/ckpt_sweep.py \
+  --config crane_project/configs/crane_symeood_k1_dino_semantic_student_v1.py \
+  --work-dir work_dirs/crane_symeood_k1_dino_corrected_mask_a_v4 \
+  --sweep-dir work_dirs/crane_symeood_k1_dino_corrected_mask_a_v4/source_val_sweep_protocol_v2 \
+  --epochs 1 2 3 4 --gpu 0
+python crane_project/tools/ckpt_sweep.py \
+  --config crane_project/configs/crane_symeood_k1_dino_semantic_student_v1.py \
+  --work-dir work_dirs/crane_symeood_k1_dino_corrected_mask_c_v4 \
+  --sweep-dir work_dirs/crane_symeood_k1_dino_corrected_mask_c_v4/source_val_sweep_protocol_v2 \
+  --epochs 1 2 3 4 --gpu 0
+```
+
+分析时先比较 source VAL 选中权重的同帧预测：C 新增和丢失的正确输出、几何精度、连续 RIoU 失败，以及蒸馏损失下降是否转为任务收益。两组各自按相同 source VAL 规则选权。只有在 source 结论固定后，才决定是否做一次固定 TEST；不要按既有 TEST 的单帧差异调损失。
+
+如需把 source 阶段产物下载到本地，可在服务器仓库根目录打包两组结果和预检。命令排除 checkpoint，但保留日志、source VAL 指标、原始预测及其 provenance，便于逐帧复查：
+
+```bash
+tar -czf dino_corrected_mask_ac_v4_source_results.tar.gz \
+  --exclude='*.pth' \
+  work_dirs/crane_symeood_k1_dino_corrected_mask_ac_v4_preflight.json \
+  work_dirs/crane_symeood_k1_dino_corrected_mask_a_v4 \
+  work_dirs/crane_symeood_k1_dino_corrected_mask_c_v4
+```
