@@ -95,3 +95,26 @@ tar -czf dino_fpn_v3_audit_results_20260924.tar.gz \
 ```
 
 这份 TEST 已暴露，核查只作诊断。若确认学生参数和预测真实不同，但任务结果几乎不变，再在下一次预定 source 实验中测量蒸馏梯度相对检测梯度的大小，并用修复后的掩码做受控对照。
+
+## 2026-09-25：V3 结论固定与修正掩码 source 探针
+
+已归档的服务器产物核查报告、历史预检、三组训练日志和 TEST PKL 表明：A/B/C 均由 K1 `epoch_20.pth` 初始化，主干状态与 K1 完全相同；A 无蒸馏损失，B 的蒸馏梯度停在分类适配器，C 的蒸馏梯度到达 FPN。三组选权均为 `epoch_1`，四个候选都满足 source VAL 约束，第一轮软评分最高。B/C 的权重与 A 不同；C 的 FPN 与 A 的 L2 差异约 0.07259，B 与 A 仅约 0.0000476。完整训练中蒸馏损失 B 约从 0.05198 降至 0.04810，C 约从 0.05196 降至 0.03938。
+
+固定 TEST 的 992 帧上，三组在完全相同的 877 帧输出：real 305 帧输出、115 帧无输出，sim 572 帧全有输出；中心命中帧集合完全相同。real `R_center=70.71%`、`mean_RIoU=0.5003`、`MCML_max=38` 三组相同。原始 PKL 不相同，C 相对 A 的中心坐标最大差约 0.06 像素、分数最大差约 0.00072。**V3 结论：开放 FPN 蒸馏梯度改善了训练特征对齐，却没有改变本次选中权重的输出覆盖、中心命中或最长连续 RIoU 失败。** 这不能推出 DINO 任务知识不可迁移。历史 PKL 缺少生成时的 provenance sidecar，checkpoint→PKL 的生成关系仍只由当时目录和报告支持，不把它表述为严格证明。
+
+完整 C 训练有一次仅到 iter 100 的启动日志和一次完整四轮日志；不能把两份日志计数相加当作额外训练预算。审计报告中检测头相对 K1 的约 3480 最大差值包含训练计数缓冲区，不代表检测卷积权重大幅变化。原 V3 训练使用未考虑 OBB 角度的前景掩码和最近邻缩小；后续代码修正不会追溯改变 V3 权重。
+
+下一步只运行一次短 source 探针 `probe_k1_dino_corrected_mask_source_v4.py`。它用原 A/B/C 配置核对身份，但只构建 C 学生，从同一 K1 权重出发；固定读取 source `train` 与 `train_sim` 的首帧和现有 DINO 缓存。运行前先用合成旋转框和单格前景验证服务器实际加载了修正后的掩码与缩小逻辑，并记录两份实现文件的 SHA。它报告修正前后掩码的 FPN 像素与教师 token、检测与蒸馏损失分别作用于 FPN 的梯度范数/余弦，以及一次**仅在内存中**按配置学习率沿蒸馏梯度更新 FPN 与分类适配器后的分类 logit 和概率变化。这一步不使用动量、权重衰减或梯度裁剪，只衡量局部响应，不等价于真实训练预算下的更新，也不用于选 checkpoint 或调整 TEST 阈值。若单步响应低于 float32 分辨率，报告零值而不编造收益。
+
+同步本地脚本及修正后的掩码/损失实现后，在服务器仓库根目录执行：
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+conda activate mmrotljj
+PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" CUDA_VISIBLE_DEVICES=0 python \
+  crane_project/tools/probe_k1_dino_corrected_mask_source_v4.py \
+  --project-root . --gpu 0 \
+  --out-json work_dirs/crane_symeood_k1_dino_corrected_mask_source_probe_v4.json
+```
+
+脚本拒绝覆盖既有 JSON。核对报告中的 `corrected_teacher_tokens`、`fpn_gradients`（尤其范数比和余弦）及 `temporary_distillation_step_response`，先判断修正后的监督是否在 source 样本上影响学生用于检测的表示与分类分数。只采样两帧，结果是设计诊断，不能据此声明总体检测性能提升。后续若需正式实验，应另起新编号、保留同预算无蒸馏对照，并只用 source VAL 选权。
