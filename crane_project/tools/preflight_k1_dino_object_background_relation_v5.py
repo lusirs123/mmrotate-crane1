@@ -78,10 +78,12 @@ def main():
     parser.add_argument('--config-a', required=True)
     parser.add_argument('--config-c', required=True)
     parser.add_argument('--out-json', required=True)
+    parser.add_argument('--no-overwrite', action='store_true',
+                        help='fail if the report already exists')
     args = parser.parse_args()
     report = validate(Path(args.config_a), Path(args.config_c))
     output = Path(args.out_json)
-    if output.exists():
+    if args.no_overwrite and output.exists():
         raise FileExistsError('Refusing to overwrite ' + str(output))
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
