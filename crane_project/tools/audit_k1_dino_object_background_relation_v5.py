@@ -13,7 +13,7 @@ import math
 from pathlib import Path
 
 
-PROTOCOL = 'k1_dino_object_background_relation_v5_artifact_audit_v1'
+PROTOCOL = 'k1_dino_object_background_relation_v5_artifact_audit_v2'
 METRIC_PROTOCOL = 'crane_ckpt_sweep_final_test_v2'
 STUDENT_CONFIG = 'crane_project/configs/crane_symeood_k1_dino_semantic_student_v1.py'
 ARMS = ('a', 'c')
@@ -94,8 +94,23 @@ def _training_config_summary(root, arm):
         raise ValueError(arm + ': old semantic loss is enabled')
     if cfg.model.backbone.frozen_stages != 1:
         raise ValueError(arm + ': backbone freezing mismatch')
+    if cfg.model.bbox_head.use_semantic_cls_adapter is not True:
+        raise ValueError(arm + ': classification adapter is disabled')
     if cfg.runner.max_epochs != 24 or cfg.optimizer.lr != 0.0025:
         raise ValueError(arm + ': formal training budget mismatch')
+    if (cfg.optimizer.momentum != 0.9
+            or cfg.optimizer.weight_decay != 0.0001):
+        raise ValueError(arm + ': optimizer contract mismatch')
+    grad_clip = cfg.optimizer_config.get('grad_clip')
+    if (grad_clip is None or grad_clip.max_norm != 10
+            or grad_clip.norm_type != 2):
+        raise ValueError(arm + ': gradient clipping contract mismatch')
+    if (cfg.lr_config.warmup != 'linear'
+            or cfg.lr_config.warmup_iters != 1000
+            or cfg.lr_config.step != [16, 22]):
+        raise ValueError(arm + ': learning-rate schedule mismatch')
+    if cfg.data.samples_per_gpu != 2:
+        raise ValueError(arm + ': batch-size contract mismatch')
     if cfg.resume_from is not None:
         raise ValueError(arm + ': unexpected resume_from')
     if not str(cfg.load_from).endswith(
