@@ -37,6 +37,11 @@ def validate(config_a, config_c):
         if sum(step.get('type') == 'LoadDinoFeatureFromCache'
                for step in cfg.train_pipeline) != 1:
             raise ValueError(name + ' must load exactly one DINO cache')
+        collect_steps = [step for step in cfg.train_pipeline
+                         if step.get('type') == 'Collect']
+        if (not collect_steps
+                or 'teacher_features' not in collect_steps[-1].get('keys', [])):
+            raise ValueError(name + ' must carry teacher_features in the batch')
     if a.model.get('object_background_relation') is not None:
         raise ValueError('A must not contain relation supervision')
     relation = dict(c.model.get('object_background_relation') or {})

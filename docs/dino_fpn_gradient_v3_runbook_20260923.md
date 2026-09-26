@@ -215,11 +215,11 @@ tar -czf dino_object_background_source_probe_v5_r2.tar.gz \
 
 短探针只验证了教师关系存在、关系梯度能到达分类适配器；它没有运行完整训练，因此不能作为正式效果结论。正式实验接入新的 `ObjectBackgroundRelationDistillation` 训练损失，不复用短探针作为训练脚本。
 
-配置为 A/C 两组。两组都从 K1 `epoch_20.pth` 初始化，使用 real train + sim train、batch 2、`frozen_stages=1`、SGD `lr=0.0025`、momentum `0.9`、weight decay `0.0001`、梯度裁剪 10、warmup 1000、step `[16,22]`，运行 24 epoch。FPN、检测头和分类适配器由原检测损失训练。A 不启用新关系损失；C 只增加 `0.05 ×` 对象/邻近背景关系 MSE。关系项保护 FPN 几何路径，只通过分类适配器更新；两组的主检测损失仍共同更新 FPN 和检测头。
+配置为 A/C 两组。两组都从 K1 `epoch_20.pth` 初始化，使用 real train + sim train、batch 2、`frozen_stages=1`、SGD `lr=0.0025`、momentum `0.9`、weight decay `0.0001`、梯度裁剪 10、warmup 1000、step `[16,22]`，运行 24 epoch。C 的关系损失必须读取离线 DINO `teacher_features`；A 也读取同一缓存但忽略它，以保持数据管线和 batch 输入完全匹配，避免把缓存读取差异混入 A/C 对照。FPN、检测头和分类适配器由原检测损失训练。A 不启用新关系损失；C 只增加 `0.05 ×` 对象/邻近背景关系 MSE。关系项保护 FPN 几何路径，只通过分类适配器更新；两组的主检测损失仍共同更新 FPN 和检测头。
 
 正式损失从变换后的 GT 旋转框生成精确对象区域，在对象外一格到四格的邻近环中取背景，并排除 padding。教师和学生分别用对象特征原型计算各位置的余弦关系，对象与背景 MSE 等权平均。教师特征来自现有离线 DINO cache，推理阶段不读取教师特征，也不改变回归分支。
 
-本地已完成关系损失模块、A/C 配置和配置预检脚本的语法检查；本机无 MMCV/CUDA，不能代替服务器预检。同步以下文件：`mmrotate/models/losses/object_background_relation.py`、`mmrotate/models/detectors/sym_eood_detector.py`、`crane_project/configs/crane_symeood_k1_dino_object_background_relation_common_v5.py`、`crane_project/configs/crane_symeood_k1_dino_object_background_relation_a_v5.py`、`crane_project/configs/crane_symeood_k1_dino_object_background_relation_c_v5.py` 和 `crane_project/tools/preflight_k1_dino_object_background_relation_v5.py`。
+本地已完成关系损失模块、A/C 配置和配置预检脚本的语法检查；本机无 MMCV/CUDA，不能代替服务器预检。同步以下文件：`mmrotate/models/losses/object_background_relation.py`、`mmrotate/models/detectors/sym_eood_detector.py`、`crane_project/configs/crane_symeood_k1_dino_object_background_relation_common_v5.py`、`crane_project/configs/crane_symeood_k1_dino_object_background_relation_a_v5.py`、`crane_project/configs/crane_symeood_k1_dino_object_background_relation_c_v5.py` 和 `crane_project/tools/preflight_k1_dino_object_background_relation_v5.py`、`mmrotate/models/losses/__init__.py`。
 
 服务器先做配置预检：
 
@@ -251,12 +251,12 @@ python crane_project/tools/ckpt_sweep.py \
   --config crane_project/configs/crane_symeood_k1_dino_semantic_student_v1.py \
   --work-dir work_dirs/crane_symeood_k1_dino_object_background_relation_a_v5 \
   --sweep-dir work_dirs/crane_symeood_k1_dino_object_background_relation_a_v5/source_val_sweep_protocol_v2 \
-  --epochs 2 4 6 8 10 12 14 16 18 20 22 24 --gpu 0
+  --epochs 16 18 20 22 24 --gpu 0
 python crane_project/tools/ckpt_sweep.py \
   --config crane_project/configs/crane_symeood_k1_dino_semantic_student_v1.py \
   --work-dir work_dirs/crane_symeood_k1_dino_object_background_relation_c_v5 \
   --sweep-dir work_dirs/crane_symeood_k1_dino_object_background_relation_c_v5/source_val_sweep_protocol_v2 \
-  --epochs 2 4 6 8 10 12 14 16 18 20 22 24 --gpu 0
+  --epochs 16 18 20 22 24 --gpu 0
 ```
 
 分析时优先比较 A/C 的新增和丢失正确输出、输出覆盖率、仅有输出帧的中心命中率、RIoU 和连续失败长度。关系损失下降不能单独作为成功标准。当前不根据固定 TEST 调损失；只有 source VAL 结论固定后才决定是否进行一次 TEST。

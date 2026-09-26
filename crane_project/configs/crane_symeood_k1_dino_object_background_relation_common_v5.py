@@ -24,7 +24,9 @@ evaluation = dict(
     weight_sim=0.7,
     weight_real=0.3)
 
-# The new relation loss is the only planned difference between A and C.
+# C consumes teacher_features for the relation target. A deliberately loads
+# the same cache but ignores it, so cache I/O and batch contents stay matched;
+# "no relation loss" remains the only planned A/C difference.
 model = dict(
     bbox_head=dict(use_semantic_cls_adapter=True),
     semantic_distillation=None)
