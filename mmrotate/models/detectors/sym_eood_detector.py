@@ -11,6 +11,8 @@ from mmdet.models.detectors.single_stage import SingleStageDetector
 from mmrotate.models.builder import ROTATED_DETECTORS, build_head, build_loss
 from mmrotate.models.losses.semantic_feature_distill import (
     SemanticFeatureDistillation)
+from mmrotate.models.losses.object_background_relation import (
+    ObjectBackgroundRelationDistillation)
 from mmrotate.core import build_assigner
 from mmrotate.models.dense_heads.rotated_atss_head import RotatedATSSHead
 from mmrotate.core import rbbox2result
@@ -74,6 +76,7 @@ class SymEOOD(SingleStageDetector):
                  pqa_dark_contrast_range=(0.7, 1.1),
                  pqa_dark_noise_std_range=(0.0, 10.0),
                  semantic_distillation=None,
+                 object_background_relation=None,
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None,
@@ -93,6 +96,7 @@ class SymEOOD(SingleStageDetector):
         # data pipeline; no DINO model is constructed by this detector and
         # simple_test therefore remains student-only.
         self.semantic_distillation = None
+        self.object_background_relation = None
         self.semantic_distillation_scope = 'foreground'
         self.semantic_distillation_protect_geometry = True
         if semantic_distillation is not None:
@@ -118,6 +122,22 @@ class SymEOOD(SingleStageDetector):
                         'use_semantic_cls_adapter=True')
                 self.semantic_distillation = SemanticFeatureDistillation(
                     **cfg)
+
+        if object_background_relation is not None:
+            if semantic_distillation is not None:
+                raise ValueError(
+                    'semantic_distillation and object_background_relation '
+                    'cannot be enabled together')
+            cfg = copy.deepcopy(object_background_relation)
+            enabled = bool(cfg.pop('enabled', True))
+            if enabled:
+                if not getattr(
+                        self.bbox_head, 'use_semantic_cls_adapter', False):
+                    raise ValueError(
+                        'object_background_relation requires '
+                        'bbox_head.use_semantic_cls_adapter=True')
+                self.object_background_relation = (
+                    ObjectBackgroundRelationDistillation(**cfg))
 
         # Mode A: Anchor-based 辅助头
         if aux_bbox_head is not None:
@@ -519,6 +539,21 @@ class SymEOOD(SingleStageDetector):
                     feature_level=level))
             losses['loss_semantic_distill'] = self.semantic_distillation(
                 distill_features, teacher_features, spatial_mask)
+
+        if self.object_background_relation is not None:
+            if teacher_features is None:
+                raise RuntimeError(
+                    'object_background_relation is enabled but teacher_features '
+                    'were not provided by the offline DINO cache pipeline')
+            relation_features = (
+                self.bbox_head.forward_semantic_distillation_features(
+                    x, protect_geometry=(
+                        self.object_background_relation.protect_geometry),
+                    feature_level=(
+                        self.object_background_relation.feature_level)))
+            losses['loss_object_background_relation'] = (
+                self.object_background_relation(
+                    relation_features, teacher_features, gt_bboxes, img_metas))
 
         # --- Independent reg-quality training ---
         # Hard detach prevents the quality target/loss from weakening cls or
