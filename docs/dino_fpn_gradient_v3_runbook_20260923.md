@@ -267,7 +267,7 @@ source VAL 选权已经固定：A 使用 `epoch_24`，C 使用 `epoch_18`。两�
 
 因此本轮固定结论是：C 在 real 域的部分时序统计量有小幅改善，但没有改善中心命中率或最长连续缺测，sim 域略有退化。当前证据不足以支持对象—邻近背景关系蒸馏作为有效改进方案；不根据这组 TEST 结果继续调损失权重、背景环或训练轮数。`CraneOfflineEvaluator [TEST 模式]` 是评估器的完整时序指标模式名称，以上结果实际来自固定 TEST，而不是 source VAL 重跑。
 
-服务器上可对既有产物进行只读核查。该脚本不运行推理、不重新选权、不写入 provenance sidecar；它核对 A/C 的 source-VAL 选权记录、checkpoint/config/PKL 哈希、固定 TEST 报告身份、预测 provenance，以及训练日志中 C 的非零关系损失和 A 的无关系损失记录：
+服务器上可对既有产物进行只读核查。该脚本不运行推理、不重新选权、不写入 provenance sidecar；它核对 A/C 的正式训练配置（K1 `epoch_20.pth` 初始化、24 epoch、冻结主干、关系字段、DINO cache 和 `teacher_features`）、source-VAL 选权记录、checkpoint/config/PKL 哈希、固定 TEST 报告身份、预测 provenance，以及训练日志中 C 的非零关系损失和 A 的无关系损失记录。多个训练日志文件只记录为 warning，不自动把重复运行判为模型错误：
 
 ```bash
 cd /media/omnisky/personal_files/ljj/symEOOD
@@ -275,7 +275,7 @@ conda activate mmrotljj
 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" python \
   crane_project/tools/audit_k1_dino_object_background_relation_v5.py \
   --project-root . \
-  --out-json work_dirs/crane_symeood_k1_dino_object_background_relation_v5_artifact_audit.json
+  --out-json work_dirs/crane_symeood_k1_dino_object_background_relation_v5_artifact_audit_v2.json
 ```
 
 核查报告中的 `c_minus_a_metrics` 用于记录 TEST 差值，`conclusion` 固定为本轮“real 时序有弱变化、中心命中率和 `MCML_max` 无改善”的证据边界。若核查失败，应先修复产物身份或日志问题，不重新解释模型效果。

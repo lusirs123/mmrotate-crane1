@@ -20,6 +20,9 @@ ARMS = ('a', 'c')
 EXPECTED_SELECTED = {'a': 'epoch_24', 'c': 'epoch_18'}
 EXPECTED_SOURCE_EPOCHS = {
     'epoch_16', 'epoch_18', 'epoch_20', 'epoch_22', 'epoch_24'}
+TRAIN_CONFIG = {
+    'a': 'crane_project/configs/crane_symeood_k1_dino_object_background_relation_a_v5.py',
+    'c': 'crane_project/configs/crane_symeood_k1_dino_object_background_relation_c_v5.py'}
 
 
 def sha256(path):
@@ -40,7 +43,9 @@ def _finite(value):
 
 def _log_summary(work_dir):
     rows = []
+    per_file = {}
     for path in sorted(Path(work_dir).glob('*.log.json')):
+        file_rows = []
         for line in path.read_text(encoding='utf-8').splitlines():
             try:
                 row = json.loads(line)
@@ -48,6 +53,13 @@ def _log_summary(work_dir):
                 continue
             if row.get('mode') == 'train':
                 rows.append(row)
+                file_rows.append(row)
+        per_file[str(path)] = dict(
+            train_records=len(file_rows),
+            first_epoch=(file_rows[0].get('epoch') if file_rows else None),
+            last_epoch=(file_rows[-1].get('epoch') if file_rows else None),
+            first_iter=(file_rows[0].get('iter') if file_rows else None),
+            last_iter=(file_rows[-1].get('iter') if file_rows else None))
     relation = [float(row['loss_object_background_relation'])
                 for row in rows
                 if row.get('loss_object_background_relation') is not None]
@@ -55,12 +67,54 @@ def _log_summary(work_dir):
         raise ValueError('non-finite relation loss in ' + str(work_dir))
     return dict(
         log_files=[str(path) for path in sorted(Path(work_dir).glob('*.log.json'))],
+        per_file=per_file,
         train_records=len(rows),
         relation_loss_records=len(relation),
         relation_loss_positive_records=sum(value > 0 for value in relation),
         relation_loss_min=min(relation) if relation else None,
         relation_loss_max=max(relation) if relation else None,
         relation_loss_last=relation[-1] if relation else None)
+
+
+def _training_config_summary(root, arm):
+    """Validate the formal training contract recorded by the actual config."""
+    try:
+        from mmcv import Config
+    except ImportError as exc:
+        raise RuntimeError('MMCV is required for training-config audit') from exc
+    path = root / TRAIN_CONFIG[arm]
+    cfg = Config.fromfile(str(path))
+    relation = cfg.model.get('object_background_relation')
+    expected_relation = None if arm == 'a' else dict(
+        enabled=True, loss_weight=0.05, feature_level=0,
+        protect_geometry=True)
+    if relation != expected_relation:
+        raise ValueError(arm + ': formal relation config mismatch')
+    if cfg.model.get('semantic_distillation') is not None:
+        raise ValueError(arm + ': old semantic loss is enabled')
+    if cfg.model.backbone.frozen_stages != 1:
+        raise ValueError(arm + ': backbone freezing mismatch')
+    if cfg.runner.max_epochs != 24 or cfg.optimizer.lr != 0.0025:
+        raise ValueError(arm + ': formal training budget mismatch')
+    if cfg.resume_from is not None:
+        raise ValueError(arm + ': unexpected resume_from')
+    if not str(cfg.load_from).endswith(
+            'work_dirs/crane_symeood_k1/epoch_20.pth'):
+        raise ValueError(arm + ': K1 initialization mismatch')
+    if sum(step.get('type') == 'LoadDinoFeatureFromCache'
+           for step in cfg.train_pipeline) != 1:
+        raise ValueError(arm + ': DINO cache pipeline mismatch')
+    collect = [step for step in cfg.train_pipeline
+               if step.get('type') == 'Collect']
+    if not collect or 'teacher_features' not in collect[-1].get('keys', []):
+        raise ValueError(arm + ': teacher_features is absent from Collect')
+    return dict(path=str(path.resolve()), sha256=sha256(path),
+                relation=relation, old_semantic_loss=None,
+                frozen_stages=cfg.model.backbone.frozen_stages,
+                max_epochs=cfg.runner.max_epochs,
+                optimizer_lr=cfg.optimizer.lr,
+                load_from=str(cfg.load_from),
+                dino_cache_pipeline=True, collects_teacher_features=True)
 
 
 def _sidecar_matches(sidecar, config, checkpoint, pkl, split):
@@ -143,9 +197,12 @@ def _arm(root, arm):
         source_selection_sha256=sha256(selection_path),
         fixed_test_report=str(report_path.resolve()),
         fixed_test_report_sha256=sha256(report_path),
+        training_config=_training_config_summary(root, arm),
         metrics=report['metrics'],
         provenance=sidecar_status,
-        training_log=logs)
+        training_log=logs,
+        warnings=(['multiple_training_log_files']
+                   if len(logs['log_files']) > 1 else []))
 
 
 def build_report(project_root):
