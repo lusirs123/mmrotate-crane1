@@ -219,7 +219,7 @@ tar -czf dino_object_background_source_probe_v5_r2.tar.gz \
 
 正式损失从变换后的 GT 旋转框生成精确对象区域，在对象外一格到四格的邻近环中取背景，并排除 padding。教师和学生分别用对象特征原型计算各位置的余弦关系，对象与背景 MSE 等权平均。教师特征来自现有离线 DINO cache，推理阶段不读取教师特征，也不改变回归分支。
 
-本地已完成关系损失模块、A/C 配置和配置预检脚本的语法检查；本机无 MMCV/CUDA，不能代替服务器预检。同步以下文件：`mmrotate/models/losses/object_background_relation.py`、`mmrotate/models/detectors/sym_eood_detector.py`、`crane_project/configs/crane_symeood_k1_dino_object_background_relation_common_v5.py`、`crane_project/configs/crane_symeood_k1_dino_object_background_relation_a_v5.py`、`crane_project/configs/crane_symeood_k1_dino_object_background_relation_c_v5.py` 和 `crane_project/tools/preflight_k1_dino_object_background_relation_v5.py`、`mmrotate/models/losses/__init__.py`。
+本地已完成关系损失模块、A/C 配置和配置预检脚本的语法检查；本机无 MMCV/CUDA，不能代替服务器预检。同步以下文件：`mmrotate/models/losses/object_background_relation.py`、`mmrotate/models/detectors/sym_eood_detector.py`、`crane_project/configs/crane_symeood_k1_dino_object_background_relation_common_v5.py`、`crane_project/configs/crane_symeood_k1_dino_object_background_relation_a_v5.py`、`crane_project/configs/crane_symeood_k1_dino_object_background_relation_c_v5.py`、`crane_project/tools/preflight_k1_dino_object_background_relation_v5.py`、`crane_project/tools/audit_k1_dino_object_background_relation_v5.py` 和 `mmrotate/models/losses/__init__.py`。
 
 服务器先做配置预检：
 
@@ -251,12 +251,31 @@ python crane_project/tools/ckpt_sweep.py \
   --config crane_project/configs/crane_symeood_k1_dino_semantic_student_v1.py \
   --work-dir work_dirs/crane_symeood_k1_dino_object_background_relation_a_v5 \
   --sweep-dir work_dirs/crane_symeood_k1_dino_object_background_relation_a_v5/source_val_sweep_protocol_v2 \
-  --epochs 16 18 20 22 24 --gpu 0
+  --epochs 16 18 20 22 24 --gpu 3
 python crane_project/tools/ckpt_sweep.py \
   --config crane_project/configs/crane_symeood_k1_dino_semantic_student_v1.py \
   --work-dir work_dirs/crane_symeood_k1_dino_object_background_relation_c_v5 \
   --sweep-dir work_dirs/crane_symeood_k1_dino_object_background_relation_c_v5/source_val_sweep_protocol_v2 \
-  --epochs 16 18 20 22 24 --gpu 0
+  --epochs 16 18 20 22 24 --gpu 3
 ```
 
 分析时优先比较 A/C 的新增和丢失正确输出、输出覆盖率、仅有输出帧的中心命中率、RIoU 和连续失败长度。关系损失下降不能单独作为成功标准。当前不根据固定 TEST 调损失；只有 source VAL 结论固定后才决定是否进行一次 TEST。
+
+### V5 固定 TEST 结论与产物核查（2026-09-26）
+
+source VAL 选权已经固定：A 使用 `epoch_24`，C 使用 `epoch_18`。两组随后在固定 992 帧 TEST 上完成评估。real 域的结果为：A 的 `R_center=60.24%`、`mean_RIoU=0.4433`、`TDR_w10=67.43%`、`MCML_max=64`、`MCML_mean=34.67`、`MRF=16.45`；C 的 `R_center=60.24%`、`mean_RIoU=0.4460`、`TDR_w10=69.47%`、`MCML_max=64`、`MCML_mean=33.67`、`MRF=10.53`。sim 域 A/C 均为 `R_center=100%`、`TDR_w10=100%`、`MCML_max=0`，C 的 `mean_RIoU=0.8724` 低于 A 的 `0.8871`，角度误差也由 `1.3104°` 变为 `1.7880°`。
+
+因此本轮固定结论是：C 在 real 域的部分时序统计量有小幅改善，但没有改善中心命中率或最长连续缺测，sim 域略有退化。当前证据不足以支持对象—邻近背景关系蒸馏作为有效改进方案；不根据这组 TEST 结果继续调损失权重、背景环或训练轮数。`CraneOfflineEvaluator [TEST 模式]` 是评估器的完整时序指标模式名称，以上结果实际来自固定 TEST，而不是 source VAL 重跑。
+
+服务器上可对既有产物进行只读核查。该脚本不运行推理、不重新选权、不写入 provenance sidecar；它核对 A/C 的 source-VAL 选权记录、checkpoint/config/PKL 哈希、固定 TEST 报告身份、预测 provenance，以及训练日志中 C 的非零关系损失和 A 的无关系损失记录：
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+conda activate mmrotljj
+PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" python \
+  crane_project/tools/audit_k1_dino_object_background_relation_v5.py \
+  --project-root . \
+  --out-json work_dirs/crane_symeood_k1_dino_object_background_relation_v5_artifact_audit.json
+```
+
+核查报告中的 `c_minus_a_metrics` 用于记录 TEST 差值，`conclusion` 固定为本轮“real 时序有弱变化、中心命中率和 `MCML_max` 无改善”的证据边界。若核查失败，应先修复产物身份或日志问题，不重新解释模型效果。
