@@ -275,7 +275,27 @@ conda activate mmrotljj
 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" python \
   crane_project/tools/audit_k1_dino_object_background_relation_v5.py \
   --project-root . \
-  --out-json work_dirs/crane_symeood_k1_dino_object_background_relation_v5_artifact_audit_v2.json
+  --out-json work_dirs/crane_symeood_k1_dino_object_background_relation_v5_artifact_audit_complete.json
 ```
 
 核查报告中的 `c_minus_a_metrics` 用于记录 TEST 差值，`conclusion` 固定为本轮“real 时序有弱变化、中心命中率和 `MCML_max` 无改善”的证据边界。若核查失败，应先修复产物身份或日志问题，不重新解释模型效果。
+
+
+### 2026-09-27：审计范围纠正与一次性完成核查
+
+此前报告的 `provenance=verified` 只覆盖部分字段，`conclusion` 为硬编码，不能把它当作自动验证的实验结论。历史 9 个测试针对关系损失和短探针，不构成审计脚本覆盖证明。本次新增专门的审计测试。
+
+当前审计在既有产物上核对全部五个 source VAL checkpoint/PKL/sidecar、VAL/TEST 标注哈希、DOTA 导出哈希与帧集合、固定 TEST 指标重算、PKL 与 DOTA 几何对应。读取 checkpoint 的 epoch、适配器权重和历史 config（若存在），对照当前解析配置；日志分别保留每个文件的计数与哈希。缺少历史配置或无法绑定 A 的两份日志时显式保留限制，不能据此宣布完全追溯通过。适配器非零和正损失也不能单独证明关系损失的梯度贡献。
+
+更正指标解释：当前历史评估器 `R_center` 分母包含无输出的 GT 帧，之前将 60.24% 当作仅输出帧命中率的解释不正确。新审计 `paired_test.groups.*.methods.*.center_hit_given_output` 为用户要求的条件中心命中率，同时输出 `output_coverage`。历史 `MCML` 是 RIoU<0.5 的连续失败，不能等同于连续无输出。新报告分别列出 output/center_hit/riou_hit 的失败区间，并在序列及帧号断点处分段。保留旧选权和旧报告以维护证据身份。
+
+运行（CPU，不重跑网络推理）：
+
+```bash
+PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" python \
+  crane_project/tools/audit_k1_dino_object_background_relation_v5.py \
+  --project-root . \
+  --out-json work_dirs/crane_symeood_k1_dino_object_background_relation_v5_artifact_audit_complete.json
+```
+
+核查输出包含逐帧新增/丢失中心命中、覆盖率、几何精度及三类失败区间。历史指标支持“未见明确整体收益”，条件命中率和最长无输出区间须以新核算为准；不继续将旧解释作为固定事实。
