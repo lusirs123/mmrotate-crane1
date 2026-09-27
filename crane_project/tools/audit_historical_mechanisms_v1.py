@@ -64,6 +64,10 @@ def sha256(path):
 def iter_evidence_files(root):
     for base, dirs, files in os.walk(str(root)):
         dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+        normalized_base = base.replace('\\', '/')
+        if '/data/' in normalized_base or normalized_base.endswith('/data'):
+            dirs[:] = []
+            continue
         for name in files:
             path = Path(base) / name
             if path.suffix.lower() not in TEXT_SUFFIXES:
@@ -103,6 +107,8 @@ def evidence_class(path):
 def collect_matches(root, files):
     matches = {group: {name: [] for name in rules}
                for group, rules in MECHANISMS.items()}
+    class_counts = {group: {name: {} for name in rules}
+                    for group, rules in MECHANISMS.items()}
     file_count = 0
     for path in files:
         file_count += 1
@@ -116,16 +122,19 @@ def collect_matches(root, files):
                 for line_no, line in enumerate(lines, 1):
                     if not compiled.search(line):
                         continue
+                    category = evidence_class(Path(rel))
+                    counts = class_counts[group][name]
+                    counts[category] = counts.get(category, 0) + 1
                     if len(matches[group][name]) >= SNIPPET_LIMIT:
                         break
                     matches[group][name].append({
                         'path': rel,
                         'line': line_no,
-                        'evidence_class': evidence_class(Path(rel)),
+                        'evidence_class': category,
                         'test_artifact_path': is_test_path(path),
                         'text': line.strip()[:300],
                     })
-    return file_count, matches
+    return file_count, matches, class_counts
 
 
 def current_contract(root):
@@ -162,15 +171,15 @@ def experiment_dirs(root):
     return sorted(result, key=lambda x: x['path'])[:500]
 
 
-def status_for(entries):
-    if not entries:
+def status_for(entries, class_counts=None):
+    counts = class_counts or {}
+    if not entries and not counts:
         return 'no_matching_evidence_in_scanned_checkout'
-    classes = {x['evidence_class'] for x in entries}
-    if 'historical_record' in classes:
+    if counts.get('historical_record', 0):
         return 'historical_record_present_review_experiment_identity'
-    if 'implementation_or_config' in classes:
+    if counts.get('implementation_or_config', 0):
         return 'implementation_or_config_present'
-    if 'other_text' in classes:
+    if counts.get('other_text', 0):
         return 'reference_text_only_or_unclassified'
     return 'test_or_reference_only'
 
@@ -185,11 +194,12 @@ def main():
     if output.exists():
         raise FileExistsError(str(output))
     files = list(iter_evidence_files(root))
-    file_count, matches = collect_matches(root, files)
+    file_count, matches, class_counts = collect_matches(root, files)
     mechanism_status = {
         group: {name: {
-            'status': status_for(entries),
+            'status': status_for(entries, class_counts[group][name]),
             'match_count_capped': len(entries),
+            'evidence_class_counts': class_counts[group][name],
             'evidence': entries,
         } for name, entries in names.items()}
         for group, names in matches.items()

@@ -13,12 +13,13 @@ def test_inventory_collects_evidence_without_inference(tmp_path):
         'ATSS and PAA were tested.\nQFL was not adopted.\n'
         'reg_quality_head was enabled in V3.\n')
     files = list(audit.iter_evidence_files(tmp_path))
-    count, matches = audit.collect_matches(tmp_path, files)
+    count, matches, class_counts = audit.collect_matches(tmp_path, files)
     assert count == 2
     assert matches['assignment']['ATSS']
     assert matches['assignment']['PAA']
     assert matches['classification']['QFL']
     assert matches['quality_guidance']['RegQuality']
+    assert class_counts['assignment']['ATSS']['historical_record'] == 1
     assert matches['assignment']['ATSS'][0]['evidence_class'] == 'historical_record'
     report_path = tmp_path / 'report.json'
     # Smoke the same output contract without invoking model code.
@@ -32,5 +33,5 @@ def test_test_path_is_marked_for_manual_review(tmp_path):
     path = tmp_path / 'fixed_test_qfl.json'
     path.write_text('QFL')
     files = list(audit.iter_evidence_files(tmp_path))
-    _count, matches = audit.collect_matches(tmp_path, files)
+    _count, matches, _class_counts = audit.collect_matches(tmp_path, files)
     assert matches['classification']['QFL'][0]['test_artifact_path'] is True
