@@ -33,6 +33,18 @@ def sha256(path):
     return digest.hexdigest()
 
 
+def require_top1_test_cfg(model_cfg):
+    # SymEOOD keeps inference settings at detector level and passes them to
+    # bbox_head when the detector is built.
+    test_cfg = model_cfg.get('test_cfg')
+    if test_cfg is None:
+        test_cfg = model_cfg['bbox_head'].get('test_cfg')
+    if (test_cfg is None or test_cfg.get('score_thr') != 0.05
+            or test_cfg.get('max_per_img') != 1):
+        raise ValueError('Unexpected source-VAL postprocessing contract')
+    return test_cfg
+
+
 def load_arm(root, arm):
     from mmcv import Config
     from mmcv.runner import load_checkpoint
@@ -69,10 +81,9 @@ def load_arm(root, arm):
             or cfg.model.get('platform_context_head') is not None
             or cfg.model.get('platform_context_injector') is not None):
         raise ValueError('This trace supports only the plain SymEOOD main-head path')
-    test_cfg = cfg.model.bbox_head.test_cfg
-    if test_cfg.score_thr != 0.05 or test_cfg.max_per_img != 1:
-        raise ValueError('Unexpected source-VAL postprocessing contract')
+    require_top1_test_cfg(cfg.model)
     model = build_detector(cfg.model)
+    require_top1_test_cfg(dict(test_cfg=model.bbox_head.test_cfg))
     load_checkpoint(model, str(checkpoint), map_location='cpu', strict=True)
     model.cuda().eval()
     with pkl.open('rb') as stream:

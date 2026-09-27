@@ -5,6 +5,14 @@ import torch
 from crane_project.tools import diagnose_v5_source_val_candidate_flow as probe
 
 
+def test_inference_config_reads_detector_level_test_cfg():
+    model_cfg = {'bbox_head': {'type': 'SymEOODHead'},
+                 'test_cfg': {'score_thr': 0.05, 'max_per_img': 1}}
+    assert probe.require_top1_test_cfg(model_cfg) == model_cfg['test_cfg']
+    with pytest.raises(ValueError, match='postprocessing'):
+        probe.require_top1_test_cfg({'bbox_head': {'type': 'SymEOODHead'}})
+
+
 @pytest.mark.parametrize('ious,scores,expected', [
     ([0.1, 0.2], [0.9, 0.8], 'no_geometric_candidate'),
     ([0.8, 0.1], [0.04, 0.03], 'score_threshold'),
