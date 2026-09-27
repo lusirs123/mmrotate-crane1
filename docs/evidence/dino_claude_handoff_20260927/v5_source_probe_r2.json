@@ -1,0 +1,2016 @@
+{
+  "protocol": "k1_dino_object_background_source_probe_v5",
+  "revision": "r2_matched_short_source",
+  "evidence_role": "source_only_design_probe",
+  "fixed_seed": 1701,
+  "checkpoint": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/crane_symeood_k1/epoch_20.pth",
+  "checkpoint_sha256": "3ab0885159294beb820da1445c38045a342fd4956c3d094eeaaadf78deb745c2",
+  "probe_sha256": "6daccef14cfde7c2bc059cc37b554e3e8f727cb9a814591184f9a614ac6427cc",
+  "config": "/media/omnisky/personal_files/ljj/symEOOD/crane_project/configs/crane_symeood_k1_dino_fpn_gradient_c_v3.py",
+  "config_sha256": "a7ae021dfd97fd6ac91df56254a5a7b167d6964efb87d18080922bc13b0948aa",
+  "k1_config_sha256": "008335f315ed356fab606b95f5095cf1112a63720b7ad1a10c5ac4756d50b759",
+  "selection_rule": "sequence-disjoint real; frame-block sim fallback; 25/75 percentiles of GT short edge",
+  "selection_modes": [
+    "sequence_disjoint",
+    "single_sequence_frame_block_split"
+  ],
+  "sample_count": 8,
+  "training_epochs": 0,
+  "temporary_steps_per_arm": 10,
+  "total_temporary_optimizer_steps": 20,
+  "trainable_parameters": "classification adapter only in both arms",
+  "detection_supervision": "unchanged K1 main-head detection loss",
+  "optimizer": {
+    "type": "SGD",
+    "lr": 0.0025,
+    "momentum": 0.9,
+    "weight_decay": 0.0001
+  },
+  "clip": {
+    "max_norm": 10,
+    "norm_type": 2
+  },
+  "lr_schedule": "constant K1 base LR for 10 diagnostic steps; no warmup",
+  "relation_weight": 0.05,
+  "frozen_features": true,
+  "checkpoint_saved": false,
+  "source_detection_coordinates": "resized/flipped image; center threshold 15px",
+  "assessment": {
+    "status": "no_support_in_this_probe",
+    "criteria": {
+      "teacher_auc": 0.6,
+      "teacher_gap": 0.02,
+      "heldout_relative_mse_gain": 0.01,
+      "score_epsilon": 1e-06
+    },
+    "domains": {
+      "real": {
+        "teacher_auc": 1.0,
+        "teacher_gap": 0.5212505161762238,
+        "relative_mse_gain_over_control": 0.0011851181261319048,
+        "score_gap_gain_over_control": -1.9566796254366636e-06,
+        "student_auc_gain_over_control": 0.0,
+        "student_gap_gain_over_control": -0.0003474801778793335,
+        "any_object_score_drop": true,
+        "lost_riou_hits": 0,
+        "lost_center_hits": 0,
+        "lost_outputs": 0
+      },
+      "sim": {
+        "teacher_auc": 0.9840476214885712,
+        "teacher_gap": 0.25370723009109497,
+        "relative_mse_gain_over_control": -0.00032727766500671333,
+        "score_gap_gain_over_control": -1.5731347957625985e-06,
+        "student_auc_gain_over_control": -0.0004960298538208008,
+        "student_gap_gain_over_control": -2.3186206817626953e-05,
+        "any_object_score_drop": true,
+        "lost_riou_hits": 0,
+        "lost_center_hits": 0,
+        "lost_outputs": 0
+      }
+    },
+    "automatic_training_authorized": false
+  },
+  "samples": [
+    {
+      "index": 1552,
+      "sequence": "real_seq05",
+      "frame_number": 546,
+      "domain": "real",
+      "image": "real_seq05_00546.jpg",
+      "original_short_edge": 23.947643280029297,
+      "role": "fit",
+      "selection_mode": "sequence_disjoint",
+      "transformed_image": "crane_project/data/crane_grab/train/images/real_seq05_00546.jpg",
+      "cache_transform": {
+        "cache_path": "work_dirs/dino_teacher_scoped_lowlight_v1_formal8/feature_cache/train/real_seq05_00546_96aa397a4eceaceb.pth",
+        "flip_direction": "horizontal",
+        "cache_image_identity_checked_by_loader": true
+      },
+      "teacher_heldout": {
+        "gap": 0.3913881182670593,
+        "auc": 0.9930555820465088,
+        "heldout_object_tokens": 3,
+        "background_tokens": 96
+      },
+      "object_tokens": 6,
+      "background_tokens": 96,
+      "baseline": {
+        "relation_mse": 0.020373942330479622,
+        "student_heldout": {
+          "gap": 0.16894370317459106,
+          "auc": 0.9548611044883728,
+          "heldout_object_tokens": 3,
+          "background_tokens": 96
+        },
+        "classification": {
+          "logit_object": -5.609292984008789,
+          "logit_background": -11.32147216796875,
+          "logit_gap": 5.712179183959961,
+          "score_object": 0.005239811725914478,
+          "score_background": 0.0005936894449405372,
+          "score_gap": 0.004646122280973941
+        },
+        "regression_sha256": "b70eb1783232d2a099b991a414408adfc963f94324526cd24f5bccdb27a42bc7",
+        "detection": {
+          "output": true,
+          "center_distance": 1.247741937637329,
+          "center_hit": true,
+          "riou": 0.8957124532318078,
+          "riou_hit": true,
+          "box": [
+            460.7542724609375,
+            442.01104736328125,
+            41.769012451171875,
+            34.29205322265625,
+            -0.25786662101745605,
+            0.9087634086608887
+          ]
+        }
+      },
+      "control": {
+        "relation_mse": 0.020487770438194275,
+        "student_heldout": {
+          "gap": 0.16989409923553467,
+          "auc": 0.9548611044883728,
+          "heldout_object_tokens": 3,
+          "background_tokens": 96
+        },
+        "classification": {
+          "logit_object": -5.598663330078125,
+          "logit_background": -11.257880210876465,
+          "logit_gap": 5.65921688079834,
+          "score_object": 0.005262366496026516,
+          "score_background": 0.0005975475069135427,
+          "score_gap": 0.004664818989112973
+        },
+        "regression_sha256": "b70eb1783232d2a099b991a414408adfc963f94324526cd24f5bccdb27a42bc7",
+        "detection": {
+          "output": true,
+          "center_distance": 1.247741937637329,
+          "center_hit": true,
+          "riou": 0.8957124532318078,
+          "riou_hit": true,
+          "box": [
+            460.7542724609375,
+            442.01104736328125,
+            41.769012451171875,
+            34.29205322265625,
+            -0.25786662101745605,
+            0.9091457724571228
+          ]
+        }
+      },
+      "relation": {
+        "relation_mse": 0.020453687757253647,
+        "student_heldout": {
+          "gap": 0.16965550184249878,
+          "auc": 0.9548611044883728,
+          "heldout_object_tokens": 3,
+          "background_tokens": 96
+        },
+        "classification": {
+          "logit_object": -5.599376201629639,
+          "logit_background": -11.260068893432617,
+          "logit_gap": 5.6606926918029785,
+          "score_object": 0.005260469391942024,
+          "score_background": 0.0005972307990305126,
+          "score_gap": 0.004663238592911512
+        },
+        "regression_sha256": "b70eb1783232d2a099b991a414408adfc963f94324526cd24f5bccdb27a42bc7",
+        "detection": {
+          "output": true,
+          "center_distance": 1.247741937637329,
+          "center_hit": true,
+          "riou": 0.8957124532318078,
+          "riou_hit": true,
+          "box": [
+            460.7542724609375,
+            442.01104736328125,
+            41.769012451171875,
+            34.29205322265625,
+            -0.25786662101745605,
+            0.909153163433075
+          ]
+        }
+      }
+    },
+    {
+      "index": 1265,
+      "sequence": "real_seq05",
+      "frame_number": 259,
+      "domain": "real",
+      "image": "real_seq05_00259.jpg",
+      "original_short_edge": 36.509674072265625,
+      "role": "fit",
+      "selection_mode": "sequence_disjoint",
+      "transformed_image": "crane_project/data/crane_grab/train/images/real_seq05_00259.jpg",
+      "cache_transform": {
+        "cache_path": "work_dirs/dino_teacher_scoped_lowlight_v1_formal8/feature_cache/train/real_seq05_00259_4337e207e3dfc8a5.pth",
+        "flip_direction": "horizontal",
+        "cache_image_identity_checked_by_loader": true
+      },
+      "teacher_heldout": {
+        "gap": 0.37909209728240967,
+        "auc": 0.9984567761421204,
+        "heldout_object_tokens": 6,
+        "background_tokens": 108
+      },
+      "object_tokens": 12,
+      "background_tokens": 108,
+      "baseline": {
+        "relation_mse": 0.019617222249507904,
+        "student_heldout": {
+          "gap": 0.22374314069747925,
+          "auc": 1.0,
+          "heldout_object_tokens": 6,
+          "background_tokens": 108
+        },
+        "classification": {
+          "logit_object": -5.722357749938965,
+          "logit_background": -11.06471061706543,
+          "logit_gap": 5.342352867126465,
+          "score_object": 0.004945806693285704,
+          "score_background": 0.00042459176620468497,
+          "score_gap": 0.004521214927081019
+        },
+        "regression_sha256": "a04d1d622f8ef47e4b178dc9a16e9d2f86cc8f48b37d0a226e1a77f4a5bc99f6",
+        "detection": {
+          "output": true,
+          "center_distance": 0.7226678729057312,
+          "center_hit": true,
+          "riou": 0.955902141157823,
+          "riou_hit": true,
+          "box": [
+            458.1666259765625,
+            435.88128662109375,
+            63.48771286010742,
+            53.552513122558594,
+            0.19076049327850342,
+            0.9667391180992126
+          ]
+        }
+      },
+      "control": {
+        "relation_mse": 0.01972419209778309,
+        "student_heldout": {
+          "gap": 0.22474050521850586,
+          "auc": 1.0,
+          "heldout_object_tokens": 6,
+          "background_tokens": 108
+        },
+        "classification": {
+          "logit_object": -5.710868835449219,
+          "logit_background": -11.002604484558105,
+          "logit_gap": 5.291735649108887,
+          "score_object": 0.004968048073351383,
+          "score_background": 0.00042748107807710767,
+          "score_gap": 0.0045405669952742755
+        },
+        "regression_sha256": "a04d1d622f8ef47e4b178dc9a16e9d2f86cc8f48b37d0a226e1a77f4a5bc99f6",
+        "detection": {
+          "output": true,
+          "center_distance": 0.7226678729057312,
+          "center_hit": true,
+          "riou": 0.955902141157823,
+          "riou_hit": true,
+          "box": [
+            458.1666259765625,
+            435.88128662109375,
+            63.48771286010742,
+            53.552513122558594,
+            0.19076049327850342,
+            0.9666211605072021
+          ]
+        }
+      },
+      "relation": {
+        "relation_mse": 0.01969417929649353,
+        "student_heldout": {
+          "gap": 0.22447025775909424,
+          "auc": 1.0,
+          "heldout_object_tokens": 6,
+          "background_tokens": 108
+        },
+        "classification": {
+          "logit_object": -5.711587429046631,
+          "logit_background": -11.004796028137207,
+          "logit_gap": 5.293208599090576,
+          "score_object": 0.00496629485860467,
+          "score_background": 0.00042721902718767524,
+          "score_gap": 0.004539075831416994
+        },
+        "regression_sha256": "a04d1d622f8ef47e4b178dc9a16e9d2f86cc8f48b37d0a226e1a77f4a5bc99f6",
+        "detection": {
+          "output": true,
+          "center_distance": 0.7226678729057312,
+          "center_hit": true,
+          "riou": 0.955902141157823,
+          "riou_hit": true,
+          "box": [
+            458.1666259765625,
+            435.88128662109375,
+            63.48771286010742,
+            53.552513122558594,
+            0.19076049327850342,
+            0.9666253924369812
+          ]
+        }
+      }
+    },
+    {
+      "index": 697,
+      "sequence": "real_seq04",
+      "frame_number": 358,
+      "domain": "real",
+      "image": "real_seq04_00358.jpg",
+      "original_short_edge": 26.63270378112793,
+      "role": "heldout",
+      "selection_mode": "sequence_disjoint",
+      "transformed_image": "crane_project/data/crane_grab/train/images/real_seq04_00358.jpg",
+      "cache_transform": {
+        "cache_path": "work_dirs/dino_teacher_scoped_lowlight_v1_formal8/feature_cache/train/real_seq04_00358_237f0a1c05e2b9c3.pth",
+        "flip_direction": "diagonal",
+        "cache_image_identity_checked_by_loader": true
+      },
+      "teacher_heldout": {
+        "gap": 0.5297175049781799,
+        "auc": 1.0,
+        "heldout_object_tokens": 2,
+        "background_tokens": 90
+      },
+      "object_tokens": 5,
+      "background_tokens": 90,
+      "baseline": {
+        "relation_mse": 0.030652735382318497,
+        "student_heldout": {
+          "gap": 0.4598678946495056,
+          "auc": 1.0,
+          "heldout_object_tokens": 2,
+          "background_tokens": 90
+        },
+        "classification": {
+          "logit_object": -5.209575176239014,
+          "logit_background": -11.160228729248047,
+          "logit_gap": 5.950653553009033,
+          "score_object": 0.006515441928058863,
+          "score_background": 0.0006312113255262375,
+          "score_gap": 0.005884230602532625
+        },
+        "regression_sha256": "8c37e45b48f54b905fd584e32a301bf5bac7636c584eaf103bc000124b291633",
+        "detection": {
+          "output": true,
+          "center_distance": 0.6533046364784241,
+          "center_hit": true,
+          "riou": 0.871011025214008,
+          "riou_hit": true,
+          "box": [
+            492.2823181152344,
+            285.7060852050781,
+            48.04808044433594,
+            22.68758773803711,
+            -0.21360695362091064,
+            0.9328708648681641
+          ]
+        }
+      },
+      "control": {
+        "relation_mse": 0.03085210919380188,
+        "student_heldout": {
+          "gap": 0.4613625407218933,
+          "auc": 1.0,
+          "heldout_object_tokens": 2,
+          "background_tokens": 90
+        },
+        "classification": {
+          "logit_object": -5.201053619384766,
+          "logit_background": -11.096508979797363,
+          "logit_gap": 5.895455360412598,
+          "score_object": 0.00655108829960227,
+          "score_background": 0.000636728189419955,
+          "score_gap": 0.005914360110182315
+        },
+        "regression_sha256": "8c37e45b48f54b905fd584e32a301bf5bac7636c584eaf103bc000124b291633",
+        "detection": {
+          "output": true,
+          "center_distance": 0.6533046364784241,
+          "center_hit": true,
+          "riou": 0.871011025214008,
+          "riou_hit": true,
+          "box": [
+            492.2823181152344,
+            285.7060852050781,
+            48.04808044433594,
+            22.68758773803711,
+            -0.21360695362091064,
+            0.9331656098365784
+          ]
+        }
+      },
+      "relation": {
+        "relation_mse": 0.03079387918114662,
+        "student_heldout": {
+          "gap": 0.46095165610313416,
+          "auc": 1.0,
+          "heldout_object_tokens": 2,
+          "background_tokens": 90
+        },
+        "classification": {
+          "logit_object": -5.201645374298096,
+          "logit_background": -11.098641395568848,
+          "logit_gap": 5.896996021270752,
+          "score_object": 0.006548531353473663,
+          "score_background": 0.000636370328720659,
+          "score_gap": 0.005912161024753004
+        },
+        "regression_sha256": "8c37e45b48f54b905fd584e32a301bf5bac7636c584eaf103bc000124b291633",
+        "detection": {
+          "output": true,
+          "center_distance": 0.6533046364784241,
+          "center_hit": true,
+          "riou": 0.871011025214008,
+          "riou_hit": true,
+          "box": [
+            492.2823181152344,
+            285.7060852050781,
+            48.04808044433594,
+            22.68758773803711,
+            -0.21360695362091064,
+            0.9331677556037903
+          ]
+        }
+      }
+    },
+    {
+      "index": 488,
+      "sequence": "real_seq04",
+      "frame_number": 149,
+      "domain": "real",
+      "image": "real_seq04_00149.jpg",
+      "original_short_edge": 34.32096862792969,
+      "role": "heldout",
+      "selection_mode": "sequence_disjoint",
+      "transformed_image": "crane_project/data/crane_grab/train/images/real_seq04_00149.jpg",
+      "cache_transform": {
+        "cache_path": "work_dirs/dino_teacher_scoped_lowlight_v1_formal8/feature_cache/train/real_seq04_00149_69e6453f41255101.pth",
+        "flip_direction": "vertical",
+        "cache_image_identity_checked_by_loader": true
+      },
+      "teacher_heldout": {
+        "gap": 0.5127835273742676,
+        "auc": 1.0,
+        "heldout_object_tokens": 3,
+        "background_tokens": 96
+      },
+      "object_tokens": 7,
+      "background_tokens": 96,
+      "baseline": {
+        "relation_mse": 0.02663337253034115,
+        "student_heldout": {
+          "gap": 0.21457523107528687,
+          "auc": 0.944444477558136,
+          "heldout_object_tokens": 3,
+          "background_tokens": 96
+        },
+        "classification": {
+          "logit_object": -5.508141994476318,
+          "logit_background": -11.295367240905762,
+          "logit_gap": 5.787225246429443,
+          "score_object": 0.005490119103342295,
+          "score_background": 0.000575508049223572,
+          "score_gap": 0.004914611054118723
+        },
+        "regression_sha256": "8e66a9a29ca365da2855e2cd0e016dce49cd908f9005f2a75714e7902606e907",
+        "detection": {
+          "output": true,
+          "center_distance": 0.6484370231628418,
+          "center_hit": true,
+          "riou": 0.8985493558334524,
+          "riou_hit": true,
+          "box": [
+            542.3760986328125,
+            166.0641326904297,
+            60.9048957824707,
+            28.07334327697754,
+            0.0013903379440307617,
+            0.9236928224563599
+          ]
+        }
+      },
+      "control": {
+        "relation_mse": 0.026667241007089615,
+        "student_heldout": {
+          "gap": 0.21554666757583618,
+          "auc": 0.944444477558136,
+          "heldout_object_tokens": 3,
+          "background_tokens": 96
+        },
+        "classification": {
+          "logit_object": -5.495894432067871,
+          "logit_background": -11.230453491210938,
+          "logit_gap": 5.734559059143066,
+          "score_object": 0.005517266225069761,
+          "score_background": 0.0005792567390017211,
+          "score_gap": 0.00493800948606804
+        },
+        "regression_sha256": "8e66a9a29ca365da2855e2cd0e016dce49cd908f9005f2a75714e7902606e907",
+        "detection": {
+          "output": true,
+          "center_distance": 0.6484370231628418,
+          "center_hit": true,
+          "riou": 0.8985493558334524,
+          "riou_hit": true,
+          "box": [
+            542.3760986328125,
+            166.0641326904297,
+            60.9048957824707,
+            28.07334327697754,
+            0.0013903379440307617,
+            0.9238429069519043
+          ]
+        }
+      },
+      "relation": {
+        "relation_mse": 0.026657303795218468,
+        "student_heldout": {
+          "gap": 0.21526259183883667,
+          "auc": 0.944444477558136,
+          "heldout_object_tokens": 3,
+          "background_tokens": 96
+        },
+        "classification": {
+          "logit_object": -5.4965739250183105,
+          "logit_background": -11.23266887664795,
+          "logit_gap": 5.736094951629639,
+          "score_object": 0.00551524106413126,
+          "score_background": 0.0005789458518847823,
+          "score_gap": 0.004936295212246478
+        },
+        "regression_sha256": "8e66a9a29ca365da2855e2cd0e016dce49cd908f9005f2a75714e7902606e907",
+        "detection": {
+          "output": true,
+          "center_distance": 0.6484370231628418,
+          "center_hit": true,
+          "riou": 0.8985493558334524,
+          "riou_hit": true,
+          "box": [
+            542.3760986328125,
+            166.0641326904297,
+            60.9048957824707,
+            28.07334327697754,
+            0.0013903379440307617,
+            0.9238462448120117
+          ]
+        }
+      }
+    },
+    {
+      "index": 2227,
+      "sequence": "sim_seq08",
+      "frame_number": 194,
+      "domain": "sim",
+      "image": "sim_seq08_00194.jpg",
+      "original_short_edge": 20.87529182434082,
+      "role": "fit",
+      "selection_mode": "single_sequence_frame_block_split",
+      "transformed_image": "crane_project/data/crane_grab/train/images/sim_seq08_00194.jpg",
+      "cache_transform": {
+        "cache_path": "work_dirs/dino_teacher_scoped_lowlight_v1_formal8/feature_cache/train_sim/sim_seq08_00194_86b2e4d0c1d20e18.pth",
+        "flip_direction": null,
+        "cache_image_identity_checked_by_loader": true
+      },
+      "teacher_heldout": {
+        "gap": 0.24526286125183105,
+        "auc": 1.0,
+        "heldout_object_tokens": 2,
+        "background_tokens": 90
+      },
+      "object_tokens": 4,
+      "background_tokens": 90,
+      "baseline": {
+        "relation_mse": 0.05325008183717728,
+        "student_heldout": {
+          "gap": 0.21609187126159668,
+          "auc": 0.9611111283302307,
+          "heldout_object_tokens": 2,
+          "background_tokens": 90
+        },
+        "classification": {
+          "logit_object": -5.187963485717773,
+          "logit_background": -10.234903335571289,
+          "logit_gap": 5.046939849853516,
+          "score_object": 0.006214489694684744,
+          "score_background": 0.0007973663159646094,
+          "score_gap": 0.0054171233787201345
+        },
+        "regression_sha256": "83795f927f65a398d91d987159eb65eefd7b4cd20c0e9e4f55dd1ff8b543b6bb",
+        "detection": {
+          "output": true,
+          "center_distance": 1.037138819694519,
+          "center_hit": true,
+          "riou": 0.890668612980877,
+          "riou_hit": true,
+          "box": [
+            363.6170349121094,
+            519.70361328125,
+            61.54942321777344,
+            21.87377166748047,
+            -0.18567287921905518,
+            0.9240204691886902
+          ]
+        }
+      },
+      "control": {
+        "relation_mse": 0.053709253668785095,
+        "student_heldout": {
+          "gap": 0.2171539068222046,
+          "auc": 0.9611111283302307,
+          "heldout_object_tokens": 2,
+          "background_tokens": 90
+        },
+        "classification": {
+          "logit_object": -5.1766815185546875,
+          "logit_background": -10.17695140838623,
+          "logit_gap": 5.000269889831543,
+          "score_object": 0.006259929854422808,
+          "score_background": 0.0008036054205149412,
+          "score_gap": 0.0054563244339078665
+        },
+        "regression_sha256": "83795f927f65a398d91d987159eb65eefd7b4cd20c0e9e4f55dd1ff8b543b6bb",
+        "detection": {
+          "output": true,
+          "center_distance": 1.037138819694519,
+          "center_hit": true,
+          "riou": 0.890668612980877,
+          "riou_hit": true,
+          "box": [
+            363.6170349121094,
+            519.70361328125,
+            61.54942321777344,
+            21.87377166748047,
+            -0.18567287921905518,
+            0.9242755174636841
+          ]
+        }
+      },
+      "relation": {
+        "relation_mse": 0.0535484254360199,
+        "student_heldout": {
+          "gap": 0.21678262948989868,
+          "auc": 0.9611111283302307,
+          "heldout_object_tokens": 2,
+          "background_tokens": 90
+        },
+        "classification": {
+          "logit_object": -5.177464962005615,
+          "logit_background": -10.179001808166504,
+          "logit_gap": 5.001536846160889,
+          "score_object": 0.0062564220279455185,
+          "score_background": 0.0008031415636651218,
+          "score_gap": 0.005453280464280397
+        },
+        "regression_sha256": "83795f927f65a398d91d987159eb65eefd7b4cd20c0e9e4f55dd1ff8b543b6bb",
+        "detection": {
+          "output": true,
+          "center_distance": 1.037138819694519,
+          "center_hit": true,
+          "riou": 0.890668612980877,
+          "riou_hit": true,
+          "box": [
+            363.6170349121094,
+            519.70361328125,
+            61.54942321777344,
+            21.87377166748047,
+            -0.18567287921905518,
+            0.9242780208587646
+          ]
+        }
+      }
+    },
+    {
+      "index": 2313,
+      "sequence": "sim_seq08",
+      "frame_number": 280,
+      "domain": "sim",
+      "image": "sim_seq08_00280.jpg",
+      "original_short_edge": 27.96515464782715,
+      "role": "fit",
+      "selection_mode": "single_sequence_frame_block_split",
+      "transformed_image": "crane_project/data/crane_grab/train/images/sim_seq08_00280.jpg",
+      "cache_transform": {
+        "cache_path": "work_dirs/dino_teacher_scoped_lowlight_v1_formal8/feature_cache/train_sim/sim_seq08_00280_93a8d8c81dd89720.pth",
+        "flip_direction": null,
+        "cache_image_identity_checked_by_loader": true
+      },
+      "teacher_heldout": {
+        "gap": 0.29409849643707275,
+        "auc": 0.9983333349227905,
+        "heldout_object_tokens": 5,
+        "background_tokens": 120
+      },
+      "object_tokens": 10,
+      "background_tokens": 120,
+      "baseline": {
+        "relation_mse": 0.022783974185585976,
+        "student_heldout": {
+          "gap": 0.1633480191230774,
+          "auc": 0.9766666889190674,
+          "heldout_object_tokens": 5,
+          "background_tokens": 120
+        },
+        "classification": {
+          "logit_object": -5.691628456115723,
+          "logit_background": -11.278470039367676,
+          "logit_gap": 5.586841583251953,
+          "score_object": 0.004967047367244959,
+          "score_background": 0.0004416230949573219,
+          "score_gap": 0.004525424272287637
+        },
+        "regression_sha256": "cc02e6c05a9510c1f3ce436c64f1467e2390b5314f59952a2083034b438b0f38",
+        "detection": {
+          "output": true,
+          "center_distance": 0.5054356455802917,
+          "center_hit": true,
+          "riou": 0.9427358980528578,
+          "riou_hit": true,
+          "box": [
+            318.9298095703125,
+            449.7920837402344,
+            83.6001968383789,
+            28.979644775390625,
+            0.4121183156967163,
+            0.9357688426971436
+          ]
+        }
+      },
+      "control": {
+        "relation_mse": 0.022918488830327988,
+        "student_heldout": {
+          "gap": 0.16398829221725464,
+          "auc": 0.9766666889190674,
+          "heldout_object_tokens": 5,
+          "background_tokens": 120
+        },
+        "classification": {
+          "logit_object": -5.674840450286865,
+          "logit_background": -11.213725090026855,
+          "logit_gap": 5.53888463973999,
+          "score_object": 0.005006668623536825,
+          "score_background": 0.0004449599946383387,
+          "score_gap": 0.0045617086288984865
+        },
+        "regression_sha256": "cc02e6c05a9510c1f3ce436c64f1467e2390b5314f59952a2083034b438b0f38",
+        "detection": {
+          "output": true,
+          "center_distance": 0.5054356455802917,
+          "center_hit": true,
+          "riou": 0.9427358980528578,
+          "riou_hit": true,
+          "box": [
+            318.9298095703125,
+            449.7920837402344,
+            83.6001968383789,
+            28.979644775390625,
+            0.4121183156967163,
+            0.9358686208724976
+          ]
+        }
+      },
+      "relation": {
+        "relation_mse": 0.022875605151057243,
+        "student_heldout": {
+          "gap": 0.16377955675125122,
+          "auc": 0.9766666889190674,
+          "heldout_object_tokens": 5,
+          "background_tokens": 120
+        },
+        "classification": {
+          "logit_object": -5.675785064697266,
+          "logit_background": -11.215977668762207,
+          "logit_gap": 5.540192604064941,
+          "score_object": 0.005003758240491152,
+          "score_background": 0.000444686011178419,
+          "score_gap": 0.004559072229312733
+        },
+        "regression_sha256": "cc02e6c05a9510c1f3ce436c64f1467e2390b5314f59952a2083034b438b0f38",
+        "detection": {
+          "output": true,
+          "center_distance": 0.5054356455802917,
+          "center_hit": true,
+          "riou": 0.9427358980528578,
+          "riou_hit": true,
+          "box": [
+            318.9298095703125,
+            449.7920837402344,
+            83.6001968383789,
+            28.979644775390625,
+            0.4121183156967163,
+            0.935872495174408
+          ]
+        }
+      }
+    },
+    {
+      "index": 2600,
+      "sequence": "sim_seq08",
+      "frame_number": 567,
+      "domain": "sim",
+      "image": "sim_seq08_00567.jpg",
+      "original_short_edge": 38.0001335144043,
+      "role": "heldout",
+      "selection_mode": "single_sequence_frame_block_split",
+      "transformed_image": "crane_project/data/crane_grab/train/images/sim_seq08_00567.jpg",
+      "cache_transform": {
+        "cache_path": "work_dirs/dino_teacher_scoped_lowlight_v1_formal8/feature_cache/train_sim/sim_seq08_00567_ff1f00b015c7b8bf.pth",
+        "flip_direction": "horizontal",
+        "cache_image_identity_checked_by_loader": true
+      },
+      "teacher_heldout": {
+        "gap": 0.2614656686782837,
+        "auc": 0.9880952835083008,
+        "heldout_object_tokens": 8,
+        "background_tokens": 126
+      },
+      "object_tokens": 17,
+      "background_tokens": 126,
+      "baseline": {
+        "relation_mse": 0.02176043577492237,
+        "student_heldout": {
+          "gap": 0.03262108564376831,
+          "auc": 0.6904762387275696,
+          "heldout_object_tokens": 8,
+          "background_tokens": 126
+        },
+        "classification": {
+          "logit_object": -5.94811487197876,
+          "logit_background": -10.764859199523926,
+          "logit_gap": 4.816744327545166,
+          "score_object": 0.0038826505187898874,
+          "score_background": 0.0004965647822245955,
+          "score_gap": 0.003386085736565292
+        },
+        "regression_sha256": "3596613be9e028bcfc8fc945d5a2490f4570d7ee136eb36c7dfb8b3dfc93a066",
+        "detection": {
+          "output": true,
+          "center_distance": 1.651977300643921,
+          "center_hit": true,
+          "riou": 0.9307063841360046,
+          "riou_hit": true,
+          "box": [
+            470.441162109375,
+            336.2901306152344,
+            108.5677490234375,
+            38.28950881958008,
+            0.1539301872253418,
+            0.9476901292800903
+          ]
+        }
+      },
+      "control": {
+        "relation_mse": 0.0217500701546669,
+        "student_heldout": {
+          "gap": 0.03284543752670288,
+          "auc": 0.6914682984352112,
+          "heldout_object_tokens": 8,
+          "background_tokens": 126
+        },
+        "classification": {
+          "logit_object": -5.927562713623047,
+          "logit_background": -10.702486038208008,
+          "logit_gap": 4.774923324584961,
+          "score_object": 0.003916949965059757,
+          "score_background": 0.0005001871613785625,
+          "score_gap": 0.0034167628036811948
+        },
+        "regression_sha256": "3596613be9e028bcfc8fc945d5a2490f4570d7ee136eb36c7dfb8b3dfc93a066",
+        "detection": {
+          "output": true,
+          "center_distance": 1.651977300643921,
+          "center_hit": true,
+          "riou": 0.9307063841360046,
+          "riou_hit": true,
+          "box": [
+            470.441162109375,
+            336.2901306152344,
+            108.5677490234375,
+            38.28950881958008,
+            0.1539301872253418,
+            0.9475568532943726
+          ]
+        }
+      },
+      "relation": {
+        "relation_mse": 0.021754737943410873,
+        "student_heldout": {
+          "gap": 0.032773613929748535,
+          "auc": 0.6904762387275696,
+          "heldout_object_tokens": 8,
+          "background_tokens": 126
+        },
+        "classification": {
+          "logit_object": -5.928569793701172,
+          "logit_background": -10.704673767089844,
+          "logit_gap": 4.776103973388672,
+          "score_object": 0.003914703149348497,
+          "score_background": 0.0004998858785256743,
+          "score_gap": 0.003414817270822823
+        },
+        "regression_sha256": "3596613be9e028bcfc8fc945d5a2490f4570d7ee136eb36c7dfb8b3dfc93a066",
+        "detection": {
+          "output": true,
+          "center_distance": 1.651977300643921,
+          "center_hit": true,
+          "riou": 0.9307063841360046,
+          "riou_hit": true,
+          "box": [
+            470.441162109375,
+            336.2901306152344,
+            108.5677490234375,
+            38.28950881958008,
+            0.1539301872253418,
+            0.9475597143173218
+          ]
+        }
+      }
+    },
+    {
+      "index": 2464,
+      "sequence": "sim_seq08",
+      "frame_number": 431,
+      "domain": "sim",
+      "image": "sim_seq08_00431.jpg",
+      "original_short_edge": 53.40936279296875,
+      "role": "heldout",
+      "selection_mode": "single_sequence_frame_block_split",
+      "transformed_image": "crane_project/data/crane_grab/train/images/sim_seq08_00431.jpg",
+      "cache_transform": {
+        "cache_path": "work_dirs/dino_teacher_scoped_lowlight_v1_formal8/feature_cache/train_sim/sim_seq08_00431_abe5d068f3408417.pth",
+        "flip_direction": "horizontal",
+        "cache_image_identity_checked_by_loader": true
+      },
+      "teacher_heldout": {
+        "gap": 0.24594879150390625,
+        "auc": 0.9799999594688416,
+        "heldout_object_tokens": 17,
+        "background_tokens": 150
+      },
+      "object_tokens": 35,
+      "background_tokens": 150,
+      "baseline": {
+        "relation_mse": 0.04813738167285919,
+        "student_heldout": {
+          "gap": -0.04362088441848755,
+          "auc": 0.40352940559387207,
+          "heldout_object_tokens": 17,
+          "background_tokens": 150
+        },
+        "classification": {
+          "logit_object": -7.239613056182861,
+          "logit_background": -10.726253509521484,
+          "logit_gap": 3.486640453338623,
+          "score_object": 0.0025509241968393326,
+          "score_background": 0.0004632471245713532,
+          "score_gap": 0.0020876770722679794
+        },
+        "regression_sha256": "aad1fd213300454db7d3a34e967d575fb3eaf35dfe562d504a3961b52e6cfbfb",
+        "detection": {
+          "output": true,
+          "center_distance": 1.8577585220336914,
+          "center_hit": true,
+          "riou": 0.9206673703612883,
+          "riou_hit": true,
+          "box": [
+            576.4219360351562,
+            489.3357849121094,
+            157.86036682128906,
+            54.84364700317383,
+            -0.1300901174545288,
+            0.9571743607521057
+          ]
+        }
+      },
+      "control": {
+        "relation_mse": 0.04807116463780403,
+        "student_heldout": {
+          "gap": -0.04371845722198486,
+          "auc": 0.40352940559387207,
+          "heldout_object_tokens": 17,
+          "background_tokens": 150
+        },
+        "classification": {
+          "logit_object": -7.208046913146973,
+          "logit_background": -10.662936210632324,
+          "logit_gap": 3.4548892974853516,
+          "score_object": 0.0025731290224939585,
+          "score_background": 0.00046668629511259496,
+          "score_gap": 0.0021064427273813635
+        },
+        "regression_sha256": "aad1fd213300454db7d3a34e967d575fb3eaf35dfe562d504a3961b52e6cfbfb",
+        "detection": {
+          "output": true,
+          "center_distance": 1.8577585220336914,
+          "center_hit": true,
+          "riou": 0.9206673703612883,
+          "riou_hit": true,
+          "box": [
+            576.4219360351562,
+            489.3357849121094,
+            157.86036682128906,
+            54.84364700317383,
+            -0.1300901174545288,
+            0.9569151401519775
+          ]
+        }
+      },
+      "relation": {
+        "relation_mse": 0.048089347779750824,
+        "student_heldout": {
+          "gap": -0.04369300603866577,
+          "auc": 0.40352940559387207,
+          "heldout_object_tokens": 17,
+          "background_tokens": 150
+        },
+        "classification": {
+          "logit_object": -7.2093963623046875,
+          "logit_background": -10.665131568908691,
+          "logit_gap": 3.455735206604004,
+          "score_object": 0.0025716389063745737,
+          "score_background": 0.00046639691572636366,
+          "score_gap": 0.00210524199064821
+        },
+        "regression_sha256": "aad1fd213300454db7d3a34e967d575fb3eaf35dfe562d504a3961b52e6cfbfb",
+        "detection": {
+          "output": true,
+          "center_distance": 1.8577585220336914,
+          "center_hit": true,
+          "riou": 0.9206673703612883,
+          "riou_hit": true,
+          "box": [
+            576.4219360351562,
+            489.3357849121094,
+            157.86036682128906,
+            54.84364700317383,
+            -0.1300901174545288,
+            0.9569167494773865
+          ]
+        }
+      }
+    }
+  ],
+  "learning_curves": {
+    "control": [
+      {
+        "step": 1,
+        "detection_loss": 0.7650018930435181,
+        "relation_loss": 0.036812011152505875,
+        "adapter_gradient_norm": 0.1163925975561142,
+        "heldout": [
+          {
+            "index": 697,
+            "relation_mse": 0.03066020831465721,
+            "student_heldout": {
+              "gap": 0.45992377400398254,
+              "auc": 1.0,
+              "heldout_object_tokens": 2,
+              "background_tokens": 90
+            },
+            "classification": {
+              "logit_object": -5.209278106689453,
+              "logit_background": -11.158256530761719,
+              "logit_gap": 5.948978424072266,
+              "score_object": 0.006516711320728064,
+              "score_background": 0.0006313928170129657,
+              "score_gap": 0.005885318503715098
+            },
+            "regression_sha256": "8c37e45b48f54b905fd584e32a301bf5bac7636c584eaf103bc000124b291633",
+            "detection": {
+              "output": true,
+              "center_distance": 0.6533046364784241,
+              "center_hit": true,
+              "riou": 0.871011025214008,
+              "riou_hit": true,
+              "box": [
+                492.2823181152344,
+                285.7060852050781,
+                48.04808044433594,
+                22.68758773803711,
+                -0.21360695362091064,
+                0.9328854084014893
+              ]
+            }
+          },
+          {
+            "index": 488,
+            "relation_mse": 0.02663455903530121,
+            "student_heldout": {
+              "gap": 0.21461069583892822,
+              "auc": 0.944444477558136,
+              "heldout_object_tokens": 3,
+              "background_tokens": 96
+            },
+            "classification": {
+              "logit_object": -5.50774621963501,
+              "logit_background": -11.293405532836914,
+              "logit_gap": 5.785659313201904,
+              "score_object": 0.005491060204803944,
+              "score_background": 0.0005756384343840182,
+              "score_gap": 0.0049154217704199255
+            },
+            "regression_sha256": "8e66a9a29ca365da2855e2cd0e016dce49cd908f9005f2a75714e7902606e907",
+            "detection": {
+              "output": true,
+              "center_distance": 0.6484370231628418,
+              "center_hit": true,
+              "riou": 0.8985493558334524,
+              "riou_hit": true,
+              "box": [
+                542.3760986328125,
+                166.0641326904297,
+                60.9048957824707,
+                28.07334327697754,
+                0.0013903379440307617,
+                0.9236955642700195
+              ]
+            }
+          },
+          {
+            "index": 2600,
+            "relation_mse": 0.021760044619441032,
+            "student_heldout": {
+              "gap": 0.032628774642944336,
+              "auc": 0.6904762387275696,
+              "heldout_object_tokens": 8,
+              "background_tokens": 126
+            },
+            "classification": {
+              "logit_object": -5.94745397567749,
+              "logit_background": -10.762970924377441,
+              "logit_gap": 4.815516948699951,
+              "score_object": 0.0038837979082018137,
+              "score_background": 0.0004966893466189504,
+              "score_gap": 0.0033871085615828633
+            },
+            "regression_sha256": "3596613be9e028bcfc8fc945d5a2490f4570d7ee136eb36c7dfb8b3dfc93a066",
+            "detection": {
+              "output": true,
+              "center_distance": 1.651977300643921,
+              "center_hit": true,
+              "riou": 0.9307063841360046,
+              "riou_hit": true,
+              "box": [
+                470.441162109375,
+                336.2901306152344,
+                108.5677490234375,
+                38.28950881958008,
+                0.1539301872253418,
+                0.9476814270019531
+              ]
+            }
+          },
+          {
+            "index": 2464,
+            "relation_mse": 0.04813503473997116,
+            "student_heldout": {
+              "gap": -0.04362410306930542,
+              "auc": 0.40352940559387207,
+              "heldout_object_tokens": 17,
+              "background_tokens": 150
+            },
+            "classification": {
+              "logit_object": -7.2386369705200195,
+              "logit_background": -10.724337577819824,
+              "logit_gap": 3.4857006072998047,
+              "score_object": 0.002551659010350704,
+              "score_background": 0.0004633671778719872,
+              "score_gap": 0.002088291832478717
+            },
+            "regression_sha256": "aad1fd213300454db7d3a34e967d575fb3eaf35dfe562d504a3961b52e6cfbfb",
+            "detection": {
+              "output": true,
+              "center_distance": 1.8577585220336914,
+              "center_hit": true,
+              "riou": 0.9206673703612883,
+              "riou_hit": true,
+              "box": [
+                576.4219360351562,
+                489.3357849121094,
+                157.86036682128906,
+                54.84364700317383,
+                -0.1300901174545288,
+                0.9571608901023865
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "step": 2,
+        "detection_loss": 0.9085193872451782,
+        "relation_loss": 0.021204877644777298,
+        "adapter_gradient_norm": 0.0851711854338646
+      },
+      {
+        "step": 3,
+        "detection_loss": 0.764933705329895,
+        "relation_loss": 0.03683476150035858,
+        "adapter_gradient_norm": 0.11639533936977386
+      },
+      {
+        "step": 4,
+        "detection_loss": 0.9084743857383728,
+        "relation_loss": 0.02121894434094429,
+        "adapter_gradient_norm": 0.08517469465732574
+      },
+      {
+        "step": 5,
+        "detection_loss": 0.7648066282272339,
+        "relation_loss": 0.036878298968076706,
+        "adapter_gradient_norm": 0.11640036106109619,
+        "heldout": [
+          {
+            "index": 697,
+            "relation_mse": 0.03072008490562439,
+            "student_heldout": {
+              "gap": 0.46037429571151733,
+              "auc": 1.0,
+              "heldout_object_tokens": 2,
+              "background_tokens": 90
+            },
+            "classification": {
+              "logit_object": -5.206721782684326,
+              "logit_background": -11.139297485351562,
+              "logit_gap": 5.932575702667236,
+              "score_object": 0.006527365185320377,
+              "score_background": 0.0006330259493552148,
+              "score_gap": 0.0058943392359651625
+            },
+            "regression_sha256": "8c37e45b48f54b905fd584e32a301bf5bac7636c584eaf103bc000124b291633",
+            "detection": {
+              "output": true,
+              "center_distance": 0.6533046364784241,
+              "center_hit": true,
+              "riou": 0.871011025214008,
+              "riou_hit": true,
+              "box": [
+                492.2823181152344,
+                285.7060852050781,
+                48.04808044433594,
+                22.68758773803711,
+                -0.21360695362091064,
+                0.9329766035079956
+              ]
+            }
+          },
+          {
+            "index": 488,
+            "relation_mse": 0.026644516736268997,
+            "student_heldout": {
+              "gap": 0.21490293741226196,
+              "auc": 0.944444477558136,
+              "heldout_object_tokens": 3,
+              "background_tokens": 96
+            },
+            "classification": {
+              "logit_object": -5.504091739654541,
+              "logit_background": -11.274116516113281,
+              "logit_gap": 5.77002477645874,
+              "score_object": 0.005499162711203098,
+              "score_background": 0.0005767575348727405,
+              "score_gap": 0.004922405176330358
+            },
+            "regression_sha256": "8e66a9a29ca365da2855e2cd0e016dce49cd908f9005f2a75714e7902606e907",
+            "detection": {
+              "output": true,
+              "center_distance": 0.6484370231628418,
+              "center_hit": true,
+              "riou": 0.8985493558334524,
+              "riou_hit": true,
+              "box": [
+                542.3760986328125,
+                166.0641326904297,
+                60.9048957824707,
+                28.07334327697754,
+                0.0013903379440307617,
+                0.9237393140792847
+              ]
+            }
+          },
+          {
+            "index": 2600,
+            "relation_mse": 0.021756859496235847,
+            "student_heldout": {
+              "gap": 0.0326957106590271,
+              "auc": 0.6904762387275696,
+              "heldout_object_tokens": 8,
+              "background_tokens": 126
+            },
+            "classification": {
+              "logit_object": -5.9413228034973145,
+              "logit_background": -10.74443531036377,
+              "logit_gap": 4.803112506866455,
+              "score_object": 0.0038939679507166147,
+              "score_background": 0.0004977692733518779,
+              "score_gap": 0.003396198677364737
+            },
+            "regression_sha256": "3596613be9e028bcfc8fc945d5a2490f4570d7ee136eb36c7dfb8b3dfc93a066",
+            "detection": {
+              "output": true,
+              "center_distance": 1.651977300643921,
+              "center_hit": true,
+              "riou": 0.9307063841360046,
+              "riou_hit": true,
+              "box": [
+                470.441162109375,
+                336.2901306152344,
+                108.5677490234375,
+                38.28950881958008,
+                0.1539301872253418,
+                0.9476378560066223
+              ]
+            }
+          },
+          {
+            "index": 2464,
+            "relation_mse": 0.04811514541506767,
+            "student_heldout": {
+              "gap": -0.04365336894989014,
+              "auc": 0.40352940559387207,
+              "heldout_object_tokens": 17,
+              "background_tokens": 150
+            },
+            "classification": {
+              "logit_object": -7.229244232177734,
+              "logit_background": -10.705525398254395,
+              "logit_gap": 3.47628116607666,
+              "score_object": 0.002558240434154868,
+              "score_background": 0.00046439439756795764,
+              "score_gap": 0.0020938460365869105
+            },
+            "regression_sha256": "aad1fd213300454db7d3a34e967d575fb3eaf35dfe562d504a3961b52e6cfbfb",
+            "detection": {
+              "output": true,
+              "center_distance": 1.8577585220336914,
+              "center_hit": true,
+              "riou": 0.9206673703612883,
+              "riou_hit": true,
+              "box": [
+                576.4219360351562,
+                489.3357849121094,
+                157.86036682128906,
+                54.84364700317383,
+                -0.1300901174545288,
+                0.9570811986923218
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "step": 6,
+        "detection_loss": 0.9083960056304932,
+        "relation_loss": 0.02124098688364029,
+        "adapter_gradient_norm": 0.08518086373806
+      },
+      {
+        "step": 7,
+        "detection_loss": 0.7646318674087524,
+        "relation_loss": 0.036938752979040146,
+        "adapter_gradient_norm": 0.11640722304582596
+      },
+      {
+        "step": 8,
+        "detection_loss": 0.9082906246185303,
+        "relation_loss": 0.0212695449590683,
+        "adapter_gradient_norm": 0.08518920093774796
+      },
+      {
+        "step": 9,
+        "detection_loss": 0.7644186019897461,
+        "relation_loss": 0.03701300919055939,
+        "adapter_gradient_norm": 0.11641556769609451
+      },
+      {
+        "step": 10,
+        "detection_loss": 0.9081633687019348,
+        "relation_loss": 0.021303467452526093,
+        "adapter_gradient_norm": 0.08519929647445679,
+        "heldout": [
+          {
+            "index": 697,
+            "relation_mse": 0.03085210919380188,
+            "student_heldout": {
+              "gap": 0.4613625407218933,
+              "auc": 1.0,
+              "heldout_object_tokens": 2,
+              "background_tokens": 90
+            },
+            "classification": {
+              "logit_object": -5.201053619384766,
+              "logit_background": -11.096508979797363,
+              "logit_gap": 5.895455360412598,
+              "score_object": 0.00655108829960227,
+              "score_background": 0.000636728189419955,
+              "score_gap": 0.005914360110182315
+            },
+            "regression_sha256": "8c37e45b48f54b905fd584e32a301bf5bac7636c584eaf103bc000124b291633",
+            "detection": {
+              "output": true,
+              "center_distance": 0.6533046364784241,
+              "center_hit": true,
+              "riou": 0.871011025214008,
+              "riou_hit": true,
+              "box": [
+                492.2823181152344,
+                285.7060852050781,
+                48.04808044433594,
+                22.68758773803711,
+                -0.21360695362091064,
+                0.9331656098365784
+              ]
+            }
+          },
+          {
+            "index": 488,
+            "relation_mse": 0.026667241007089615,
+            "student_heldout": {
+              "gap": 0.21554666757583618,
+              "auc": 0.944444477558136,
+              "heldout_object_tokens": 3,
+              "background_tokens": 96
+            },
+            "classification": {
+              "logit_object": -5.495894432067871,
+              "logit_background": -11.230453491210938,
+              "logit_gap": 5.734559059143066,
+              "score_object": 0.005517266225069761,
+              "score_background": 0.0005792567390017211,
+              "score_gap": 0.00493800948606804
+            },
+            "regression_sha256": "8e66a9a29ca365da2855e2cd0e016dce49cd908f9005f2a75714e7902606e907",
+            "detection": {
+              "output": true,
+              "center_distance": 0.6484370231628418,
+              "center_hit": true,
+              "riou": 0.8985493558334524,
+              "riou_hit": true,
+              "box": [
+                542.3760986328125,
+                166.0641326904297,
+                60.9048957824707,
+                28.07334327697754,
+                0.0013903379440307617,
+                0.9238429069519043
+              ]
+            }
+          },
+          {
+            "index": 2600,
+            "relation_mse": 0.0217500701546669,
+            "student_heldout": {
+              "gap": 0.03284543752670288,
+              "auc": 0.6914682984352112,
+              "heldout_object_tokens": 8,
+              "background_tokens": 126
+            },
+            "classification": {
+              "logit_object": -5.927562713623047,
+              "logit_background": -10.702486038208008,
+              "logit_gap": 4.774923324584961,
+              "score_object": 0.003916949965059757,
+              "score_background": 0.0005001871613785625,
+              "score_gap": 0.0034167628036811948
+            },
+            "regression_sha256": "3596613be9e028bcfc8fc945d5a2490f4570d7ee136eb36c7dfb8b3dfc93a066",
+            "detection": {
+              "output": true,
+              "center_distance": 1.651977300643921,
+              "center_hit": true,
+              "riou": 0.9307063841360046,
+              "riou_hit": true,
+              "box": [
+                470.441162109375,
+                336.2901306152344,
+                108.5677490234375,
+                38.28950881958008,
+                0.1539301872253418,
+                0.9475568532943726
+              ]
+            }
+          },
+          {
+            "index": 2464,
+            "relation_mse": 0.04807116463780403,
+            "student_heldout": {
+              "gap": -0.04371845722198486,
+              "auc": 0.40352940559387207,
+              "heldout_object_tokens": 17,
+              "background_tokens": 150
+            },
+            "classification": {
+              "logit_object": -7.208046913146973,
+              "logit_background": -10.662936210632324,
+              "logit_gap": 3.4548892974853516,
+              "score_object": 0.0025731290224939585,
+              "score_background": 0.00046668629511259496,
+              "score_gap": 0.0021064427273813635
+            },
+            "regression_sha256": "aad1fd213300454db7d3a34e967d575fb3eaf35dfe562d504a3961b52e6cfbfb",
+            "detection": {
+              "output": true,
+              "center_distance": 1.8577585220336914,
+              "center_hit": true,
+              "riou": 0.9206673703612883,
+              "riou_hit": true,
+              "box": [
+                576.4219360351562,
+                489.3357849121094,
+                157.86036682128906,
+                54.84364700317383,
+                -0.1300901174545288,
+                0.9569151401519775
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    "relation": [
+      {
+        "step": 1,
+        "detection_loss": 0.7650018930435181,
+        "relation_loss": 0.036812011152505875,
+        "adapter_gradient_norm": 0.11484933644533157,
+        "relation_adapter_gradient_norm": 0.16389182209968567,
+        "heldout": [
+          {
+            "index": 697,
+            "relation_mse": 0.030658282339572906,
+            "student_heldout": {
+              "gap": 0.4599093794822693,
+              "auc": 1.0,
+              "heldout_object_tokens": 2,
+              "background_tokens": 90
+            },
+            "classification": {
+              "logit_object": -5.209297180175781,
+              "logit_background": -11.1583251953125,
+              "logit_gap": 5.949028015136719,
+              "score_object": 0.006516629364341497,
+              "score_background": 0.0006313817575573921,
+              "score_gap": 0.005885247606784105
+            },
+            "regression_sha256": "8c37e45b48f54b905fd584e32a301bf5bac7636c584eaf103bc000124b291633",
+            "detection": {
+              "output": true,
+              "center_distance": 0.6533046364784241,
+              "center_hit": true,
+              "riou": 0.871011025214008,
+              "riou_hit": true,
+              "box": [
+                492.2823181152344,
+                285.7060852050781,
+                48.04808044433594,
+                22.68758773803711,
+                -0.21360695362091064,
+                0.9328854084014893
+              ]
+            }
+          },
+          {
+            "index": 488,
+            "relation_mse": 0.02663429267704487,
+            "student_heldout": {
+              "gap": 0.21460071206092834,
+              "auc": 0.944444477558136,
+              "heldout_object_tokens": 3,
+              "background_tokens": 96
+            },
+            "classification": {
+              "logit_object": -5.507768154144287,
+              "logit_background": -11.293478012084961,
+              "logit_gap": 5.785709857940674,
+              "score_object": 0.005490994546562433,
+              "score_background": 0.0005756285972893238,
+              "score_gap": 0.0049153659492731094
+            },
+            "regression_sha256": "8e66a9a29ca365da2855e2cd0e016dce49cd908f9005f2a75714e7902606e907",
+            "detection": {
+              "output": true,
+              "center_distance": 0.6484370231628418,
+              "center_hit": true,
+              "riou": 0.8985493558334524,
+              "riou_hit": true,
+              "box": [
+                542.3760986328125,
+                166.0641326904297,
+                60.9048957824707,
+                28.07334327697754,
+                0.0013903379440307617,
+                0.9236958026885986
+              ]
+            }
+          },
+          {
+            "index": 2600,
+            "relation_mse": 0.0217602401971817,
+            "student_heldout": {
+              "gap": 0.03262609243392944,
+              "auc": 0.6904762387275696,
+              "heldout_object_tokens": 8,
+              "background_tokens": 126
+            },
+            "classification": {
+              "logit_object": -5.947486400604248,
+              "logit_background": -10.763040542602539,
+              "logit_gap": 4.815554141998291,
+              "score_object": 0.0038837254978716373,
+              "score_background": 0.0004966798587702215,
+              "score_gap": 0.003387045639101416
+            },
+            "regression_sha256": "3596613be9e028bcfc8fc945d5a2490f4570d7ee136eb36c7dfb8b3dfc93a066",
+            "detection": {
+              "output": true,
+              "center_distance": 1.651977300643921,
+              "center_hit": true,
+              "riou": 0.9307063841360046,
+              "riou_hit": true,
+              "box": [
+                470.441162109375,
+                336.2901306152344,
+                108.5677490234375,
+                38.28950881958008,
+                0.1539301872253418,
+                0.9476815462112427
+              ]
+            }
+          },
+          {
+            "index": 2464,
+            "relation_mse": 0.048135675489902496,
+            "student_heldout": {
+              "gap": -0.043623507022857666,
+              "auc": 0.40352940559387207,
+              "heldout_object_tokens": 17,
+              "background_tokens": 150
+            },
+            "classification": {
+              "logit_object": -7.238680839538574,
+              "logit_background": -10.724409103393555,
+              "logit_gap": 3.4857282638549805,
+              "score_object": 0.0025516117457300425,
+              "score_background": 0.00046335806837305427,
+              "score_gap": 0.002088253677356988
+            },
+            "regression_sha256": "aad1fd213300454db7d3a34e967d575fb3eaf35dfe562d504a3961b52e6cfbfb",
+            "detection": {
+              "output": true,
+              "center_distance": 1.8577585220336914,
+              "center_hit": true,
+              "riou": 0.9206673703612883,
+              "riou_hit": true,
+              "box": [
+                576.4219360351562,
+                489.3357849121094,
+                157.86036682128906,
+                54.84364700317383,
+                -0.1300901174545288,
+                0.957161009311676
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "step": 2,
+        "detection_loss": 0.9085195064544678,
+        "relation_loss": 0.021203745156526566,
+        "adapter_gradient_norm": 0.08493263274431229
+      },
+      {
+        "step": 3,
+        "detection_loss": 0.7649348974227905,
+        "relation_loss": 0.03682723641395569,
+        "adapter_gradient_norm": 0.11485179513692856
+      },
+      {
+        "step": 4,
+        "detection_loss": 0.9084749817848206,
+        "relation_loss": 0.021213680505752563,
+        "adapter_gradient_norm": 0.08493597060441971
+      },
+      {
+        "step": 5,
+        "detection_loss": 0.7648102045059204,
+        "relation_loss": 0.03685609996318817,
+        "adapter_gradient_norm": 0.11485627293586731,
+        "heldout": [
+          {
+            "index": 697,
+            "relation_mse": 0.030700931325554848,
+            "student_heldout": {
+              "gap": 0.46023687720298767,
+              "auc": 1.0,
+              "heldout_object_tokens": 2,
+              "background_tokens": 90
+            },
+            "classification": {
+              "logit_object": -5.206918239593506,
+              "logit_background": -11.14000129699707,
+              "logit_gap": 5.9330830574035645,
+              "score_object": 0.006526523735374212,
+              "score_background": 0.0006329094176180661,
+              "score_gap": 0.005893614317756146
+            },
+            "regression_sha256": "8c37e45b48f54b905fd584e32a301bf5bac7636c584eaf103bc000124b291633",
+            "detection": {
+              "output": true,
+              "center_distance": 0.6533046364784241,
+              "center_hit": true,
+              "riou": 0.871011025214008,
+              "riou_hit": true,
+              "box": [
+                492.2823181152344,
+                285.7060852050781,
+                48.04808044433594,
+                22.68758773803711,
+                -0.21360695362091064,
+                0.9329767823219299
+              ]
+            }
+          },
+          {
+            "index": 488,
+            "relation_mse": 0.026641428470611572,
+            "student_heldout": {
+              "gap": 0.21480798721313477,
+              "auc": 0.944444477558136,
+              "heldout_object_tokens": 3,
+              "background_tokens": 96
+            },
+            "classification": {
+              "logit_object": -5.504316329956055,
+              "logit_background": -11.274850845336914,
+              "logit_gap": 5.770534515380859,
+              "score_object": 0.0054984972812235355,
+              "score_background": 0.0005766557296738029,
+              "score_gap": 0.004921841551549733
+            },
+            "regression_sha256": "8e66a9a29ca365da2855e2cd0e016dce49cd908f9005f2a75714e7902606e907",
+            "detection": {
+              "output": true,
+              "center_distance": 0.6484370231628418,
+              "center_hit": true,
+              "riou": 0.8985493558334524,
+              "riou_hit": true,
+              "box": [
+                542.3760986328125,
+                166.0641326904297,
+                60.9048957824707,
+                28.07334327697754,
+                0.0013903379440307617,
+                0.923740565776825
+              ]
+            }
+          },
+          {
+            "index": 2600,
+            "relation_mse": 0.02175850421190262,
+            "student_heldout": {
+              "gap": 0.032671570777893066,
+              "auc": 0.6904762387275696,
+              "heldout_object_tokens": 8,
+              "background_tokens": 126
+            },
+            "classification": {
+              "logit_object": -5.94165563583374,
+              "logit_background": -10.745158195495605,
+              "logit_gap": 4.803502559661865,
+              "score_object": 0.0038932343013584614,
+              "score_background": 0.0004976708441972733,
+              "score_gap": 0.003395563457161188
+            },
+            "regression_sha256": "3596613be9e028bcfc8fc945d5a2490f4570d7ee136eb36c7dfb8b3dfc93a066",
+            "detection": {
+              "output": true,
+              "center_distance": 1.651977300643921,
+              "center_hit": true,
+              "riou": 0.9307063841360046,
+              "riou_hit": true,
+              "box": [
+                470.441162109375,
+                336.2901306152344,
+                108.5677490234375,
+                38.28950881958008,
+                0.1539301872253418,
+                0.9476383924484253
+              ]
+            }
+          },
+          {
+            "index": 2464,
+            "relation_mse": 0.048121217638254166,
+            "student_heldout": {
+              "gap": -0.04364508390426636,
+              "auc": 0.40352940559387207,
+              "heldout_object_tokens": 17,
+              "background_tokens": 150
+            },
+            "classification": {
+              "logit_object": -7.2296905517578125,
+              "logit_background": -10.706250190734863,
+              "logit_gap": 3.476559638977051,
+              "score_object": 0.002557754050940275,
+              "score_background": 0.0004642996354959905,
+              "score_gap": 0.0020934544154442847
+            },
+            "regression_sha256": "aad1fd213300454db7d3a34e967d575fb3eaf35dfe562d504a3961b52e6cfbfb",
+            "detection": {
+              "output": true,
+              "center_distance": 1.8577585220336914,
+              "center_hit": true,
+              "riou": 0.9206673703612883,
+              "riou_hit": true,
+              "box": [
+                576.4219360351562,
+                489.3357849121094,
+                157.86036682128906,
+                54.84364700317383,
+                -0.1300901174545288,
+                0.9570816159248352
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "step": 6,
+        "detection_loss": 0.908397376537323,
+        "relation_loss": 0.021229112520813942,
+        "adapter_gradient_norm": 0.08494186401367188
+      },
+      {
+        "step": 7,
+        "detection_loss": 0.7646389007568359,
+        "relation_loss": 0.03689604252576828,
+        "adapter_gradient_norm": 0.1148623675107956
+      },
+      {
+        "step": 8,
+        "detection_loss": 0.9082929491996765,
+        "relation_loss": 0.02124902978539467,
+        "adapter_gradient_norm": 0.08494985848665237
+      },
+      {
+        "step": 9,
+        "detection_loss": 0.7644297480583191,
+        "relation_loss": 0.0369449183344841,
+        "adapter_gradient_norm": 0.11486979573965073
+      },
+      {
+        "step": 10,
+        "detection_loss": 0.9081668853759766,
+        "relation_loss": 0.02127259597182274,
+        "adapter_gradient_norm": 0.08495957404375076,
+        "heldout": [
+          {
+            "index": 697,
+            "relation_mse": 0.03079387918114662,
+            "student_heldout": {
+              "gap": 0.46095165610313416,
+              "auc": 1.0,
+              "heldout_object_tokens": 2,
+              "background_tokens": 90
+            },
+            "classification": {
+              "logit_object": -5.201645374298096,
+              "logit_background": -11.098641395568848,
+              "logit_gap": 5.896996021270752,
+              "score_object": 0.006548531353473663,
+              "score_background": 0.000636370328720659,
+              "score_gap": 0.005912161024753004
+            },
+            "regression_sha256": "8c37e45b48f54b905fd584e32a301bf5bac7636c584eaf103bc000124b291633",
+            "detection": {
+              "output": true,
+              "center_distance": 0.6533046364784241,
+              "center_hit": true,
+              "riou": 0.871011025214008,
+              "riou_hit": true,
+              "box": [
+                492.2823181152344,
+                285.7060852050781,
+                48.04808044433594,
+                22.68758773803711,
+                -0.21360695362091064,
+                0.9331677556037903
+              ]
+            }
+          },
+          {
+            "index": 488,
+            "relation_mse": 0.026657303795218468,
+            "student_heldout": {
+              "gap": 0.21526259183883667,
+              "auc": 0.944444477558136,
+              "heldout_object_tokens": 3,
+              "background_tokens": 96
+            },
+            "classification": {
+              "logit_object": -5.4965739250183105,
+              "logit_background": -11.23266887664795,
+              "logit_gap": 5.736094951629639,
+              "score_object": 0.00551524106413126,
+              "score_background": 0.0005789458518847823,
+              "score_gap": 0.004936295212246478
+            },
+            "regression_sha256": "8e66a9a29ca365da2855e2cd0e016dce49cd908f9005f2a75714e7902606e907",
+            "detection": {
+              "output": true,
+              "center_distance": 0.6484370231628418,
+              "center_hit": true,
+              "riou": 0.8985493558334524,
+              "riou_hit": true,
+              "box": [
+                542.3760986328125,
+                166.0641326904297,
+                60.9048957824707,
+                28.07334327697754,
+                0.0013903379440307617,
+                0.9238462448120117
+              ]
+            }
+          },
+          {
+            "index": 2600,
+            "relation_mse": 0.021754737943410873,
+            "student_heldout": {
+              "gap": 0.032773613929748535,
+              "auc": 0.6904762387275696,
+              "heldout_object_tokens": 8,
+              "background_tokens": 126
+            },
+            "classification": {
+              "logit_object": -5.928569793701172,
+              "logit_background": -10.704673767089844,
+              "logit_gap": 4.776103973388672,
+              "score_object": 0.003914703149348497,
+              "score_background": 0.0004998858785256743,
+              "score_gap": 0.003414817270822823
+            },
+            "regression_sha256": "3596613be9e028bcfc8fc945d5a2490f4570d7ee136eb36c7dfb8b3dfc93a066",
+            "detection": {
+              "output": true,
+              "center_distance": 1.651977300643921,
+              "center_hit": true,
+              "riou": 0.9307063841360046,
+              "riou_hit": true,
+              "box": [
+                470.441162109375,
+                336.2901306152344,
+                108.5677490234375,
+                38.28950881958008,
+                0.1539301872253418,
+                0.9475597143173218
+              ]
+            }
+          },
+          {
+            "index": 2464,
+            "relation_mse": 0.048089347779750824,
+            "student_heldout": {
+              "gap": -0.04369300603866577,
+              "auc": 0.40352940559387207,
+              "heldout_object_tokens": 17,
+              "background_tokens": 150
+            },
+            "classification": {
+              "logit_object": -7.2093963623046875,
+              "logit_background": -10.665131568908691,
+              "logit_gap": 3.455735206604004,
+              "score_object": 0.0025716389063745737,
+              "score_background": 0.00046639691572636366,
+              "score_gap": 0.00210524199064821
+            },
+            "regression_sha256": "aad1fd213300454db7d3a34e967d575fb3eaf35dfe562d504a3961b52e6cfbfb",
+            "detection": {
+              "output": true,
+              "center_distance": 1.8577585220336914,
+              "center_hit": true,
+              "riou": 0.9206673703612883,
+              "riou_hit": true,
+              "box": [
+                576.4219360351562,
+                489.3357849121094,
+                157.86036682128906,
+                54.84364700317383,
+                -0.1300901174545288,
+                0.9569167494773865
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "peak_allocated_mib": 388.9541015625
+}

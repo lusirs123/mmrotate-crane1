@@ -1,0 +1,61 @@
+{
+  "date": "2026-09-27",
+  "document_sha256": "9574f3dd453b8d73a1babd82934c72c5221e5e0006385b33921ee647bd06d0ae",
+  "v5_frame_records_verified": 992,
+  "group_counts_and_ratios_verified": true,
+  "failure_intervals_recomputed": true,
+  "longest_failure_by_type": {
+    "A": {
+      "output": 39,
+      "center_hit": 39,
+      "riou_hit": 64
+    },
+    "C": {
+      "output": 64,
+      "center_hit": 64,
+      "riou_hit": 64
+    }
+  },
+  "diagnostic_slices_A_C_output_center_riou": {
+    "far": [
+      [
+        5,
+        5,
+        5
+      ],
+      [
+        0,
+        0,
+        0
+      ]
+    ],
+    "dark": [
+      [
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0
+      ]
+    ],
+    "small": [
+      [
+        15,
+        13,
+        0
+      ],
+      [
+        24,
+        23,
+        9
+      ]
+    ]
+  },
+  "evidence_hashes_verified": 8,
+  "local_document_links_valid": true,
+  "training_or_inference_performed": false,
+  "limitation": "Counts recomputed from saved audit frame records; original predictions/checkpoints not reloaded in this task."
+}

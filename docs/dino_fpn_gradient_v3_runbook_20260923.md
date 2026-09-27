@@ -299,3 +299,24 @@ PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" python \
 ```
 
 核查输出包含逐帧新增/丢失中心命中、覆盖率、几何精度及三类失败区间。历史指标支持“未见明确整体收益”，条件命中率和最长无输出区间须以新核算为准；不继续将旧解释作为固定事实。
+
+### V5 source VAL 候选流失诊断
+
+此阶段只诊断已固定的 A `epoch_24` 和 C `epoch_18`，不训练、不改阈值、不读取 fixed TEST。目标为 source VAL 的 `real_seq07` 与 `sim_seq10` 共 738 帧。先检查已有 VAL `results.pkl`：它只保存最终最多一个框，无法还原阈值前候选，因此脚本对固定权重各做一次前向追踪，并将每帧追踪得到的 top-1 框与原 PKL 对齐。对齐失败时终止，不生成诊断报告。
+
+此前提到的暗光 33 帧、远距 40 帧和小目标 64 帧属于 fixed TEST 的 `real_seq02/03` 诊断切片，不能称为本次 source VAL 的失败帧，也不能借 source VAL 的分层结果逐帧解释它们。本次分析只能帮助确定 source 域中哪一层最常流失候选；能否解释 target 域的 64 帧连续失败仍是后续泛化问题。
+
+SymEOOD 当前推理是单阶段检测头：密集锚点解码 → padding 锚点过滤 → `score_thr=0.05` → 全局 `max_per_img=1`。没有 RPN、分类前 top-K 或 NMS；配置中的 `nms_pre` 与 `nms` 在该路径上未执行。诊断按实际路径记录每帧所有有效解码候选的最佳 RIoU、RIoU≥0.5 的候选数及最佳分数/排名、过阈值候选数、最终 top-1 的 RIoU，并把失败归为：无几何合格候选、分数阈值流失、top-1 排序流失。仅因某组多输出或少输出不能推断它改善了几何合格候选。报告按 real/sim 汇总并列出 A/C 输出集合变化和阶段转移。
+
+服务器使用第四张卡运行。运行前先同步 `crane_project/tools/diagnose_v5_source_val_candidate_flow.py`，命令须从仓库根目录执行：
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+conda activate mmrotljj
+PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" python \
+  crane_project/tools/diagnose_v5_source_val_candidate_flow.py \
+  --project-root . --gpu 3 \
+  --out-json work_dirs/crane_symeood_k1_dino_object_background_relation_v5_source_val_candidate_flow_v1.json
+```
+
+脚本核对 VAL 标注、选权文件、checkpoint/PKL 哈希与预测 provenance；只读 source VAL，输出协议为 `v5_source_val_candidate_flow_v1` 的 JSON。RIoU≥0.5 是本次几何候选诊断阈值，仅用于分层；候选覆盖率低不能单独证明 FPN 容量或锚点设计错误。先看阶段分布、A/C 新增/丢失帧的阶段，以及原始 top-1 一致性，再确定是否需要下一项实验。

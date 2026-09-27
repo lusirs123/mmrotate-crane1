@@ -1,0 +1,626 @@
+{
+  "protocol": "k1_dino_fpn_gradient_existing_artifact_audit_v1",
+  "evidence_role": "post_exposure_fixed_test_diagnosis_only",
+  "inference_performed": false,
+  "checkpoint_selection_performed": false,
+  "fixed_test_gt_sha256": "10efb48f72ffc3aff1097f12aec318a8aa4f09e411bfc13635e9f2a907e695e2",
+  "historical_preflight": {
+    "status": "verified_historical_gradient_route",
+    "path": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/crane_symeood_k1_dino_fpn_gradient_v3_preflight.json",
+    "note": "This preflight predates the foreground mask correction"
+  },
+  "arms": {
+    "a": {
+      "selection": {
+        "selected_checkpoint": "epoch_1",
+        "selection_strategy": {
+          "w_max": 0.99868,
+          "mcml_limit": 5,
+          "delta": 0.005,
+          "total": 4,
+          "feasible": 4,
+          "mcml_rejected": 0,
+          "selection": "constraint_pass"
+        },
+        "selected_source_val_metrics": {
+          "real/R_center(%)": 100.0,
+          "real/mean_RIoU": 0.7932,
+          "real/DFR(%/frame)": 3.2953,
+          "real/ACI": 0.9259,
+          "real/TDR_w10(%)": 100.0,
+          "real/MCML_max(frames)": 0,
+          "real/MCML_mean(frames)": 0.0,
+          "real/MCML_pass(limit=5)": 1,
+          "sim/A-RMSE(deg)": 12.7218,
+          "sim/R_center(%)": 99.8,
+          "sim/mean_RIoU": 0.8461,
+          "sim/DFR(%/frame)": 2.9834,
+          "sim/ACI": 0.9483,
+          "sim/TDR_w10(%)": 100.0,
+          "sim/MCML_max(frames)": 0,
+          "sim/MCML_mean(frames)": 0.0,
+          "sim/MCML_pass(limit=5)": 1
+        }
+      },
+      "fixed_test_metrics": {
+        "real/R_center(%)": 70.71,
+        "real/mean_RIoU": 0.5003,
+        "real/DFR(%/frame)": 3.2561,
+        "real/ACI": 0.9221,
+        "real/TDR_w10(%)": 83.21,
+        "real/MCML_max(frames)": 38,
+        "real/MCML_mean(frames)": 18.33,
+        "real/MCML_pass(limit=5)": 0,
+        "real/MRF(frames)": 8.0,
+        "sim/A-RMSE(deg)": 5.017,
+        "sim/R_center(%)": 100.0,
+        "sim/mean_RIoU": 0.8291,
+        "sim/DFR(%/frame)": 2.5198,
+        "sim/ACI": 0.9514,
+        "sim/TDR_w10(%)": 100.0,
+        "sim/MCML_max(frames)": 0,
+        "sim/MCML_mean(frames)": 0.0,
+        "sim/MCML_pass(limit=5)": 1
+      },
+      "fixed_test_prediction_sha256": "923b1dbc2db33a878f01fe961108880b0c888457ea6558aada0d07b8602ad92c",
+      "source_val_prediction_cache_status": "historical_generation_unattested",
+      "prediction_cache_status": "historical_generation_unattested",
+      "training_log": {
+        "files": [
+          "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/crane_symeood_k1_dino_fpn_gradient_a_v3/20260924_110933.log.json"
+        ],
+        "train_records": 52,
+        "semantic_loss_records": 0,
+        "semantic_loss_min": null,
+        "semantic_loss_max": null,
+        "semantic_loss_last": null
+      },
+      "checkpoint": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/crane_symeood_k1_dino_fpn_gradient_a_v3/epoch_1.pth"
+    },
+    "b": {
+      "selection": {
+        "selected_checkpoint": "epoch_1",
+        "selection_strategy": {
+          "w_max": 0.99868,
+          "mcml_limit": 5,
+          "delta": 0.005,
+          "total": 4,
+          "feasible": 4,
+          "mcml_rejected": 0,
+          "selection": "constraint_pass"
+        },
+        "selected_source_val_metrics": {
+          "real/R_center(%)": 100.0,
+          "real/mean_RIoU": 0.7932,
+          "real/DFR(%/frame)": 3.2953,
+          "real/ACI": 0.9259,
+          "real/TDR_w10(%)": 100.0,
+          "real/MCML_max(frames)": 0,
+          "real/MCML_mean(frames)": 0.0,
+          "real/MCML_pass(limit=5)": 1,
+          "sim/A-RMSE(deg)": 12.7218,
+          "sim/R_center(%)": 99.8,
+          "sim/mean_RIoU": 0.8461,
+          "sim/DFR(%/frame)": 2.9834,
+          "sim/ACI": 0.9483,
+          "sim/TDR_w10(%)": 100.0,
+          "sim/MCML_max(frames)": 0,
+          "sim/MCML_mean(frames)": 0.0,
+          "sim/MCML_pass(limit=5)": 1
+        }
+      },
+      "fixed_test_metrics": {
+        "real/R_center(%)": 70.71,
+        "real/mean_RIoU": 0.5003,
+        "real/DFR(%/frame)": 3.256,
+        "real/ACI": 0.9221,
+        "real/TDR_w10(%)": 83.21,
+        "real/MCML_max(frames)": 38,
+        "real/MCML_mean(frames)": 18.33,
+        "real/MCML_pass(limit=5)": 0,
+        "real/MRF(frames)": 8.0,
+        "sim/A-RMSE(deg)": 5.017,
+        "sim/R_center(%)": 100.0,
+        "sim/mean_RIoU": 0.8291,
+        "sim/DFR(%/frame)": 2.5198,
+        "sim/ACI": 0.9514,
+        "sim/TDR_w10(%)": 100.0,
+        "sim/MCML_max(frames)": 0,
+        "sim/MCML_mean(frames)": 0.0,
+        "sim/MCML_pass(limit=5)": 1
+      },
+      "fixed_test_prediction_sha256": "0b85b65b7a6d35fd1c6b9ee8418733fa0516ec2c995bd767c39fedcda4d23350",
+      "source_val_prediction_cache_status": "historical_generation_unattested",
+      "prediction_cache_status": "historical_generation_unattested",
+      "training_log": {
+        "files": [
+          "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/crane_symeood_k1_dino_fpn_gradient_b_v3/20260924_112559.log.json"
+        ],
+        "train_records": 52,
+        "semantic_loss_records": 52,
+        "semantic_loss_min": 0.04807,
+        "semantic_loss_max": 0.05198,
+        "semantic_loss_last": 0.0481
+      },
+      "checkpoint": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/crane_symeood_k1_dino_fpn_gradient_b_v3/epoch_1.pth"
+    },
+    "c": {
+      "selection": {
+        "selected_checkpoint": "epoch_1",
+        "selection_strategy": {
+          "w_max": 0.99868,
+          "mcml_limit": 5,
+          "delta": 0.005,
+          "total": 4,
+          "feasible": 4,
+          "mcml_rejected": 0,
+          "selection": "constraint_pass"
+        },
+        "selected_source_val_metrics": {
+          "real/R_center(%)": 100.0,
+          "real/mean_RIoU": 0.7932,
+          "real/DFR(%/frame)": 3.2944,
+          "real/ACI": 0.9259,
+          "real/TDR_w10(%)": 100.0,
+          "real/MCML_max(frames)": 0,
+          "real/MCML_mean(frames)": 0.0,
+          "real/MCML_pass(limit=5)": 1,
+          "sim/A-RMSE(deg)": 12.7233,
+          "sim/R_center(%)": 99.8,
+          "sim/mean_RIoU": 0.8457,
+          "sim/DFR(%/frame)": 2.9864,
+          "sim/ACI": 0.9483,
+          "sim/TDR_w10(%)": 100.0,
+          "sim/MCML_max(frames)": 0,
+          "sim/MCML_mean(frames)": 0.0,
+          "sim/MCML_pass(limit=5)": 1
+        }
+      },
+      "fixed_test_metrics": {
+        "real/R_center(%)": 70.71,
+        "real/mean_RIoU": 0.5003,
+        "real/DFR(%/frame)": 3.2534,
+        "real/ACI": 0.9221,
+        "real/TDR_w10(%)": 83.21,
+        "real/MCML_max(frames)": 38,
+        "real/MCML_mean(frames)": 18.33,
+        "real/MCML_pass(limit=5)": 0,
+        "real/MRF(frames)": 8.0,
+        "sim/A-RMSE(deg)": 5.0173,
+        "sim/R_center(%)": 100.0,
+        "sim/mean_RIoU": 0.8291,
+        "sim/DFR(%/frame)": 2.5199,
+        "sim/ACI": 0.9514,
+        "sim/TDR_w10(%)": 100.0,
+        "sim/MCML_max(frames)": 0,
+        "sim/MCML_mean(frames)": 0.0,
+        "sim/MCML_pass(limit=5)": 1
+      },
+      "fixed_test_prediction_sha256": "0a1cb50afe4d571158d07852f5d2b9c72fddc1c9e2cda5bbd029ec1e4fd25a5a",
+      "source_val_prediction_cache_status": "historical_generation_unattested",
+      "prediction_cache_status": "historical_generation_unattested",
+      "training_log": {
+        "files": [
+          "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/crane_symeood_k1_dino_fpn_gradient_c_v3/20260924_113954.log.json",
+          "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/crane_symeood_k1_dino_fpn_gradient_c_v3/20260924_143825.log.json"
+        ],
+        "train_records": 54,
+        "semantic_loss_records": 54,
+        "semantic_loss_min": 0.03921,
+        "semantic_loss_max": 0.05196,
+        "semantic_loss_last": 0.03938
+      },
+      "checkpoint": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/crane_symeood_k1_dino_fpn_gradient_c_v3/epoch_1.pth"
+    }
+  },
+  "weight_comparisons": {
+    "A_vs_K1": {
+      "auxiliary_head": {
+        "shared_tensors": 4,
+        "different_tensors": 4,
+        "max_abs_delta": 0.002843722701072693,
+        "l2_delta": 0.014016441653645047,
+        "missing_left": 0,
+        "missing_right": 0
+      },
+      "backbone": {
+        "shared_tensors": 318,
+        "different_tensors": 0,
+        "max_abs_delta": 0.0,
+        "l2_delta": 0.0,
+        "missing_left": 0,
+        "missing_right": 0
+      },
+      "detection_head": {
+        "shared_tensors": 5,
+        "different_tensors": 5,
+        "max_abs_delta": 3480.0,
+        "l2_delta": 3480.000010147081,
+        "missing_left": 0,
+        "missing_right": 0
+      },
+      "classification_adapter": {
+        "shared_tensors": 0,
+        "different_tensors": 0,
+        "max_abs_delta": 0.0,
+        "l2_delta": 0.0,
+        "missing_left": 1,
+        "missing_right": 0
+      },
+      "fpn": {
+        "shared_tensors": 16,
+        "different_tensors": 16,
+        "max_abs_delta": 0.04002629220485687,
+        "l2_delta": 0.4098044509973607,
+        "missing_left": 0,
+        "missing_right": 0
+      }
+    },
+    "B_vs_K1": {
+      "auxiliary_head": {
+        "shared_tensors": 4,
+        "different_tensors": 4,
+        "max_abs_delta": 0.0028437674045562744,
+        "l2_delta": 0.014016441341372973,
+        "missing_left": 0,
+        "missing_right": 0
+      },
+      "backbone": {
+        "shared_tensors": 318,
+        "different_tensors": 0,
+        "max_abs_delta": 0.0,
+        "l2_delta": 0.0,
+        "missing_left": 0,
+        "missing_right": 0
+      },
+      "detection_head": {
+        "shared_tensors": 5,
+        "different_tensors": 5,
+        "max_abs_delta": 3480.0,
+        "l2_delta": 3480.000010147093,
+        "missing_left": 0,
+        "missing_right": 0
+      },
+      "classification_adapter": {
+        "shared_tensors": 0,
+        "different_tensors": 0,
+        "max_abs_delta": 0.0,
+        "l2_delta": 0.0,
+        "missing_left": 1,
+        "missing_right": 0
+      },
+      "fpn": {
+        "shared_tensors": 16,
+        "different_tensors": 16,
+        "max_abs_delta": 0.04002605378627777,
+        "l2_delta": 0.4098128419348417,
+        "missing_left": 0,
+        "missing_right": 0
+      },
+      "training_projection": {
+        "shared_tensors": 0,
+        "different_tensors": 0,
+        "max_abs_delta": 0.0,
+        "l2_delta": 0.0,
+        "missing_left": 1,
+        "missing_right": 0
+      }
+    },
+    "C_vs_K1": {
+      "auxiliary_head": {
+        "shared_tensors": 4,
+        "different_tensors": 4,
+        "max_abs_delta": 0.002880871295928955,
+        "l2_delta": 0.014063238702996302,
+        "missing_left": 0,
+        "missing_right": 0
+      },
+      "backbone": {
+        "shared_tensors": 318,
+        "different_tensors": 0,
+        "max_abs_delta": 0.0,
+        "l2_delta": 0.0,
+        "missing_left": 0,
+        "missing_right": 0
+      },
+      "detection_head": {
+        "shared_tensors": 5,
+        "different_tensors": 5,
+        "max_abs_delta": 3480.0,
+        "l2_delta": 3480.000010152498,
+        "missing_left": 0,
+        "missing_right": 0
+      },
+      "classification_adapter": {
+        "shared_tensors": 0,
+        "different_tensors": 0,
+        "max_abs_delta": 0.0,
+        "l2_delta": 0.0,
+        "missing_left": 1,
+        "missing_right": 0
+      },
+      "fpn": {
+        "shared_tensors": 16,
+        "different_tensors": 16,
+        "max_abs_delta": 0.04032132774591446,
+        "l2_delta": 0.41677695328366193,
+        "missing_left": 0,
+        "missing_right": 0
+      },
+      "training_projection": {
+        "shared_tensors": 0,
+        "different_tensors": 0,
+        "max_abs_delta": 0.0,
+        "l2_delta": 0.0,
+        "missing_left": 1,
+        "missing_right": 0
+      }
+    },
+    "A_vs_B": {
+      "auxiliary_head": {
+        "shared_tensors": 4,
+        "different_tensors": 4,
+        "max_abs_delta": 4.470348358154297e-08,
+        "l2_delta": 3.367473716444435e-07,
+        "missing_left": 0,
+        "missing_right": 0
+      },
+      "backbone": {
+        "shared_tensors": 318,
+        "different_tensors": 0,
+        "max_abs_delta": 0.0,
+        "l2_delta": 0.0,
+        "missing_left": 0,
+        "missing_right": 0
+      },
+      "detection_head": {
+        "shared_tensors": 5,
+        "different_tensors": 4,
+        "max_abs_delta": 5.282461643218994e-06,
+        "l2_delta": 5.73732685933475e-05,
+        "missing_left": 0,
+        "missing_right": 0
+      },
+      "classification_adapter": {
+        "shared_tensors": 1,
+        "different_tensors": 1,
+        "max_abs_delta": 0.0008042216068133712,
+        "l2_delta": 0.02164324493033358,
+        "missing_left": 0,
+        "missing_right": 0
+      },
+      "fpn": {
+        "shared_tensors": 16,
+        "different_tensors": 16,
+        "max_abs_delta": 1.339241862297058e-06,
+        "l2_delta": 4.761205978958018e-05,
+        "missing_left": 0,
+        "missing_right": 0
+      },
+      "training_projection": {
+        "shared_tensors": 0,
+        "different_tensors": 0,
+        "max_abs_delta": 0.0,
+        "l2_delta": 0.0,
+        "missing_left": 1,
+        "missing_right": 0
+      }
+    },
+    "A_vs_C": {
+      "auxiliary_head": {
+        "shared_tensors": 4,
+        "different_tensors": 4,
+        "max_abs_delta": 0.00010296888649463654,
+        "l2_delta": 0.0015867610098983511,
+        "missing_left": 0,
+        "missing_right": 0
+      },
+      "backbone": {
+        "shared_tensors": 318,
+        "different_tensors": 0,
+        "max_abs_delta": 0.0,
+        "l2_delta": 0.0,
+        "missing_left": 0,
+        "missing_right": 0
+      },
+      "detection_head": {
+        "shared_tensors": 5,
+        "different_tensors": 4,
+        "max_abs_delta": 0.00023730285465717316,
+        "l2_delta": 0.0025487312039049106,
+        "missing_left": 0,
+        "missing_right": 0
+      },
+      "classification_adapter": {
+        "shared_tensors": 1,
+        "different_tensors": 1,
+        "max_abs_delta": 0.0008216452552005649,
+        "l2_delta": 0.021614764115379926,
+        "missing_left": 0,
+        "missing_right": 0
+      },
+      "fpn": {
+        "shared_tensors": 16,
+        "different_tensors": 16,
+        "max_abs_delta": 0.0022894064895808697,
+        "l2_delta": 0.07258725046609739,
+        "missing_left": 0,
+        "missing_right": 0
+      },
+      "training_projection": {
+        "shared_tensors": 0,
+        "different_tensors": 0,
+        "max_abs_delta": 0.0,
+        "l2_delta": 0.0,
+        "missing_left": 1,
+        "missing_right": 0
+      }
+    },
+    "B_vs_C": {
+      "auxiliary_head": {
+        "shared_tensors": 4,
+        "different_tensors": 4,
+        "max_abs_delta": 0.0001029670238494873,
+        "l2_delta": 0.001586687094599091,
+        "missing_left": 0,
+        "missing_right": 0
+      },
+      "backbone": {
+        "shared_tensors": 318,
+        "different_tensors": 0,
+        "max_abs_delta": 0.0,
+        "l2_delta": 0.0,
+        "missing_left": 0,
+        "missing_right": 0
+      },
+      "detection_head": {
+        "shared_tensors": 5,
+        "different_tensors": 4,
+        "max_abs_delta": 0.00023754313588142395,
+        "l2_delta": 0.002542196736548325,
+        "missing_left": 0,
+        "missing_right": 0
+      },
+      "classification_adapter": {
+        "shared_tensors": 1,
+        "different_tensors": 1,
+        "max_abs_delta": 0.00010108396236319095,
+        "l2_delta": 0.002960787087918018,
+        "missing_left": 0,
+        "missing_right": 0
+      },
+      "fpn": {
+        "shared_tensors": 16,
+        "different_tensors": 16,
+        "max_abs_delta": 0.002289391355589032,
+        "l2_delta": 0.07258625664610573,
+        "missing_left": 0,
+        "missing_right": 0
+      },
+      "training_projection": {
+        "shared_tensors": 1,
+        "different_tensors": 1,
+        "max_abs_delta": 0.0001988820731639862,
+        "l2_delta": 0.004622414846266454,
+        "missing_left": 0,
+        "missing_right": 0
+      }
+    }
+  },
+  "paired_predictions": {
+    "A_vs_B": {
+      "all": {
+        "both_output": 877,
+        "left_only_output": 0,
+        "right_only_output": 0,
+        "neither_output": 115,
+        "exact_equal_prediction_frames": 115,
+        "differing_center_hit_frames": 0,
+        "left_only_center_hits": 0,
+        "right_only_center_hits": 0,
+        "max_abs_box_delta_common_output": 0.005950927734375,
+        "max_abs_score_delta_common_output": 0.00015160441398620605
+      },
+      "real": {
+        "both_output": 305,
+        "left_only_output": 0,
+        "right_only_output": 0,
+        "neither_output": 115,
+        "exact_equal_prediction_frames": 115,
+        "differing_center_hit_frames": 0,
+        "left_only_center_hits": 0,
+        "right_only_center_hits": 0,
+        "max_abs_box_delta_common_output": 0.005950927734375,
+        "max_abs_score_delta_common_output": 0.00015160441398620605
+      },
+      "sim": {
+        "both_output": 572,
+        "left_only_output": 0,
+        "right_only_output": 0,
+        "neither_output": 0,
+        "exact_equal_prediction_frames": 0,
+        "differing_center_hit_frames": 0,
+        "left_only_center_hits": 0,
+        "right_only_center_hits": 0,
+        "max_abs_box_delta_common_output": 0.0001220703125,
+        "max_abs_score_delta_common_output": 3.337860107421875e-06
+      }
+    },
+    "A_vs_C": {
+      "all": {
+        "both_output": 877,
+        "left_only_output": 0,
+        "right_only_output": 0,
+        "neither_output": 115,
+        "exact_equal_prediction_frames": 115,
+        "differing_center_hit_frames": 0,
+        "left_only_center_hits": 0,
+        "right_only_center_hits": 0,
+        "max_abs_box_delta_common_output": 0.36572265625,
+        "max_abs_score_delta_common_output": 0.0007213354110717773
+      },
+      "real": {
+        "both_output": 305,
+        "left_only_output": 0,
+        "right_only_output": 0,
+        "neither_output": 115,
+        "exact_equal_prediction_frames": 115,
+        "differing_center_hit_frames": 0,
+        "left_only_center_hits": 0,
+        "right_only_center_hits": 0,
+        "max_abs_box_delta_common_output": 0.36572265625,
+        "max_abs_score_delta_common_output": 0.0007213354110717773
+      },
+      "sim": {
+        "both_output": 572,
+        "left_only_output": 0,
+        "right_only_output": 0,
+        "neither_output": 0,
+        "exact_equal_prediction_frames": 0,
+        "differing_center_hit_frames": 0,
+        "left_only_center_hits": 0,
+        "right_only_center_hits": 0,
+        "max_abs_box_delta_common_output": 0.0113983154296875,
+        "max_abs_score_delta_common_output": 1.7642974853515625e-05
+      }
+    },
+    "B_vs_C": {
+      "all": {
+        "both_output": 877,
+        "left_only_output": 0,
+        "right_only_output": 0,
+        "neither_output": 115,
+        "exact_equal_prediction_frames": 115,
+        "differing_center_hit_frames": 0,
+        "left_only_center_hits": 0,
+        "right_only_center_hits": 0,
+        "max_abs_box_delta_common_output": 0.359771728515625,
+        "max_abs_score_delta_common_output": 0.0006879568099975586
+      },
+      "real": {
+        "both_output": 305,
+        "left_only_output": 0,
+        "right_only_output": 0,
+        "neither_output": 115,
+        "exact_equal_prediction_frames": 115,
+        "differing_center_hit_frames": 0,
+        "left_only_center_hits": 0,
+        "right_only_center_hits": 0,
+        "max_abs_box_delta_common_output": 0.359771728515625,
+        "max_abs_score_delta_common_output": 0.0006879568099975586
+      },
+      "sim": {
+        "both_output": 572,
+        "left_only_output": 0,
+        "right_only_output": 0,
+        "neither_output": 0,
+        "exact_equal_prediction_frames": 0,
+        "differing_center_hit_frames": 0,
+        "left_only_center_hits": 0,
+        "right_only_center_hits": 0,
+        "max_abs_box_delta_common_output": 0.011310577392578125,
+        "max_abs_score_delta_common_output": 2.09808349609375e-05
+      }
+    }
+  }
+}

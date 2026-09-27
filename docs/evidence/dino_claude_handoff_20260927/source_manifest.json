@@ -1,0 +1,60 @@
+{
+  "created": "2026-09-27",
+  "purpose": "Evidence snapshot for DINO Claude handoff; originals copied byte-for-byte; no inference or training",
+  "files": [
+    {
+      "file": "v5_artifact_audit_complete.json",
+      "source": "/Users/mac/Downloads/crane_symeood_k1_dino_object_background_relation_v5_artifact_audit_complete.json",
+      "sha256": "7bd637524c96f37b08dbe3aa3d0ed7dc5505f173aba1f5ee706785a0209a31e6",
+      "bytes": 609409
+    },
+    {
+      "file": "v5_source_probe_r2.json",
+      "source": "/Users/mac/Downloads/crane_symeood_k1_dino_object_background_source_probe_v5_r2.json",
+      "sha256": "be41bd5b0103293ac0e1e886579e26f06c3a8a59e82cc7be04e005de808bb40f",
+      "bytes": 70126
+    },
+    {
+      "file": "v3_artifact_audit.json",
+      "source": "/Users/mac/Downloads/dino_fpn_v3_audit_results_20260924.tar.gz",
+      "sha256": "220f4ba901d5cbd78f3a8b3157e7adbfcc5b65c9dbeb5839a62a4b4993c248c2",
+      "bytes": 20017,
+      "archive_member": "work_dirs/crane_symeood_k1_dino_fpn_gradient_v3_artifact_audit.json"
+    },
+    {
+      "file": "v3_a_test.json",
+      "source": "/Users/mac/Downloads/dino_fpn_v3_audit_results_20260924.tar.gz",
+      "sha256": "3f475c725264c6a5ff9782f00a24df9e0cf64b3028d204cae872c1f33d87f7c3",
+      "bytes": 1663,
+      "archive_member": "work_dirs/crane_symeood_k1_dino_fpn_gradient_a_v3/source_val_sweep_student_protocol_v2/final_test/epoch_1/final_test_metrics_v2.json"
+    },
+    {
+      "file": "v3_b_test.json",
+      "source": "/Users/mac/Downloads/dino_fpn_v3_audit_results_20260924.tar.gz",
+      "sha256": "72e3416a64439151c6d476a67045550ce8d9611e465aea91d5267e7960fa76ca",
+      "bytes": 1662,
+      "archive_member": "work_dirs/crane_symeood_k1_dino_fpn_gradient_b_v3/source_val_sweep_student_protocol_v2/final_test/epoch_1/final_test_metrics_v2.json"
+    },
+    {
+      "file": "v3_c_test.json",
+      "source": "/Users/mac/Downloads/dino_fpn_v3_audit_results_20260924.tar.gz",
+      "sha256": "f135f3e024ab2ea94399a68c75b8b50b54bd508ac45e9a3efb49d12a28c7f0ee",
+      "bytes": 1664,
+      "archive_member": "work_dirs/crane_symeood_k1_dino_fpn_gradient_c_v3/source_val_sweep_student_protocol_v2/final_test/epoch_1/final_test_metrics_v2.json"
+    },
+    {
+      "file": "v4_a_test.json",
+      "source": "/Users/mac/Downloads/dino_corrected_mask_ac_v4_source_results.tar.gz",
+      "sha256": "e24c48ead0602797618dd830b360eb09186354f45fa58318b87e632aa2720435",
+      "bytes": 1659,
+      "archive_member": "work_dirs/crane_symeood_k1_dino_corrected_mask_a_v4/source_val_sweep_protocol_v2/final_test/epoch_1/final_test_metrics_v2.json"
+    },
+    {
+      "file": "v4_c_test.json",
+      "source": "/Users/mac/Downloads/dino_corrected_mask_ac_v4_source_results.tar.gz",
+      "sha256": "48f201f8ce7330d142f6683b541fa2772e1e8e62ae01496cedfb22e17adf1c5f",
+      "bytes": 1660,
+      "archive_member": "work_dirs/crane_symeood_k1_dino_corrected_mask_c_v4/source_val_sweep_protocol_v2/final_test/epoch_1/final_test_metrics_v2.json"
+    }
+  ]
+}
