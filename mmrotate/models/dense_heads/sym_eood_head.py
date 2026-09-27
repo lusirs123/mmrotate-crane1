@@ -16,9 +16,10 @@ import torch.nn as nn
 from mmcv.cnn import bias_init_with_prob
 from mmcv.runner import force_fp32
 from mmdet.core import images_to_levels, multi_apply, unmap
-from mmrotate.core import rotated_anchor_center_inside_flags
+from mmrotate.core import rbbox_overlaps, rotated_anchor_center_inside_flags
 from mmrotate.models.builder import ROTATED_HEADS
 from mmrotate.models.dense_heads.rotated_retina_head import RotatedRetinaHead
+from mmrotate.models.losses.candidate_selection import candidate_selection_loss
 
 
 @ROTATED_HEADS.register_module(force=True)
@@ -78,6 +79,7 @@ class SymEOODHead(RotatedRetinaHead):
                  score_context_gate_scale: float = 0.05,
                  use_semantic_cls_adapter: bool = False,
                  filter_padding_anchors: bool = False,
+                 candidate_selection=None,
                  **kwargs):
         super().__init__(*args, **kwargs)
         # L_equi
@@ -131,6 +133,19 @@ class SymEOODHead(RotatedRetinaHead):
         # source anchor center lies outside img_shape (inside pad_shape).
         # No image pixels or decoded coordinates are modified.
         self.filter_padding_anchors = bool(filter_padding_anchors)
+        self.candidate_selection = dict(candidate_selection) if candidate_selection else None
+        if self.candidate_selection is not None:
+            expected = {'score_threshold', 'iou_threshold', 'margin', 'loss_weight'}
+            if set(self.candidate_selection) != expected:
+                raise ValueError('candidate_selection requires exactly ' + str(sorted(expected)))
+            if self.num_classes != 1 or not self.use_sigmoid_cls:
+                raise ValueError('candidate_selection supports the one-class sigmoid K1 head')
+            if float(self.candidate_selection['loss_weight']) < 0.0:
+                raise ValueError('candidate_selection loss_weight must be non-negative')
+            if (self.test_cfg is None or self.test_cfg.get('max_per_img') != 1
+                    or float(self.test_cfg.get('score_thr', -1)) !=
+                    float(self.candidate_selection['score_threshold'])):
+                raise ValueError('candidate_selection must match deployed top-1 score threshold')
         if self.use_score_context_modulation:
             self.score_context_gate_alpha = nn.Parameter(
                 torch.tensor(float(score_context_gate_init),
@@ -277,6 +292,11 @@ class SymEOODHead(RotatedRetinaHead):
         (labels_list, label_weights_list, bbox_targets_list, bbox_weights_list,
          num_total_pos, num_total_neg) = cls_reg_targets
 
+        if self.candidate_selection is not None:
+            selection_loss, selection_stats = self._candidate_selection_batch_loss(
+                flatten_cls_scores, flatten_bbox_preds, anchor_list,
+                labels_list, gt_bboxes, img_metas)
+
         # 强制采用正样本数作为归一化尺度，避免 O2O 场景下被海量背景稀释
         num_total_samples = max(num_total_pos, 1)
 
@@ -340,6 +360,9 @@ class SymEOODHead(RotatedRetinaHead):
             losses_degraded_aux2_cls.append(lda)
 
         result = dict(loss_cls=losses_cls, loss_bbox=losses_bbox)
+        if self.candidate_selection is not None:
+            result['loss_candidate_selection'] = selection_loss
+            result.update(selection_stats)
         if self.use_equi_loss and any(le is not None and le.numel() > 0 for le in losses_equi):
             result['loss_equi'] = losses_equi
         if self.use_invar_loss and any(li is not None and li.numel() > 0 for li in losses_invar):
@@ -358,6 +381,81 @@ class SymEOODHead(RotatedRetinaHead):
             result['score_context_gate_alpha'] = raw_alpha
             result['score_context_gate_eff'] = effective_gate.detach()
         return result
+
+    def _candidate_selection_batch_loss(self, flat_cls, flat_reg, anchor_list,
+                                        labels_list, gt_bboxes, img_metas):
+        """Use the same anchor order, padding rule and decoder as top-1 inference."""
+        cfg = self.candidate_selection
+        n_images = len(img_metas)
+        level_sizes = [anchors.size(0) for anchors in anchor_list[0]]
+        flat_labels = torch.cat([
+            level_labels.reshape(n_images, level_size)
+            for level_labels, level_size in zip(labels_list, level_sizes)
+        ], dim=1)
+        losses = []
+        valid_images = 0
+        good_marked_negative = 0
+        any_good_marked_negative = 0
+        active_good_marked_negative = 0
+        no_good = 0
+        empty_gt = 0
+        active_images = 0
+        for i in range(n_images):
+            zero = flat_cls[i].sum() * 0.0
+            gt = gt_bboxes[i]
+            if gt.numel() == 0:
+                empty_gt += 1
+                losses.append(zero)
+                continue
+            anchors = torch.cat(anchor_list[i])
+            mask = torch.ones(anchors.size(0), dtype=torch.bool,
+                              device=anchors.device)
+            if self.filter_padding_anchors:
+                mask &= rotated_anchor_center_inside_flags(
+                    anchors, img_metas[i]['img_shape'])
+            if not bool(mask.any()):
+                no_good += 1
+                losses.append(zero)
+                continue
+            with torch.no_grad():
+                boxes = self.bbox_coder.decode(
+                    anchors[mask], flat_reg[i][mask].detach(),
+                    max_shape=img_metas[i]['img_shape'])
+                ious = rbbox_overlaps(boxes.float(), gt.float()).max(dim=1)[0]
+            logits = flat_cls[i][mask, 0]
+            loss, good_index, _ = candidate_selection_loss(
+                logits, ious,
+                score_threshold=float(cfg['score_threshold']),
+                iou_threshold=float(cfg['iou_threshold']),
+                margin=float(cfg['margin']))
+            losses.append(loss)
+            if good_index is None:
+                no_good += 1
+                continue
+            valid_images += 1
+            labeled = flat_labels[i][mask]
+            any_good_marked_negative += int(bool((
+                (ious >= float(cfg['iou_threshold']))
+                & (labeled == self.num_classes)).any()))
+            is_active = bool(loss.detach() > 0)
+            if is_active:
+                active_images += 1
+            is_negative = bool(labeled[good_index].item() == self.num_classes)
+            good_marked_negative += int(is_negative)
+            active_good_marked_negative += int(is_active and is_negative)
+        mean_loss = torch.stack(losses).mean() * float(cfg['loss_weight'])
+        stats = dict(
+            selection_valid_images=mean_loss.new_tensor(float(valid_images)).detach(),
+            selection_active_images=mean_loss.new_tensor(float(active_images)).detach(),
+            selection_good_labeled_negative=mean_loss.new_tensor(
+                float(good_marked_negative)).detach(),
+            selection_any_good_labeled_negative=mean_loss.new_tensor(
+                float(any_good_marked_negative)).detach(),
+            selection_active_good_labeled_negative=mean_loss.new_tensor(
+                float(active_good_marked_negative)).detach(),
+            selection_no_good=mean_loss.new_tensor(float(no_good)).detach(),
+            selection_empty_gt=mean_loss.new_tensor(float(empty_gt)).detach())
+        return mean_loss, stats
 
     def get_targets(self,
                     anchor_list,

@@ -335,3 +335,146 @@ PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" python \
 ```
 
 优先查看 JSON 中 `assignment`、`classification`、`quality_guidance` 三组的 `status`、`bound_artifacts` 和 `evidence_class_counts`。只有 `historical_artifact_bound_review_scope_and_result` 才进入实验候选核查；`historical_text_only_no_bound_artifact` 只是历史文字线索。脚本会排除自身和旧清单 JSON，并要求同一实验目录同时有配置、checkpoint、训练日志和 source VAL 证据。涉及 TEST 文件的条目只用于追溯，不用于选择阈值、checkpoint 或训练方向。将该清单与 27 条 S7 记录、V1–V5 训练日志和 source VAL 选权文件一起核对后，才决定是否开展单一 A/B 实验。
+
+### 历史机制核查的最终口径（2026-09-27）
+
+本次核查的目的，是防止下一项改进重复已经做过的机制。证据分三层：配置文件证明机制已经进入过实验流程；workdir 中的 checkpoint、训练日志和 source VAL 结果用于复核当时的结果；文档只补充设计背景、失败记录和实验限制。workdir 被清理时，仍保留“做过”的结论，但该实验的数值只能标为“结果不可复核”。TEST 文件只作为历史追溯，不参与下一项方案选择。
+
+当前 K1 的身份已经固定：`crane_project/configs/crane_symeood_k1.py` 的主头使用 `SymPOLAAssigner` 和 `SymNFLLoss`，另有一个只参与训练的 `RotatedATSSHead` 辅助头；推理主路径使用 SymEOODHead。通用 `MaxIoUAssigner`、Rotated ATSS、FCOS centerness 和 RePoints/PAA 配置不能直接改写成 K1 主头实验。
+
+基于仓库现有配置、代码、历史文档和已保存结果，机制清单如下：
+
+| 机制 | 是否进入过项目实验配置 | 当前能否复核结果 | 后续处理 |
+| --- | --- | --- | --- |
+| SymPOLA + SymNFL | 是，当前 K1 主路径 | K1/V1–V5 结果按各自产物记录 | 作为基线，不重复更换名称 |
+| ATSS | 是，K1 辅助头及其他旋转检测器 | 需按模型身份区分 | 不作为新的 K1 主分配实验 |
+| MaxIoU | 是，EOOD/通用检测器 | 与 K1 主头不等价 | 不直接迁移结论 |
+| PAA/RePoints | 有通用实现或配置 | 未确认 K1 主头结果 | 不把代码存在当作 K1 结果 |
+| SimOTA | 有文字或引用线索 | 未找到明确 K1 结果绑定 | 若 config 存在则归为已做，未有 config 则只记线索 |
+| 质量下界 | 有讨论和部分质量阈值文字 | 未确认独立 K1 消融 | 先核对现有 SymPOLA 代码，避免重复 |
+| QFL | 历史文档记录已试且退化 | 原始产物需单独绑定 | 作为已有负结果，不重复 |
+| VFL | 文档记录未形成已验证结果 | 没有可靠 K1 产物 | 不因“未试”就直接训练，先判断与 QFL 的新增信息 |
+| IoU-aware head | 有设计和文献映射 | 未确认 K1 训练结果 | 不能称已验证方案 |
+| centerness | 通用 FCOS/ATSS 配置存在 | 非 K1 主头结果 | 不直接迁移 |
+| RegQuality/PQA | 文档记录 v1–v3 失败或封存 | 结果产物需绑定 | 不换名称重做 |
+| score modulation | 检测器代码存在若干质量/分数接口 | 未形成当前 K1 的独立结果 | 不能仅凭代码存在宣称有效 |
+| DINO S7/quality ranking | 有独立 source-only 训练和诊断记录 | 属于 DINO RPN/ROI 候选链 | 与 K1 蒸馏分开解释 |
+
+这份清单支持的研究结论是：V5 候选流失诊断暴露的是分类分数与几何质量脱钩；V5 对象—邻近背景关系蒸馏没有形成整体收益；QFL、RegQuality/PQA 和多条 DINO/S7 排序路线已有负结果或边界限制。下一项工作不能重复这些路线，也不能因为某个通用模块存在就宣称它已经在 K1 上验证。
+
+如果继续实验，只允许在已有配置和结果核对完成后选择一个明确新增的机制。优先检查候选级相对排序是否已经在 **K1 主头** 做过；DINO S7 的 relative-quality 结果不能代替 K1 实验。若 K1 中确实没有该机制，才设计单一 source-only A/B 对照，并预先固定旧正确帧保持、成功帧、覆盖率、RIoU、MCML 和连续无输出长度的判据。
+
+### K1 主头候选排序静态核对（2026-09-27）
+
+范围：本地保留的 K1/DINO 配置、SymEOOD 主头及 detector 训练调用、历史排序实验文档。配置未找到不等于历史没有做过；按项目约定，项目实验配置存在即可记为做过，work_dir 删除不撤销这一身份。通用上游配置不作为本项目运行证据。
+
+| 检查项 | 当前代码/配置事实 | 历史边界 |
+| --- | --- | --- |
+| K1 主头分类与分配 | `crane_symeood_k1.py` 使用 SymNFL（gamma=2、alpha=0.25）和 SymPOLA；ATSS 用于辅助头 | 不能把辅助头 ATSS 当作主头分配消融 |
+| 已有几何监督 | SymNFL 用 detached SymKLD 加权分类损失；SymPOLA 联合分类与几何代价 | K1 已有几何信息，不能以“首次引入几何质量”为新实验理由 |
+| QFL 分支 | `sym_nfl_loss.py` 有 `use_quality_target`，默认关闭，当前 K1 未开启 | 历史 QFL 退化记录保留，不因当前关闭就记为未做 |
+| 独立质量头 | 当前 K1 配置未启用 `reg_quality_head`、`pqa_head` | RegQuality/PQA 已有失败或封存记录 |
+| PQA pairwise 排序 | detector 已实现 `_build_pqa_rank_batches`、`_compute_pqa_rank_loss`，对 PQA 热图采样得到的 quality 用候选 IoU 做成对排序；权重默认 0 | 本地未找到启用该具体 rank 开关的配置，不能据此断言未试；“候选级相对排序”这个名称本身已不足以区分新旧方案 |
+| DINO/S7 排序 | 文档记载 Pairwise V1/V2、relative-quality、unified hard-pair | 属于 DINO RPN/ROI 路线，结论不能直接移作 K1 主头结果 |
+| 直接监督 K1 原始分类分数的候选成对损失 | 当前保留的 K1 配置及训练调用中未发现启用证据 | 仅为本次静态检索结果，不是“整个项目从未做过”的证明 |
+
+结论：不能把下一步简化为“加一个 ranking loss”。可讨论的差异是**直接约束部署所用的 K1 分类分数**，与已有 PQA 独立质量输出、DINO ROI 排序区分；其有效性尚无证据。即使改变监督作用位置，也不能自动证明具有足够新增价值。
+
+本轮静态核对到此结束，无需服务器重跑。若继续，先在方案中明确候选来源、IoU 成对目标、作用分数、梯度范围和旧正确输出保持方式，并逐项对照现有 PQA/S7 实现；只有这些差异足以形成独立假设，才讨论同预算 source-only A/B。尤其要处理低分但排序正确的情况：成对排序只约束相对次序，不能保证最高分超过固定 score threshold。当前诊断含 score_threshold 失败，因此单独 pairwise 不能覆盖全部问题。本轮不修改模型、不启动训练。
+
+### 静态核对后的单一实验设计草案（2026-09-27，未实现/未训练）
+
+**假设**：在存在 RIoU≥0.5 候选的 source 样本上，直接约束 K1 部署所用分类 logit 的最终选择条件，可能比独立质量头/特征关系监督更贴近输出失败。V5 A/C 的候选覆盖结果只能支持研究问题，不能替代 K1 epoch20 或新对照的实际表现，也不证明本方案有效。
+
+**唯一新增项：包含固定输出阈值的候选选择损失。** 对每幅有 GT 的训练图像，按真实推理路径排除 padding 锚点；对全部有效候选解码，用 detached 框和 GT 算旋转 IoU（不先按分数截断候选）。单类别抓斗任务中，令 G 为与任一 GT 的最大 RIoU≥0.5 的候选，B 为其余候选。g 是 G 内最高分类 logit，b 是 B 内最高分类 logit；t=log(0.05/0.95) 是现有输出阈值对应 logit。新增项为：
+
+`L_select = mean_image relu(m + max(b, t) - g)`
+
+B 为空时竞争值取 t；G 为空或无有效候选时，该图新增项取可反传的零并记录次数，不能强行将坏框标为好框。无 GT 图像本草案仅用原检测损失处理，并单独报告其数量；不能宣称因此改善了无目标误报。整 batch 平均含跳过图像的零项，避免有效样本数变化导致每图权重隐式放大。IoU、候选分组、max 索引均不通过框回传；梯度只通过选中分类 logits。并列采用固定 flatten 顺序。
+
+设计初值建议固定 `m=0.1`（logit 单位）、`lambda=0.05`，总损失为原检测损失加 lambda×L_select。这是未验证的工程初值，不是依据 TEST 或已知最优值选择；首轮不扫描。阈值 0.05 和 RIoU 0.5 沿用既有定义。该项在合格候选已以足够 margin 胜出时为零；低于阈值时有提升 g 的梯度，错误候选领先时有提升 g、压低 b 的梯度。不保证训练收敛、保留旧输出或消除误报。
+
+| 对比对象 | 实质差异/重叠 |
+| --- | --- |
+| SymNFL/SymPOLA | 保留原分类、几何权重和分配；新增项直接比较最终候选竞争条件。但选中的合格候选可能被 SymPOLA 标为负，存在梯度冲突，需在实现短检查中记录频次和相应梯度方向 |
+| PQA pairwise | 历史实现对采样的 PQA quality 排序；本草案作用于原始 K1 分类 logit，并把固定输出阈值纳入同一个损失。二者都属于候选排序思想，不声称方法学首创 |
+| DINO/S7 | 不使用 ROI 教师排序或教师任务输出；候选来自 K1 密集头 |
+| V5 | 不使用对象—背景特征关系、分类适配器或 DINO 缓存；这是 GT 任务监督实验，不称为蒸馏 |
+
+**A/B 对照**：两组都从同一 K1 epoch20 初始化，使用原生 K1 结构（不新增 adapter），real train+sim train，24 epoch、batch2、frozen_stages=1、SGD lr0.0025/momentum0.9/wd0.0001、clip10、warmup1000、step[16,22]，相同种子、数据变换及 checkpoint 保存方式。A 用原检测损失，B 仅多 L_select。新增损失通过正常分类路径更新 retina_cls、FPN 和未冻结主干；不直接更新 retina_reg，但共享特征更新仍可能改变几何，不能称为几何完全受保护。两组推理结构和阈值相同。
+
+**实现时的一次必要短检查**：验证候选坐标/层级/logit 对应和 padding 规则；手构成功、低分、排序失败、无合格候选、空候选/空 GT 边界；确认新增项梯度路径和实际参数更新；在少量 source-train 上记录选中 g 的原分配标签及新增项与检测项的分类梯度关系、有效监督比例、运行时间和显存。这是链路与冲突检查，不是用几步训练判断长期有效性，不扩展成新一轮完整审计。若没有有效监督或存在实现错误，先停止正式训练；不能暗中改变分配规则来消除冲突。
+
+**评价与停止规则**：source VAL 仍为738帧，按已有选权规则只扫描16/18/20/22/24，不为本方案另改选权公式。对选定 A/B 报告 success(RIoU≥0.5)、有输出帧、中心命中率（仅输出帧）、新增/丢失正确帧、RIoU、MCML和最长无输出区间，分 real/sim 汇总。覆盖与排序追踪复用已有工具的规则，不重新设计整套审计。最低观察门槛为 success 净增且输出覆盖、连续失败不恶化；这是工程筛选条件，不是单种子统计显著性保证。735/738 来自既有 V5 A，不作为新 A 的预定结果，source 容易且余量小应作为限制。首轮未改善则停止该设定，不顺势扫权重或加模块。TEST 仅在 source 选权和方案固定后作最终报告，不能用来决定 margin 或 loss weight。
+
+当前交付止于设计草案；尚无实现验证或新训练结果。与历史独立质量头存在明确实现差异，但不足以保证研究价值或性能收益。
+
+### K1 候选选择 A/B 实现与服务器操作（2026-09-27）
+
+本地实现文件：`mmrotate/models/losses/candidate_selection.py` 提供单图选择项；`mmrotate/models/dense_heads/sym_eood_head.py` 在正式检测损失中接入，不改变 `simple_test`；`crane_project/configs/crane_symeood_k1_candidate_selection_{a,b}_v1.py` 为同预算 A/B；`crane_project/tools/preflight_k1_candidate_selection_v1.py` 完成配置、权重身份、少量 source 图的真实梯度检查。此段取代上节“未实现”的状态描述。它是 K1 的 GT 任务监督，不依赖 DINO 教师、cache 或 adapter。
+
+代码合同：候选顺序按每层 H×W×anchor 展平并跨层拼接，复用 K1 的 padding 规则和 `bbox_coder.decode(..., max_shape=img_shape)`；解码与 RIoU 分组不对回归参数求导。每幅图的 loss 先计算，含无有效监督图像的零项一起按 batch 大小取均值，再乘固定 `0.05`。训练日志记录有合格候选、有梯度、合格候选被 SymPOLA 标为负、无合格候选和空 GT 的图像数。新项梯度到分类头、FPN 和未冻结主干；不直接进入回归卷积。预检针对固定的四张 source-train 图而非全量诊断，若均无新增项梯度，将输出 `NO_ACTIVE_SELECTION_SIGNAL_ON_SAMPLED_SOURCE`，不能将其视作正式训练收益证据。若有梯度则输出 `READY_FOR_FORMAL_TRAINING`，还需查看标签冲突、分类梯度余弦、显存。
+
+本机仅有 PyTorch，无 MMCV/CUDA。选择损失及 source VAL 汇总共五项本地测试通过，相关 Python 文件编译及 `git diff --check` 通过；实际模型构建和 source 梯度由服务器预检负责。同步上述实现、配置与预检脚本后，在仓库根目录运行：
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+conda activate mmrotljj
+test ! -e work_dirs/crane_symeood_k1_candidate_selection_a_v1
+test ! -e work_dirs/crane_symeood_k1_candidate_selection_b_v1
+PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" python \
+  crane_project/tools/preflight_k1_candidate_selection_v1.py \
+  --gpu 3 --out-json work_dirs/k1_candidate_selection_v1_preflight.json
+```
+
+预检会核对 K1 `epoch_20.pth` 的既有 SHA256、A/B 模型仅差选择项、24 epoch 与训练设置、无 DINO cache，并报告四张 source 样本的候选监督是否激活及梯度范围。逐图记录主头分类、主头回归和新增选择损失的实际量级及比值。标签统计分三层：任一合格候选被分为负、最高分合格候选被分为负、以及**新增项激活时**最高分合格候选被分为负。第三项才表示直接梯度冲突；`conflict_over_30_percent_warning` 用第三项除以激活帧数。它只基于四帧短样本，不是统计可靠的硬阈值，更不自动改候选筛选或权重。预检只读权重，不执行优化器更新。首轮 margin 仍固定为 `0.1` logit；提议的 `0.5–1.0` 会改变已预登记的单变量对照，不能在这次检查中直接替换。确认报告 `status=READY_FOR_FORMAL_TRAINING`，并审阅冲突、梯度余弦与显存后，使用相同两卡、相同随机种子依次训练两组。`tools/dist_train.sh` 已固定传入 `--seed 0`，两组均沿用它；不要加 `--resume-from` 或 `--auto-resume`：
+
+```bash
+CUDA_VISIBLE_DEVICES=2,3 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+  bash tools/dist_train.sh \
+  crane_project/configs/crane_symeood_k1_candidate_selection_a_v1.py 2 \
+  --no-validate
+CUDA_VISIBLE_DEVICES=2,3 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+  bash tools/dist_train.sh \
+  crane_project/configs/crane_symeood_k1_candidate_selection_b_v1.py 2 \
+  --no-validate
+```
+
+两组训练结束并确认 epoch 16/18/20/22/24 的 checkpoint 存在后，在物理 GPU 3 串行扫描 source VAL：
+
+```bash
+for arm in a b; do
+  PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" python \
+    crane_project/tools/ckpt_sweep.py \
+    --config crane_project/configs/crane_symeood_k1_candidate_selection_${arm}_v1.py \
+    --work-dir work_dirs/crane_symeood_k1_candidate_selection_${arm}_v1 \
+    --sweep-dir work_dirs/crane_symeood_k1_candidate_selection_${arm}_v1/source_val_sweep_protocol_v2 \
+    --epochs 16 18 20 22 24 --gpu 3 || break
+done
+```
+
+两组都使用原生 K1 推理路径；B 配置中的选择项只在 `loss()` 使用，不增加推理参数。按既有 source VAL 选权结果报告新增/丢失的正确帧、覆盖、仅有输出帧的中心命中、RIoU、MCML 和最长无输出区间。若需要对设计假设做定向核验，在两组 source VAL sweep 均完成后执行以下只读追踪；它会核对选中 checkpoint、PKL 的哈希与生成记录、738 帧序列及重放 top-1 与保存结果的一致性：
+
+```bash
+PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" python \
+  crane_project/tools/trace_k1_candidate_selection_source_val_v1.py \
+  --gpu 3 --out-json work_dirs/k1_candidate_selection_source_val_trace_v1.json
+```
+
+追踪报告按总体及 real/sim 分域列出 A 有输出/B 无输出、B 有输出/A 无输出、正确帧新增/丢失、stage 转移及三帧 V5 C 历史案例 `sim_seq10_00211/00212/00213` 在**新 A/B**中的实际 stage。它们不是新 A 的已知失败帧，也不能预设必须转成 success。分数项采用**每帧最高分合格候选和最高分错误候选**，分别给出有效帧数、均值，以及两组共同有效帧上的配对 B−A 变化；`bad_minus_good_score` 越低表示排序越有利于合格候选。全部是选权后的诊断项，不参与新的阈值或 checkpoint 选择；“A 零流失/B 新增输出”和“好框涨、坏框降”是希望观察到的模式，不能作为预设结果。
+
+此阶段不调用 `--run-final-test`。只有 source VAL 选权和研究判断固定后，才分别用保存的选权文件做一次最终 TEST：
+
+```bash
+for arm in a b; do
+  PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" python \
+    crane_project/tools/ckpt_sweep.py \
+    --config crane_project/configs/crane_symeood_k1_candidate_selection_${arm}_v1.py \
+    --work-dir work_dirs/crane_symeood_k1_candidate_selection_${arm}_v1 \
+    --sweep-dir work_dirs/crane_symeood_k1_candidate_selection_${arm}_v1/source_val_sweep_protocol_v2 \
+    --final-test-from work_dirs/crane_symeood_k1_candidate_selection_${arm}_v1/source_val_sweep_protocol_v2/sweep_results.json \
+    --gpu 3 || break
+done
+```
+
+`--final-test-from` 会核对 source VAL 选权文件、配置和选中 checkpoint 的身份；TEST 结果只作最终报告，不反向调整阈值、margin、loss weight 或选权。
