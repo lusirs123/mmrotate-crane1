@@ -320,3 +320,18 @@ PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" python \
 ```
 
 脚本核对 VAL 标注、选权文件、checkpoint/PKL 哈希与预测 provenance；只读 source VAL，输出协议为 `v5_source_val_candidate_flow_v1` 的 JSON。RIoU≥0.5 是本次几何候选诊断阈值，仅用于分层；候选覆盖率低不能单独证明 FPN 容量或锚点设计错误。先看阶段分布、A/C 新增/丢失帧的阶段，以及原始 top-1 一致性，再确定是否需要下一项实验。
+
+### 历史机制证据清单
+
+在决定下一项分类或质量引导实验前，先在完整服务器 checkout 执行只读清单脚本。它扫描配置、代码、文档、日志、JSON 和实验目录名，分别标记实现/配置证据、历史记录证据和测试/引用文本；不会构建模型、运行推理、训练或使用 TEST 指标选方向。`historical_record_present_review_experiment_identity` 只表示找到历史记录，还需把配置、checkpoint、日志和 source VAL 结果绑定后才能确认“已验证”。
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+conda activate mmrotljj
+PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" python \
+  crane_project/tools/audit_historical_mechanisms_v1.py \
+  --project-root . \
+  --out-json work_dirs/historical_mechanism_inventory_v1.json
+```
+
+优先查看 JSON 中 `assignment`、`classification`、`quality_guidance` 三组的 `status` 和 `evidence`。`test_or_reference_only` 不能作为已完成实验；涉及 TEST 文件的条目只用于追溯，不用于选择阈值、checkpoint 或训练方向。将该清单与 27 条 S7 记录、V1–V5 训练日志和 source VAL 选权文件一起核对后，才决定是否开展单一 A/B 实验。
