@@ -69,7 +69,25 @@ def gradient_norm(grads):
                for g in grads if g is not None) ** 0.5
 
 
-def one_source_probe(cfg, checkpoint, gpu):
+def choose_supplement_indices(real_count, sim_count, per_domain, seed=1701):
+    """Deterministic source-only sample; exclude the four original probe rows."""
+    if per_domain < 1:
+        raise ValueError('per_domain must be positive')
+    rng = np.random.RandomState(seed)
+    domain_indices = []
+    for offset, count in ((0, real_count), (real_count, sim_count)):
+        excluded = {offset, offset + count // 2}
+        available = [index for index in range(offset, offset + count)
+                     if index not in excluded]
+        if per_domain > len(available):
+            raise ValueError('per_domain exceeds available source records')
+        domain_indices.append(sorted(int(index) for index in
+                                     rng.choice(available, per_domain,
+                                                replace=False)))
+    return tuple(domain_indices[0] + domain_indices[1])
+
+
+def one_source_probe(cfg, checkpoint, gpu, supplement_per_domain=None):
     from mmcv.parallel import collate, scatter
     from mmcv.runner import load_checkpoint
     from mmrotate.datasets import build_dataset
@@ -84,8 +102,12 @@ def one_source_probe(cfg, checkpoint, gpu):
     if not hasattr(dataset, 'datasets') or len(dataset.datasets) != 2:
         raise ValueError('Expected real + sim source train')
     real_count = len(dataset.datasets[0])
-    indices = (0, real_count // 2, real_count,
-               real_count + len(dataset.datasets[1]) // 2)
+    if supplement_per_domain is None:
+        indices = (0, real_count // 2, real_count,
+                   real_count + len(dataset.datasets[1]) // 2)
+    else:
+        indices = choose_supplement_indices(
+            real_count, len(dataset.datasets[1]), supplement_per_domain)
     model = build_detector(cfg.model,
                            train_cfg=cfg.get('train_cfg'),
                            test_cfg=cfg.get('test_cfg'))
@@ -97,13 +119,16 @@ def one_source_probe(cfg, checkpoint, gpu):
     if not fpn_params:
         raise ValueError('Expected trainable FPN parameters')
     rows = []
+    gradient_checks_by_domain = {'real': 0, 'sim': 0}
     torch.cuda.reset_peak_memory_stats(gpu)
     for index in indices:
+        domain = 'real' if index < real_count else 'sim'
         start = time.perf_counter()
         batch = scatter(collate([dataset[index]], samples_per_gpu=1), [gpu])[0]
         losses = model(return_loss=True, **batch)
         select = losses['loss_candidate_selection']
-        row = dict(index=index, image=batch['img_metas'][0]['filename'],
+        row = dict(index=index, domain=domain,
+                   image=batch['img_metas'][0]['filename'],
                    loss=float(select.detach()),
                    valid_images=int(losses['selection_valid_images']),
                    active_images=int(losses['selection_active_images']),
@@ -123,7 +148,10 @@ def one_source_probe(cfg, checkpoint, gpu):
                        float(select.detach()) / max(float(cls_loss.detach()), 1e-12)),
                    selection_to_regression_loss_ratio=(
                        float(select.detach()) / max(float(bbox_loss.detach()), 1e-12)))
-        if row['active_images']:
+        check_gradient = bool(row['active_images']) and (
+            supplement_per_domain is None
+            or gradient_checks_by_domain[domain] < 1)
+        if check_gradient:
             grads = torch.autograd.grad(
                 select, [cls_param] + fpn_params + [reg_param],
                 retain_graph=True, allow_unused=True)
@@ -146,10 +174,12 @@ def one_source_probe(cfg, checkpoint, gpu):
                     or row['selection_fpn_gradient_l2'] <= 0
                     or row['selection_reg_gradient_l2'] != 0):
                 raise RuntimeError('selection gradient scope differs from design')
+            gradient_checks_by_domain[domain] += 1
+            del grads, detection, det_grad, sel_grad
         torch.cuda.synchronize(gpu)
         row['duration_seconds'] = time.perf_counter() - start
         rows.append(row)
-        del batch, losses
+        del batch, losses, select, cls_loss, bbox_loss
     status = ('READY_FOR_FORMAL_TRAINING' if any(r['active_images'] for r in rows)
               else 'NO_ACTIVE_SELECTION_SIGNAL_ON_SAMPLED_SOURCE')
     valid_count = sum(r['valid_images'] for r in rows)
@@ -160,6 +190,21 @@ def one_source_probe(cfg, checkpoint, gpu):
     active_conflict_rate = (active_conflict_count / active_count
                             if active_count else None)
     return dict(rows=rows, status=status,
+                sampling=dict(mode=('four_fixed_source_rows'
+                                    if supplement_per_domain is None
+                                    else 'deterministic_stratified_source_sample'),
+                              seed=1701,
+                              per_domain=supplement_per_domain,
+                              excluded_original_probe_rows=(
+                                  supplement_per_domain is not None)),
+                scanned_by_domain={domain: sum(r['domain'] == domain
+                                               for r in rows)
+                                   for domain in ('real', 'sim')},
+                active_by_domain={domain: sum(r['active_images']
+                                             for r in rows
+                                             if r['domain'] == domain)
+                                  for domain in ('real', 'sim')},
+                gradient_checks_by_domain=gradient_checks_by_domain,
                 conflict_count=conflict_count,
                 valid_candidate_image_count=valid_count,
                 conflict_fraction_among_valid_images=conflict_rate,
@@ -178,6 +223,8 @@ def one_source_probe(cfg, checkpoint, gpu):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--gpu', type=int, default=3)
+    parser.add_argument('--supplement-per-domain', type=int, default=None,
+                        help='bounded deterministic source scan, excluding the original four rows')
     parser.add_argument('--out-json', required=True)
     args = parser.parse_args()
     output = Path(args.out_json)
@@ -186,16 +233,30 @@ def main():
     if Path.cwd().resolve() != ROOT:
         raise ValueError('Run from the project root')
     a, b, checkpoint = check_configs()
-    report = dict(protocol='k1_candidate_selection_v1_preflight',
+    protocol = ('k1_candidate_selection_v1_preflight'
+                if args.supplement_per_domain is None
+                else 'k1_candidate_selection_v1_source_supplement')
+    report = dict(protocol=protocol,
                   config_a_sha256=sha256(CONTROL),
                   config_b_sha256=sha256(EXPERIMENT),
                   checkpoint=str(checkpoint),
                   checkpoint_sha256=sha256(checkpoint),
                   source_only=True,
-                  **one_source_probe(b, checkpoint, args.gpu))
+                  **one_source_probe(b, checkpoint, args.gpu,
+                                     args.supplement_per_domain))
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, indent=2) + '\n')
-    print(json.dumps(report, indent=2))
+    if args.supplement_per_domain is None:
+        print(json.dumps(report, indent=2))
+    else:
+        print(json.dumps({
+            key: report[key] for key in (
+                'protocol', 'checkpoint_sha256', 'status', 'sampling',
+                'scanned_by_domain', 'active_by_domain',
+                'gradient_checks_by_domain', 'active_conflict_fraction',
+                'conflict_over_30_percent_warning', 'peak_allocated_mib')
+        }, indent=2))
+        print('Detailed source rows: ' + str(output))
 
 
 if __name__ == '__main__':

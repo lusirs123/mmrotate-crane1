@@ -427,7 +427,20 @@ PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" python \
   --gpu 3 --out-json work_dirs/k1_candidate_selection_v1_preflight.json
 ```
 
-预检会核对 K1 `epoch_20.pth` 的既有 SHA256、A/B 模型仅差选择项、24 epoch 与训练设置、无 DINO cache，并报告四张 source 样本的候选监督是否激活及梯度范围。逐图记录主头分类、主头回归和新增选择损失的实际量级及比值。标签统计分三层：任一合格候选被分为负、最高分合格候选被分为负、以及**新增项激活时**最高分合格候选被分为负。第三项才表示直接梯度冲突；`conflict_over_30_percent_warning` 用第三项除以激活帧数。它只基于四帧短样本，不是统计可靠的硬阈值，更不自动改候选筛选或权重。预检只读权重，不执行优化器更新。首轮 margin 仍固定为 `0.1` logit；提议的 `0.5–1.0` 会改变已预登记的单变量对照，不能在这次检查中直接替换。确认报告 `status=READY_FOR_FORMAL_TRAINING`，并审阅冲突、梯度余弦与显存后，使用相同两卡、相同随机种子依次训练两组。`tools/dist_train.sh` 已固定传入 `--seed 0`，两组均沿用它；不要加 `--resume-from` 或 `--auto-resume`：
+预检会核对 K1 `epoch_20.pth` 的既有 SHA256、A/B 模型仅差选择项、24 epoch 与训练设置、无 DINO cache，并报告四张 source 样本的候选监督是否激活及梯度范围。逐图记录主头分类、主头回归和新增选择损失的实际量级及比值。标签统计分三层：任一合格候选被分为负、最高分合格候选被分为负、以及**新增项激活时**最高分合格候选被分为负。第三项才表示直接梯度冲突；`conflict_over_30_percent_warning` 用第三项除以激活帧数。它只基于四帧短样本，不是统计可靠的硬阈值，更不自动改候选筛选或权重。预检只读权重，不执行优化器更新。首轮 margin 仍固定为 `0.1` logit；提议的 `0.5–1.0` 会改变已预登记的单变量对照，不能在这次检查中直接替换。训练是否启动按下文补查结果判断。正式 A/B 均使用相同两卡；`tools/dist_train.sh` 已固定传入 `--seed 0`，两组均沿用它，不加 `--resume-from` 或 `--auto-resume`。
+
+首次服务器预检的实际结果（2026-09-27）：四张 source-train 图均有合格候选，四张的选择损失和激活计数均为零，状态 `NO_ACTIVE_SELECTION_SIGNAL_ON_SAMPLED_SOURCE`。K1 checkpoint SHA256 与配置合同核对通过；但没有激活梯度可供这四张图验证，`active_conflict_fraction=null` 表示分母为零，不能解读为无冲突。先做**一次**有上限的 source-train 补查：固定种子 1701，在 real 和 sim 各抽 64 张，并排除首次四张；不读取 VAL/TEST，不更新模型、不改 margin 或 loss weight。补查只在每个域首次激活时验证分类头、FPN、回归卷积的梯度，逐图统计激活和损失量级。输出新 JSON，不覆盖原报告：
+
+```bash
+PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" python \
+  crane_project/tools/preflight_k1_candidate_selection_v1.py \
+  --gpu 3 --supplement-per-domain 64 \
+  --out-json work_dirs/k1_candidate_selection_v1_source_supplement.json
+```
+
+若补查找到激活图像、梯度范围正确且标签冲突可接受，再执行以下原定 A/B 训练。若 128 张仍全为零，**停止当前 B 正式训练**：这只说明固定抽样下没有观察到新增监督，不证明 2781 张训练图全部为零，也不证明以后检测损失更新后永远不会激活。它已不足以支持把本次 24 epoch 当作已验证的“有效新监督”对照；记录为初始化监督过稀的限制，后续若重设计，应单独预登记新损失与新配置，不在这次实验中临时提高 margin、修改阈值或用 TEST 选样本。
+
+首次四张和 128 张补查都是模型链路检查，并非训练效果证据。原始已满足条件的样本产生零选择损失是预期行为；真正需要核对的是在更多 source 样本上是否至少出现可作用的场景。
 
 ```bash
 CUDA_VISIBLE_DEVICES=2,3 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
