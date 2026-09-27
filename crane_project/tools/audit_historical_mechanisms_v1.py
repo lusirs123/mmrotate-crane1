@@ -23,6 +23,11 @@ SKIP_DIRS = {
 }
 MAX_BYTES = 12 * 1024 * 1024
 SNIPPET_LIMIT = 8
+GENERATED_NAMES = {
+    'audit_historical_mechanisms_v1.py',
+    'historical_mechanism_inventory_v1.json',
+    'historical_mechanism_inventory_v2.json',
+}
 
 MECHANISMS = {
     'assignment': {
@@ -69,6 +74,8 @@ def iter_evidence_files(root):
             dirs[:] = []
             continue
         for name in files:
+            if name in GENERATED_NAMES or name.startswith('historical_mechanism_inventory_'):
+                continue
             path = Path(base) / name
             if path.suffix.lower() not in TEXT_SUFFIXES:
                 continue
@@ -184,6 +191,71 @@ def status_for(entries, class_counts=None):
     return 'test_or_reference_only'
 
 
+def experiment_artifact_records(root):
+    """Find work_dirs where a mechanism has a bound experiment artifact set."""
+    records = {group: {name: [] for name in rules}
+               for group, rules in MECHANISMS.items()}
+    work_root = root / 'work_dirs'
+    if not work_root.is_dir():
+        return records
+    all_patterns = {name: re.compile(pattern, re.I)
+                    for group in MECHANISMS.values() for name, pattern in group.items()}
+    for experiment in sorted(p for p in work_root.iterdir() if p.is_dir()):
+        files = []
+        has_checkpoint = False
+        has_config = False
+        has_log = False
+        has_source_val = False
+        for base, dirs, names in os.walk(str(experiment)):
+            dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+            for filename in names:
+                path = Path(base) / filename
+                lower = filename.lower()
+                if lower.endswith('.pth'):
+                    has_checkpoint = True
+                if lower.endswith('.py') and ('config' in lower or 'configs' in str(path)):
+                    has_config = True
+                if lower.endswith('.log') or lower == 'log.json' or 'train.log' in lower:
+                    has_log = True
+                if ('source_val' in lower or 'sweep_results' in lower
+                        or lower == 'results.pkl'):
+                    has_source_val = True
+                if path.suffix.lower() in TEXT_SUFFIXES and path.stat().st_size <= MAX_BYTES:
+                    files.append(path)
+        if not (has_checkpoint and has_config and has_log and has_source_val):
+            continue
+        text = '\n'.join(line for path in files
+                          for line in read_lines(path)[:20000])
+        for group, rules in MECHANISMS.items():
+            for name, pattern in rules.items():
+                if not all_patterns[name].search(experiment.name + '\n' + text):
+                    continue
+                path_string = str(experiment.relative_to(root))
+                scope = ('k1_target_or_distill' if 'crane_symeood_k1' in path_string
+                         else 'other_model_or_unknown')
+                records[group][name].append({
+                    'experiment_dir': path_string,
+                    'scope': scope,
+                    'has_checkpoint': has_checkpoint,
+                    'has_config': has_config,
+                    'has_training_log': has_log,
+                    'has_source_val_evidence': has_source_val,
+                })
+    return records
+
+
+def final_status(text_entries, class_counts, artifact_entries):
+    if artifact_entries:
+        return 'historical_artifact_bound_review_scope_and_result'
+    if class_counts.get('historical_record', 0):
+        return 'historical_text_only_no_bound_artifact'
+    if class_counts.get('implementation_or_config', 0):
+        return 'implementation_or_config_only'
+    if text_entries:
+        return 'reference_text_only_or_unclassified'
+    return 'no_matching_evidence_in_scanned_checkout'
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--project-root', default='.')
@@ -195,17 +267,21 @@ def main():
         raise FileExistsError(str(output))
     files = list(iter_evidence_files(root))
     file_count, matches, class_counts = collect_matches(root, files)
+    artifact_records = experiment_artifact_records(root)
     mechanism_status = {
         group: {name: {
-            'status': status_for(entries, class_counts[group][name]),
+            'status': final_status(entries, class_counts[group][name],
+                                   artifact_records[group][name]),
             'match_count_capped': len(entries),
             'evidence_class_counts': class_counts[group][name],
+            'bound_artifact_count': len(artifact_records[group][name]),
+            'bound_artifacts': artifact_records[group][name],
             'evidence': entries,
         } for name, entries in names.items()}
         for group, names in matches.items()
     }
     report = {
-        'protocol': 'historical_mechanism_inventory_v1',
+        'protocol': 'historical_mechanism_inventory_v2',
         'evidence_role': 'read_only_inventory',
         'selection_or_training_performed': False,
         'test_metrics_used_for_selection': False,
@@ -217,6 +293,7 @@ def main():
         'limitations': [
             'A text match proves that a mechanism or name is present in a file, not that it was trained successfully.',
             'A matching experiment must be verified with its config, checkpoint, log and source-VAL result together.',
+            'Generated audit scripts and prior inventory JSON files are excluded from evidence scanning.',
             'TEST-named artifacts are indexed for provenance only and are not used to choose a direction.',
             'No model is built and no inference is run by this script.',
         ],

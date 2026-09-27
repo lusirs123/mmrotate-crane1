@@ -35,3 +35,20 @@ def test_test_path_is_marked_for_manual_review(tmp_path):
     files = list(audit.iter_evidence_files(tmp_path))
     _count, matches, _class_counts = audit.collect_matches(tmp_path, files)
     assert matches['classification']['QFL'][0]['test_artifact_path'] is True
+
+
+def test_generated_inventory_is_excluded(tmp_path):
+    path = tmp_path / 'historical_mechanism_inventory_v1.json'
+    path.write_text('SimOTA')
+    assert list(audit.iter_evidence_files(tmp_path)) == []
+
+
+def test_bound_artifact_requires_all_four_evidence_types(tmp_path):
+    work = tmp_path / 'work_dirs/exp_simota'
+    work.mkdir(parents=True)
+    (work / 'config.py').write_text("assigner=dict(type='SimOTA')")
+    (work / 'epoch_1.pth').write_bytes(b'checkpoint')
+    (work / 'train.log').write_text('SimOTA training')
+    (work / 'source_val_sweep_results.json').write_text('SimOTA source_val')
+    records = audit.experiment_artifact_records(tmp_path)
+    assert records['assignment']['SimOTA'][0]['scope'] == 'other_model_or_unknown'

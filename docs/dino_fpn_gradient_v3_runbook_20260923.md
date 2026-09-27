@@ -331,7 +331,7 @@ conda activate mmrotljj
 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" python \
   crane_project/tools/audit_historical_mechanisms_v1.py \
   --project-root . \
-  --out-json work_dirs/historical_mechanism_inventory_v1.json
+  --out-json work_dirs/historical_mechanism_inventory_final.json
 ```
 
-优先查看 JSON 中 `assignment`、`classification`、`quality_guidance` 三组的 `status` 和 `evidence`。`test_or_reference_only` 不能作为已完成实验；涉及 TEST 文件的条目只用于追溯，不用于选择阈值、checkpoint 或训练方向。将该清单与 27 条 S7 记录、V1–V5 训练日志和 source VAL 选权文件一起核对后，才决定是否开展单一 A/B 实验。
+优先查看 JSON 中 `assignment`、`classification`、`quality_guidance` 三组的 `status`、`bound_artifacts` 和 `evidence_class_counts`。只有 `historical_artifact_bound_review_scope_and_result` 才进入实验候选核查；`historical_text_only_no_bound_artifact` 只是历史文字线索。脚本会排除自身和旧清单 JSON，并要求同一实验目录同时有配置、checkpoint、训练日志和 source VAL 证据。涉及 TEST 文件的条目只用于追溯，不用于选择阈值、checkpoint 或训练方向。将该清单与 27 条 S7 记录、V1–V5 训练日志和 source VAL 选权文件一起核对后，才决定是否开展单一 A/B 实验。
