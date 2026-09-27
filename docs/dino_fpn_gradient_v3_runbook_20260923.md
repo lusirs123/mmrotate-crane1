@@ -411,6 +411,8 @@ B 为空时竞争值取 t；G 为空或无有效候选时，该图新增项取�
 
 ### K1 候选选择 A/B 实现与服务器操作（2026-09-27）
 
+**当前状态：已封存，未开展正式训练。** 下列训练、VAL 与 TEST 命令保留为原设计记录，不是当前执行指令。最终决定及证据见本文末尾“候选选择 V1 封存结论”。
+
 本地实现文件：`mmrotate/models/losses/candidate_selection.py` 提供单图选择项；`mmrotate/models/dense_heads/sym_eood_head.py` 在正式检测损失中接入，不改变 `simple_test`；`crane_project/configs/crane_symeood_k1_candidate_selection_{a,b}_v1.py` 为同预算 A/B；`crane_project/tools/preflight_k1_candidate_selection_v1.py` 完成配置、权重身份、少量 source 图的真实梯度检查。此段取代上节“未实现”的状态描述。它是 K1 的 GT 任务监督，不依赖 DINO 教师、cache 或 adapter。
 
 代码合同：候选顺序按每层 H×W×anchor 展平并跨层拼接，复用 K1 的 padding 规则和 `bbox_coder.decode(..., max_shape=img_shape)`；解码与 RIoU 分组不对回归参数求导。每幅图的 loss 先计算，含无有效监督图像的零项一起按 batch 大小取均值，再乘固定 `0.05`。训练日志记录有合格候选、有梯度、合格候选被 SymPOLA 标为负、无合格候选和空 GT 的图像数。新项梯度到分类头、FPN 和未冻结主干；不直接进入回归卷积。预检针对固定的四张 source-train 图而非全量诊断，若均无新增项梯度，将输出 `NO_ACTIVE_SELECTION_SIGNAL_ON_SAMPLED_SOURCE`，不能将其视作正式训练收益证据。若有梯度则输出 `READY_FOR_FORMAL_TRAINING`，还需查看标签冲突、分类梯度余弦、显存。
@@ -491,3 +493,27 @@ done
 ```
 
 `--final-test-from` 会核对 source VAL 选权文件、配置和选中 checkpoint 的身份；TEST 结果只作最终报告，不反向调整阈值、margin、loss weight 或选权。
+
+### 候选选择 V1 封存结论（2026-09-27）
+
+本轮为 **K1 原始分类分数的 GT 候选选择监督**，不是蒸馏：不使用 DINO 教师、教师缓存、特征对齐或分类适配器。目标是在存在 RIoU≥0.5 候选时，让最高分合格候选同时超过错误候选与固定输出阈值，并留出 margin。当前仅完成实现和无参数更新的 source-train 可用性检查，未完成正式 A/B 训练，不能记作新的蒸馏负结果或训练后性能结论。
+
+证据：首次四张固定样本，加上种子1701的 real64张、sim64张补查（排除首次四张），共132张不同 source-train 图，约占2781张的4.7%。全部有合格候选，新增选择损失均为零；补查报告 `active_by_domain={real:0, sim:0}`、两域真实梯度检查次数均为0。对应设置为 K1 epoch20、margin=0.1、loss_weight=0.05 和当前输入变换。补查 checkpoint SHA256 为 `3ab0885159294beb820da1445c38045a342fd4956c3d094eeaaadf78deb745c2`，与预检一致。
+
+标签统计已完成：132张均存在某些合格候选被分为负样本，但最高分合格候选被分为负的计数为0。没有新增项激活，因此没有验证激活时的真实梯度路径或梯度冲突；`active_conflict_fraction=null` 不能解释为冲突率为零。
+
+**封存决定：按既定停止规则，暂停本版24 epoch A/B，不运行其后续VAL或TEST，不调整margin、权重或阈值。** 保留代码、配置和报告用于复核，不删除或覆盖。该决定基于未在已检查样本观察到新增监督，不证明全部2781张、其他变换或后续检测训练中始终不会激活，也不证明学生容量达到上限。
+
+产物：`work_dirs/k1_candidate_selection_v1_preflight.json` 与 `work_dirs/k1_candidate_selection_v1_source_supplement.json`。后者已下载到本地 `/Users/mac/Downloads/k1_candidate_selection_v1_source_supplement.json` 并核对汇总与128条记录。
+
+后续**不自动追加全量扫描**。只有明确需要回答“固定初始化与固定输入协议下，全体source-train的激活比例是多少”时，才单独开展一次只读全量统计；找到10张即停止不能得到全量比例，找到激活样本也不能证明训练收益。当前无此追加执行安排。新实验需要另行说明可验证且不重复历史方法的假设。对于本项 hinge 损失，减小margin只会使激活更少或不变；增大权重不能激活原本为零的项，不以这两种做法绕过封存决定。
+
+### 教师—学生 source VAL 能力差距对照 V1（2026-09-27，已实现未在服务器执行）
+
+候选选择 V1 封存后，研究主线回到“替换 DINO 时保留哪些教师能力”。新增只读工具 `crane_project/tools/audit_teacher_student_source_val_gap_v1.py`，比较同一738帧 source VAL 上的一个教师 frame-outcomes JSON 与 K1 学生 prediction PKL。它不运行推理、不读取 TEST、不改阈值、不选 checkpoint，也不把结果直接当作蒸馏收益。
+
+工具先核对738个标注帧、教师 `seq/frame` 身份和学生一类 `max_per_img=1` 输出，再计算教师正确/学生错误、教师错误/学生正确、双方正确和双方错误四类，并按 real/sim 分域。学生框的 RIoU由GT和PKL重新计算；教师仅使用其报告中的 `top1_hit`、`top1_riou` 和 `top1_score`。因此它只能回答框级能力差距，不能证明教师背景响应、中间特征或学生候选阶段的差距。
+
+教师角色必须在命令中显式写出。现有 `source_interpolation_result.json` 是 native-DINO 检测小头的 source 输出报告，不等同于 V1–V5 使用的冻结 DINOv2 特征缓存教师；若后续取得真正对应的教师任务输出，应使用相同工具但更换输入并保留角色标记。没有学生 provenance sidecar 时，工具按排序后的source VAL标注与PKL顺序配对并在报告中标记这一限制；有 sidecar 时会核对其 PKL SHA256。
+
+运行后的决策只按以下顺序解释：若教师正确而学生错误的帧主要是学生已有合格候选但排序/分数失败，才补取最小的教师任务响应并设计分类分支蒸馏；若学生根本没有合格候选，才考虑空间特征迁移；若教师优势很少或教师与学生角色不匹配，则停止把该报告作为新蒸馏依据。四类计数不能单独授权训练，教师错误帧必须保留GT检测监督。
