@@ -531,3 +531,7 @@ done
 修复后输出协议为 `teacher_student_source_val_gap_audit_v2`（保留原脚本文件名）：拒绝epoch24 PKL与epoch20 checkpoint的明显冲突；检查提供checkpoint的文件和SHA；有生成sidecar时核对预测/配置/权重/标注SHA及source_val split；没有sidecar时默认拒绝，只有显式 `--allow-unverified-student` 才输出历史描述报告。增加教师已选alpha、source协议、命中与RIoU一致性、数值范围、real_seq07=226/sim_seq10=512及完整帧集合检查；空类别也输出零。即使身份sidecar存在，教师输出口径和输入变换证据仍不完整，因此报告不自动批准蒸馏。五项针对性回归测试及本地738帧历史复算通过，未连接服务器、未重跑模型。
 
 下一步只补目标K1 epoch20的预测生成绑定：优先用已有source VAL选权记录、epoch20 PKL和sidecar；没有可绑定的产物才考虑一次固定epoch20的source推理。历史教师输出继续复用。取消先前“少于5帧就停止蒸馏”的任意门槛；双方都正确的帧也可能含有可迁移信息。当前61/2仅不支持无差别模仿教师最终框，不能证明DINO能力不可迁移。无需为了重新得到同一61/2计数而在服务器重跑修订脚本。
+
+### 旧版服务器测试入口修复（2026-09-28）
+
+服务器环境是 MMCV/MMDetection 1.x；`crane_project/tools/test.py` 原先却是 MMEngine 2.x 入口，导入 `mmdet.utils.register_all_modules` 时失败。该入口现改为委托仓库根目录的旧版 `tools/test.py`，保留原命令路径并使用项目已有的 provenance 选项。source VAL 推理必须使用 `crane_symeood_k1_source_val_eval.py`，不能用普通 K1 配置的 TEST split。
