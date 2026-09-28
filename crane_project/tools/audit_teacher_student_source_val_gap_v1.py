@@ -15,6 +15,7 @@ import argparse
 import hashlib
 import json
 import pickle
+import re
 from pathlib import Path
 
 import numpy as np
@@ -22,7 +23,7 @@ import numpy as np
 from crane_project.tools.eval_crane_offline import compute_riou, parse_dota_txt
 
 
-PROTOCOL = 'teacher_student_source_val_gap_audit_v1'
+PROTOCOL = 'teacher_student_source_val_gap_audit_v2'
 FRAME_COUNT = 738
 RIoU_THRESHOLD = 0.5
 CENTER_THRESHOLD_PX = 15.0
@@ -44,6 +45,14 @@ def load_teacher_outcomes(path, alpha=None):
     """Load a source ``frame_outcomes`` list from a teacher JSON report."""
     payload = json.loads(Path(path).read_text(encoding='utf-8'))
     selected_alpha = payload.get('selected_alpha') if alpha is None else alpha
+    protocol = payload.get('protocol', {})
+    if (not isinstance(protocol, dict)
+            or protocol.get('source_val_datasets') != ['val:val']
+            or any(protocol.get(k) is True for k in
+                   ('target_data_read', 'target_used_for_selection'))):
+        raise ValueError('Teacher source-VAL protocol is missing or incompatible')
+    if selected_alpha != payload.get('selected_alpha'):
+        raise ValueError('Use the already selected teacher alpha; no reselection')
     source = payload.get('source', payload)
     candidates = source.get('candidates') if isinstance(source, dict) else None
     if candidates is not None:
@@ -67,11 +76,25 @@ def load_teacher_outcomes(path, alpha=None):
         key = frame_key(row['seq'], row['frame'])
         if key in result:
             raise ValueError('Duplicate teacher frame: ' + key)
+        riou = (None if row.get('top1_riou') is None else
+                float(row['top1_riou']))
+        if riou is None or not np.isfinite(riou) or not 0 <= riou <= 1:
+            raise ValueError('Teacher frame lacks top1_riou: ' + key)
+        if type(row['top1_hit']) is not bool:
+            raise ValueError('Teacher top1_hit must be boolean')
+        score = row.get('top1_score')
+        if score is not None and (not np.isfinite(score) or not 0 <= score <= 1):
+            raise ValueError('Invalid teacher score')
+        report_hit = row['top1_hit']
+        metric_hit = riou >= RIoU_THRESHOLD
+        if report_hit != metric_hit:
+            raise ValueError('Teacher top1_hit disagrees with RIoU threshold: '
+                             + key)
+        if metric_hit and score is None:
+            raise ValueError('Teacher hit without a recorded output')
         result[key] = dict(
             key=key, seq=str(row['seq']), frame=int(row['frame']),
-            correct=bool(row['top1_hit']),
-            riou=(None if row.get('top1_riou') is None else
-                  float(row['top1_riou'])),
+            correct=metric_hit, report_top1_hit=report_hit, riou=riou,
             score=(None if row.get('top1_score') is None else
                    float(row['top1_score'])),
             output_observed=('top1_score' in row and row.get('top1_score') is not None),
@@ -79,6 +102,8 @@ def load_teacher_outcomes(path, alpha=None):
     return result, dict(
         path=str(Path(path).resolve()), sha256=sha256(path),
         source_protocol=payload.get('protocol'),
+        source_full_summary=node.get('source_full_summary'),
+        input_transform_and_gt_generation_binding='not_verified_by_this_report',
         selected_alpha=selected_alpha,
         selected_checkpoint=payload.get('selected_checkpoint'),
         selected_checkpoint_sha256=payload.get('selected_checkpoint_sha256'))
@@ -96,7 +121,7 @@ def load_student_predictions(path):
         provenance = json.loads(provenance_path.read_text(encoding='utf-8'))
         observed_hash = provenance.get('results_sha256',
                                       provenance.get('results_pkl_sha256'))
-        if observed_hash not in (None, sha256(path)):
+        if observed_hash != sha256(path):
             raise ValueError('Student provenance does not match prediction PKL')
         identity_status = 'provenance_sidecar_present'
     return rows, provenance, identity_status
@@ -107,12 +132,15 @@ def student_outcome(prediction, gt):
     if not isinstance(prediction, (list, tuple)) or len(prediction) != 1:
         raise ValueError('Expected one-class prediction list per frame')
     boxes = np.asarray(prediction[0])
+    if boxes.ndim != 2 or boxes.shape[1] != 6 or len(boxes) > 1:
+        raise ValueError('Student prediction violates max_per_img=1 contract')
     if boxes.size == 0:
         return dict(output=False, correct=False, riou=None, score=None,
                     center_distance_px=None)
-    if boxes.ndim != 2 or boxes.shape[1] != 6 or len(boxes) > 1:
-        raise ValueError('Student prediction violates max_per_img=1 contract')
     box = boxes[0].astype(float)
+    if (not np.isfinite(box).all() or np.any(box[2:4] <= 0)
+            or not 0 <= box[5] <= 1):
+        raise ValueError('Invalid student box or score')
     riou = float(compute_riou(box[:5], gt))
     distance = float(np.linalg.norm(box[:2] - gt[:2]))
     return dict(output=True, correct=riou >= RIoU_THRESHOLD, riou=riou,
@@ -120,16 +148,59 @@ def student_outcome(prediction, gt):
 
 
 def build_report(gt_dir, teacher_json, student_pkl, teacher_role,
-                 student_config=None, student_checkpoint=None, alpha=None):
+                 student_config=None, student_checkpoint=None, alpha=None,
+                 allow_unverified_student=False):
     gt_paths = sorted(p for p in Path(gt_dir).glob('*.txt')
                       if not p.name.startswith('._'))
     if len(gt_paths) != FRAME_COUNT:
         raise ValueError('Expected 738 source-VAL annotations')
     if {p.stem.split('_', 1)[0] for p in gt_paths} != {'real', 'sim'}:
         raise ValueError('Unexpected source-VAL frame identities')
+    expected_keys = {frame_key(p.stem.rsplit('_', 1)[0],
+                               p.stem.rsplit('_', 1)[1]) for p in gt_paths}
+    sequence_counts = {seq: sum(p.stem.startswith(seq + '_') for p in gt_paths)
+                       for seq in ('real_seq07', 'sim_seq10')}
+    if sequence_counts != {'real_seq07': 226, 'sim_seq10': 512}:
+        raise ValueError('Expected real_seq07=226 and sim_seq10=512')
     teacher, teacher_meta = load_teacher_outcomes(teacher_json, alpha)
+    if set(teacher) != expected_keys:
+        raise ValueError('Teacher/source-VAL frame sets differ')
     student_rows, student_provenance, student_identity_status = \
         load_student_predictions(student_pkl)
+    checkpoint_meta = None
+    if student_checkpoint is not None:
+        checkpoint_path = Path(student_checkpoint)
+        if not checkpoint_path.is_file():
+            raise FileNotFoundError('Student checkpoint not found: ' +
+                                    str(checkpoint_path))
+        checkpoint_meta = dict(path=str(checkpoint_path.resolve()),
+                               sha256=sha256(checkpoint_path))
+        pkl_epoch = re.search(r'epoch_?(\d+)', Path(student_pkl).name)
+        ckpt_epoch = re.search(r'epoch_?(\d+)', checkpoint_path.name)
+        if pkl_epoch and ckpt_epoch and pkl_epoch.group(1) != ckpt_epoch.group(1):
+            raise ValueError('Student PKL/checkpoint epoch identity mismatch: '
+                             + Path(student_pkl).name + ' vs ' +
+                             checkpoint_path.name)
+    annotation_digest = hashlib.sha256()
+    for path in gt_paths:
+        annotation_digest.update(path.name.encode('utf-8'))
+        annotation_digest.update(b'\0')
+        annotation_digest.update(path.read_bytes())
+    annotation_hash = annotation_digest.hexdigest()
+    if student_provenance is not None:
+        if (student_provenance.get('split') != 'source_val'
+                or student_provenance.get('annotations_sha256') != annotation_hash):
+            raise ValueError('Student provenance source split/annotations mismatch')
+        if checkpoint_meta is None or student_config is None:
+            raise ValueError('Provenance validation requires checkpoint and config')
+        if (student_provenance.get('checkpoint_sha256') != checkpoint_meta['sha256']
+                or student_provenance.get('config_sha256') != sha256(student_config)):
+            raise ValueError('Student provenance checkpoint/config mismatch')
+        student_identity_status = 'generation_sidecar_hashes_verified_order_by_dataset_contract'
+    elif not allow_unverified_student:
+        raise ValueError('Student generation identity is unverified; use an existing '
+                         'provenance-bound PKL, or --allow-unverified-student for '
+                         'historical descriptive comparison only')
     rows = []
     for gt_path, prediction in zip(gt_paths, student_rows):
         parts = gt_path.stem.rsplit('_', 2)
@@ -153,7 +224,9 @@ def build_report(gt_dir, teacher_json, student_pkl, teacher_role,
                              'teacher_wrong_student_correct'
                              if not t['correct'] and student['correct'] else
                              'both_correct' if t['correct'] else 'both_wrong')))
-    counts = {}
+    counts = dict.fromkeys(('both_correct', 'both_wrong',
+                            'teacher_correct_student_wrong',
+                            'teacher_wrong_student_correct'), 0)
     for row in rows:
         counts[row['comparison']] = counts.get(row['comparison'], 0) + 1
     domains = {}
@@ -168,11 +241,16 @@ def build_report(gt_dir, teacher_json, student_pkl, teacher_role,
     return dict(
         protocol=PROTOCOL, evidence_role='source_val_only',
         fixed_test_read=False, inference_executed=False,
+        assessment_status='historical_top1_comparison_only',
+        suitable_for_epoch20_distillation_decision=False,
+        annotations_sha256=annotation_hash,
+        comparison_semantics='teacher_report_top1_geometry_vs_student_saved_output',
+        candidate_stage_assessment='not_available_in_final_outputs',
         thresholds=dict(riou=RIoU_THRESHOLD, center_px=CENTER_THRESHOLD_PX),
         teacher_role=teacher_role, teacher=teacher_meta,
         student=dict(path=str(Path(student_pkl).resolve()),
                      sha256=sha256(student_pkl), config=student_config,
-                     checkpoint=student_checkpoint,
+                     checkpoint=checkpoint_meta,
                      provenance=student_provenance,
                      identity_status=student_identity_status),
         frame_count=len(rows), teacher_correct_count=teacher_correct,
@@ -196,6 +274,7 @@ def main():
     parser.add_argument('--student-config')
     parser.add_argument('--student-checkpoint')
     parser.add_argument('--teacher-alpha', type=float)
+    parser.add_argument('--allow-unverified-student', action='store_true')
     parser.add_argument('--out-json', required=True)
     args = parser.parse_args()
     output = Path(args.out_json)
@@ -203,7 +282,8 @@ def main():
         raise FileExistsError(output)
     report = build_report(args.gt_dir, args.teacher_json, args.student_pkl,
                           args.teacher_role, args.student_config,
-                          args.student_checkpoint, args.teacher_alpha)
+                          args.student_checkpoint, args.teacher_alpha,
+                          args.allow_unverified_student)
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open('x', encoding='utf-8') as stream:
         json.dump(report, stream, indent=2, ensure_ascii=False, allow_nan=False)
