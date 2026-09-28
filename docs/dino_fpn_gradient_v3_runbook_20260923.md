@@ -532,6 +532,14 @@ done
 
 下一步只补目标K1 epoch20的预测生成绑定：优先用已有source VAL选权记录、epoch20 PKL和sidecar；没有可绑定的产物才考虑一次固定epoch20的source推理。历史教师输出继续复用。取消先前“少于5帧就停止蒸馏”的任意门槛；双方都正确的帧也可能含有可迁移信息。当前61/2仅不支持无差别模仿教师最终框，不能证明DINO能力不可迁移。无需为了重新得到同一61/2计数而在服务器重跑修订脚本。
 
+### 教师—学生差距 V2 实际结果（2026-09-28）
+
+epoch20 学生的 source VAL 预测已经通过 sidecar 绑定：PKL SHA256 为 `9bfa8195dcbf42218d182107177c0db9f8210797b354b2cf6d8c33679072de57`，checkpoint SHA256 为 `3ab0885159294beb820da1445c38045a342fd4956c3d094eeaaadf78deb745c2`，预测配置为 `crane_symeood_k1_source_val_eval.py`，738条运行顺序身份和 source 标注哈希均已核对。教师仍是 native-DINO alpha=0.5 source top-1 报告，不是DINOv2缓存特征教师。
+
+逐帧结果为：双方正确674，教师正确/学生错误3，教师错误/学生正确61，双方错误0。教师几何命中677/738，epoch20学生几何命中735/738。三帧教师独有正确为 `real_seq07|117`、`sim_seq10|211`、`sim_seq10|212`，三帧学生均为空输出；学生错误恰好只有这三帧。教师独有样本数量很少，且教师在61帧上错误而学生正确，说明这个 native-DINO 最终框输出不能直接作为学生监督目标。报告中的 `suitable_for_epoch20_distillation_decision=false` 正确保留了这一证据边界。
+
+V2修复了V1的epoch身份错误，但仍是框级最终输出比较。它没有学生候选阶段、教师中间特征或教师分类响应，不能判断三帧空输出发生在候选生成、分数阈值还是排序阶段。下一步不直接蒸馏这3个最终框，也不读取TEST挑选困难样本；若继续替换DINO，应使用与V1–V5相同的DINOv2特征教师，先在部署学生的对应分类/候选位置取得教师响应，再进行短链路监督检查。
+
 ### 旧版服务器测试入口修复（2026-09-28）
 
 服务器环境是 MMCV/MMDetection 1.x；`crane_project/tools/test.py` 原先却是 MMEngine 2.x 入口，导入 `mmdet.utils.register_all_modules` 时失败。该入口现改为委托仓库根目录的旧版 `tools/test.py`，保留原命令路径并使用项目已有的 provenance 选项。source VAL 推理必须使用 `crane_symeood_k1_source_val_eval.py`，不能用普通 K1 配置的 TEST split。

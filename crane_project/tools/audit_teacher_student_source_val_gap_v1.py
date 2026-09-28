@@ -296,6 +296,12 @@ def main():
     parser.add_argument('--allow-unverified-student', action='store_true')
     parser.add_argument('--out-json', required=True)
     args = parser.parse_args()
+    if (args.teacher_role == 'native_dino_detector_source_top1'
+            and not args.allow_native_diagnostic):
+        raise ValueError(
+            'native-DINO output is a separate diagnostic; use the frozen '
+            'DINOv2 feature-cache probe for distillation decisions, or pass '
+            '--allow-native-diagnostic explicitly')
     output = Path(args.out_json)
     if output.exists():
         raise FileExistsError(output)
