@@ -201,9 +201,20 @@ def build_report(gt_dir, teacher_json, student_pkl, teacher_role,
             raise ValueError('Student provenance source split/annotations mismatch')
         if checkpoint_meta is None or student_config is None:
             raise ValueError('Provenance validation requires checkpoint and config')
-        if (student_provenance.get('checkpoint_sha256') != checkpoint_meta['sha256']
-                or student_provenance.get('config_sha256') != sha256(student_config)):
-            raise ValueError('Student provenance checkpoint/config mismatch')
+        observed_checkpoint_hash = student_provenance.get('checkpoint_sha256')
+        observed_config_hash = student_provenance.get('config_sha256')
+        expected_checkpoint_hash = checkpoint_meta['sha256']
+        expected_config_hash = sha256(student_config)
+        if observed_checkpoint_hash != expected_checkpoint_hash:
+            raise ValueError(
+                'Student provenance checkpoint mismatch: observed_sha256={} '
+                'provided_sha256={}'.format(observed_checkpoint_hash,
+                                            expected_checkpoint_hash))
+        if observed_config_hash != expected_config_hash:
+            raise ValueError(
+                'Student provenance config mismatch: sidecar_sha256={} '
+                'provided_config={} provided_sha256={}'.format(
+                    observed_config_hash, student_config, expected_config_hash))
         student_identity_status = 'generation_sidecar_hashes_verified_order_by_dataset_contract'
     elif not allow_unverified_student:
         raise ValueError('Student generation identity is unverified; use an existing '
@@ -279,7 +290,7 @@ def main():
     parser.add_argument('--teacher-json', required=True)
     parser.add_argument('--student-pkl', required=True)
     parser.add_argument('--teacher-role', required=True)
-    parser.add_argument('--student-config')
+    parser.add_argument('--student-config', help='Exact config used to generate the student PKL; for source VAL use crane_symeood_k1_source_val_eval.py')
     parser.add_argument('--student-checkpoint')
     parser.add_argument('--teacher-alpha', type=float)
     parser.add_argument('--allow-unverified-student', action='store_true')

@@ -539,3 +539,7 @@ done
 ### provenance 兼容修复（2026-09-28）
 
 服务器 `tools/test.py --result-identity-out` 生成的 sidecar 协议为 `mmdet_runtime_result_order_identity_v1`，它用 `runtime_dataset_order`、`result_count`、配置和 checkpoint 哈希绑定结果，不包含 `split` 或顶层 `annotations_sha256`。教师—学生差距工具此前只接受 ckpt_sweep 的另一种 provenance 结构，误报 `Student provenance source split/annotations mismatch`。现已同时支持两种 sidecar：旧版 runtime identity 校验738个 frame_key顺序、PKL/配置/权重哈希；ckpt_sweep provenance 继续校验 source_val 和标注哈希。该修复不放宽身份检查。
+
+### 教师—学生差距审计的配置身份纠正（2026-09-28）
+
+epoch20 source VAL PKL 的 runtime sidecar 绑定的是 `crane_symeood_k1_source_val_eval.py`，因为该配置把 `data.test` 指向738帧 source VAL；`crane_symeood_k1.py` 的 `data.test` 指向固定 TEST。审计命令若传入普通 K1 配置，会得到 `Student provenance config mismatch`，这是应保留的身份保护。工具现输出 sidecar/config两侧SHA和实际配置路径，便于区分配置传错与权重传错。后续命令必须传入 `crane_symeood_k1_source_val_eval.py`。
