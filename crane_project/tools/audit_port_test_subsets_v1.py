@@ -11,6 +11,7 @@ cannot be hidden by aggregation with another real or simulated sequence.
 import argparse
 import json
 import os
+import hashlib
 from typing import Dict, List
 
 import numpy as np
@@ -24,6 +25,37 @@ from crane_project.tools.eval_crane_offline import (
 
 
 TARGETS = (('real', 'seq04'), ('real', 'seq03'), ('sim', 'seq09'))
+
+
+def legacy_summary(rows):
+    """Exact historical metrics plus intervals counted in stored frame order.
+
+    The historical evaluator bridges frame-ID gaps; length therefore counts
+    evaluated records, not end-start+1. Preserve that behavior explicitly.
+    """
+    from crane_project.tools import eval_crane_offline_legacy_v1 as legacy
+    evaluator = legacy.CraneOfflineEvaluator(mode='test')
+    evaluator.results = rows
+    metrics = evaluator.compute_metrics()
+    intervals = []
+    for key in sorted({(r['domain'], r['seq_id']) for r in rows}):
+        seq = sorted([r for r in rows if (r['domain'], r['seq_id']) == key],
+                     key=lambda r: r['frame_id'])
+        run = []
+        for r in seq + [None]:
+            failed = r is not None and r['gt_box'] is not None and (
+                r['pred_box'] is None or
+                legacy.compute_riou(r['pred_box'], r['gt_box']) < 0.5)
+            if failed:
+                run.append(r)
+            elif run:
+                intervals.append(dict(sequence='_'.join(key),
+                    start=run[0]['frame_id'], end=run[-1]['frame_id'],
+                    length=len(run),
+                    no_output_frames=sum(x['pred_box'] is None for x in run),
+                    frame_ids=[x['frame_id'] for x in run]))
+                run = []
+    return dict(metrics=metrics, failure_intervals=intervals)
 
 
 def _records(gt_dir: str, pred_dir: str) -> List[dict]:
@@ -128,6 +160,8 @@ def main() -> None:
     parser.add_argument('--gt-dir', required=True)
     parser.add_argument('--pred-dir', required=True)
     parser.add_argument('--out-json', required=True)
+    parser.add_argument('--include-legacy', action='store_true',
+                        help='Also replay frozen pre-fix metrics; no reselection')
     args = parser.parse_args()
 
     if not os.path.isdir(args.gt_dir):
@@ -160,6 +194,19 @@ def main() -> None:
             for d, s in TARGETS
         },
     }
+    if args.include_legacy:
+        from crane_project.tools import eval_crane_offline_legacy_v1 as legacy
+        with open(legacy.__file__, 'rb') as stream:
+            legacy_hash = hashlib.sha256(stream.read()).hexdigest()
+        result['protocol'] = 'port_test_subset_audit_v2_legacy_replay'
+        result['legacy_provenance'] = dict(
+            git_commit='6b42872bc686af9c50c29b7731ed2ffa4832f316',
+            file_sha256=legacy_hash,
+            role='historical_reproduction_not_corrected_rotated_iou',
+            checkpoint_selection='unchanged; replay existing TEST predictions')
+        result['legacy_aggregate'] = legacy_summary(rows)
+        for d, s in TARGETS:
+            result['subsets'][f'{d}_{s}']['legacy'] = legacy_summary(grouped[(d, s)])
     os.makedirs(os.path.dirname(os.path.abspath(args.out_json)), exist_ok=True)
     with open(args.out_json, 'w', encoding='utf-8') as handle:
         json.dump(result, handle, indent=2, ensure_ascii=False)
