@@ -182,6 +182,8 @@ def get_val_img_ids(val_ann_dir):
     txt_files = sorted(path for path in glob.glob(
         os.path.join(val_ann_dir, '*.txt'))
         if not os.path.basename(path).startswith('._'))
+    if not txt_files:
+        raise RuntimeError('No annotation TXT files found: ' + val_ann_dir)
     return [os.path.splitext(os.path.basename(f))[0] for f in txt_files]
 
 
@@ -728,9 +730,6 @@ def run_final_test(config, best_ckpt, sweep_dir, center_thresh):
             generated=True)
 
     img_ids = get_val_img_ids(gt_dir)
-    if len(img_ids) != 992:
-        raise RuntimeError('Expected the fixed 992-frame TEST; found '
-                           + str(len(img_ids)))
     task_dir = pkl_to_dota(pkl_path, img_ids, preds_dir)
     metrics = run_offline_eval(task_dir, gt_dir, mode='test', center_thresh=center_thresh)
     report = dict(
@@ -884,9 +883,6 @@ def main():
     # ---- 2. 获取 val 集 img_id ----
     val_ann_dir, _ = dataset_paths(args.config, 'val')
     img_ids = get_val_img_ids(val_ann_dir)
-    if len(img_ids) != 738:
-        raise RuntimeError('Expected the fixed 738-frame source VAL; found '
-                           + str(len(img_ids)))
     print(f'\nVal 集: {len(img_ids)} 帧')
 
     # ---- 3. 逐 checkpoint 扫描 ----

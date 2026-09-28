@@ -57,6 +57,8 @@ def test_val_subprocess_imports_this_checkout_before_installed_mmrotate(
     monkeypatch.setenv('PYTHONPATH', '/other/python/packages')
     monkeypatch.setattr(ckpt_sweep, 'check_or_record_prediction',
                         lambda *args, **kwargs: args[2])
+    monkeypatch.setattr(ckpt_sweep, 'dataset_paths',
+                        lambda *args: ('/new/val/annfiles', '/new/val/images'))
     seen = {}
 
     def fake_run(cmd, **kwargs):
@@ -66,6 +68,8 @@ def test_val_subprocess_imports_this_checkout_before_installed_mmrotate(
     monkeypatch.setattr(ckpt_sweep.subprocess, 'run', fake_run)
     ckpt_sweep.run_test_on_val(
         'student.py', 'epoch_1.pth', str(tmp_path), 'epoch_1', gpu=0)
+    assert 'data.test.ann_file=/new/val/annfiles' in seen['cmd']
+    assert 'data.test.img_prefix=/new/val/images' in seen['cmd']
     env = seen['kwargs']['env']
     assert env['PYTHONPATH'].split(os.pathsep)[0] == ckpt_sweep.PROJ_ROOT
     assert env['CUDA_VISIBLE_DEVICES'] == '0'
@@ -108,3 +112,18 @@ def test_cached_dota_export_rejects_changed_prediction_pkl(tmp_path):
         pickle.dump([[np.array([[11., 10., 4., 2., 0., .8]])]], stream)
     with pytest.raises(RuntimeError, match='export provenance mismatch'):
         ckpt_sweep.pkl_to_dota(str(pkl), ['real_seq01_00001'], str(tmp_path))
+
+
+@pytest.mark.parametrize('count', [738, 887, 992, 1440])
+def test_annotation_listing_supports_old_and_new_splits(tmp_path, count):
+    for index in range(count):
+        (tmp_path / ('real_seq14_%05d.txt' % index)).write_text('')
+    (tmp_path / '._metadata.txt').write_text('ignored')
+    ids = ckpt_sweep.get_val_img_ids(str(tmp_path))
+    assert len(ids) == count
+    assert ids == sorted(ids)
+
+
+def test_empty_annotation_directory_fails(tmp_path):
+    with pytest.raises(RuntimeError, match='No annotation TXT'):
+        ckpt_sweep.get_val_img_ids(str(tmp_path))
