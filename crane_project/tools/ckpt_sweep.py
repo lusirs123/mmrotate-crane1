@@ -100,6 +100,17 @@ sys.path.insert(0, os.path.dirname(__file__))
 from eval_crane_offline import CraneOfflineEvaluator, METRIC_PROTOCOL_VERSION
 
 
+def dataset_paths(config, split):
+    """Resolve evaluation paths from the same merged config as inference."""
+    from mmcv import Config
+    dataset = Config.fromfile(config).data[split]
+    root = dataset.get('data_root', '')
+    def resolve(value):
+        path = value if os.path.isabs(value) else os.path.join(root, value)
+        return os.path.abspath(os.path.join(PROJ_ROOT, path))
+    return resolve(dataset['ann_file']), resolve(dataset['img_prefix'])
+
+
 def inference_subprocess_env(gpu=None):
     """Resolve MMRotate from this checkout, as tools/dist_train.sh does."""
     env = os.environ.copy()
@@ -232,8 +243,7 @@ def run_test_on_val(config, checkpoint, sweep_dir, ckpt_name, gpu=None):
     preds_dir = os.path.join(sweep_dir, ckpt_name, 'preds')
     os.makedirs(preds_dir, exist_ok=True)
     pkl_path = os.path.join(preds_dir, 'results.pkl')
-    val_ann_dir = os.path.join(
-        PROJ_ROOT, 'crane_project/data/crane_grab/val/annfiles')
+    val_ann_dir, val_img_dir = dataset_paths(config, 'val')
 
     if os.path.exists(pkl_path):
         check_or_record_prediction(
@@ -253,8 +263,8 @@ def run_test_on_val(config, checkpoint, sweep_dir, ckpt_name, gpu=None):
         '--work-dir', tmp_work_dir,
         '--out', pkl_path,
         '--cfg-options',
-        'data.test.ann_file=val/annfiles/',
-        'data.test.img_prefix=val/images/',
+        'data.test.ann_file=' + val_ann_dir,
+        'data.test.img_prefix=' + val_img_dir,
     ]
 
     print(f'  [推理] test.py -> {pkl_path}')
@@ -688,7 +698,7 @@ def run_final_test(config, best_ckpt, sweep_dir, center_thresh):
     preds_dir = os.path.join(final_dir, 'preds')
     os.makedirs(preds_dir, exist_ok=True)
     pkl_path = os.path.join(preds_dir, 'results.pkl')
-    gt_dir = os.path.join(PROJ_ROOT, 'crane_project/data/crane_grab/test/annfiles')
+    gt_dir, _ = dataset_paths(config, 'test')
 
     if os.path.exists(pkl_path):
         check_or_record_prediction(
@@ -872,7 +882,7 @@ def main():
             raise RuntimeError('Missing requested epochs: ' + repr(missing))
 
     # ---- 2. 获取 val 集 img_id ----
-    val_ann_dir = os.path.join(PROJ_ROOT, 'crane_project/data/crane_grab/val/annfiles')
+    val_ann_dir, _ = dataset_paths(args.config, 'val')
     img_ids = get_val_img_ids(val_ann_dir)
     if len(img_ids) != 738:
         raise RuntimeError('Expected the fixed 738-frame source VAL; found '
