@@ -188,8 +188,16 @@ def build_report(gt_dir, teacher_json, student_pkl, teacher_role,
         annotation_digest.update(path.read_bytes())
     annotation_hash = annotation_digest.hexdigest()
     if student_provenance is not None:
-        if (student_provenance.get('split') != 'source_val'
-                or student_provenance.get('annotations_sha256') != annotation_hash):
+        provenance_protocol = student_provenance.get('protocol')
+        runtime_order = student_provenance.get('runtime_dataset_order')
+        if provenance_protocol == 'mmdet_runtime_result_order_identity_v1':
+            observed_keys = [row.get('frame_key') for row in runtime_order or []]
+            expected_keys_in_order = [path.stem for path in gt_paths]
+            if (student_provenance.get('result_count') != FRAME_COUNT
+                    or observed_keys != expected_keys_in_order):
+                raise ValueError('Student runtime order does not match source VAL')
+        elif (student_provenance.get('split') != 'source_val'
+              or student_provenance.get('annotations_sha256') != annotation_hash):
             raise ValueError('Student provenance source split/annotations mismatch')
         if checkpoint_meta is None or student_config is None:
             raise ValueError('Provenance validation requires checkpoint and config')

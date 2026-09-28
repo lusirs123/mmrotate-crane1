@@ -535,3 +535,7 @@ done
 ### 旧版服务器测试入口修复（2026-09-28）
 
 服务器环境是 MMCV/MMDetection 1.x；`crane_project/tools/test.py` 原先却是 MMEngine 2.x 入口，导入 `mmdet.utils.register_all_modules` 时失败。该入口现改为委托仓库根目录的旧版 `tools/test.py`，保留原命令路径并使用项目已有的 provenance 选项。source VAL 推理必须使用 `crane_symeood_k1_source_val_eval.py`，不能用普通 K1 配置的 TEST split。
+
+### provenance 兼容修复（2026-09-28）
+
+服务器 `tools/test.py --result-identity-out` 生成的 sidecar 协议为 `mmdet_runtime_result_order_identity_v1`，它用 `runtime_dataset_order`、`result_count`、配置和 checkpoint 哈希绑定结果，不包含 `split` 或顶层 `annotations_sha256`。教师—学生差距工具此前只接受 ckpt_sweep 的另一种 provenance 结构，误报 `Student provenance source split/annotations mismatch`。现已同时支持两种 sidecar：旧版 runtime identity 校验738个 frame_key顺序、PKL/配置/权重哈希；ckpt_sweep provenance 继续校验 source_val 和标注哈希。该修复不放宽身份检查。
