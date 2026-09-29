@@ -1,4 +1,4 @@
-"""Fixed TEST diagnosis: export integrity, seven single-image replays and dense candidates.
+"""Fixed TEST diagnosis: export integrity, 103 single-image replays and dense candidates.
 No optimization, threshold search, checkpoint selection, or artifact overwrites.
 """
 import argparse
@@ -8,10 +8,11 @@ import os
 import pickle
 import sys
 from pathlib import Path
+from collections import Counter
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-FRAMES = (99, 100, 125, 150, 175, 199, 200)
+FRAMES = (98, 99, *range(100, 200), 200)
 
 
 def sha(path):
@@ -111,6 +112,8 @@ def main():
         if len(data['img']) != 1:
             raise ValueError('Only single-scale unflipped TEST supported')
         image, meta = data['img'][0], data['img_metas'][0][0]
+        if Path(meta['filename']).stem != record['frame']:
+            raise ValueError('Preprocessing frame identity mismatch')
         gt = torch.as_tensor(dataset.get_ann_info(i)['bboxes'],device=image.device).clone()
         if gt.shape != (1,5) or meta.get('flip',False):
             raise ValueError('Expected one GT and no flip')
@@ -147,7 +150,11 @@ def main():
         status='CHAIN_CONSISTENT' if usable else 'CHAIN_MISMATCH_REVIEW_BEFORE_ATTRIBUTION',
         score_threshold=0.05,iou_diagnostic_threshold=0.5,frames=list(FRAMES),
         export_rows=exports,replay_rows=rows,
-        limitations=['Historical PKL order is inferred from the same dataset loader and checked against TXT and seven replays.',
+        stage_counts_failure_block=dict(Counter(r['candidates']['stage'] for r in rows
+            if 100 <= int(r['frame'].split('_')[-1]) <= 199)),
+        stage_counts_controls=dict(Counter(r['candidates']['stage'] for r in rows
+            if int(r['frame'].split('_')[-1]) in (98,99,200))),
+        limitations=['Historical PKL order is inferred from the same dataset loader and checked against TXT and 103 replays (100..199 plus 98,99,200).',
                       'No causal training diagnosis or threshold recommendation follows from these TEST probes.'])
     out.parent.mkdir(parents=True,exist_ok=True)
     with out.open('x') as f:
