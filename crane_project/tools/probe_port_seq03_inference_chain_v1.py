@@ -60,6 +60,10 @@ def audit_export(dataset, predictions, pred_dir):
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--gpu', type=int, default=3)
+    ap.add_argument('--config', required=True)
+    ap.add_argument('--checkpoint', required=True)
+    ap.add_argument('--final-test-dir', required=True,
+                    help='Existing final_test/epoch_N directory containing metrics and preds')
     ap.add_argument('--out-json', required=True)
     args = ap.parse_args()
     out = Path(args.out_json).resolve()
@@ -78,10 +82,9 @@ def main():
         require_top1_test_cfg, trace_one, best_iou)
     from crane_project.tools.ckpt_sweep import annotation_set_sha256
 
-    cfg_path = ROOT/'crane_project/configs/crane_symeood_k1_port_day2night_v1.py'
-    work = ROOT/'work_dirs/crane_symeood_k1_port_day2night_v1'
-    ckpt = work/'epoch_24.pth'
-    final = work/'val_sweep_port_v1/final_test/epoch_24'
+    cfg_path = (ROOT / args.config).resolve()
+    ckpt = (ROOT / args.checkpoint).resolve()
+    final = (ROOT / args.final_test_dir).resolve()
     pkl = final/'preds/results.pkl'
     report = json.loads((final/'final_test_metrics_v2.json').read_text())
     for field, path in [('config_sha256',cfg_path),('checkpoint_sha256',ckpt),('results_pkl_sha256',pkl)]:
@@ -146,7 +149,8 @@ def main():
         print(record['frame'],rows[-1]['single_vs_saved'],summary['stage'],flush=True)
     usable = all(r['match'] for r in exports) and all(r['single_vs_saved']['match'] and r['trace_vs_single']['match'] for r in rows)
     result = dict(protocol='port_seq03_fixed_chain_v1',evidence_role='exposed_test_diagnosis_only',
-        checkpoint=str(ckpt),checkpoint_sha256=sha(ckpt),config_sha256=sha(cfg_path),pkl_sha256=sha(pkl),
+        checkpoint=str(ckpt),checkpoint_sha256=sha(ckpt),config=str(cfg_path),
+        final_test_dir=str(final),config_sha256=sha(cfg_path),pkl_sha256=sha(pkl),
         status='CHAIN_CONSISTENT' if usable else 'CHAIN_MISMATCH_REVIEW_BEFORE_ATTRIBUTION',
         score_threshold=0.05,iou_diagnostic_threshold=0.5,frames=list(FRAMES),
         export_rows=exports,replay_rows=rows,
