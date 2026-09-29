@@ -58,3 +58,21 @@ def test_resolved_configs_only_intended_differences():
         cfg['custom_imports']['imports'].remove('mmrotate.datasets.pipelines.port_train_augment')
         cfg['work_dir']=base['work_dir']
         assert cfg==base
+
+
+def test_eood_scale_control_matches_symeood_b():
+    folder=ROOT/'crane_project/configs'
+    base=Config.fromfile(str(folder/'crane_eood_k1_port_day2night_v1.py')).to_dict()
+    cfg=Config.fromfile(str(folder/'crane_eood_k1_port_day2night_aug_b_v1.py')).to_dict()
+    sym=Config.fromfile(str(folder/'crane_symeood_k1_port_day2night_aug_b_v1.py')).to_dict()
+    for key in ['data','optimizer','optimizer_config','lr_config','runner',
+                'load_from','resume_from','evaluation','checkpoint_config']:
+        assert cfg.get(key)==sym.get(key),key
+    for i,entry in enumerate(cfg['data']['train']):
+        aug=entry['pipeline'].pop(3)
+        assert aug==dict(type='PortIsotropicShrink',prob=.5,scale_range=(.5,1.))
+    cfg['custom_imports']['imports'].remove('mmrotate.datasets.pipelines.port_train_augment')
+    cfg['work_dir']=base['work_dir']
+    assert cfg['checkpoint_config']['max_keep_ckpts']==24
+    cfg['checkpoint_config']['max_keep_ckpts']=base['checkpoint_config']['max_keep_ckpts']
+    assert cfg==base
