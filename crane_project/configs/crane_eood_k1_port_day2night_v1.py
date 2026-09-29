@@ -5,7 +5,7 @@ Inherit original model/training settings; override dataset paths and work_dir.
 Historical config bytes are archived in dataset provenance/config_retirement_20260929.
 """
 
-_base_ = ['./crane_symeood_k1.py']
+_base_ = ['./crane_eood_k1.py']
 
 data_root = 'crane_project/data/crane_grab_port_day2night_v1/'
 data = dict(
@@ -29,4 +29,4 @@ data = dict(
     test=dict(data_root=data_root),
 )
 
-work_dir = 'work_dirs/crane_symeood_k1_port_day2night_seq06_v1'
+work_dir = 'work_dirs/crane_eood_k1_port_day2night_v1'
