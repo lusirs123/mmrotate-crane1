@@ -29,10 +29,22 @@ def text_set_hash(paths):
     return h.hexdigest()
 
 
-def read_boxes(path):
+def read_boxes(path, prediction=False):
     lines = [s.split() for s in path.read_text().splitlines() if s.strip()]
-    if any(len(s) < 9 or s[8] != 'grab' for s in lines):
-        raise ValueError('Invalid DOTA row: ' + str(path))
+    for s in lines:
+        try:
+            if prediction:
+                # ckpt_sweep exports eight coordinates followed by score.
+                valid = (len(s) == 9 and np.isfinite(float(s[8]))
+                         and 0 <= float(s[8]) <= 1)
+            else:
+                valid = len(s) in (9, 10) and s[8] == 'grab'
+            valid = valid and np.isfinite(np.asarray(s[:8], dtype=float)).all()
+        except (ValueError, IndexError):
+            valid = False
+        if not valid:
+            raise ValueError('Invalid {} row: {}'.format(
+                'prediction' if prediction else 'GT', path))
     boxes = parse_dota_txt(str(path))
     if len(boxes) > 1 or any(not np.isfinite(b).all() or np.any(b[2:4] <= 0) for b in boxes):
         raise ValueError('Expected valid top-1 box: ' + str(path))
@@ -88,7 +100,7 @@ def audit(gt_dir, sweep):
             raise ValueError('Export hash mismatch: ' + key)
         rows = []
         for p in sim:
-            boxes = read_boxes(export / p.name)
+            boxes = read_boxes(export / p.name, prediction=True)
             rows.append(dict(frame=p.stem, riou=compute_riou(boxes[0], gt[p.stem]) if boxes else None))
         results.append(dict(epoch=epoch, checkpoint_sha256=selected['checkpoint_sha256'],
             **summarize([r['riou'] for r in rows]), rows=rows))
