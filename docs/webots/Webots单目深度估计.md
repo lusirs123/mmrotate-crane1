@@ -812,7 +812,7 @@ Webots 数据按完整连续序列划分为参数拟合、固定开发和未知�
 
 ## 附录 A 来源索引
 
-原文件已逐字节保存在 [整合前归档](archive/20260915_pre_consolidation/)，只用于追溯，不继续维护。
+原文件已逐字节保存在 [整合前归档](../archive/20260915_pre_consolidation)，只用于追溯，不继续维护。
 
 | 锚点 | 归档文件 | 原文件开头（历史快照） | 正文去向 |
 | --- | --- | --- | --- |
@@ -820,8 +820,8 @@ Webots 数据按完整连续序列划分为参数拟合、固定开发和未知�
 | <a id="source-e"></a>`source-e` | `archive/20260915_pre_consolidation/Webots深度估计现有数据与论文证据清单_20260906.md` | *Webots 深度估计现有数据与论文证据清单*，2026-09-07；「2026-09-06 契约修订：正式部署路线已改为 Raw-opt。原图 OBB 只能与实体相机光轴深度配对」 | 2.1、3.1–3.7、4.1、4.2、4.3、5.2、6.2 |
 | <a id="source-c"></a>`source-c` | `archive/20260915_pre_consolidation/webots_depth_calibration_status_20260823.md` | *Webots 单目尺度标定状态（2026-08-23）* | 3.4、4.5 |
 
-整合清单与哈希：[manifest.json](archive/20260915_pre_consolidation/manifest.json)。该 manifest 是 **2026-09-15 首次机械整合的快照**：其中的 `anchor`、`integrated_body_sha256` 字段描述的是当时的章节编号与结构，本轮语义重写已改变编号与组织方式，因此这些字段不再对应当前正文，只作为归档原文的身份与完整性凭据。本轮映射见 [融合核对表](融合核对表.md)。
+整合清单与哈希：[manifest.json](../archive/20260915_pre_consolidation/manifest.json)。该 manifest 是 **2026-09-15 首次机械整合的快照**：其中的 `anchor`、`integrated_body_sha256` 字段描述的是当时的章节编号与结构，本轮语义重写已改变编号与组织方式，因此这些字段不再对应当前正文，只作为归档原文的身份与完整性凭据。本轮映射见 [融合核对表](../audit/融合核对表.md)。
 
 本轮对该文件的语义处理：符号、公式、数据协议与评价边界只保留一处完整说明；Raw-opt 参数与 fixed-dev 数值合并为 2.4 与 4.1；native-S14 calibration-train 审计合并为 4.2，其数据状态一览表并入 4.3；两段论文可用表述合并为 5.2 一处（2.9 只留指针）；Unknown-02 的降级规则不再单列小节，改并入 4.1 之后的历史对照（数值只在 4.1 出现一次）；后续顺序与最小后续动作合并为一节；坐标系适用条件（刚性安装 ≠ 相对重力姿态固定）写入 2.1.1、2.2、2.5、2.6、2.9 与 5.2。早期「完整修复」措辞以 1.2 与 4.1 的限制解读。
 
-相关文档：[冻结 DINOv2 与 SymEOOD 检测融合](冻结DINOv2与SymEOOD检测融合.md)、[OBB 观测可靠性与连续输出](OBB观测可靠性与连续输出.md)、[研究文档入口](README.md)。
+相关文档：[冻结 DINOv2 与 SymEOOD 检测融合](../dino/冻结DINOv2与SymEOOD检测融合.md)、[OBB 观测可靠性与连续输出](../obb/OBB观测可靠性与连续输出.md)、[研究文档入口](../README.md)。

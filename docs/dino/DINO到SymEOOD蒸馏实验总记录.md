@@ -1,4 +1,8 @@
-# K1 → DINO 特征蒸馏的 FPN 梯度范围对照 V3
+# DINO → SymEOOD 蒸馏实验总记录
+
+本文件汇集 V1–V5 实验、同口径比较、warmstart V2 和迁移快照。前半部分按原 V3–V5 实验时间线记录；文末「合并的历史记录」保留各阶段原始表述，历史的“当前”与“下一步”不替代较新的裁决。
+
+## V3–V5 FPN 梯度与关系蒸馏实验
 
 本实验只检验原有前景特征损失能否在共享 FPN 获得蒸馏梯度后产生额外收益。V1/V2 配置、权重和结果保持原状。三个新训练均从同一 source VAL 选中的普通 K1 `epoch_20.pth` 初始化；不按已暴露 TEST 调损失或训练预算。
 
@@ -551,3 +555,421 @@ V2修复了V1的epoch身份错误，但仍是框级最终输出比较。它没�
 ### 教师—学生差距审计的配置身份纠正（2026-09-28）
 
 epoch20 source VAL PKL 的 runtime sidecar 绑定的是 `crane_symeood_k1_source_val_eval.py`，因为该配置把 `data.test` 指向738帧 source VAL；`crane_symeood_k1.py` 的 `data.test` 指向固定 TEST。审计命令若传入普通 K1 配置，会得到 `Student provenance config mismatch`，这是应保留的身份保护。工具现输出 sidecar/config两侧SHA和实际配置路径，便于区分配置传错与权重传错。后续命令必须传入 `crane_symeood_k1_source_val_eval.py`。
+
+
+## 合并的历史记录
+
+以下记录按原文保留实验细节与证据入口。其“当前状态”“下一步”等表述只反映各记录写成时的状态；后续裁决以本文较新的日期记录为准。此次合并没有重跑实验或重新核验外部产物。
+
+
+### 语义蒸馏 V1 设计快照
+
+来源：原 `docs/dino_to_symeood_semantic_distillation_v1.md`。
+
+## DINO 到 SymEOOD 的几何保护语义蒸馏 V1
+
+### 目的
+
+本入口验证一个有限问题：冻结 DINOv2 已表现出的语义候选能力，能否在不保留
+DINO 推理链的前提下，改善普通 SymEOOD K1 的分类排序。它不是 Base V3
+时序 refiner 的替代实验，也不使用固定 TEST 选择权重或超参数。
+
+### 实现边界
+
+- 教师输入来自既有 DINOv2 ViT-L/14 离线特征缓存；训练过程不运行 DINO。
+- 只读取 source TRAIN（`train:train` 与 `train_sim:train`），缓存必须通过文件身份、
+  模型名、通道数、有限值和完整性预检。
+- 教师特征固定为 FP16 `64x64`，只蒸馏 FPN 第 0 层对应的分类塔特征，最多
+  使用 4096 个空间 token。非正方形 DINO patch grid 先按右侧/底部规则补成
+  正方形，再缩放到 `64x64`，避免直接拉伸破坏与学生画布的空间对应。
+- 蒸馏区域由训练 GT 的 OBB 外接矩形给出；教师张量始终 detach。
+- 原版 head 没有多层分类塔，因此增加零初始化的 `1x1` 分类残差适配器；蒸馏
+  支路在适配器输入前 detach。蒸馏梯度只能更新分类适配器与训练期投影器，不能
+  更新 backbone、FPN 或回归分支。原有 SymKLD、角度定义和 OBB 目标不变。
+- 推理前导出学生 checkpoint，移除 `semantic_distillation.*`，保留轻量分类
+  适配器。导出后的权重由 `crane_symeood_k1_dino_semantic_student_v1.py`
+  加载，推理不实例化 DINO 或蒸馏投影器。
+
+### 公平比较
+
+1. GT-only：普通 `crane_symeood_k1.py`，相同 source 数据、seed 和训练轮次。
+2. 蒸馏 V1：只增加前景分类塔语义蒸馏。
+3. 两者分别在 source VAL 选择 checkpoint；固定 TEST 只做一次冻结评估。
+
+必须同时报告完整 OBB、中心、尺度、角度、小目标切片、推理时间和显存。语义
+排序改善不能替代尺度与角度结果。若 source VAL 无改善或几何指标退化，停止该
+路线，不根据 TEST 调整 `loss_weight`。
+
+训练批量、优化器、基础学习率、warmup、epoch 数和学习率衰减点继承普通 K1：
+`samples_per_gpu=2`、SGD `lr=0.0025`、24 epochs、warmup 1000 iterations、
+epoch 16/22 衰减。蒸馏组与 GT-only 组的唯一预期模型差异是分类适配器及其训练损失。
+
+### 当前状态
+
+代码入口和本地单元测试已完成；尚未在服务器完成缓存完整性检查、训练、学生导出
+和评估，因此尚不能声称性能提升或形成论文贡献。
+
+缓存预检的峰值进程内存只打印到终端，不进入稳定 JSON。重复检查的证据相同
+时保留首份报告及其 SHA256；缓存身份或完整性发生变化时仍拒绝覆盖。
+
+
+### 语义学生与 K1 同口径比较
+
+来源：原 `docs/dino_semantic_student_fair_comparison_20260923.md`。
+
+## DINO 语义蒸馏学生与普通 K1 的同口径比较
+
+### 固定设计
+
+- 两组训练均使用原有的 source train / train_sim 数据和 24 epoch 日程；蒸馏学生只在训练时读取冻结 DINO 特征，评估使用学生配置 `crane_symeood_k1_dino_semantic_student_v1.py`。
+- 两组均只从 `epoch_16/18/20/22/24.pth` 选择权重。source VAL 共 738 帧；固定 TEST 不用于选权。
+- `ckpt_sweep.py` 沿用历史两阶段规则：跨域加权中心召回率距离候选最优值不超过 0.005，最长连续漏检不超过 5 帧；合格候选按 `0.35*TDR + 0.25*R_center + 0.20*sim/ACI + 0.20*(1-min(sim/A-RMSE,90)/90)` 排序。跨域权重为 sim 0.7、real 0.3。没有合格候选时沿用旧脚本的两级 fallback，并在结果中显式记录。
+- `eval_crane_offline.py` 的 `mode='test'` 用于输出完整时序指标；在 source VAL 阶段，数据来源仍然是 `val/annfiles`，不是固定 TEST。
+- 两组均通过相同的 `tools/test.py`、DOTA 转换和当前 `eval_crane_offline.py` 指标版本计算。选择完成后才分别对各自选中权重运行一次固定 TEST。
+
+### 历史结果与修订结果的关系
+
+旧 `work_dirs/crane_symeood_k1/ckpt_sweep/sweep_results.json` 保持原样。它来自指标修复前的离线评估器；不能与当前评估器生成的蒸馏结果直接比较。使用该文件保存的普通 K1 五组 VAL 预测在本地以当前评估器重算时，`epoch_24` 的 `sim/A-RMSE(deg)` 从旧报告的 1.6529 变为 9.0415，`real/mean_RIoU` 从 0.9026 变为 0.769。相同五组预测在当前指标版本和原选权公式下，初步重选为 `epoch_20`。这说明旧 `epoch_24` 是历史选择，不应被悄悄改名为当前指标版本下的选择。
+
+#### K1 固定 TEST 指标下降的已确认原因
+
+本地保存的普通 K1 `epoch_24` 固定 TEST 预测为 992 帧，PKL 与 DOTA 文件逐帧数量匹配，导出前后中心最大差约 0.0066 像素。real 域 420 帧中只有 274 帧有输出，另 146 帧缺测；274 帧中有 272 帧满足 15 像素中心阈值。旧报告的 `real/R_center=99.27%` 是 `272/274`，当前 `64.76%` 是 `272/420`。这不是同一个分母，也不是新模型突然失去 34.51 个百分点的已输出帧定位能力。
+
+旧 `real/mean_RIoU=0.8046` 是有输出帧上的轴对齐近似值。当前旋转框 IoU 在有输出帧上为 `0.7042`，把 146 帧缺测记为零后是 `0.4594`。仿真域 572/572 帧均有输出，旧近似 IoU `0.9087`，当前真实旋转 IoU `0.8761`。旧近似计算不能作为修订版 RIoU；当前全帧指标也不能被误读为有输出帧的定位质量。
+
+上述拆解来自只读审计 `crane_project/tools/audit_k1_metric_denominators_v1.py`，本地明确分母和序列覆盖率的报告保存在 `work_dirs/crane_symeood_k1/metric_compatibility_audit_v1/epoch_24_r4.{json,md}`。审计还核对了 PKL 与 DOTA 导出的几何一致性，最小 IoU 为 0.99817，排除了导出时大幅改变框几何的解释。服务器新选中的 K1 `epoch_20` 审计显示 real `420` 帧、输出 `277`、缺测 `143`、输出后中心命中 `276/277=99.64%`、全帧中心检测召回 `276/420=65.71%`；已输出框的严格旋转 IoU 为 `0.7129`，全帧零填充值为 `0.4702`。缺测帧没有可计算的中心误差。
+
+#### 缺测阶段和进一步诊断
+
+普通 K1 的实际主头推理不运行 NMS：先用 `score_thr=0.05` 过滤每个特征层候选，再从剩余候选取最高分的一个。因此在原配置下最终为空，表示没有候选通过这个分类分数门槛；不能把空输出归因于 NMS。现有最终 PKL 不保存低于门槛的候选，不能仅凭它断言放宽门槛后会得到正确框，更不能据固定 TEST 调整门槛。
+
+本地历史 K1 `epoch_24` 的 real 缺测按序列为 `seq02:107/220`、`seq03:39/200`；较长连续段包括 `seq02:129–172`（44 帧）、`seq02:2–41`（40 帧）。这是缺测集中出现的证据，不是暗光或小目标的因果证明。已有 source VAL `epoch_20` 预测仅缺 `real 1/226` 和 `sim 2/512`，所以仅在 source VAL 上放开固定分数门槛的诊断样本很少，不能用它直接决定新的线上门槛。新增的 `audit_k1_source_val_threshold_v1.py` 只比较原 `0.05` 与诊断用 `0` 的配对预测、检查已有框完全一致、统计补出的框是否真正命中；它不选门槛，不读取固定 TEST，也不授权改动线上策略。
+
+服务器必须在独立 `ckpt_sweep_metric_v2` 目录生成两组新的选权和 TEST 报告；保留旧结果。普通 K1 的 VAL 预测可从历史 `ckpt_sweep` 缓存重算指标，蒸馏学生则需运行五个候选权重的 VAL 推理。两组报告都要核对 checkpoint、VAL 标注、预测和指标协议身份。若普通 K1 缺少候选 checkpoint 或缓存预测，应停止比较并补齐来源，不用旧指标填补。
+
+### 解释边界
+
+同口径 TEST 对照必须比较当前重新选择的普通 K1 与蒸馏学生。历史冻结 `epoch_24` 的既有结果仍可作为历史参考，但它使用旧指标版本选权，不能与新选权协议混成同一组公平对照。VAL 和 TEST 的数据角色应分别标注。只有 TEST 计算完成后，才能判断蒸馏是否改善检测表现；训练损失下降和训练钩子的 `save_best` 不能代替该结论。
+
+### 固定 TEST 配对审计入口（2026-09-23）
+
+已有同口径 TEST 结果显示蒸馏学生在 real 域的全帧中心命中率低于普通 K1。两份终端输出分别记录 849 和 794 个总预测框，但终端汇总尚不能说明哪些帧被学生补回、哪些帧由 K1 独有，也不能用不同输出集合上的条件平均 RIoU 直接判断几何改善。
+
+只读入口 `crane_project.tools.audit_k1_dino_student_paired_test_v1` 复用已有两组 `final_test_metrics_v2.json`、`results.pkl` 和 `Task1_grab` 文件，不重新推理。它先核对 TEST 标注、报告与预测哈希以及 PKL 到 DOTA 的逐帧几何一致性，然后按 real/sim 与序列输出三种中心命中分母、全帧 RIoU、双方独有正确帧和共同输出帧的配对 RIoU。完整 JSON 保留 992 帧逐帧记录；Markdown 只呈现汇总。
+
+该审计用于解释已暴露 TEST 的差异，不能据逐帧得失选择新的训练样本、阈值、checkpoint 或在线切换规则。下一版蒸馏应先在 source 数据上预设保留 K1 原有能力的设计与对照，再按既定选权协议检验。当前本地缺少学生 TEST 原始预测，因此不能把从终端总框数推算的逐域计数标为已完成的配对审计。
+
+
+### K1 warmstart V2 方案快照
+
+来源：原 `docs/dino_k1_warmstart_distillation_v2_20260923.md`。
+
+## K1 初始化的轻量蒸馏配对实验 V2
+
+### 已有证据与本轮目的
+
+已暴露的固定 TEST 配对审计 `k1_dino_student_paired_fixed_test_audit_v1` 表明：从头训练的语义特征蒸馏学生在 real 域从 K1 的 277 帧输出降至 222 帧；`real_seq03` 失去 60 帧 K1 原有输出，`real_seq02[2,41]` 与 `[137,169]` 两段均未恢复。共同输出帧在 `seq02` 有一定 RIoU 收益，但不能抵消缺测代价。审计 JSON 的本地 SHA256 为 `5ef70baf2897f1a79fc62cfbaa4b13ede95b6afab12435d484174d6be785f6f3`。这些 TEST 结果仅解释失败，不参与 V2 的训练样本、阈值和 checkpoint 选择。
+
+V2 只回答一个问题：**从 source VAL 已选中的普通 K1 初始化后，原有的 DINO 前景特征损失是否相对同预算普通微调产生增益？** V2 不是新的 DINO 检测头候选蒸馏，也没有解决教师候选的 source 支持不足问题。学生推理仍只运行 SymEOOD；训练时从磁盘读取已有冻结 DINO 缓存，不运行 DINO 大主干。
+
+### 两组唯一的计划差异
+
+| 项目 | 无 DINO 损失对照 | DINO 特征蒸馏 |
+|---|---|---|
+| 配置 | `crane_symeood_k1_dino_warmstart_control_v2.py` | `crane_symeood_k1_dino_warmstart_distill_v2.py` |
+| 初始化 | source VAL 选中的 `crane_symeood_k1/epoch_20.pth` | 同一文件 |
+| 学生结构 | K1 + 零初始化分类残差适配器 | 完全相同 |
+| source 数据 | train + train_sim | 完全相同 |
+| DINO 缓存数据流 | 读取，用于匹配数据和运行条件 | 读取，供蒸馏损失使用 |
+| 训练 | 4 epoch；SGD，学习率 0.00025；每卡 batch 2；2 GPU 顺序运行 | 完全相同 |
+| 唯一有意差异 | 无 DINO 损失 | 原 V1 前景特征蒸馏损失，权重 0.05 |
+
+先运行 CPU preflight：要求 K1 checkpoint SHA256 与新版 source VAL 选权结果、已生成的 K1 TEST 身份报告一致；检查 train 与 train_sim 两份缓存收据；解析两组配置；构建两组 CPU 模型并加载同一 K1 权重，确认新增分类适配器为零、初始分类和回归输出完全相同。若任何检查失败，停止训练，不回退到旧版选权结果。
+
+4 epoch、低学习率是预先固定的微调预算。两组 checkpoint 只在 source VAL 以同一 `ckpt_sweep.py` 规则选择；固定 TEST 每组只运行一次。对照的含义是区分 DINO 损失与普通继续训练的影响；与原 24 epoch 从头训练 K1 的比较则仍须单独标明训练预算不同。不得依据已暴露 TEST 的特定帧挑选样本或调节损失。
+
+### 服务器顺序
+
+1. 同步本文件、三个 V2 config、preflight 工具和专项测试。保留原 V1 权重与报告。
+2. 运行 `tests/test_k1_dino_warmstart_v2.py` 和 `tests/test_semantic_feature_distill_v1.py`。
+3. CPU preflight 成功并输出 `MATCHED_WARMSTART_READY` 后，先训练 control，再训练 distill。仅使用 GPU 0、1，不并发训练。
+4. 用统一学生推理配置 `crane_symeood_k1_dino_semantic_student_v1.py` 对两组 epoch 1–4 做 source VAL 选权；核对两个 `sweep_results.json` 的协议、候选和选择。
+5. 各自按选权结果运行一次固定 TEST，再生成配对审计。正式评价同时报告全帧中心命中、输出覆盖率、共同输出帧几何、序列连续缺测，以及推理时间/显存；不把 TEST 当作优化输入。
+
+本地没有服务器 K1 epoch 20 权重或 MMCV/MMRotate 运行环境，因此 CPU 模型构建与真实权重加载必须在服务器 preflight 中完成。本地验证只覆盖契约逻辑、配置文本、语法和已有蒸馏模块测试。
+
+
+本轮 warmstart V2 的归档结果、配置身份纠正与后续迁移方向见 本文「2026-09-23 蒸馏交接与正式结果」。
+
+
+### 2026-09-23 蒸馏交接与正式结果
+
+来源：原 `docs/dino_distillation_handoff_20260923.md`。
+
+## DINO → SymEOOD 初步蒸馏试验与对话迁移记录（2026-09-23）
+
+### 当前结论与任务定位
+
+当前阶段是轻量学生蒸馏可行性验证。目标是在训练时利用冻结 DINOv2 教师，部署时只运行 SymEOOD 学生。先前运行时调用 DINO 的 scoped 融合、DINO 独立检测诊断，与本轮缓存特征蒸馏是不同实验身份。
+
+本轮 warmstart V2 相对于同预算无蒸馏对照，只增加 1 帧中心命中，real 最长连续缺测均为 62 帧；未获得实质连续检测收益。结论仅适用于这套前景特征损失、初始化和训练预算，不等于所有蒸馏方法无效，也没有多随机种子统计显著性结论。
+
+### 试验目的、设计与针对困难
+
+历史关注 real_seq02 远距片段 [2,41]、暗光片段 [137,169] 与 real_seq03 小目标片段 [129,192]。这些是已暴露 TEST 的诊断标签，不允许据此挑训练样本或调整参数。seq03 抓料可能影响形状，但不从正式 TEST 删除，也不把动作影响当作已证实因果。
+
+从头训练特征蒸馏 V1 曾丢失 K1 输出。V2 回答：从已选中 K1 初始化，DINO 特征损失是否比普通继续训练有额外收益？两组均从 K1 epoch_20 初始化，计划训练4 epoch，SGD lr=0.00025、momentum=0.9、weight_decay=0.0001，warmup100步、ratio0.1、step=[3]，梯度裁剪10。source train2033帧 + train_sim748帧；VAL738帧；TEST992帧。计划每卡batch2、两卡顺序训练；这些训练设置来自仓库配置，包内没有训练日志，未据此验证实际启动参数。
+
+两组学生均有零初始化分类残差适配器；control关闭蒸馏损失。distill读取1024通道DINOv2 ViT-L/14缓存，使用单层FPN（feature_level=0）、前景余弦对齐、权重0.05、最多4096 tokens。protect_geometry=True 对蒸馏输入执行detach，蒸馏梯度直接更新适配器和训练期投影，不直接更新主干/FPN；检测损失仍更新检测网络，因此不能声称几何完全受保护。尚未蒸馏抓斗教师RPN/ROI的任务输出。
+
+源域VAL从epoch1–4按既有自定义规则选权，两组均选epoch_1。原规则包含加权中心召回约束、MCML≤5及TDR、中心、ACI、角度软评分；本次未依据TEST重选。当前metric_v3只是输出目录名，报告metric_protocol_version仍为2。
+
+### 正式 TEST 表（直接读取归档JSON）
+
+R_center为全部GT帧中的中心命中比例，阈值15px；mean_RIoU为缺测计零的全帧值。条件定位误差与覆盖率必须同时解释。MCML是当前评估协议下连续失败统计，不是直接训练目标，也不能自动继承教师数值。
+
+| 指标 | control | distill |
+|---|---:|---:|
+| real/R_center(%) | 72.38 | 72.62 |
+| real/mean_RIoU | 0.5074 | 0.5085 |
+| real/DFR(%/frame) | 2.9759 | 2.9855 |
+| real/ACI | 0.9253 | 0.9252 |
+| real/TDR_w10(%) | 79.13 | 79.13 |
+| real/MCML_max(frames) | 62 | 62 |
+| real/MCML_mean(frames) | 25.33 | 25.33 |
+| real/MCML_pass(limit=5) | 0 | 0 |
+| real/MRF(frames) | 7.53 | 7.53 |
+| sim/A-RMSE(deg) | 4.8098 | 4.7998 |
+| sim/R_center(%) | 100.0 | 100.0 |
+| sim/mean_RIoU | 0.8284 | 0.8282 |
+| sim/DFR(%/frame) | 2.2792 | 2.2759 |
+| sim/ACI | 0.9562 | 0.9562 |
+| sim/TDR_w10(%) | 100.0 | 100.0 |
+| sim/MCML_max(frames) | 0 | 0 |
+| sim/MCML_mean(frames) | 0.0 | 0.0 |
+| sim/MCML_pass(limit=5) | 1 | 1 |
+
+### 配对结果（完整记录见 paired_test_audit.json）
+
+| 分组 | 对照输出 | 学生输出 | 对照中心命中 | 学生中心命中 | 共同输出RIoU：对照→学生 |
+|---|---:|---:|---:|---:|---|
+| real | 309 | 310 | 304 | 305 | 0.689634719 → 0.689516215 |
+| real/seq02 | 121 | 121 | 117 | 117 | 0.685973641 → 0.685302251 |
+| real/seq03 | 188 | 189 | 187 | 188 | 0.691991052 → 0.692228394 |
+| sim | 572 | 572 | 572 | 572 | 0.828363051 → 0.828201647 |
+
+学生独有输出记录：`[{"frame_key": "real_seq03_00186", "domain": "real", "sequence": "seq03", "frame": 186, "gt_short_edge_px": 22.40755271911621, "baseline": {"output": false, "center_hit": false, "riou_hit": false, "center_error_px": null, "riou": null}, "student": {"output": true, "center_hit": true, "riou_hit": false, "center_error_px": 6.655543107343824, "riou": 0.49407209503787036}}]`。
+
+real共有309帧双方输出，学生共同帧RIoU略降；seq02双方均缺99帧，输出集合完全相同；seq03仅补回1帧。real的RIoU命中总数均为274，不能将新增中心命中直接称为新增完整框命中。sim均完整输出，几何差异微小。
+
+### 必须纠正的历史说明
+
+1. 旧选权SHA 551a255db55e0125141d35239e207298868326e5909895470dcefb527bf2f4ac 与本地统一学生推理配置 crane_symeood_k1_dino_semantic_student_v1.py 完全一致。此前把它解释为“选权后配置被修改”，证据不足；更符合现有证据的是VAL使用学生推理配置，而提供的TEST命令错误换成训练配置。原设计文档也要求用统一学生配置选权。哈希保护本身正常，但之前给出的命令和原因解释有误，不应为消除保护而重写旧哈希。
+
+2. 用户粘贴过real R_center=96.19%、RIoU=0.7937、MCML=6的历史表。本包未定位到这一整组报告的可靠身份，之前直接确认其为独立native-S14 DINO正式TEST是不成立的。包中formal_integrated_nms05与formal_integrated_test_refactor绑定scoped配置及BrightAug epoch20，包含融合结果：real条件中心97.39%、另列全帧25px中心72.38%、MCML39。它们不能当作同口径独立教师上限。需要对应96.19/6的原始报告、配置、权重身份及预测，才能重算同协议教师比较。
+
+3. 实际配对文件名是 work_dirs/crane_symeood_k1_dino_warmstart_v2_paired_test_audit.json（及.md），此前漏写crane_symeood前缀导致打包失败。
+
+### 当前改进方向与停止条件
+
+本轮停止继续围绕这一个TEST净增帧调节余弦损失、阈值或训练轮数。保留当前负结果及同预算对照。下一步候选方向是任务相关的选择性蒸馏，但尚未证明有效，也未在本轮实现。
+
+先确定实际教师身份和源域教师正确、学生不足的监督支持，复用已有source质量与覆盖诊断；不要重复把源域缺少真实小目标验证支持包装成新发现，不重新划分数据。存在可信监督时，以K1初始化，保留GT检测损失，优先迁移对象与邻近背景的区分或可靠类别响应；异构检测头需明确区域/候选对应，不直接复制权重或全面照搬教师框。
+
+可考虑源域清晰教师视图与学生合理光照扰动的对应，以及有限后段学生参数接受蒸馏梯度。加入原有能力保留约束是待验证选择，不保证覆盖率保留；全部新增机制不能一次堆叠。教师几何监督需经source GT核验，小目标分辨率/尺度问题独立讨论。新方案先固定设计、同预算对照、source VAL选权，再冻结评价；已暴露TEST只能诊断，不能声称未见测试的无偏确认。
+
+资源目标：训练优先缓存教师输出，不加载在线大教师计算图；控制缓存与GPU张量上界，顺序运行实验。最终单学生推理必须测延迟和峰值显存，不能凭参数少宣称加速；本包没有新延迟测量。
+
+### 证据位置、验证与复现
+
+本地仓库 /Users/mac/Documents/paper/symEOOD；服务器 /media/omnisky/personal_files/ljj/symEOOD；Python3.8 mmrotljj。原始压缩包 /Users/mac/Downloads/k1_dino_warmstart_test_analysis_20260923.tar.gz。SHA256为47a9c479d8f6e1ed8ff81013e945071f833ac315d56f9a99f4ae27c57dfdabe9。全部包内成员路径与哈希保存在相邻evidence/dino_warmstart_v2_20260923/archive_manifest.json。
+
+关键原文已复制到 [证据目录](../evidence/dino_warmstart_v2_20260923)，不会依赖/tmp解压目录。control_selection.json、distill_selection.json保存选权；control_test.json、distill_test.json保存正式指标；paired_test_audit.json保存992帧；两份formal摘要只作为历史身份核对证据。
+
+本轮实际验证：压缩包SHA与服务器记录一致；两组选权checkpoint哈希与TEST及配对审计一致；config哈希三方一致；配对审计绑定的TEST文件SHA与实际文件一致；配对记录992帧。未重跑训练、模型推理或GPU测试；缺少PKL/Task1_grab与权重，不能独立重算框几何或验证实际训练参数。
+
+复现入口：ckpt_sweep.py --final-test-from 必须使用选权时同一config并保持config哈希，sweep目录必须与JSON所在目录一致。当前两组位于 work_dirs/crane_symeood_k1_dino_warmstart_{control,distill}_v2/ckpt_sweep_metric_v3/final_test/epoch_1/；配对工具 audit_k1_dino_student_paired_test_v1.py 使用 --gt-dir、两组 --*-report/--*-pkl/--*-pred-dir 读取已存在预测即可，不需要重跑模型。
+
+### 新对话接续提示
+
+先读取本文与证据JSON。用户当前目标是DINO能力迁移和学生轻量部署，暂不写论文正文。不要混淆DINOv2特征教师、抓斗DINO检测器、scoped运行时融合、Base V3观测系统和本轮warmstart学生。V2已经完成初步对照且没有实质收益；后续讨论任务相关蒸馏时先检查是否与历史失败方法重复。优先核实教师身份与监督支持，避免反复让用户重新选权、打包或重复完整诊断。
+
+
+### 2026-09-27 课题迁移快照
+
+来源：原 `docs/DINO课题迁移记忆_20260927.md`。
+
+## DINO 优化与 SymEOOD 蒸馏：Claude 课题迁移记忆
+
+整理日期：2026-09-27。当前研究任务由用户明确为 **DINO 上的优化**，包括 DINO 检测能力改进及向轻量 SymEOOD 学生迁移；本次接续不自动扩展到深度估计、可靠性策略或论文正文。
+
+本文是便于上传 Claude 的**有日期的迁移快照**，正文包含独立理解课题所需的背景、结果和限制。原始实验仍在既有主线文档与结果文件中维护，本文不另立平行实验总账。历史材料中的“蒸馏尚未开始”已经过时：截至本快照，蒸馏已推进到 **V5 对象—邻近背景关系蒸馏，完成训练、source VAL 选权、固定 TEST 和产物审计**；完成实验不等于已经取得稳定性能收益。
+
+### 1. 可直接复制到 Claude 记忆导入框的摘要
+
+```text
+[2026-09-27] 我的课题是港口门座式起重机抓斗顶梁的单目、单类旋转框（OBB）检测。检测框围绕顶梁参考平面，不是整个抓斗或平台。当前工作集中于 DINO 优化及 DINO→SymEOOD 的轻量学生蒸馏。
+[2026-09-27] DINO 所针对的三个困难是：暗光大目标的分类分数/排序崩塌；远距离目标的低置信度输出不足；更小旋转目标的空间采样、候选覆盖与最终质量排序问题。代表诊断片段分别是 real_seq02[137,169]、real_seq02[2,41]、real_seq03[129,192]。这些 TEST 片段已暴露，不能用于选权、调阈值或选训练样本。
+[2026-09-27] 冻结 DINOv2 ViT-L/14 加 rotated RPN/ROI 小头已提供暗光语义救援证据：BrightAug 的 0/33 到 ScopedDINO 的 29/33，加因果尺度/角度稳定后 32/33。scope 使用过 target 信息，这些是机制诊断；不是通用学生成绩或未知视频泛化。
+[2026-09-27] 历史正式 DINO 组件是 native S14、ROI 分类权重插值 alpha=0.5、S7 disabled、ROI NMS=0.5。S7 高分辨率分支把小目标诊断片段候选 R@100 从 55/64 补到 64/64，但该方案最终 Top-1 仍为 50/64。候选覆盖、正确选框、框几何和连续性必须分别评价。
+[2026-09-27] 已尝试分类权重插值、S7 readout/RPN、NMS 调整、pairwise/relative/highres/unified 排序、时序 ROI projector、native spatial adapter 和 K1/DINO 几何融合。部分 source 指标改善，但有旧正确帧损失或未迁移到固定困难片段；不能简单说全部无效，也不能拼接不同模型的最好数字。
+[2026-09-27] 蒸馏学生使用 SymEOOD K1 加零初始化分类残差适配器，教师为冻结 DINOv2 的离线特征。推理仅运行学生，不调用 DINO。蒸馏 V1 丢失原 K1 输出；V2 K1 warmstart 相对同预算对照仅增加 1 帧中心命中；V3 放开 FPN 蒸馏梯度、V4 修正前景掩码后，均未获得输出覆盖或中心命中的额外收益。
+[2026-09-27] 最新 V5 已完成 24 epoch 对象—邻近背景关系蒸馏 A/C 对照。A 无关系损失，C 增加权重 0.05 的关系 MSE；均由同一个 K1 epoch_20 初始化，source VAL 分别选中 A epoch_24、C epoch_18。V5 的 frozen_stages=1，不是 V3/V4 的整个 ResNet-50 冻结。
+[2026-09-27] V5 固定 TEST 的 real 420 帧：A/C 输出 255/258 帧，中心命中均为 253 帧；条件中心命中率为 99.22%/98.06%，全帧中心召回均为 60.24%。C 新增与丢失中心命中各 22 帧，seq02 净减 15 帧、seq03 净增 15 帧。最长连续无输出为 39/64 帧；RIoU 连续失败 MCML 则均为 64 帧。sim RIoU 从 0.8871 降到 0.8724。当前结论是实验完成，但尚未证明稳定的整体收益。
+[2026-09-27] R_center 的分母要明确：中心命中/有输出帧是条件定位率；中心命中/全部 GT 帧是全帧召回。输出覆盖率要单列。历史 MCML 表示 RIoU<0.5 的连续失败，不等于连续无输出。缺测计零的 mean_RIoU 与有输出帧条件 RIoU 也不能混用。
+[2026-09-27] source train 为 real 2033 + sim 748=2781 帧；source VAL 738 帧；固定 TEST 992 帧（real 420、sim 572）已暴露。独立真实困难验证不足是已知限制，不要反复要求重做同一全量诊断，也不能把它说成唯一已证实原因。新方案应先说明与既有失败方法的差异，并在 source 上确定设计和同预算对照。
+[2026-09-27] 我希望保留已有工作、负结果和证据边界；不要编造结果、来源或贡献。低风险本地操作按授权持续完成，数据删除、对外发送等遵守授权范围。重要结论注明模型、数据、日期和来源；需要核对的地方明确标记。
+```
+
+这段记忆是本次对话和项目证据的整理，不代表已经读取或导出了用户在其他 ChatGPT 会话中的全部个人记忆。
+
+### 2. 三个问题究竟是什么
+
+| SymEOOD 面临的问题 | DINO 介入的理由与已完成工作 | 目前的证据边界 |
+| --- | --- | --- |
+| **暗光大目标：有几何候选，但分类分数和排序失效。** 暗光下目标不一定消失，正确候选可能被背景高分候选压制，产生长段漏检。代表片段 `real_seq02[137,169]`，33 帧。 | 引入冻结 DINOv2 的语义特征和 source 训练的小检测头；ScopedDINO 将历史 BrightAug 的 Top-1 `0/33` 提高到 `29/33`，因果框稳定后达 `32/33`。 | 该 scope 使用过 target-dev 信息，只支持暗光救援机制；稳定器改善宽高和角度，不补造输出。V5 蒸馏学生在同一 33 帧仍无输出，不能说救援能力已迁入学生。 |
+| **远距离目标：低置信度和输出覆盖不足。** 普通 K1 曾在 `real_seq02[2,41]` 连续无输出，共 40 帧。 | DINO 逐级候选审计推翻了“始终没有可用候选”的笼统解释。历史 highres 方案在该片段 R@100 为 `40/40`、Top-1 为 `38/40`；另一时序方案曾为 `39/40`。 | 这些是不同 DINO 实验的诊断结果。远距已不再是该 DINO 候选生成支线的独立瓶颈，却仍可能是 SymEOOD 学生的覆盖问题；V5 A/C 在这 40 帧分别输出 `5/0` 帧。 |
+| **更小旋转目标：细节不足，补出候选后仍选不准。** `real_seq03[129,192]` 共 64 帧，历史短边约 `1.124` 个 DINO token。 | S7 高分辨率 readout/RPN 与 ROI 读出把 R@100 `55/64→64/64`，说明可以补足候选；随后尝试多类质量排序和时序方案。 | 同一 highres 方案 Top-1 仍为 `50/64`，剩余问题是最终 OBB 质量排序。抓料/形变可能影响观测，但不能把未经验证的解释当因果结论，也不能从正式 TEST 删除失败帧。 |
+
+三个困难的共同目标是增加**正确且连续的检测输出**，同时保留已有几何和正常帧能力。DINO 本身的计算成本是另一个工程约束，促使研究转向训练用教师、推理用学生。[来源 S1、S2、S5]
+
+普通 K1 的现有主头推理先按 `score_thr=0.05` 过滤候选，再取最高分一个框，**不运行 NMS**。因此不能把 K1 空输出解释为 NMS 抑制；DINO RPN/ROI 的 NMS 诊断属于另一条检测链。最终 PKL 不含低于阈值的候选，也不足以证明降低阈值就会恢复正确框。[S2]
+
+### 3. 已做过的 DINO 改进及保留结论
+
+| 路线 | 改动与正向结果 | 代价、状态与后续应记住的内容 |
+| --- | --- | --- |
+| 冻结语义救援 + 因果框稳定 | 冻结 DINOv2 ViT-L/14，训练 oriented RPN/rotated ROI 小头；等价 OBB 表示对齐后，对 log 宽高、双角周期方向做因果 EMA，历史暗光 Top-1 `0→29→32/33`。 | EMA 系数 `0.25`；中心、分数、排序和是否输出不变。target-derived scope 使结果只具诊断资格。 |
+| ROI 分类器权重插值 | `alpha=0.5` 时 source Top-1 `662→677/738`，新增 15、丢失 0。 | 这是分类权重插值系数，不能与 EMA 系数混同；更大 alpha 会丢旧正确帧。作为历史正式 native-S14 组件保留。 |
+| S7 readout/RPN 与高分辨率 ROI | 补足极小目标候选；source-safe highres 版本达 `688/738`、small `311/350`、lost=0；固定 small R@100 达 `64/64`。 | 候选增益没有变成该片段 Top-1 增益；正式 native-S14 基线仍不启用 S7。 |
+| DINO NMS `0.1→0.5` | 同一 137 帧追踪中，NMS 后有可用候选的帧数 `117→128`。 | Top-1 仍 `117/137`；新增保留的 11 帧转为最终排序失败。不能继续把阈值扫描当主要解法。 |
+| Pairwise、连续/相对质量、highres/unified ranker | relative-quality 达 source `691/738`、lost=0；unified hard-pair 达 `696/738`、lost=1。 | 相对质量/highres 在固定 small 仍未得到所需提升；unified 只通过 bounded-risk research gate，不能称 exact-safe，也不补写缺失的 target 结果。 |
+| 时序 ROI projector/候选接管 | 对象跨帧检索 margin 改善。 | 闭环检测曾降到 `425/738`、lost=263；身份相似不等于 OBB 几何质量。不能把余弦相似度直接当定位质量。 |
+| native spatial adapter V3 | source 4 epoch 可训练，轻量 head 资源可控。 | epoch1 `+1/-2`、epoch2–4 `+2/-4`，回退 epoch0；与 relative-quality 的最小互补审计只多 1 帧 oracle，停止该选择器路线。此 V3 不是下节蒸馏 V3。 |
+| K1/DINO 几何融合及 seq11 replay | K1 锚框、DINO fallback、bounded residual、retention/history 等尝试；retentive V3 epoch9 在 source 有改善。 | TEST 未稳定复现；seq11 V4 replay epoch10 是历史候选，困难块 OOF 未完成。不能把这条融合支线当作已完成的轻量蒸馏。 |
+
+历史 BrightAug QFL、RegQuality/PQA 等失败路线也已封存。后续方案需要说明新增信息或监督，不能仅更名重跑。以上数字来自 S1 的对应实验记录，本次没有重新运行这些模型。
+
+### 4. 蒸馏已完成到哪一步
+
+#### 4.1 教师、学生和目的
+
+教师是**冻结 DINOv2 ViT-L/14 特征**，通过离线缓存提供训练监督；不是把抓斗 DINO RPN/ROI 的最终框、类别分数或时序输出整套复制给学生。学生是 SymEOOD K1（ResNet-50/FPN/旋转检测头）加零初始化分类残差适配器。当前蒸馏的意图是把语义能力迁到学生分类表示，保留原 GT 检测损失及 OBB 任务。
+
+V1–V4 使用前景特征余弦对齐和训练期投影器；V5 改为对象与邻近背景的关系图匹配，不再启用旧特征损失。学生推理配置保留分类适配器，不实例化教师或训练期损失。**学生推理评估链已运行；独立部署包验收、端到端延迟和峰值显存改善尚无本次证据。** 不依据“移除了大教师”直接宣称已达到实时速度。[S2–S5]
+
+#### 4.2 V1–V5 演进与结果
+
+| 版本 | 实验目的和主要改动 | 已完成结果与裁决 |
+| --- | --- | --- |
+| **V1：从头训练特征蒸馏** | K1 加分类残差适配器；前景余弦对齐；辅助梯度在 FPN 输入处 detach，仅更新适配器与投影器。 | 历史配对记录：real 输出从 K1 的 `277` 降到学生 `222`；seq03 丢失 60 帧 K1 原输出，远距和暗光两段未恢复。完成了初步实验，未保住原有能力。原 V1 设计文档的“尚未训练”是旧状态。[S2、S3] |
+| **V2：K1 warmstart 同预算对照** | 两组同由 K1 epoch20 初始化；4 epoch，lr=0.00025；control 不加蒸馏，distill 只增加原前景损失，权重0.05。 | 均选 epoch1。real 输出 `309→310`，中心命中 `304→305`；全帧中心召回 `72.38%→72.62%`；RIoU 命中均274；MCML 均62。仅 seq03 第186帧新增中心命中，其 RIoU≈0.494，未新增完整框命中。无实质整体收益。[S4] |
+| **V3：FPN 梯度范围 A/B/C** | 三组冻结整个 ResNet-50（frozen_stages=4）；A 无蒸馏，B 阻断蒸馏进入 FPN，C 放开；均 K1 epoch20、4 epoch。 | 均选 epoch1；同一877帧有输出（real305、sim572），中心命中集合相同；real 全帧中心召回70.71%、mean_RIoU0.5003、MCML38相同。损失、参数和浮点预测确有差异，但特征对齐改善未转为任务收益。旧 PKL 缺生成时 provenance，保留追溯限制。[S5、E3] |
+| **V4：修正掩码的 A/C 对照** | 修正旋转框前景外接范围计算，缩小掩码时以最大池化保留小目标；沿用 V3 4 epoch 预算，A 无损失、C 蒸馏进入 FPN。 | source 探针证明修复和梯度路径生效；正式 A/C 均选 epoch1，real 输出均305/420，中心命中均297，条件中心命中率97.38%；MCML均38。掩码修复后仍无额外覆盖/中心收益。工程修复不追溯改变 V3 权重。[S5、E4] |
+| **V5：对象—邻近背景关系蒸馏** | 由 K1 epoch20 warmstart，恢复24 epoch日程；A/C同预算；C增加对象/背景关系MSE，权重0.05。 | A选epoch24、C选epoch18，完成992帧固定TEST和2026-09-27产物审计。出现序列间收益/退化交换，未形成稳定整体收益，详见第5节。[S5、E1] |
+
+每版内部对照用于判断该版蒸馏的额外收益。V2、V3/V4、V5 的冻结范围与训练预算不同，不能根据各版 TEST 的最高值再选择“最终最佳版本”。
+
+#### 4.3 V5 的具体实现及曾经的短探针
+
+V5 在变换后的 GT 旋转框内部构造对象掩码；邻近背景来自外扩区域，留一格间隔、外扩至四格，并排除 padding。教师和学生各自对对象特征求原型，再计算原型与各位置特征的余弦关系。对象区域、背景区域的关系 MSE 等权，整体乘 `0.05`。它迁移的是对象—背景关系，**不是教师候选框质量、类别 logits 或时序轨迹**。[代码 C1]
+
+配置中 `protect_geometry=True` 使该辅助关系项只经分类适配器更新，阻断它直接进入基础 FPN；原检测损失仍训练可训练主干阶段、FPN 与检测头，所以不能声称整个训练过程保持回归几何不变。V5 为 `frozen_stages=1`，与 V3/V4 的 `frozen_stages=4` 不同。[C1、E1]
+
+两组均读取同一教师缓存以匹配数据管线；A 不使用关系项，C 使用。共同日程为24 epoch、SGD lr=0.0025、momentum=0.9、weight decay=0.0001、warmup1000、step=[16,22]、梯度裁剪10、每卡batch2。source VAL候选为epoch16/18/20/22/24。[E1、C2]
+
+在正式训练之前，V5短source探针已经运行，但结果是 `no_support_in_this_probe`，**不是已通过蒸馏收益门槛**：教师区分度存在（real AUC=1.0，sim约0.984），但学生相对control的对象—背景分类gap略降；real关系MSE相对改善约0.119%，sim略差。短探针与正式24 epoch训练是不同实验；正式结果仍按正式A/C对照解释。[E2]
+
+### 5. 最新完成的 V5：核对后的结果
+
+本节直接读取并复核2026-09-27完整审计JSON的992条逐帧记录。A是无关系损失对照，C是关系蒸馏学生；中心阈值15 px，RIoU命中阈值0.5。以下结果属于**已暴露固定TEST的描述性诊断**。
+
+#### 5.1 real 总体和 sim 几何
+
+| 指标 | A：epoch24 | C：epoch18 | 解释 |
+| --- | ---: | ---: | --- |
+| real输出帧数 / GT帧数 | 255/420 | 258/420 | 净增3帧输出 |
+| real输出覆盖率 | 60.71% | 61.43% | 不等于正确检测率 |
+| real中心命中帧数 | 253 | 253 | 总数没有提高 |
+| real条件中心命中率：命中/有输出 | 99.22% | 98.06% | C下降约1.15个百分点 |
+| real全帧中心召回：命中/全部GT | 60.24% | 60.24% | 历史报告的 R_center 即此口径 |
+| real RIoU≥0.5命中帧数 | 239 | 238 | C少1帧 |
+| real全帧mean_RIoU，缺测记零 | 0.4433 | 0.4460 | 小幅增加，不代表每个已输出框更准确 |
+| real有输出帧条件mean_RIoU | 0.7301 | 0.7261 | 输出集合不同；不能直接归因于同帧几何变差 |
+| real双方共同输出236帧的mean_RIoU | 0.7391 | 0.7442 | 同帧几何有小幅改善 |
+| real最长连续无输出 | 39帧 | 64帧 | C变差；按序列与帧号连续性重算 |
+| real MCML：最长连续RIoU失败 | 64帧 | 64帧 | 两组最差失败段所处序列不同 |
+| real TDR_w10 | 67.43% | 69.47% | 部分时序统计改善 |
+| real MCML_mean | 34.67帧 | 33.67帧 | 历史同协议指标 |
+| real MRF | 16.45帧 | 10.53帧 | 历史同协议指标 |
+| real DFR（%/frame） | 2.4967 | 2.5817 | C更高 |
+| real ACI | 0.9430 | 0.9355 | C更低 |
+| sim输出/中心命中 | 572/572 | 572/572 | 两组均完整输出与中心命中 |
+| sim mean_RIoU | 0.8871 | 0.8724 | C几何退化 |
+| sim角度RMSE | 1.3104° | 1.7880° | C角度误差增加 |
+
+#### 5.2 总数相同不代表逐帧相同
+
+C相对A新增22个中心命中，同时失去22个A原有中心命中。共同输出236帧，A独有输出19帧、C独有22帧。中心命中得失统计包含“仍有框但定位由对变错/由错变对”，因此不必等于独有输出数量。
+
+| 序列 | 输出帧数 A→C | 中心命中 A→C | RIoU命中 A→C | 结果 |
+| --- | --- | --- | --- | --- |
+| real_seq02，220帧 | 122→110 | 122→107 | 122→107 | 中心命中净减15；最长无输出延长 |
+| real_seq03，200帧 | 133→148 | 131→146 | 117→131 | 中心命中净增15；局部改善未覆盖seq02代价 |
+
+A最长无输出为 `real_seq02[133,171]` 的39帧；C为 `real_seq02[110,173]` 的64帧。A的64帧连续RIoU失败位于 `real_seq03[129,192]`，C的64帧连续RIoU失败位于 `real_seq02[110,173]`。**旧MCML最大值相同，掩盖了失败位置和无输出长度的变化。**
+
+#### 5.3 回到原来的三个困难片段
+
+以下由同一V5审计的逐帧记录计算，仅用于解释，不据此继续调参。
+
+| 固定诊断片段 | A：输出/中心命中/RIoU命中 | C：输出/中心命中/RIoU命中 |
+| --- | --- | --- |
+| 远距 seq02[2,41]，40帧 | 5 / 5 / 5 | 0 / 0 / 0 |
+| 暗光 seq02[137,169]，33帧 | 0 / 0 / 0 | 0 / 0 / 0 |
+| 更小目标 seq03[129,192]，64帧 | 15 / 13 / 0 | 24 / 23 / 9 |
+
+V5的确在这个小目标片段产生了局部正确框，但暗光没有恢复，远距退化。可保留“局部能力变化”的观察；不能称为三个问题已解决、DINO能力完整迁入学生或整体有效改进。
+
+#### 5.4 审计已经支持什么，还有什么没有证明
+
+完整审计记录两组各5个source VAL候选的checkpoint/PKL/provenance核对，以及固定TEST和逐帧几何对应检查。记录中的checkpoint历史config可用，报告为无配置差异。A选中epoch24、C选中epoch18，与source选权一致。
+
+C日志有312条关系损失记录，均为正，范围0.00068–0.00158，最后0.00084；A无关系损失记录。两组分类适配器均已非零。但正损失和适配器改变不能单独证明该辅助项对最终改善的因果贡献。
+
+A目录存在两份均到epoch24的日志；checkpoint与唯一训练日志的运行绑定仍未完全确认，不能把两份日志相加称为48 epoch。审计也没有历史完整梯度轨迹。本次整理复算JSON内计数、比例及失败区间，并核对证据副本哈希；没有重新访问服务器权重、加载PKL、训练或运行模型推理。
+
+### 6. Claude 接续时必须保留的口径与状态
+
+1. **模型身份分开。** DINOv2特征教师、native-S14抓斗DINO检测组件、ScopedDINO、K1/DINO融合refiner、蒸馏学生均为不同模型。native spatial adapter V3、retentive geometry V3、FPN蒸馏V3不是同一个V3；关系蒸馏V5也不是OBB可靠性V5.1。
+2. **K1权重有历史版本。** 当前蒸馏初始化是重新按修订指标source VAL选出的普通K1 epoch20；旧K1 epoch24及BrightAug epoch20不能替代它。epoch20 SHA为 `3ab0885159294beb820da1445c38045a342fd4956c3d094eeaaadf78deb745c2`。
+3. **数据角色固定。** source train real2033+sim748=2781，source VAL738，固定TEST992（real420+sim572）。TEST已暴露；不据其单帧得失挑样本、阈值、epoch或损失参数，不把反复诊断称为未知测试确认。
+4. **指标分母显式写出。** 条件中心命中率、全帧中心召回、输出覆盖率分别报告。RIoU条件平均与缺测计零平均分别报告。MCML与最长无输出分别报告，跨序列和帧号断点重置。
+5. **区分实际执行和代码存在。** 已有V1–V5实验与学生推理评估，不再误写“蒸馏未启动”；但蒸馏成功、统一实时部署、多随机种子稳定性和未知真实视频泛化仍无充分证据。导出脚本存在不等于部署包已验收。
+6. **已有支持限制不用反复重新发现。** 历史尺度定义下source-train有真实小目标，source-val小目标350帧均为sim、real为0；“native错而S7对”监督稀疏属于指定候选协议。不能说训练集完全没有真实小目标，也不能将验证不足当作唯一已证实原因。
+7. **测量有效性不等于模型优化。** seq03[130,187]的58帧抓料/未离料区间可作预定measurement-valid敏感性分析，但完整TEST保留；不能只剔除失败帧来证明收益。
+8. **当前阶段定位。** 本次用户要求接续DINO优化。后续需在已有V1–V5负结果和局部收益上说明新机制，采用匹配对照及source验证；不自动回到seq11融合、可靠性策略或深度支线，不自动启动新训练。
+
+建议 Claude 在读完后先复述：三个困难是什么、哪一层已经改善、哪一层仍失败、V5完成了什么，以及三个最重要的证据限制。把第1节摘要用于记忆，把全文放入课题项目资料，后续按新日期更新事实。
+
+### 7. 来源和复核入口
+
+| 编号 | 文件 | 本文用途 |
+| --- | --- | --- |
+| S1 | [冻结DINOv2与SymEOOD检测融合](冻结DINOv2与SymEOOD检测融合.md) | 三个困难、历史改进、模型身份、2026-09-22整体复盘；蒸馏状态须结合后续记录 |
+| S2 | 本文「语义学生与 K1 同口径比较」 | K1输出/指标分母纠正、V1比较与选权协议 |
+| S3 | 本文「K1 warmstart V2 方案快照」 | V1失败记录、V2同预算设计 |
+| S4 | 本文「2026-09-23 蒸馏交接与正式结果」及[归档证据](../evidence/dino_warmstart_v2_20260923) | V2正式指标与配对结果；其中“下一步关系蒸馏尚未实现”已被V5完成状态更新 |
+| S5 | 本文 V3–V5 实验记录 | 覆盖V3、V4、V5，历史快照更新至2026-09-27 |
+| E1 | [V5完整产物审计](../evidence/dino_claude_handoff_20260927/v5_artifact_audit_complete.json) | 992帧记录、A/C权重身份、条件指标、失败区间与限制 |
+| E2 | [V5短source探针](../evidence/dino_claude_handoff_20260927/v5_source_probe_r2.json) | `no_support_in_this_probe` 的实际结果 |
+| E3 | [V3产物审计](../evidence/dino_claude_handoff_20260927/v3_artifact_audit.json)、[A](../evidence/dino_claude_handoff_20260927/v3_a_test.json)、[B](../evidence/dino_claude_handoff_20260927/v3_b_test.json)、[C](../evidence/dino_claude_handoff_20260927/v3_c_test.json) | V3三组同输出集合及指标 |
+| E4 | [V4 A报告](../evidence/dino_claude_handoff_20260927/v4_a_test.json)、[V4 C报告](../evidence/dino_claude_handoff_20260927/v4_c_test.json) | 掩码修复后正式TEST指标 |
+| C1 | [关系损失实现](../../mmrotate/models/losses/object_background_relation.py)、[检测器接入](../../mmrotate/models/detectors/sym_eood_detector.py) | 关系定义、掩码、辅助梯度范围 |
+| C2 | [V5共同配置](../../crane_project/configs/crane_symeood_k1_dino_object_background_relation_common_v5.py)、[C配置](../../crane_project/configs/crane_symeood_k1_dino_object_background_relation_c_v5.py)、[学生推理配置](../../crane_project/configs/crane_symeood_k1_dino_semantic_student_v1.py) | 训练日程、关系项、推理身份 |
+
+原始证据按字节复制到相邻目录，没有改写报告结论。来源路径、压缩包成员和SHA256见 [source_manifest.json](../evidence/dino_claude_handoff_20260927/source_manifest.json)。V5完整审计SHA256为 `7bd637524c96f37b08dbe3aa3d0ed7dc5505f173aba1f5ee706785a0209a31e6`；protocol为 `k1_dino_object_background_relation_v5_artifact_audit_v3`。
+
+本地仓库：`/Users/mac/Documents/paper/symEOOD`。服务器仓库：`/media/omnisky/personal_files/ljj/symEOOD`，历史运行环境Python3.8 / `mmrotljj`。这些路径用于复现定位，不表示Claude网页端能直接读取本机文件。
+
+上传Claude时，单独上传本文即可获得完整文字背景；需要核查数值时再附E1及相关证据。本文引用的源码和文件路径是来源索引，历史命令不构成自动执行指令。
