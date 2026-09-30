@@ -2,6 +2,8 @@ import importlib.util
 from pathlib import Path
 import math
 import numpy as np
+import pytest
+from copy import deepcopy
 
 ROOT=Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('port_geom',ROOT/'crane_project/tools/audit_port_train_val_geometry_v1.py')
@@ -89,3 +91,51 @@ def test_protocol_formula_matches_project_evaluator():
                   pred_box=pred,plc_rope=None) for i,pred in enumerate(predictions)]
     official=CraneOfflineEvaluator().evaluate_records(records)
     assert abs(m.summarize(rows)['protocol_angle']['rmse']-official['sim/A-RMSE(deg)'])<.0001
+
+
+def test_real_merged_configs_resolve_actual_head_contract_without_mutation():
+    mmcv = pytest.importorskip('mmcv')
+    from mmrotate.models import build_detector
+    for arm, expected_max in [('eood', 2000), ('symeood', 1)]:
+        cfg = mmcv.Config.fromfile(str(ROOT / 'crane_project/configs' /
+            ('crane_' + arm + '_k1_port_day2night_aug_b_v1.py')))
+        before = deepcopy(cfg.model)
+        contract = m.inference_contract(cfg.model)
+        assert contract['max_per_img'] == expected_max
+        assert cfg.model == before
+        # Exercise the same constructors used on the server, without weights/GPU.
+        model_cfg = deepcopy(cfg.model)
+        model_cfg.pretrained = None
+        model_cfg.train_cfg = None
+        model = build_detector(model_cfg)
+        head = model.bbox_head.predictors[0] if arm == 'eood' else model.bbox_head
+        assert head.test_cfg.score_thr == .05
+        assert head.test_cfg.max_per_img == expected_max
+        del model
+        invalid = deepcopy(before)
+        target = invalid.bbox_head.predictors[0].test_cfg if arm == 'eood' else invalid.test_cfg
+        target.score_thr = .01
+        with pytest.raises(ValueError, match='frozen inference contract'):
+            m.inference_contract(invalid)
+
+
+def test_eood_multiple_outputs_keep_first_and_validate_all_export_rows(tmp_path):
+    from crane_project.tools.ckpt_sweep import pkl_to_dota
+    import pickle
+    a = np.array([[30.,30.,40.,20.,.1,.9], [90.,80.,35.,15.,-.2,.6]])
+    predictions = [[a], [np.empty((0,6))]]
+    pkl = tmp_path / 'results.pkl'
+    with pkl.open('wb') as stream:
+        pickle.dump(predictions, stream)
+    folder = Path(pkl_to_dota(str(pkl), ['real_seq07_00001','real_seq07_00002'], str(tmp_path)))
+    exported = m.parse_dota_txt(str(folder / 'real_seq07_00001.txt'))
+    assert m.raw_box([a], 2000) == a[0].tolist()
+    m.validate_export([a], exported, 2000)
+    m.validate_export(predictions[1], [], 2000)
+    assert m.raw_box(predictions[1], 2000) is None
+    with pytest.raises(ValueError, match='export mismatch'):
+        m.validate_export([a], exported[::-1], 2000)
+    with pytest.raises(ValueError, match='output limit'):
+        m.raw_box([a], 1)
+    with pytest.raises(ValueError, match='sorted by score'):
+        m.raw_box([a[::-1]], 2000)

@@ -175,15 +175,62 @@ def paired_report(first, second, continuous=False):
         eood_strata=strata(first), symeood_strata=strata(second))
 
 
-def raw_box(prediction):
+def inference_contract(model_cfg):
+    """Resolve the actual inference head without changing the frozen config."""
+    head = model_cfg['bbox_head']
+    if model_cfg.get('type') == 'Eood' and head.get('type') == 'EoodHead':
+        predictors = head.get('predictors', [])
+        if not predictors or predictors[0].get('type') != 'RotatedEoodHead':
+            raise ValueError('Expected EOOD predictor 0 = RotatedEoodHead')
+        # EoodHead.get_bboxes delegates to predictors[0]; outer test_cfg is None.
+        test_cfg = predictors[0].get('test_cfg')
+        location = 'model.bbox_head.predictors[0].test_cfg'
+        expected_max = 2000
+        postprocess = 'per_level_pre_topk_then_rotated_nms'
+    elif model_cfg.get('type') == 'SymEOOD' and head.get('type') == 'SymEOODHead':
+        test_cfg = model_cfg.get('test_cfg')
+        if test_cfg is None:
+            test_cfg = head.get('test_cfg')
+        location = 'model.test_cfg_or_bbox_head.test_cfg'
+        expected_max = 1
+        postprocess = 'padding_filter_then_score_threshold_then_top1_without_nms'
+    else:
+        raise ValueError('Unsupported inference head for this fixed comparison')
+    if (test_cfg is None or test_cfg.get('score_thr') != .05
+            or test_cfg.get('max_per_img') != expected_max
+            or test_cfg.get('nms_pre') != 2000
+            or test_cfg.get('nms', {}).get('iou_thr') != .1):
+        raise ValueError('Unexpected frozen inference contract at ' + location)
+    return dict(config_location=location, score_thr=.05,
+                max_per_img=expected_max, postprocess=postprocess,
+                evaluation_selection='first_returned_box_highest_score')
+
+
+def prediction_array(prediction, max_predictions=1):
     if not isinstance(prediction, (list, tuple)) or len(prediction) != 1:
         raise ValueError('Expected single-class prediction')
     a = np.asarray(prediction[0])
-    if a.ndim != 2 or a.shape[1] != 6 or len(a) > 1 or not np.isfinite(a).all():
-        raise ValueError('Expected zero/one finite Nx6 prediction')
-    if len(a):
-        canonical(a[0,:5])
+    if (a.ndim != 2 or a.shape[1] != 6 or len(a) > max_predictions
+            or not np.isfinite(a).all()):
+        raise ValueError('Expected finite Nx6 predictions within the head output limit')
+    if len(a) and (np.any(a[:,2:4] <= 0) or np.any(a[:,5] <= .05)
+                   or np.any(a[:,5] > 1) or np.any(np.diff(a[:,5]) > 0)):
+        raise ValueError('Expected positive OBBs sorted by score above fixed threshold .05')
+    return a
+
+
+def raw_box(prediction, max_predictions=1):
+    # ckpt_sweep exports rows in order; evaluator uses the FIRST TXT row.
+    a = prediction_array(prediction, max_predictions)
     return a[0].tolist() if len(a) else None
+
+
+def validate_export(prediction, exported, max_predictions):
+    a = prediction_array(prediction, max_predictions)
+    if len(exported) != len(a) or any(
+            compute_riou(box[:5], text_box) < .99
+            for box, text_box in zip(a, exported)):
+        raise ValueError('VAL PKL/TXT order or export mismatch')
 
 
 def make_row(dataset, index, prediction, split, input_scale=1.):
@@ -267,9 +314,7 @@ def main():
                 or record['results_pkl_sha256'] != sha(pkl)):
             raise ValueError('Selected artifact identity mismatch: '+arm)
         cfg = Config.fromfile(str(config_path))
-        test_cfg = cfg.model.get('test_cfg', cfg.model.bbox_head.get('test_cfg'))
-        if test_cfg is None or test_cfg.get('score_thr') != .05 or test_cfg.get('max_per_img') != 1:
-            raise ValueError('Expected fixed score_thr .05 / max_per_img 1')
+        contract = inference_contract(cfg.model)
         multi = cfg.data.val.pipeline[1]
         if multi['type'] != 'MultiScaleFlipAug' or tuple(multi['img_scale']) != (1024,1024) or multi.get('flip',False):
             raise ValueError('Expected single-scale unflipped 1024 VAL pipeline')
@@ -293,15 +338,13 @@ def main():
             raise ValueError('VAL prediction count mismatch')
         rows = []
         for i, prediction in enumerate(predictions):
-            box = raw_box(prediction)
+            box = raw_box(prediction, contract['max_per_img'])
             row = make_row(dataset,i,box,'val')
             txt = pkl.parent/'Task1_grab'/(row['image']+'.txt')
             if not txt.exists():
                 raise FileNotFoundError(txt)
             exported = parse_dota_txt(str(txt))
-            if (len(exported) != int(box is not None) or
-                    (box is not None and compute_riou(np.asarray(box[:5]),exported[0]) < .99)):
-                raise ValueError('VAL PKL/TXT order or export mismatch: '+row['image'])
+            validate_export(prediction, exported, contract['max_per_img'])
             rows.append(row)
         if {r['sequence'] for r in rows} != {'real_seq07','real_seq14','sim_seq10'}:
             raise ValueError('Unexpected source VAL sequence identities')
@@ -323,7 +366,8 @@ def main():
         train_specs[arm] = train
         identities[arm] = dict(config=str(config_path),config_sha256=sha(config_path),
             checkpoint=str(checkpoint), checkpoint_sha256=sha(checkpoint),
-            val_pkl=str(pkl),val_pkl_sha256=sha(pkl),selection_sha256=sha(sweep/'sweep_results.json'))
+            val_pkl=str(pkl),val_pkl_sha256=sha(pkl),selection_sha256=sha(sweep/'sweep_results.json'),
+            inference_contract=contract)
     # ConcatDataset order is deliberately flattened so identity/sample matching is explicit.
     from mmdet.datasets.dataset_wrappers import ConcatDataset
     from mmcv.parallel import collate, scatter
@@ -353,7 +397,7 @@ def main():
                 offset += len(part)
         train_ann_hashes = [annotation_set_sha256(str(Path(s.get('data_root',''))/s['ann_file'])) for s in train_specs[arm]]
         identity = dict(arm=arm, selected=identities[arm],script_sha256=sha(__file__),
-            runtime_sources={str(p.relative_to(ROOT)):sha(p) for folder in ['mmrotate/models','mmrotate/core/bbox','mmrotate/datasets/pipelines'] for p in sorted((ROOT/folder).rglob('*.py'))},
+            runtime_sources={str(p.relative_to(ROOT)):sha(p) for folder in ['mmrotate/models','mmrotate/core/bbox','mmrotate/core/post_processing','mmrotate/datasets/pipelines'] for p in sorted((ROOT/folder).rglob('*.py'))},
             augmentation_sha256=sha(ROOT/'mmrotate/datasets/pipelines/port_train_augment.py'),
             sampling=dict(per_domain=args.train_per_domain,seed=args.seed,indices=indices),
             annotation_hashes=train_ann_hashes,
@@ -368,7 +412,13 @@ def main():
                 raise ValueError('Malformed TRAIN cache')
         else:
             torch.cuda.set_device(args.gpu)
-            model = build_detector(configs[arm].model)
+            model_cfg = deepcopy(configs[arm].model)
+            model_cfg.pretrained = None
+            model_cfg.train_cfg = None  # Match tools/test.py construction.
+            model = build_detector(model_cfg)
+            if configs[arm].get('fp16') is not None:
+                from mmcv.runner import wrap_fp16_model
+                wrap_fp16_model(model)
             load_checkpoint(model,identities[arm]['checkpoint'],map_location='cpu',strict=True)
             model.cuda(args.gpu).eval()
             predictions = {}
@@ -389,7 +439,7 @@ def main():
                         raise ValueError('TRAIN preprocessing identity changed')
                     with torch.no_grad():
                         result = model(return_loss=False,rescale=True,**batch)[0]
-                    values.append(raw_box(result))
+                    values.append(raw_box(result, identities[arm]['inference_contract']['max_per_img']))
                 predictions[condition] = values
                 print(arm,condition,'inferred',len(values),'TRAIN samples',flush=True)
             write_new(cache,dict(identity=identity,predictions=predictions))
