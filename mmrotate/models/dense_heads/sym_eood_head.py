@@ -17,7 +17,7 @@ from mmcv.cnn import bias_init_with_prob
 from mmcv.runner import force_fp32
 from mmdet.core import images_to_levels, multi_apply, unmap
 from mmrotate.core import rbbox_overlaps, rotated_anchor_center_inside_flags
-from mmrotate.models.builder import ROTATED_HEADS
+from mmrotate.models.builder import ROTATED_HEADS, build_loss
 from mmrotate.models.dense_heads.rotated_retina_head import RotatedRetinaHead
 from mmrotate.models.losses.candidate_selection import candidate_selection_loss
 
@@ -80,6 +80,7 @@ class SymEOODHead(RotatedRetinaHead):
                  use_semantic_cls_adapter: bool = False,
                  filter_padding_anchors: bool = False,
                  candidate_selection=None,
+                 center_size_compensation=None,
                  **kwargs):
         super().__init__(*args, **kwargs)
         # L_equi
@@ -133,6 +134,10 @@ class SymEOODHead(RotatedRetinaHead):
         # source anchor center lies outside img_shape (inside pad_shape).
         # No image pixels or decoded coordinates are modified.
         self.filter_padding_anchors = bool(filter_padding_anchors)
+        # Optional positive-only training loss; no added detection parameters.
+        self.center_size_compensation = (
+            build_loss(center_size_compensation)
+            if center_size_compensation is not None else None)
         self.candidate_selection = dict(candidate_selection) if candidate_selection else None
         if self.candidate_selection is not None:
             expected = {'score_threshold', 'iou_threshold', 'margin', 'loss_weight'}
@@ -334,8 +339,9 @@ class SymEOODHead(RotatedRetinaHead):
         losses_cls, losses_bbox = [], []
         losses_equi, losses_invar = [], []
         losses_degraded_cls, losses_degraded_aux2_cls = [], []
+        losses_center_size = []
         for lvl in range(num_levels):
-            lc, lb, le, li, ldc, lda = self.loss_single(
+            level_losses = self.loss_single(
                 cls_scores[lvl], bbox_preds[lvl],
                 level_anchor_list[lvl],
                 labels_list[lvl], label_weights_list[lvl],
@@ -352,6 +358,9 @@ class SymEOODHead(RotatedRetinaHead):
                 degraded_aux2_cls_score=(
                     None if degraded_aux2_cls_scores is None
                     else degraded_aux2_cls_scores[lvl]))
+            lc, lb, le, li, ldc, lda = level_losses[:6]
+            if self.center_size_compensation is not None:
+                losses_center_size.append(level_losses[6])
             losses_cls.append(lc)
             losses_bbox.append(lb)
             losses_equi.append(le)
@@ -360,6 +369,11 @@ class SymEOODHead(RotatedRetinaHead):
             losses_degraded_aux2_cls.append(lda)
 
         result = dict(loss_cls=losses_cls, loss_bbox=losses_bbox)
+        if self.center_size_compensation is not None:
+            result['loss_center_size_compensation'] = losses_center_size
+            result['center_size_positive_count'] = sum(
+                ((labels >= 0) & (labels < self.num_classes)).sum()
+                for labels in labels_list).detach().float()
         if self.candidate_selection is not None:
             result['loss_candidate_selection'] = selection_loss
             result.update(selection_stats)
@@ -769,8 +783,17 @@ class SymEOODHead(RotatedRetinaHead):
         if loss_degraded_aux2_cls is None:
             loss_degraded_aux2_cls = bbox_pred.new_zeros(())
 
-        return (loss_cls, loss_bbox, loss_equi, loss_invar,
-                loss_degraded_cls, loss_degraded_aux2_cls)
+        result = (loss_cls, loss_bbox, loss_equi, loss_invar,
+                  loss_degraded_cls, loss_degraded_aux2_cls)
+        if self.center_size_compensation is not None:
+            # Use precisely the existing SymPOLA positives and global positive
+            # normalizer; negatives never enter this regression objective.
+            extra = self.center_size_compensation(
+                decoded_pred_bboxes[pos_inds], decoded_gt_bboxes[pos_inds],
+                weight=bbox_weights[pos_inds][:, 0],
+                avg_factor=num_total_samples)
+            result += (extra,)
+        return result
 
     def _compute_degraded_cls_loss(self, degraded_cls_score, labels,
                                    label_weights, decoded_pred_bboxes,

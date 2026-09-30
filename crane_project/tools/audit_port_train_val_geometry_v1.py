@@ -227,9 +227,22 @@ def raw_box(prediction, max_predictions=1):
 
 def validate_export(prediction, exported, max_predictions):
     a = prediction_array(prediction, max_predictions)
-    if len(exported) != len(a) or any(
-            compute_riou(box[:5], text_box) < .99
-            for box, text_box in zip(a, exported)):
+    def matches(box, text_box):
+        if compute_riou(box[:5], text_box) >= .99:
+            return True
+        # OpenCV can lose a vertex for nearly coincident rectangles after the
+        # 0.01px DOTA export rounding. Check corners at export precision as a
+        # fallback for identity only; do NOT change the evaluation IoU metric.
+        import cv2
+        def corners(obb):
+            b = canonical(obb)
+            return cv2.boxPoints(((float(b[0]),float(b[1])),
+                (float(b[2]),float(b[3])),math.degrees(float(b[4]))))
+        first, second = corners(box[:5]), corners(text_box)
+        return any(float(np.linalg.norm(first - np.roll(order, shift, axis=0),axis=1).max()) <= .03
+                   for order in (second,second[::-1]) for shift in range(4))
+    if len(exported) != len(a) or any(not matches(box,text_box)
+                                    for box,text_box in zip(a,exported)):
         raise ValueError('VAL PKL/TXT order or export mismatch')
 
 
