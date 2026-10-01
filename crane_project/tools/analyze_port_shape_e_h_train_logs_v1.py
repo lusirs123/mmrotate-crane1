@@ -78,10 +78,14 @@ def metadata_review(meta, arm):
         except (ValueError, TypeError, SyntaxError) as error:
             issues.append('resolved_config_parse_unverified: ' + str(error))
             resolved = {}
+    required = ('model', 'runner', 'optimizer_config', 'work_dir')
+    if not all(k in resolved for k in required):
+        issues.append('resolved_config_required_fields_missing')
     if resolved:
         head = resolved.get('model', {}).get('bbox_head', {})
         if not head or 'runner' not in resolved or 'optimizer_config' not in resolved:
-            issues.append('resolved_config_required_fields_missing')
+            if 'resolved_config_required_fields_missing' not in issues:
+                issues.append('resolved_config_required_fields_missing')
         else:
             if head.get('center_size_compensation') is not None:
                 raise ValueError('D compensation is not this experiment')
@@ -99,6 +103,7 @@ def metadata_review(meta, arm):
             raise ValueError('Wrong work_dir in training metadata')
     return dict(seed=seed, exp_name=exp, config_text_sha256=(
         hashlib.sha256(text.encode()).hexdigest() if isinstance(text, str) else None),
+        checked_config_summary=resolved,
         identity_review_required=bool(issues), issues=issues)
 
 

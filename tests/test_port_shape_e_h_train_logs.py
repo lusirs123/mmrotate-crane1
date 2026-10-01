@@ -95,6 +95,17 @@ class LogReview(unittest.TestCase):
         self.assertTrue(review['identity_review_required'])
         self.assertFalse(marker.exists())
 
+    def test_empty_partial_config_and_checked_summary(self):
+        for config in ('unrelated = 1', 'runner = dict(max_epochs=24)'):
+            m = meta()
+            m['config'] = config
+            review = metadata_review(m, 'e_h')
+            self.assertTrue(review['identity_review_required'])
+            self.assertIn('resolved_config_required_fields_missing', review['issues'])
+        review = metadata_review(meta(), 'e_h')
+        self.assertFalse(review['identity_review_required'])
+        self.assertEqual(review['checked_config_summary']['model']['bbox_head']['shape_compensation'], SHAPE)
+
     def test_overlapping_and_restarted_logs_rejected(self):
         a = self.log([row()], 'a.log.json')
         b = self.log([row()], 'b.log.json')
