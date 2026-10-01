@@ -8,7 +8,8 @@ import torch
 
 from crane_project.tools.diagnose_port_center_size_d_v1 import (
     d_parts, grad_cos, gradient_report, positive_geometry, read_logs, runs,
-    val_analysis, config_differences, checkpoint_contract)
+    val_analysis, config_differences, checkpoint_contract, ordered_data_infos,
+    pick_train_indices, reuse_artifacts, sha)
 
 
 def test_decomposition_matches_actual_loss_and_gradient():
@@ -99,6 +100,83 @@ def test_saved_config_comparison_reports_actual_difference():
     assert config_differences({'x':[1,2]},{'x':[1,3]})[0]['path']=='x[1]'
 
 
+def test_real_concat_metadata_sampler_preserves_global_indices_and_seed():
+    from types import SimpleNamespace
+    from mmdet.datasets.dataset_wrappers import ConcatDataset
+    from crane_project.tools.audit_port_train_val_geometry_v1 import pick_indices
+    class Leaf:
+        CLASSES=('grab',)
+        def __init__(self,prefix):
+            self.data_infos=[dict(filename=prefix+str(i).zfill(5)+'.png') for i in range(10)]
+        def __len__(self):return len(self.data_infos)
+        def __getitem__(self,i):return self.data_infos[i]['filename']
+    real=ConcatDataset([Leaf('real_seq01_'),Leaf('real_seq05_'),Leaf('real_seq06_'),
+                        Leaf('real_seq12_'),Leaf('real_seq13_')])
+    dataset=ConcatDataset([real,Leaf('sim_seq08_')])
+    assert not hasattr(dataset,'data_infos')
+    infos=ordered_data_infos(dataset)
+    assert len(infos)==len(dataset)==60
+    assert all(dataset[i]==infos[i]['filename'] for i in range(len(dataset)))
+    result=pick_train_indices(dataset,8,1701)
+    assert result==pick_indices(SimpleNamespace(data_infos=infos),8,1701)
+    assert sum(i<50 for i in result)==8 and sum(i>=50 for i in result)==8
+    assert len({infos[i]['filename'].rsplit('_',1)[0] for i in result if i<50})==5
+
+
+def resume_fixture(tmp_path,monkeypatch):
+    from types import SimpleNamespace
+    import crane_project.tools.ckpt_sweep as sweep_module
+    monkeypatch.setattr(sweep_module,'annotation_set_sha256',lambda path:'fixed-annotations')
+    sweeps,identities={},{}
+    for arm,epoch in [('b','epoch_24'),('d','epoch_22')]:
+        folder=tmp_path/arm;folder.mkdir()
+        checkpoint=folder/(epoch+'.pth');checkpoint.write_bytes(b'checkpoint fixture')
+        pkl=folder/'results.pkl';pkl.write_bytes(b'prediction fixture')
+        record=dict(checkpoint=str(checkpoint),checkpoint_sha256=sha(checkpoint),
+                    results_pkl=str(pkl),results_pkl_sha256=sha(pkl))
+        selection=folder/'sweep_results.json'
+        selection.write_text(json.dumps(dict(evidence_role='source_val_checkpoint_selection',
+            selected_checkpoint=epoch,selected_path=str(checkpoint),config_sha256=arm+'-config',
+            source_val_annotations_sha256='fixed-annotations',all_checkpoints={epoch:record})))
+        identities[arm]=dict(selected_epoch=epoch,config_sha256=arm+'-config',
+            checkpoint=str(checkpoint),checkpoint_sha256=sha(checkpoint),pkl=str(pkl),
+            pkl_sha256=sha(pkl),annotation_sha256='fixed-annotations',selection_sha256=sha(selection))
+        sweeps[arm]=folder
+    script='crane_project/tools/diagnose_port_center_size_d_v1.py'
+    sources={script:'old-diagnostic','mmrotate/models/losses/center_size_compensation.py':'unchanged'}
+    cache=tmp_path/'diagnosis.artifacts.json';progress=tmp_path/'diagnosis.progress.jsonl'
+    cache.write_text(json.dumps(dict(protocol='port_center_size_d_diagnosis_v1',
+        evidence_role='train_val_only_diagnosis',sources=sources,identities=identities,
+        val=dict(saved=True))))
+    progress.write_text('')
+    current=dict(sources);current[script]='fixed-diagnostic'
+    configs={arm:SimpleNamespace(data=SimpleNamespace(val=SimpleNamespace(
+        data_root=str(tmp_path),ann_file='annotations'))) for arm in ('b','d')}
+    return cache,progress,current,sweeps,configs
+
+
+def test_resume_reuses_artifacts_without_rewriting_or_rereading_val(tmp_path,monkeypatch):
+    args=resume_fixture(tmp_path,monkeypatch)
+    before=args[0].read_bytes()
+    cached=reuse_artifacts(*args)
+    assert cached['val']==dict(saved=True)
+    assert args[0].read_bytes()==before and args[1].read_bytes()==b''
+
+
+@pytest.mark.parametrize('changed',['progress','model_source','checkpoint','selection','annotations'])
+def test_resume_refuses_partial_work_or_changed_evidence(tmp_path,monkeypatch,changed):
+    args=resume_fixture(tmp_path,monkeypatch)
+    cache,progress,current,sweeps,configs=args
+    if changed=='progress':progress.write_text('{"completed_batch":1}\n')
+    elif changed=='model_source':current['mmrotate/models/losses/center_size_compensation.py']='changed'
+    elif changed=='checkpoint':(sweeps['b']/'epoch_24.pth').write_bytes(b'changed')
+    elif changed=='selection':(sweeps['b']/'sweep_results.json').write_text('{}')
+    else:
+        import crane_project.tools.ckpt_sweep as sweep_module
+        monkeypatch.setattr(sweep_module,'annotation_set_sha256',lambda path:'changed')
+    with pytest.raises(ValueError):reuse_artifacts(*args)
+
+
 @pytest.mark.parametrize('phase',['warmup_o2m','late_o2o'])
 def test_actual_head_capture_decomposition_and_gradient_report(phase):
     from mmrotate.models import build_head
@@ -180,9 +258,10 @@ def test_runtime_orchestration_with_actual_head_and_cpu_io_fixture(tmp_path,monk
             result['fixture_aux_loss']=x.square().mean()*.01
             return result
     class Dataset:
-        datasets=[range(1810),range(748)]
-        data_infos=[dict(filename=('real_seq01_' if i<1810 else 'sim_seq08_')+str(i)+'.png')
-                    for i in range(2558)]
+        CLASSES=('grab',)
+        def __init__(self,prefix,count,offset):
+            self.data_infos=[dict(filename=prefix+str(i+offset)+'.png') for i in range(count)]
+        def __len__(self):return len(self.data_infos)
         def __getitem__(self,i):
             path=tmp_path/self.data_infos[i]['filename']
             if not path.exists():path.write_bytes(b'synthetic image identity fixture')
@@ -207,7 +286,10 @@ def test_runtime_orchestration_with_actual_head_and_cpu_io_fixture(tmp_path,monk
     monkeypatch.setattr(torch.cuda,'max_memory_allocated',lambda *a:0)
     monkeypatch.setattr(nn.Module,'cuda',lambda self,*a:self)
     monkeypatch.setattr(mmrotate.models,'build_detector',lambda *a:Tiny())
-    monkeypatch.setattr(mmrotate.datasets,'build_dataset',lambda *a:Dataset())
+    from mmdet.datasets.dataset_wrappers import ConcatDataset
+    dataset=ConcatDataset([Dataset('real_seq01_',1810,0),Dataset('sim_seq08_',748,1810)])
+    assert not hasattr(dataset,'data_infos')
+    monkeypatch.setattr(mmrotate.datasets,'build_dataset',lambda *a:dataset)
     monkeypatch.setattr(mmcv.parallel,'collate',batch)
     monkeypatch.setattr(mmcv.parallel,'scatter',lambda batch,gpus:[batch])
     monkeypatch.setattr(SymEOODHead,'get_anchors',cpu_anchors)

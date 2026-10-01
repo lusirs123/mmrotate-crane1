@@ -15,7 +15,7 @@ import os
 from pathlib import Path
 import random
 import sys
-from types import MethodType
+from types import MethodType, SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -27,6 +27,68 @@ def sha(path):
         for block in iter(lambda: stream.read(1024 * 1024), b''):
             h.update(block)
     return h.hexdigest()
+
+
+def ordered_data_infos(dataset):
+    """Metadata in the SAME global index order as nested ConcatDataset.__getitem__."""
+    if hasattr(dataset,'datasets'):
+        infos=[info for child in dataset.datasets for info in ordered_data_infos(child)]
+    elif hasattr(dataset,'data_infos'):
+        infos=list(dataset.data_infos)
+    else:
+        raise TypeError('Unsupported TRAIN wrapper: '+type(dataset).__name__)
+    if len(infos)!=len(dataset):
+        raise ValueError('TRAIN metadata count does not match global indexing')
+    return infos
+
+
+def pick_train_indices(dataset,per_domain,seed):
+    from crane_project.tools.audit_port_train_val_geometry_v1 import pick_indices
+    # The legacy sampler accepts flat metadata; retain its seed/stratification.
+    return pick_indices(SimpleNamespace(data_infos=ordered_data_infos(dataset)),per_domain,seed)
+
+
+def reuse_artifacts(artifact_path,progress_path,current_sources,sweeps,configs):
+    """Resume ONLY before the first TRAIN batch, with frozen identity checks."""
+    from crane_project.tools.ckpt_sweep import annotation_set_sha256
+    if not artifact_path.is_file() or not progress_path.is_file():
+        raise FileNotFoundError('Resume requires both existing artifact and progress sidecars')
+    if progress_path.read_text().strip():
+        raise ValueError('Resume accepts only zero completed TRAIN batches; preserve nonempty progress')
+    cached=json.loads(artifact_path.read_text())
+    if (cached.get('protocol')!='port_center_size_d_diagnosis_v1'
+            or cached.get('evidence_role')!='train_val_only_diagnosis'):
+        raise ValueError('Unexpected artifact cache protocol')
+    script_key='crane_project/tools/diagnose_port_center_size_d_v1.py'
+    stable=lambda x:{k:v for k,v in x.items() if k!=script_key}
+    if stable(cached['sources'])!=stable(current_sources):
+        raise ValueError('Model/config sources changed; cached artifacts cannot be reused')
+    for arm in ('b','d'):
+        identity=cached['identities'][arm]
+        cfg=configs[arm]
+        ann=(Path(cfg.data.val.data_root)/cfg.data.val.ann_file).resolve()
+        selection_path=Path(sweeps[arm])/'sweep_results.json'
+        if sha(selection_path)!=identity['selection_sha256']:
+            raise ValueError('Frozen selection changed: '+arm)
+        selection=json.loads(selection_path.read_text())
+        selected='epoch_24' if arm=='b' else 'epoch_22'
+        if (selection.get('evidence_role')!='source_val_checkpoint_selection'
+                or selection['selected_checkpoint']!=selected
+                or identity['selected_epoch']!=selected
+                or selection['config_sha256']!=identity['config_sha256']):
+            raise ValueError('Frozen VAL contract changed: '+arm)
+        record=selection['all_checkpoints'][selected]
+        for key,record_key in [('checkpoint','checkpoint'),('pkl','results_pkl')]:
+            path=Path(identity[key]).resolve()
+            if (Path(record[record_key]).resolve()!=path
+                    or sha(path)!=identity[key+'_sha256']
+                    or record[record_key+'_sha256']!=identity[key+'_sha256']):
+                raise ValueError('Frozen '+key+' changed: '+arm)
+        if (Path(selection['selected_path']).resolve()!=Path(identity['checkpoint']).resolve()
+                or annotation_set_sha256(str(ann))!=identity['annotation_sha256']
+                or selection['source_val_annotations_sha256']!=identity['annotation_sha256']):
+            raise ValueError('VAL annotations/selected path changed: '+arm)
+    return cached
 
 
 def stats(values):
@@ -368,7 +430,6 @@ def runtime_probe(cfg, identities, gpu, per_domain, progress_path=None, control_
     from mmrotate.datasets import build_dataset
     from mmrotate.models import build_detector
     from crane_project.tools.preflight_port_center_size_v1 import fixed_train_specs
-    from crane_project.tools.audit_port_train_val_geometry_v1 import pick_indices
     from crane_project.tools.ckpt_sweep import annotation_set_sha256
     torch.cuda.set_device(gpu)
     random.seed(1701); np.random.seed(1701); torch.manual_seed(1701); torch.cuda.manual_seed_all(1701)
@@ -377,7 +438,12 @@ def runtime_probe(cfg, identities, gpu, per_domain, progress_path=None, control_
     datasets = {s:build_dataset(fixed_train_specs(cfg,s)) for s in (1.,.5)}
     if any([len(p) for p in ds.datasets] != [1810,748] for ds in datasets.values()):
         raise ValueError('TRAIN split differs')
-    indices = pick_indices(datasets[1.],per_domain,1701)
+    # Check metadata order for both views before accessing image indices.
+    first_infos=ordered_data_infos(datasets[1.])
+    half_infos=ordered_data_infos(datasets[.5])
+    if [i['filename'] for i in first_infos]!=[i['filename'] for i in half_infos]:
+        raise ValueError('clean/half TRAIN order differs')
+    indices = pick_train_indices(datasets[1.],per_domain,1701)
     real = [i for i in indices if i<1810]; sim = [i for i in indices if i>=1810]
     if len(real)!=per_domain or len(sim)!=per_domain:
         raise ValueError('Unbalanced diagnostic sample')
@@ -553,11 +619,15 @@ def main():
     ap.add_argument('--per-domain',type=int,default=8)
     ap.add_argument('--artifact-only',action='store_true',help='Existing VAL and logs only; no model execution')
     ap.add_argument('--config-only',action='store_true',help='Local resolved-config check only')
+    ap.add_argument('--resume-empty-progress',action='store_true',
+                    help='Reuse existing VAL sidecar only when no TRAIN batch completed')
     ap.add_argument('--out-json',required=True)
     args=ap.parse_args()
     os.chdir(ROOT)
     out=Path(args.out_json).resolve()
     if out.exists(): raise FileExistsError(out)
+    if args.resume_empty_progress and (args.config_only or args.artifact_only):
+        raise ValueError('Resume requires the complete TRAIN diagnostic mode')
     if args.per_domain<5 or args.per_domain>32: raise ValueError('per-domain must be 5..32')
     from crane_project.tools.preflight_port_center_size_v1 import check_configs,CONTROL,EXPERIMENT
     b,d=check_configs()
@@ -578,25 +648,36 @@ def main():
     if args.config_only:
         report['status']='CONFIG_ONLY_PASS_RUNTIME_UNVERIFIED'
     else:
-        rows,ids={},{}
-        for arm,cfg,path,sweep,epoch in [('b',b,CONTROL,args.b_sweep,'epoch_24'),
-                                       ('d',d,EXPERIMENT,args.d_sweep,'epoch_22')]:
-            rows[arm],ids[arm]=load_frozen_val(cfg,path,Path(sweep),epoch)
-        report['identities']=ids
-        report['val']=val_analysis(rows['b'],rows['d'])
+        artifact_path=out.with_suffix('.artifacts.json')
+        progress_path=out.with_suffix('.progress.jsonl')
+        if args.resume_empty_progress:
+            cached=reuse_artifacts(artifact_path,progress_path,report['sources'],
+                dict(b=args.b_sweep,d=args.d_sweep),dict(b=b,d=d))
+            ids=cached['identities']
+            report['identities']=ids
+            report['val']=cached['val']
+            report['resumed_artifacts']=dict(path=str(artifact_path),sha256=sha(artifact_path),
+                original_sources=cached['sources'],completed_train_batches_before_resume=0)
+        else:
+            if not args.artifact_only and (artifact_path.exists() or progress_path.exists()):
+                raise FileExistsError('Sidecars already exist; use --resume-empty-progress only '
+                                     'if no TRAIN batch completed, or choose a new output name')
+            rows,ids={},{}
+            for arm,cfg,path,sweep,epoch in [('b',b,CONTROL,args.b_sweep,'epoch_24'),
+                                           ('d',d,EXPERIMENT,args.d_sweep,'epoch_22')]:
+                rows[arm],ids[arm]=load_frozen_val(cfg,path,Path(sweep),epoch)
+            report['identities']=ids
+            report['val']=val_analysis(rows['b'],rows['d'])
         report['logs']={a:read_logs(Path(p).parent) for a,p in [('b',args.b_sweep),('d',args.d_sweep)]}
         if args.artifact_only:
             report['status']='ARTIFACTS_READ_RUNTIME_UNVERIFIED'
         else:
             # Preserve artifact findings and completed batches even if GPU execution fails.
-            artifact_path=out.with_suffix('.artifacts.json')
-            progress_path=out.with_suffix('.progress.jsonl')
             artifact_path.parent.mkdir(parents=True,exist_ok=True)
-            if artifact_path.exists() or progress_path.exists():
-                raise FileExistsError('Refusing to overwrite diagnosis sidecars')
-            with artifact_path.open('x') as stream:
-                json.dump(report,stream,ensure_ascii=False,indent=2,allow_nan=False)
-            progress_path.touch(exist_ok=False)
+            if not args.resume_empty_progress:
+                with artifact_path.open('x') as stream:
+                    json.dump(report,stream,ensure_ascii=False,indent=2,allow_nan=False)
+                progress_path.touch(exist_ok=False)
             report['train']=runtime_probe(d,ids,args.gpu,args.per_domain,progress_path,control_cfg=b)
             report['status']='DIAGNOSIS_COMPLETE_REVIEW_REQUIRED'
     out.parent.mkdir(parents=True,exist_ok=True)
