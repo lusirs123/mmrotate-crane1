@@ -1435,3 +1435,254 @@ python crane_project/tools/analyze_port_shape_e_h_train_logs_v1.py \
 ```
 
 后续分析先看保护/实际节点/配对身份，再结合有符号误差与梯度判断四张TRAIN图上H是否纠偏尺寸/角度、是否与主KLD同向或有代价、是否通过共享层影响原目标。单个相反夹角、标量比或微小单次变化不能证明全训练根因、监督权重不足或优化器实际更新效果。仅在TRAIN机制证据与既有VAL退化模式一致时预登记下一项范围有限的设计/对照，继续保留B。TEST已多次暴露：不以本轮或既有TEST差异调系数、改选权、改门槛或启动新TEST。
+
+## 30. 冻结B/E-H TRAIN梯度结果评审与有限下一步（2026-10-01）
+
+### 30.1 回传证据、身份及独立复核（事实）
+
+用户提供第29节命令的8行终端打印和Downloads下主JSON、progress JSONL、artifacts JSON。原字节归档到`work_dirs/port_shape_e_h_v1_train_gradients_server_20261001.json`、同前缀`.progress.jsonl`和`.artifacts.json`，未覆盖服务器/之前报告。三者SHA分别为：
+
+- 主JSON：`bf5316450298b1dfe53c90b77560a887ee2fb84b81300649bb97f4d5e8971ff8`。
+- progress：`c0dbdf22600a114da030be3e9c007cda2be33cd52b33968b45a064fb7e5f3b9e`。
+- artifacts：`714ef4429adb10dc8edc9423ef92fe9c3b45c5ecb18ae76bd3412a69f1304e61`。
+
+主JSON状态TRAIN_GRADIENT_CHECK_COMPLETE_REVIEW_REQUIRED；progress 8行与主JSON的8个row逐字段完全一致；artifacts是执行前快照，CHECK_STARTED属于预期状态，除status外全部字段与最终主JSON对应前缀一致，不是未完成检查。8行终端H和FPN H/main数值与JSON逐项完全一致。
+
+本地独立核对28个源码SHA、来源清单SHA及B/E配置SHA与当前项目一致；两个权重SHA与第24/29节已冻结B ep24/E-H ep22一致。服务器checkpoint_contract均MATCH、seed0、iter15360/14080，参数/buffer未改变、optimizer_steps=0、分类tau1、late O2O每图1个正样本/分母2。权重本地仍缺失，checkpoint读取/参数不变结论为服务器已核对代码的报告证据，不能声称本地再加载权重。
+
+四张TRAIN原图SHA及train/train_sim标注集合SHA与本地数据一致；两臂同视图的输入/GT/scale_factor/image SHA一致。B/E 8个图片—视图配对中6个level/anchor相同；clean第一对real_seq01_00000和sim_seq08_00000不同，因此这两个不能视为严格匹配正样本比较。即使另外6个anchor相同，两臂参数、优化历史及epoch24/22仍不同，不能升级为只切换H的因果干预。
+
+保存框的raw主KLD范围0.00345936–0.05600375，decoder边/中心边界及delta限幅、主float32行列式/逆矩阵/原距/压缩上限、H double保护/指数尾部计数均0。GT长宽比约1.5010、2.7041、2.9142、2.9239；全部方向定义/周期边界标记通过，本次不是近方形框或角度周期端点造成的符号异常。服务器峰值allocated显存两臂约2.296GiB，仅表示此次探针，不是完整训练显存预算。
+
+独立按报告norm复算全部比值，按框/梯度复算误差×梯度及几何响应，均一致。进一步仅用回传的16个正样本框，在本地CPU重算原SymKLDLoss/权重2和固定H/权重0.05，使用相同权重1和分母2：batch主loss最大绝对差1.1921e-7，H为1.1642e-10；log长/短边及rad角度梯度最大绝对差主KLD9.2387e-7、H为0。这是保存节点的数学复算，没有运行检测器、推理、optimizer或增加TRAIN图片。结合第29节已通过测试与此次源码/数值复核，未发现改变当前判断的节点、权重、分母或统计错误；FPN/卷积夹角没有原梯度向量和本地权重，不能声称本地独立重新算出这些夹角。
+
+### 30.2 新增H强度与共享层交互（事实、推断边界）
+
+以下H已包含0.05，主KLD已包含权重2，不再次乘权重：
+
+| 冻结模型/视图 | FPN H/main范数比（两batch） | FPN H/main cos（两batch） |
+|---|---:|---:|
+| B clean，反事实H | 11.0899% / 11.1199% | 0.5507 / 0.9438 |
+| B half，反事实H | 4.9335% / 4.2540% | 0.5586 / 0.9175 |
+| E-H clean，实际H | 7.2835% / 7.6411% | 0.9266 / 0.8619 |
+| E-H half，实际H | 4.7953% / 4.9170% | 0.3522 / 0.9766 |
+
+E主回归输出卷积H/main比clean6.3119%–6.7952%、half3.1773%–4.7081%，其cos全部正（0.2203–0.9589）。E的FPN H/base_total比4.7925%–7.5993%、cos0.3504–0.9689；base_total含原主分类与辅助项。H对直接分类输出卷积和实际框xy均零，主回归卷积base_total梯度与主KLD一致，符合分类质量分支detach和独立辅助输出卷积的原结构。
+
+有限批次中H在主回归/FPN有非零响应，没有整体反向共享梯度或数值限幅失效的证据；但positive cos不能保证每张图/每个尺寸或角度都纠偏，也不能保证共享参数更新保持中心/分类/检测覆盖。half的H/main比更低并不证明0.05太小：本次E H的绝对FPN范数clean约0.0632/0.0777、half0.0694/0.0742，量级相近，main的范数和预测误差组成也改变。不能将这些比值当作形状监督“充分/不足”的判据或直接据此增大系数。
+
+### 30.3 直接纠偏响应与一个局部耦合实例（事实、限定推断）
+
+每臂8个正样本，定义误差×梯度>0为冻结分配下局部纠偏：B反事实H与原主KLD对长、短、角均8/8；E实际H与主KLD对长和角均8/8、短边均7/8。只有E half的sim_seq08_00374短边例外；16个框来自4个原图及重复视图/权重，不能当作16个独立样本或纠偏率的总体估计。
+
+该框level0/anchor13146，B/E选择相同anchor。E当前长边+6.9694%、短边+0.5558%、规范角度误差-3.4825°，原图中心距2.7259px；已偏大的短边，其log短边梯度主KLD=-0.0050239、H=-0.0002380，局部梯度下降会继续增大短边。H角度梯度-0.0201104，与负角误差相乘为正，角度正在被纠正。不能将短边不纠偏写成整体协方差loss上升或无效；联合几何目标可能同时降低其他误差。
+
+为补这一具体缺口，在同一保存框上做float64解析反事实，保留尺寸，分别仅把中心或规范方向替换为GT，再重算同样loss的log短边梯度，没有新模型前向、修改训练目标或实际更新：
+
+| 保存框的局部反事实 | 主KLD log短边梯度 | 0.05 H log短边梯度 |
+|---|---:|---:|
+| 实际框 | -0.00502469 | -0.000237993 |
+| 仅中心=GT | -0.00415730 | -0.000237993 |
+| 仅方向=GT | +0.01042363 | +0.001023962 |
+| 中心和方向均=GT | +0.01103533 | +0.001023962 |
+
+同时在无保护区用已有C+S表达分解原主KLD、保留原sqrt压缩链式因子：raw C=0.00323824、S=0.03557227，对log短边梯度贡献分别约-0.000873874和-0.004150818，总和-0.005024692。仅把中心置为GT不消除例外，H不依赖中心且仍为负；只消除角差即转为纠偏。因此可将这个单框的符号变化解释为尺寸—方向联合项的局部耦合，并指出主中心项也贡献扩边响应，而非代码断连、周期或数值保护。
+
+这不是D失败根因，也不是E-H全局退化根因：例外短边是偏大的，而既有VAL主要记录整体偏小；直接用这个反例解释VAL尺寸低估在方向上不成立。此外，E half的real_seq06_00006短边低估-9.0095%（B为-6.5179%），当前H和主KLD却均有纠偏梯度；其中心/角度又比B好。说明“保存点的方向正确”与“不同训练轨迹最终尺寸更好”是不同证据，不能由局部导数推出收敛、共享网络响应或泛化。
+
+### 30.4 当前结论与下一步建议（推断、待验证）
+
+**有限TRAIN检查完成，E-H的实际接入和局部几何响应得到验证；没有找到足以解释全局退化的训练根因。保留B；E-H v1仍为未达联合目标的固定实验。** 结合第28节后期日志，没有证据支持继续以持续大梯度、H完全无效、整体梯度反向或数值保护触发作为既定根因；也不直接提高0.05、重训原E-H或恢复D/候选排序/完整审计路线。
+
+下一项可优先考察的有限候选是**原B＋独立长短边log尺寸约束**：保留B原主KLD、中心/角度和全部检测链路，仅令新增项直接约束log(pred_long/gt_long)、log(pred_short/gt_short)，不新增H、中心或角度项。尺寸排序应兼容宽高交换，目标detach，尺寸无量纲；原等比例变换、坐标还原、深度约束不变。此为待设计/验证的机制假设，检验“单独尺寸纠偏是否比继续增加联合协方差监督更匹配既有VAL尺寸低估”，不是已证明的新loss或收益，不能承诺同时改善角度/覆盖。
+
+先用现有TRAIN保存框及已归档VAL普通尺寸低估框做有限离线公式/梯度检查，关注上下偏差、角差、近方形、交换等价和本节例外；不新增推理或全数据审计。根据该TRAIN检查预先固定公式、一个系数及预算，不能按VAL/TEST网格挑系数。通过后才另行获授权在本地实现一项B/候选同初始化、同预算对照，按原规则选权，使用第15/24节覆盖、连续性、尺寸、定位、sim角度及RIoU联合门槛，不事后放宽。原B/E实验结果继续保留；若有必要重新训练B作同期对照须事先说明，不以小样本反事实证明收益。
+
+本次只读取三个新TRAIN附件、已有交接/相关代码和旧VAL报告结构，未重算新VAL全量梯度或读取新增TEST，未改任何诊断/模型/损失/配置代码。TEST已多次暴露，继续明确披露；后续设计、系数和选权只依TRAIN/VAL协议。本次不报TRAIN正样本检测“中心命中率”，也没有输出覆盖或全帧中心正确覆盖的新证据；这些检测分母和深度独立验证限制保持。
+
+## 31. 独立尺寸候选F-S v1的详细设计与针对性文献核对（2026-10-01，尚未实施）
+
+### 31.1 任务边界及问题对应（事实与推断）
+
+用户要求先详细设计下一步并说明是否针对现有问题，再检索相似工作。本节先形成设计，再以原论文核对其依据及局限；只更新本文，没有改代码、连接服务器、启动训练/推理或新增TEST检查。B ep24继续为有效方案，D/E-H历史结果和选权身份保持。F-S是新候选代号，不把已失败的固定E-H v1改名或改变其历史公式。
+
+| 当前证据（第24/28/30节） | F-S的直接目标 | 不能由此推出的结论 |
+|---|---|---|
+| VAL两域长短边signed log bias为负，E-H比B更负；普通real尺寸也退化 | 对每条边的尺寸比例提供独立纠偏信号，同时约束偏大和偏小 | 不证明主KLD是整体偏小的根因，也不是所有框都偏小 |
+| 一张TRAIN框的主KLD/H短边导数与该边误差方向不符，消除角差后转为纠偏 | 新增项的边长导数不依赖角差/中心差 | 例外是短边偏大，不能用于解释VAL整体低估；原主KLD耦合仍保留 |
+| E-H改善sim角度、real正确覆盖，但尺寸、RIoU及定位尾部有代价 | 回到B，只增加尺寸项，检验不同监督目标的取舍 | F-S不直接新增角度/中心监督，不保证复现E-H角度或覆盖收益 |
+| 后期日志没有持续大梯度；有限TRAIN H有非零且多数纠偏的响应 | 无证据要求先改lr/clip或继续增大H系数 | 正确的局部导数不证明共享网络更新、收敛或泛化更好 |
+
+**工作假设：** 在保留原联合几何目标的条件下，额外的独立边长纠偏能否改善尺寸误差及尺寸偏差，并满足原覆盖、定位、角度和连续性要求。它针对尺寸这个已观测缺口；不是整体根因修复，也不是完全解耦网络。
+
+静态核对发现，`mmrotate/models/losses/center_size_compensation.py`中的D尺寸分项已经是排序边长log残差的两维平均SmoothL1，beta=0.1；D另含中心分项，二者合计权重0.25。因此F-S的数学主体并非本项目首次引入，其实验身份是**在B上单独检验尺寸分项**。本节候选权重0.1与D也不同，B/F-S对照不能单独归因D失败于中心项；如要严格分解D因果，需要另设同系数消融，但本轮不增加该路线。
+
+### 31.2 一个具体候选公式及接入范围（设计，待TRAIN验证）
+
+对原主KLD实际接收的解码正样本框，定义排序边长：
+
+```text
+Lp = max(pred_w, pred_h); Sp = min(pred_w, pred_h)
+Lg = max(gt_w, gt_h);     Sg = min(gt_w, gt_h)
+eL = log(Lp/Lg);          eS = log(Sp/Sg)
+rho_beta(e) = e^2/(2*beta)               if abs(e) < beta
+              abs(e) - beta/2           otherwise
+g_i = (rho_beta(eL_i) + rho_beta(eS_i))/2
+L_F-S = L_B + lambda * sum_i(a_i*g_i)/N
+candidate: beta=0.1, lambda=0.1, eps=1e-6
+```
+
+`a_i`与`N`必须直接复用原KLD的实际权重和当前GPU batch跨FPN层归一化，逐层使用同一全局分母、再求和；不增加跨GPU归一化、按域重加权或每层自行平均。GT detach。空正样本返回与预测边相连的零项，负样本不参与。沿用原O2M/O2O切换和原正样本，不增加样本筛选、IoU质量加权、候选排序或难例挖掘。
+
+新增项只读取真实解码的w/h，使用与D一致的两维平均，不能将求和/平均混用造成2倍差别。正边数值检查和eps只保护log；不另加上限/偏小专用权重、输出尺度校准或小框放大。原解码限幅仍须诊断，不能用解码边上的导数证明限幅后的原参数仍有梯度。尺寸排序消除w/h交换编码影响，角度周期不进入新增项；不改变GT角度定义。
+
+候选beta=0.1沿用既有D尺寸项平滑尺度，二次区对应约-9.52%到+10.52%的尺寸比例误差。候选lambda=0.1采用一个温和、可解释的起点：无保护、中心和方向完全正确、尺寸残差很小时，项目raw对称KLD约为`2*(eL^2+eS^2)`，权重2及sqrt压缩后的主回归约为`2*(eL^2+eS^2)`；新增项约为`lambda/(4*beta)*(eL^2+eS^2)`，故此理想局部条件下额外尺寸强度约为原项的12.5%。这是本项目公式的泰勒近似，不是论文验证，不是实际FPN范数比，也不是选择了最优系数。
+
+**0.1/0.1是本节提交评审的唯一候选，尚未通过有限TRAIN接入/初始化检查，也尚未冻结正式训练合同。** 后续检查若数值、节点或有效信号失败，先报告具体失败并重新论证，不自动扫系数、不按VAL/TEST挑系数、不临时加入阶段调度。小样本范数比不用于自动匹配H强度。
+
+现有`SymEOODHead.shape_compensation`通过通用`build_loss`接入，且已传递主KLD实际正样本节点/权重/分母；后续可复用此入口，新建独立尺寸loss和继承B的配置，不新增预测分支或可学习参数。原日志键`loss_shape_compensation`若复用，报告必须另明确loss类型为F-S、公式/系数及配置SHA，避免与H混淆。需有关闭新增项时所有原loss、state键及推理输出一致的检查。历史D/E-H类和正式配置不改，F-S中不叠加D或H。
+
+### 31.3 纠偏性质与已知反例的界限（数学推导，未运行F实验）
+
+在排序分支确定、合法正边且无保护激活时：
+
+```text
+d L_extra / d log(Lp_i) = lambda*a_i/(2*N) * clip(eL_i/beta, -1, 1)
+d L_extra / d log(Sp_i) = lambda*a_i/(2*N) * clip(eS_i/beta, -1, 1)
+d L_extra / d pred_x/y/theta = 0
+```
+
+因此新增项对有误差的边总有独立纠偏方向；对预测和GT的共同等比例缩放不变。两条边同时缩小但比例正确时仍会有loss，避免只约束长宽比遗漏共同尺度。近方形时不人为加强方向监督；精确w=h的排序拐点须验证一致的分支/次梯度，不能声称处处可微。
+
+**原主KLD加上新增项的总梯度未必纠偏。** 对第30.3节保存的E half反例，仅代入候选公式作标准库数学运算：短边log残差0.005542746，权重1/分母2下F-S导数为+0.001385687；原主KLD约-0.005024691，两者相加仍为-0.003639005。这不是在B上运行F，也不是新训练结果；它表明候选提供纠偏补充，而不保证翻转该保存框的联合导数。不能因未翻转就按此单框增大系数，也不能宣称消除了角度耦合。
+
+共享回归塔/FPN及预测相关分配仍可能使分类、中心和覆盖变化。保持等比例增强、原图坐标还原和原深度估计约束；F-S不新增推理变换。代码链路保持不等于独立深度精度已验证，几何或尺寸改善也不能直接替代深度GT评估。
+
+### 31.4 有限验证、正式对照与判断（待实施）
+
+1. **先复用保存框作数学/单元验证。** 用第30节16个保存节点检查上述导数、有限差分及主KLD+F-S组成；覆盖边长上下5%/10%、两边共同缩放、中心/方向替换、w/h交换加pi/2、theta加pi、近/精确方形、空正样本和数值保护。角差2/5/10度等是数学扰动，不能算新数据或训练证据。已归档VAL普通低估框仅用于固定的几何解释，不拟合系数/门槛、不重跑全量推理。不得把独立构造的邻近张量梯度当实际主节点梯度。
+2. **授权实现后做有限TRAIN接入/初始化检查。** 复用原四张TRAIN图及clean/half，不扩大为完整审计。B ep24探针仅用于后期实际节点/尺度/共享层梯度；另按原seed0和ImageNet初始化核对B/F-S参数与buffer一致、O2M真实接入和完整目标裁剪。冻结后期快照强制早期分配不等于恢复早期历史。检查新增项xy/theta直接梯度为零、边长/回归/FPN非零、原loss一致、保护和clip记录完整；所有探针optimizer_steps=0、状态/钩子/计数恢复。是否出现有效信号须在实际解码及限幅链路下判断，不能只看loss非零或新增项与主项正cos。
+3. **检查通过且正式设计冻结后，一次B/F-S对照。** F-S从与B相同ImageNet预训练/seed0开始，不从B或E权重续训；TRAIN real1810+sim748、等比例增强、24epoch、原两卡总batch4、SGD/lr日程及clip10均不变。优先复用原B日志/权重/VAL缓存；核对来源、初始化和配置合同，仅新增loss/工作目录不同。历史B是单seed历史对照，不冒称同期逐batch配对。若来源/初始化/环境实质不一致，先披露并说明同期B重跑的必要性，不自行增加训练预算。
+4. **沿原VAL协议选权，再判断目标。** 仍只扫描16/18/20/22/24，原硬约束与软评分、fallback披露不变；不能按尺寸报告换epoch。第15/24节15项覆盖/联合几何门槛全部保留：real输出至少374/375、全帧中心正确至少360/375，最长无输出/RIoU失败不劣于1/4；sim输出与中心正确保持512/512；两域共同输出长/短边平均相对误差都下降、sim纯角度RMSE严格低于B实际2.107151度、共同输出中心mean不增、全帧平均RIoU不降。中心命中仅以输出帧为分母，另报输出覆盖及全帧中心正确覆盖；不得把B的96%全帧正确写成100%。
+
+普通real沿用原固定排除10个历史严重错位帧的分组，另报其尺寸误差、中心mean/RMSE/p90、signed bias和逐序列新增严重错位。本节建议正式冻结前明确增加**普通real共同输出中心mean/RMSE不得恶化**的定位尾部保护项（B现有共同组n364基准4.4375px/5.2923px；新增输出另报，不能混换分母）。此项是拟新增目标保护，不伪称原15项已包含；不参与选权评分、不在看到F结果后改标准。共同输出集合若改变，应同时重算该集合的B基准，不硬用不同集合的上述数值。
+
+如果仅尺寸改善、sim角度不改善，或定位/覆盖代价仍在，就报告部分收益并保留B；不为通过实验放宽联合目标。单次seed0或微小差异不称稳定/显著收益。TEST已经多次暴露，不能称未接触的独立确认集；本节不依据TEST调公式/系数/选权，也不安排新TEST。
+
+### 31.5 针对性文献证据—设计对应表（已检索事实与可借鉴边界）
+
+检索日期2026-10-01。主题词覆盖rotated/OBB regression、size-angle coupling、independent shape/side-length loss、scale sensitivity和gradient calibration。使用原论文arXiv全文、NeurIPS官方PDF、期刊发布页及作者所在机构文献库；不把第三方摘要或论文AP当本项目证据。是针对性检索，不是系统综述/穷尽原创性检索。RIL/EIoU读取方法部分，Constraint/2026 RSFPN核读发布页方法内容，KLD复用并核对原文，GCL仅依据作者机构可读摘要，SODE依据发布页摘要/引言；未读的GCL完整推导不能写成已经复现。
+
+| 原论文及核读位置 | 相似问题/可借鉴内容 | 本候选采用或不采用、证据边界 |
+|---|---|---|
+| Xue Yang等，[Learning High-Precision Bounding Box for Rotated Object Detection via Kullback-Leibler Divergence](https://proceedings.neurips.cc/paper/2021/file/98f13708210194c475687be6106a3b84-Paper.pdf)，NeurIPS2021，参数梯度与尺度不变性分析 | KLD的参数梯度相互影响，并可随物体形状调整优化重点 | 保留联合主KLD；耦合也可能有益。论文没有验证本项目整体低估根因或lambda=0.1 |
+| Qi Ming等，[Optimization for Arbitrary-Oriented Object Detection via Representation Invariance Loss](https://arxiv.org/html/2103.11636)，2021预印本，第3.3节式9/10 | 有不考虑中心/角度的尺度不敏感shape度量，并考虑宽高等价表达 | 最接近独立尺寸的OBB依据。借鉴表示等价/相对尺度；不引入其完整匹配策略，也不照抄完整RIL |
+| Yi-Fan Zhang等，[Focal and Efficient IOU Loss for Accurate Bounding Box Regression](https://arxiv.org/html/2101.08158)，Neurocomputing2022，第3.1.3/3.2节式5–7 | 仅长宽比可遗漏两边共同缩放，且比例项可能使宽高响应相反；EIoU显式约束两条边 | 支持分别测量边长误差。它研究水平框/CIoU，不证明KLD或H有相同全局故障；不引入Focal样本加权 |
+| Luyang Zhang等，[Constraint Loss for Rotated Object Detection in Remote Sensing Images](https://www.mdpi.com/2072-4292/13/21/4291)，Remote Sensing2021，DOI10.3390/rs13214291，第2.1节式3 | 把中心、尺寸、角度分开，尺寸对宽高交换作最小误差处理 | 支持独立尺寸和交换不变性已有先例；其重点是表达边界/约束容差，不等同当前退化。不采用中心/尺寸小误差置零的容差域 |
+| Qi Ming等，[Gradient Calibration Loss for Fast and Accurate Oriented Bounding Box Regression](https://biblio.ugent.be/publication/01HYJQR0WF0MQZ32KWVZ89D2J6)，IEEE TGRS2024，DOI10.1109/TGRS.2024.3367294，机构摘要 | 对rotated IoU梯度和角误差关系、尺度敏感性作分析及校准 | 借鉴实际梯度验证，不能只看loss下降。其角误差与梯度负相关不等于错误符号，也不是主KLD/H问题证明；暂不换GCL |
+| Xiaozhi Yu等，[SODE-Net: A Slender Rotating Object Detection Network Based on Spatial Orthogonality and Decoupled Encoding](https://www.mdpi.com/2072-4292/17/17/3042)，Remote Sensing2025，DOI10.3390/rs17173042，摘要/引言 | 尺寸位置与角度特征分支解耦，并改backbone/角度编码 | 提供未来共享特征冲突的研究方向，超出单loss受控范围；目前没有本项目特征冲突的充分证据，暂不引入 |
+| Jiaxin Xu等，[Rotation-Sensitive Feature Enhancement Network for Oriented Object Detection in Remote Sensing Images](https://www.mdpi.com/1424-8220/26/2/381)，Sensors2026，DOI10.3390/s26020381，第3.4.3节式17/18及消融说明 | 联合回归另加log长宽比形状项，按历史梯度统计动态平衡权重 | 相近的“原回归+形状项”先例；但仅比例项对两边共同缩放为零，不能替代本候选两条边的尺度纠偏。不引入其动态权重、角度项或FPN改造 |
+
+对RIL式10作本节自己的代数改写：固定边长对应关系时，`hIoU = exp(-abs(log(wp/wg))-abs(log(hp/hg)))`。因此该度量与log边长差有直接关系；F-S的SmoothL1在小误差附近的响应不同，不是RIL原式。式10是论文定义的shape度量，不能随意把它等同一般二维矩形真实IoU或未经核对直接照搬论文中loss符号。
+
+对2026 RSFPN式17的本节数学判断：若pred_w=k*gt_w且pred_h=k*gt_h，长宽比相同，其shape项为零，虽然k不为1时实际尺寸有误差。发布页还明确记载其消融中加入GC-MTL后总体mAP相对上一阶段下降0.14个百分点；这仅是原论文该指标的结果，不能证明其所有几何效果无效，也不能把整套网络AP收益归为形状项。因此“有论文做形状监督”不等于这种监督解决本项目共同尺度偏小；动态权重不由论文名义自动获得采用依据。
+
+**文献核对后的设计建议：** 继续采用B加独立log长短边项这个最小候选，优先借鉴RIL的表示/尺度处理、EIoU的独立边长目标和GCL的梯度核查方法；不把仅长宽比损失当完整尺寸监督，也不一次加入动态权重、角度分支或新FPN。已找到相似工作和相似优化问题，没有找到直接验证本项目F-S公式/权重及联合目标的结果，更不能宣称“新OBB损失”或原创性。正式验证仍按31.4节，收益和根因均保持待验证。
+
+## 32. F-S前两项检查的本地实现、验证及服务器交付（2026-10-01）
+
+### 32.1 授权范围与实现（事实）
+
+用户授权综合第31节建议与相关论文，进行前两项检查、本地修改对应代码，复核后提供服务器指令。已实现候选F-S和有限检查工具；没有连接服务器、正式训练、修改VAL选权/门槛或新增TEST。原B ep24仍为有效方案。候选beta=0.1、lambda=0.1、eps=1e-6固定用于本次检查，但**尚未根据服务器实际接入/初始化结果冻结正式训练合同**。不把代码可训练或检查完成状态当成正式训练许可。
+
+| 项目位置 | 本次内容 |
+|---|---|
+| `mmrotate/models/losses/log_size_loss.py` | 排序长短边log残差的两维平均SmoothL1，GT detach；没有中心/角度依赖或参数 |
+| `mmrotate/models/losses/__init__.py` | 仅注册/导出LogSizeLoss |
+| `crane_project/configs/crane_symeood_k1_port_day2night_size_f_s_v1.py` | 继承B，仅新增尺寸项和工作目录，未叠加D/H，未改初始化/预算 |
+| `crane_project/tools/check_port_size_f_s_v1.py` | CPU保存框解析梯度/有限差分、表示/尺度/角差与方形边界检查，无检测器前向 |
+| `crane_project/tools/preflight_port_size_f_s_v1.py` | 冻结B后期4批次＋原seed0初始化4批次的TRAIN接入/梯度/完整裁剪检查，零optimizer step |
+| `crane_project/tools/port_size_f_s_v1_saved_boxes.json` | 既有16个TRAIN节点和8个固定描述性VAL低估框；记录来源SHA及原TRAIN身份 |
+| `crane_project/tools/port_size_f_s_v1_sources.json` | 34个代码/配置/保存框成员的固定SHA |
+| `tests/test_port_size_f_s_v1.py` | 12项F-S数值、真实主头接入、状态/异常恢复和CLI契约测试 |
+
+数学主体沿用已有D尺寸分项。本轮借鉴RIL的交换等价/相对尺度思路、EIoU的独立边长目标及GCL的实际梯度核查，不声称复现完整论文；未加入动态权重、角度分支、样本筛选、候选排序、蒸馏或FPN改造。模型主头、解码、分配、增强、坐标还原及深度代码未改。旧D/E-H损失/配置、原诊断报告未覆盖。
+
+### 32.2 第一项：保存框公式检查结果（本地事实，数学证据）
+
+从第30节原TRAIN梯度报告提取全部16个保存节点，保留原框、权重、分母及arm/尺度/图像/anchor。另从第24节原VAL比较报告提取每arm/domain按图像名排序的前两个两边均低估且非原10帧严重错位的输出框，共8个；这是明确条件选择的描述性例子，不是无偏样本、总体纠偏率或新VAL评估，不据此挑系数。来源报告及当前fixture SHA均固定。
+
+本地Python3.8/torch1.8 CPU执行结果保存为`work_dirs/port_size_f_s_v1_saved_box_check_local_20261001.json`，状态`SAVED_BOX_FORMULA_CHECK_COMPLETE_REVIEW_REQUIRED`。包括16个TRAIN回放、8个VAL描述框及34个合成比例/角差/方形扰动。无检测器前向、推理或参数更新。
+
+新增项的解析log边梯度与autograd一致；所有保存框新增xy/角度导数为零。表示交换加pi/2、theta加pi、中心/方向改变和共同0.5缩放不改变新增项；两边共同偏小仍被检测。近方形/精确方形有限，精确排序拐点明确不作不适用的双侧有限差分。全部非拐点log边有限差分最大绝对误差约1.36724e-7，低于预先设置2e-6。
+
+| TRAIN保存框回放 | 原主KLD局部纠偏（长/短） | 单独F-S局部纠偏（长/短） | 主KLD＋F-S局部纠偏（长/短） |
+|---|---:|---:|---:|
+| B，8个节点 | 8/8、8/8 | 8/8、8/8 | 8/8、8/8 |
+| E-H，8个节点，只作历史反例验证 | 8/8、7/8 | 8/8、8/8 | 8/8、7/8 |
+
+重复视图/模型来自4张原图，不能把这些分母当独立样本或全TRAIN纠偏率。E-H half的sim_seq08_00374短边导数：原主KLD -0.00502469137，F-S +0.00138568647，合计 -0.00363900490，仍不纠偏。与第31节限制一致；没有通过增加系数消除此反例，也没有借它解释VAL共同尺度低估。
+
+首轮核查发现并修正了两个**诊断断言问题**：B配置的完整loss字典还含eps/reduction，不能以省略字段的字典误拒；当前MMDetection的weight_reduce_loss在mean/avg_factor路径含float32 eps分母保护。新增loss一直调用原reduce函数，未改归一化。解析检查现在测量同版本reduce倍率，再验证边长导数，报告记录倍率和库版本。当前本地N=2时float64倍率0.4999999702、float32倍率0.5；第31节1/N公式是忽略此微小库保护的数学表达，正式接入继续与原KLD共用原归一化。
+
+### 32.3 第二项：TRAIN工具契约及本地可验证范围（事实、服务器待验证）
+
+工具依赖第一项成功的报告并核对候选、源码清单、fixture及状态，拒绝换系数、跳过前置检查或覆盖已有输出。GPU前冻结artifacts，逐批写progress，失败保留CHECK_FAILED及已完成行；没有自动改batch/尺度/预算或启动训练。
+
+服务器只载入原B ep24，核对原VAL选权身份/config SHA、已冻结checkpoint SHA和checkpoint内安全AST配置/seed/epoch/iter；不读取E/D权重、不用VAL指标重选权。旧sweep JSON仅用于身份字段。B权重中新增F-S为反事实信号，不能当已经训练F。之后按tools/train.py的seed0→build_detector→init_weights核对当前B/F-S参数/state键/buffer完全相同，再使用F-S初始化模型作实际O2M检查；不从B续训，也不把当前初始化身份相同写成已恢复历史初始状态。
+
+每阶段固定TRAIN索引(0,1810)/(905,2184)，即real_seq01_00000、sim_seq08_00000、real_seq06_00006、sim_seq08_00374，clean/half各两批，共8个带F-S的前向。每批额外关闭F-S作一次原B目标前向，因此**实际共16次TRAIN检测器前向**，不是只有8次；全部无optimizer step。两阶段输入张量/GT/scale_factor/图像SHA一致；half原GT还原与clean一致且共同尺度恰为0.5。TRAIN仍为real1810+sim748，图像字节与两域标注集合SHA必须匹配原报告，不仅检查名字/数量。checkpoint执行后再次验SHA。
+
+新增项复用主KLD实际正样本张量对象、权重及每层全局分母，捕获并核对所有5层、空层和loss计数；独立公式与集成值一致。记录主KLD/F-S及二者相加的直接长短边响应、xy/theta为零、正样本level/anchor、输入和原图坐标。检查回归输出卷积/FPN有效梯度，新增分类输出卷积和回归输出xy/angle行梯度为零；共享梯度夹角不作为几何收益保证。记录主KLD原距、det/inverse/raw/loss保护、原decoder限幅、尺寸eps/线性区/排序tie，不能把F-S无保护当主KLD无保护。
+
+完整B目标包括原辅助项，分别对完整B与B+F-S反传并按原clip10记录前后范数/倍率；没有模拟optimizer更新。比较关闭F-S后的原全部loss时恢复相同RNG和调度状态，防止随机辅助分支产生假差异。所有钩子、计数、buffer、RNG及参数保持/恢复；BN训练态、非调度buffer修改、实际节点断连或非有限梯度均拒绝，异常后清除临时参数梯度。
+
+这里是单GPU、每批两图的有限探针，保持原每卡batch/分母；完整目标指该批次全部原loss，不代表重构了正式两卡DDP平均后的历史梯度、裁剪或更新轨迹。
+
+本地12项新测试通过，相关26项原尺寸/E-H集成及梯度测试通过，共38项。覆盖上述数值/归一化/GT detach、D尺寸分项等值、真实SymEOODHead实际节点/空层、原loss和推理不变、参数/state键一致、随机辅助loss比较、完整裁剪、错误/BN/buffer拒绝、异常梯度清理、八批次CPU I/O fixture、初始化匹配、前置报告/源码拒绝及CLI持久化。CPU fixture以小卷积替代ResNet/FPN输入链路、CUDA及checkpoint读取，不能称服务器真实B权重、原ImageNet参数或GPU数值已通过。
+
+独立配置命令完成，`work_dirs/port_size_f_s_v1_config_check_local_20261001.json`状态`CONFIG_ONLY_RUNTIME_UNVERIFIED`。本地库为torch1.8.0.post3/MMCV1.7.2/MMDetection2.28.2；服务器报告会记录其库版本、reduce源码SHA和倍率。Python3.8 AST及diff空白检查通过。源码清单/上传成员另逐字节核对；除新增F-S相关文件及loss注册外，没有修改历史模型/损失/分配/数据转换代码。旧E-H源码清单保留原历史字节，注册新增loss导致当前__init__.py SHA改变；本次使用独立F-S清单，不重写历史清单消除版本差异。
+
+### 32.4 服务器运行与回传（待验证）
+
+上传`work_dirs/port_size_f_s_v1_preflight_tools_20261001.tar.gz`到服务器项目根目录，再执行：
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+conda activate mmrotljj
+tar -xzf port_size_f_s_v1_preflight_tools_20261001.tar.gz
+
+PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/check_port_size_f_s_v1.py \
+  --out-json work_dirs/port_size_f_s_v1_saved_box_check.json
+
+CUDA_VISIBLE_DEVICES=3 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/preflight_port_size_f_s_v1.py \
+  --gpu 0 \
+  --math-report work_dirs/port_size_f_s_v1_saved_box_check.json \
+  --out-json work_dirs/port_size_f_s_v1_train_preflight.json
+```
+
+第一条是CPU数学检查，可复现本地结论；第二条仅执行有限TRAIN接入/初始化检查。物理卡3映射gpu0。B原sweep目录迁移时，仅用`--b-sweep`提供原目录；不换权重/epoch，不绕过来源或数据身份检查。原ImageNet初始化沿用服务器torchvision预训练缓存。本地没有该B权重/GPU环境，实际数值、初始化/裁剪及显存待服务器回传确认。
+
+回传终端和以下4个文件：
+
+- `work_dirs/port_size_f_s_v1_saved_box_check.json`。
+- `work_dirs/port_size_f_s_v1_train_preflight.json`。
+- `work_dirs/port_size_f_s_v1_train_preflight.progress.jsonl`，正常8行。
+- `work_dirs/port_size_f_s_v1_train_preflight.artifacts.json`，GPU前身份快照。
+
+预期末尾分别为`SAVED_BOX_FORMULA_CHECK_COMPLETE_REVIEW_REQUIRED`和`TRAIN_PREFLIGHT_COMPLETE_REVIEW_REQUIRED`，都只是检查完成待评审，**不是正式训练或联合几何目标通过**。artifacts的CHECK_STARTED是执行前快照，不代表主报告失败。输出或sidecar已存在时改新输出名，保留旧结果；若改数学输出名，第二条math-report同步引用它。
+
+后续先看实际节点/来源/保护、初始及后期的尺寸有效信号、共享响应与完整裁剪，再决定是否冻结一次正式F-S训练；不由非零loss、正cos或小样本比例直接自动调系数。第31.4节VAL协议/覆盖、普通real尾部及联合几何目标继续有效，尚未改VAL工具。TEST已多次暴露，不用于本次设计/系数/选权；TRAIN正样本不是输出帧，不在本工具报告检测中心命中率/输出覆盖或独立深度精度。
+
+### 32.5 最终交付校验（事实）
+
+上传包共39个成员：34个固定来源成员、独立F-S清单及4个相关测试文件；没有图片、权重、完整训练日志、完整VAL预测或TEST产物，只有12KB的既有框诊断fixture。包大小139060字节，全部成员与当前项目逐字节一致，Python3.8 AST及diff空白检查通过。原第30节28个来源中27个仍保持原SHA，唯一变化是本节明确新增导出的loss __init__.py。包不含本文，项目交接继续以本地本文为准。
+
+- 上传包SHA256：`8cd055c580a2e4876927ffef8b0e4452d6adf5838415dd78e3ba9d1205cddb63`。
+- F-S来源清单SHA256：`4e27e775f3bfe3abbb4ab93ed4111b57532fe3dded55b018497908dd8354ec7f`。
+- 本地保存框报告SHA256：`2087ea50b522281bec26d1faccdb1db31de4fb0a92beccc97acf2d556c581743`。
+- 本地配置报告SHA256：`90b4fae920cec029cfd8ba994c3cd2fb50faf48c81846561de43c5a54701e0c1`。
+
+实现/测试复核未留下影响本次数学或接入检查的已知代码问题。第一项已在本地完成；第二项完成工具、真实主头CPU验证及配置核对，服务器真实权重、ImageNet初始化和CUDA运行仍待回传，不作“GPU已通过”或“可正式训练”的结论。

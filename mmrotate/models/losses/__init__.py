@@ -16,11 +16,13 @@ from .object_background_relation import ObjectBackgroundRelationDistillation
 from .candidate_selection import candidate_selection_loss
 from .center_size_compensation import CenterSizeCompensationLoss
 from .covariance_shape_loss import CovarianceShapeLoss
+from .log_size_loss import LogSizeLoss
 
 __all__ = [
     'GDLoss', 'GDLoss_v1', 'KFLoss', 'ConvexGIoULoss', 'BCConvexGIoULoss',
     'KLDRepPointsLoss', 'SmoothFocalLoss', 'RotatedIoULoss',
     'SpatialBorderLoss','sym_kld', 'SymKLDLoss','SymNFLLoss',
     'SemanticFeatureDistillation', 'ObjectBackgroundRelationDistillation',
-    'candidate_selection_loss', 'CenterSizeCompensationLoss', 'CovarianceShapeLoss'
+    'candidate_selection_loss', 'CenterSizeCompensationLoss', 'CovarianceShapeLoss',
+    'LogSizeLoss'
 ]
