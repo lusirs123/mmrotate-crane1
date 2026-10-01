@@ -860,3 +860,161 @@ python crane_project/tools/preflight_port_shape_e_v1.py \
 **下一步判断规则：** 先看有限/连接/保护/裁剪，再看尺度和分配阶段的强度范围与回归/FPN方向。负余弦本身不等于有害。若E-H信号合理，再基于数学性质和TRAIN参考冻结一个公式及lambda_H，并登记后只进行一次同初始化、同seed、同预算的B/E对照；不自动照搬0.25，不扫描多个系数，也不先训练再按VAL改设计。E-H不满足要求时，记录原因后评估保留E0或暂停，不能自动改成另一套算法。
 
 第15.3节VAL选权及覆盖、连续性、联合几何条件仍有效：中心命中率只统计输出帧，另报输出覆盖率及全帧中心正确覆盖；区分普通real与严重错位组，报尺寸signed bias/p90和sim纯角度。TEST已经多次暴露，本轮不用于公式、系数、门槛或权重调整。保持等比例、原图还原及深度估计约束，不把几何检查当独立深度准确性证据。
+
+## 20. 服务器E候选TRAIN短检查结果与测试代码复核（2026-10-01）
+
+### 20.1 结果身份和复核范围（事实）
+
+用户返回终端输出及`/Users/mac/Downloads/port_shape_e_v1_train_preflight.json`，要求读取、检查测试代码、分析并建议下一步。本轮只复核结果和源码，保存证据及更新本文，没有改模型/探针/训练配置，没有连接服务器或启动训练。返回JSON已原字节保存为`work_dirs/port_shape_e_v1_train_preflight_server_20261001.json`，SHA256为`625a0dda8682b01c54337e98a798c31ae282ee15c73ebc5a00df09c84a387e7a`。
+
+终端8行的32个loss数值与JSON逐项完全一致；报告中7个源码SHA均与当前本地文件匹配，4张TRAIN图片及两组TRAIN标注集合SHA也与本地一致。B冻结身份epoch24、iter15360、seed0，内嵌配置契约MATCH；checkpoint SHA为`8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23`。本地没有该权重，身份验证来自服务器脚本的SHA/配置检查，不能声称本地再次读取权重。
+
+状态`TRAIN_PROBE_COMPLETE_REVIEW_REQUIRED`，正式配置仍`NOT_FROZEN`。服务器为GTX1080、PyTorch1.13.1+cu117，峰值allocated显存2489.919MiB；这不是reserved显存或正式训练速度/显存预测。参数SHA前后相同，optimizer steps=0、training epochs=0。
+
+### 20.2 有效梯度、保护及裁剪（事实）
+
+实际8个batch、16次图片视图，仍只有4张独立TRAIN图片。每个O2M batch18个正样本，O2O为2个，正常反映topk9到topk1，不是检测输出数量或输出覆盖率。80个正样本出现次数包含重复视图/分配，不是80张独立图片。
+
+8个batch的实际主KLD非空节点连接计数均完整，两形状项w/h/角度梯度及回归卷积/FPN信号均非零；新增xy直接梯度和输出分类卷积直接梯度均为0。分类仍有共享特征和预测相关分配的间接变化可能，不能据此保证覆盖不变。全部JSON浮点数有限。
+
+记录的边长下限、协方差/平均协方差det下限、逆矩阵上限、S/T负舍入及raw/loss上限、Hellinger尾部计数均为0；原KLD报告的det/inverse/raw/loss保护也为0。完整目标clip10均未触发：实际B裁剪前范数范围1.292919–7.399534，B+E0为1.425511–7.626419，B+单位E-H为3.899160–8.407352。裁剪前后微小差别属于计算精度，不能读成梯度更新。有限/未裁剪并不等于共享更新幅度或几何结果已合理。
+
+### 20.3 分阶段强度：总体匹配中位数不能直接用作系数（事实及解释）
+
+下表为完整FPN范数比，相对于当前batch主SymKLD，不是相对于含主分类/ATSS辅助项的完整B目标：
+
+| 分配重放/尺度 | E0 / 主KLD | 单位E-H / 主KLD | 匹配E0的lambda_H范围 |
+|---|---:|---:|---:|
+| O2M / clean | 0.1164–0.1200 | 0.4284–0.5695 | 0.2106–0.2717 |
+| O2M / half | 0.0907–0.1192 | 0.3383–0.3915 | 0.2681–0.3045 |
+| O2O / clean | 0.0738–0.1194 | 2.2180–2.2240 | 0.0333–0.0537 |
+| O2O / half | 0.0698–0.1210 | 0.8508–0.9867 | 0.0707–0.1422 |
+
+脚本8个batch匹配系数的中位数0.1764368、范围0.0332759–0.3044739均独立复算一致，没有计算错误。但O2M中位数0.2699005、O2O中位数0.0622121；混合中位数由两个分配条件各占4个batch人为决定，不能当所有训练阶段等强度的证据。若直接采用0.1764，本次O2O的新增FPN范数约为主KLD的15.0%–39.2%；直接照搬0.25则为21.3%–55.6%。这些只是线性缩放的诊断描述，不是运行了这些系数的训练或完整裁剪检查。
+
+**数学解释：** 第18.4节近零展开中E0约为0.25*r²，而平滑E-H约为`sqrt(r²/4+eps)-sqrt(eps)`，r²=u²+v²。因此两者单位权重的径向梯度比近似为`1/sqrt(r²+4*eps)`：在平滑区外，形状误差越小，E-H相对E0越强；完全一致处两者梯度仍为0。O2O的S均值clean约0.00239/0.00557、half约0.00974/0.03150，明显小于这些O2M正样本的0.10–0.38，与上述响应相容。FPN比例还受分配、中心项和共享映射影响，不能由这个展开精确预测或证明泛化收益。
+
+完整回归卷积的E0/主KLD范围0.05098–0.11305（O2O），单位E-H为0.71069–2.02978（O2O），同样显示小误差区增强。FPN与主KLD的余弦：E0为0.5604–0.9644，E-H为0.5507–0.9438，8个batch均正；主回归卷积也均正。只能排除本探针范围内这两组参数的明显反向合成，不能保证real中心/分类/覆盖或普通几何不退化。
+
+### 20.4 测试代码审查结论和限制
+
+**审查结论（事实）：** 没有发现足以使这次结果失效的损失分解、权重/归一化、实际节点捕获、梯度范数、系数汇总或完整目标累加错误。逐项重算了范数比、匹配系数、中位数/范围及裁剪前后关系。捕获的是实际KLD正样本，修复后的第17.3节错误没有再次出现；每层normalizer相同，本次也等于实际总正样本数。完整目标累加包含`aux0_loss_*`，没有漏掉既有ATSS辅助项。
+
+**需要保留的测量边界：**
+
+1. `warmup_o2m`只是epoch24冻结参数上的调度/分配重放，不是同seed0初始化下的真实早期特征；探针seed1701用于可复现检查，checkpoint的seed0身份另已核验。因此真实初始化接入路径仍是正式实现时必要的小缺口。
+2. `coefficient_reference.proposed_lambda`字段虽然有NOT_FROZEN说明，名字容易被误读；其含义始终是混合条件下的描述性匹配参考，不能自动用于训练。下一版汇总宜显式分阶段/尺度标注，保留本次原JSON。
+3. backbone只测layer4末块一个参数；在两行O2O中主KLD/E0/E-H均为0，另一个half O2O行两候选余弦均约-0.3189。这不能代表完整backbone梯度缺失或E-H新增的普遍冲突。当前参数报告不区分None依赖和连接但数值为0；实际正样本节点另有显式依赖检查。无需据此追加全backbone审计。
+4. 混合real/sim的FPN范数不能外推逐域；直接w/h的单位是像素、角度是弧度，不能比较列的绝对大小来断言“角度主导”。形状保护计数来自解码后框，不能据全部0排除bbox_coder的delta限幅或head解码上界等更早的保护。
+5. 几何小算例是独立形状项的一步无量纲方向检查，没有测实际共享网络更新后的中心、RIoU、输出覆盖、连续性或深度精度。当前脚本通过状态是运行完成待评审，不是几何收益门槛通过。
+
+本轮源码与已通过的第19节版本相同，复用该30项CPU测试，不无理由重复同版测试或D完整诊断。返回结果补齐真实B checkpoint/ResNet/CUDA路径在这8个batch的有限执行证据，不等同覆盖正式训练全过程。
+
+### 20.5 下一步单一候选建议（推断、待验证；尚未接入或冻结正式配置）
+
+推荐继续E-H，下一版采用固定`lambda_H=0.05`作为单一保守候选，保留本次H_eps、eps1e-6和局部float64，不新增中心补偿、阶段调度、动态平衡或其他形状项。选择依据是普通小误差区与后期主监督相对强度，而非VAL/TEST指标或寻找数值最优。
+
+按现有向量线性缩放，0.05在本次O2O中的新增FPN范数约为主KLD的4.254%–11.120%，回归卷积为3.553%–10.149%；O2M则为FPN1.691%–2.847%、回归卷积1.339%–2.234%。因此它并非全程匹配E0，而是有意保持较弱的大误差/多正样本增强、在小误差区增加信号。这是机制和强度方面的实验理由，不证明0.05最佳、早期信号足够、覆盖一定安全或D根因已找到。
+
+正式接入后只补一个有限检查：用B原初始化流程（预训练backbone+同seed0初始化检测头），复用相同4张TRAIN图片的clean/half O2M视图，无optimizer步骤；核对新增loss确实只在同一主正样本上聚合、B目标不变、有限梯度及完整裁剪，并与独立计算数值一致。结合初始化大误差情况，记录必要的decoder/上界保护，避免把本次解码后保护0误当完整证明。不重新跑当前epoch24探针，不扫系数，不补完整TRAIN审计。
+
+若接入/初始化检查通过，预登记固定公式、系数、seed、预算和第15.3节VAL选权/覆盖/联合几何门槛，再进行一次正式B/E-H对照；保持同初始化/同预算，不把本次冻结B诊断写成已经训练了E。若初始化信号或数值有问题，先记录具体问题，不能事后按VAL调系数或自动加入阶段调度。
+
+后续中心命中率只统计输出帧，另报输出覆盖与全帧中心正确覆盖，并保留连续性、普通real尺寸/方向及sim角度条件。TEST已多次暴露，本次未使用TEST，不据其改设计/系数/权重。等比例变换、原图坐标还原和深度估计约束保持；本次没有独立深度GT验证。
+
+## 21. 固定E-H v1实现、代码审查及服务器运行（2026-10-01）
+
+### 21.1 授权与冻结实验身份
+
+用户授权修改实验E、代码检查并给服务器指令。本轮将第20.5节单一候选接入为独立E-H v1：
+
+```text
+T = 0.5 * [log det((Sigma_pred+Sigma_gt)/2)
+           - 0.5*(log det Sigma_pred + log det Sigma_gt)]
+H_eps = sqrt(-expm1(-T)+1e-6) - sqrt(1e-6)
+L_E-H-v1 = L_B + 0.05 * weighted_reduce(H_eps, global_positive_count)
+```
+
+公式、系数0.05、eps1e-6、沿用当前高斯映射及候选内部float64已冻结。正式配置`crane_project/configs/crane_symeood_k1_port_day2night_shape_e_h_v1.py`、目录`work_dirs/crane_symeood_k1_port_day2night_shape_e_h_v1`。E0是旧参考候选，未训练；E-H v1不是E0或整框ProbIoU复现。0.05的依据仍是第20节TRAIN强度与数学性质，不是经VAL/TEST得到的最优值或D根因结论。
+
+B全部原目标、辅助头、数据含seq06、等比例增强、seed0、ImageNet初始化、24epoch、SGD/lr/裁剪、分配、推理阈值、原图还原及深度链路保持。解析配置仅新增形状项及work_dir。正式E从原初始化训练，不从B/D权重续训。本地没有连接服务器、启动训练或新增VAL/TEST推理。
+
+### 21.2 实现及代码审查（事实）
+
+| 文件 | 内容 |
+|---|---|
+| `mmrotate/models/dense_heads/sym_eood_head.py` | 可选`shape_compensation`，复用主KLD实际decoded正样本张量、GT、权重和分母；输出`loss_shape_compensation`及非优化正样本计数 |
+| `mmrotate/models/losses/__init__.py` | 注册现有参数为空的`CovarianceShapeLoss` |
+| `mmrotate/models/losses/covariance_shape_loss.py` | 复用第19/20节已检查的H_eps实现，没有改公式/数值处理 |
+| `crane_project/configs/crane_symeood_k1_port_day2night_shape_e_h_v1.py` | 继承B，显式固定Hellinger模式、0.05、eps及独立目录 |
+| `crane_project/tools/preflight_port_shape_e_h_v1.py` | 原初始化路径下实际接入的4批TRAIN检查，不加载B快照 |
+| `crane_project/tools/compare_port_shape_e_h_val_v1.py` | 固定所选B/E VAL缓存的配对报告、原门槛、指标数值交叉核对；不推理或选权 |
+| `tests/test_port_shape_e_h_integration.py` | 配置、参数身份、真实head/推理/梯度、初始化流程CPU fixture、VAL分母及缓存流程 |
+
+新增形状损失没有可训练参数或buffer，B/E state_dict键一致；显式禁止同一head叠加D中心补偿和E形状补偿，以保持实验身份。未启用形状项的B/D行为维持；没有改变loss默认模式用于本次E，配置明确传入hellinger和0.05。空正样本项接图零，GT在协方差内部detach；新增项不直接监督xy、只在原正样本归一化下聚合。
+
+初始化探针按`tools/train.py`的seed0→build_detector→init_weights流程各构造当前B/E，要求参数SHA、state键及初始buffer值一致，再用E检测器进行4个batch（两对既有TRAIN图×clean/half），仅实际初始化O2M，不重跑epoch24探针。关闭形状项后在相同训练前向模式重算B原目标，核对主分类/回归和所有辅助loss不变；同批独立计算E项并要求复用实际主KLD节点。head临时hook与形状项开关均在finally恢复。
+
+记录新增xywhθ直接梯度、完整主回归/分类卷积与完整FPN的范数及相对主KLD/完整B比例、余弦，记录完整B/E两目标裁剪前后范数。检测非有限/缺失依赖、非零中心或输出分类卷积梯度、缺少回归/FPN信号、参数更新等错误；不通过时停止并保留sidecar。正常完成仅表示实现检查待评审，不自动判断覆盖安全或正式训练收益。记录decoder delta宽高限幅、解码中心/边长上界及下界与协方差保护，补第20.4节的必要缺口；不增加全TRAIN或完整backbone审计。
+
+VAL工具严格沿用原16/18/20/22/24候选、选权配置/metric协议及中心阈值15；B固定epoch24，E只读取已经冻结的选中权重。记录selection_info，包含fallback时也披露。配对报告保留输出中心命中/输出覆盖/全帧正确覆盖、普通real与历史严重错位、尺寸signed log bias/p90、纯角度、原序列/编号缺口下的连续性。新增门槛字段只表达第15.3节既定条件，不自动替换B；sim角度同时对固定2.1072及B的未舍入实际RMSE作严格下降比较，避免舍入造成虚假微小改善。单次seed0没有显著/稳定收益结论。
+
+为防第19节发现的近共线RIoU误差，另对固定B/E输出做独立双精度交叉核对，仅报差值及0.5阈值变化。差值>1e-3或阈值变化时标记需要评审，原选权及主指标不改、不用另一个IoU重选epoch。
+
+**审查结论：** 没有发现当前实现阻断问题。审查改为B/E相同grad-enabled训练前向、立即释放B比较图，减少后端路径差异的误报风险；核对正式loss只累加一次、统计计数不是优化项、原推理无新模块使用、D tuple索引兼容、配置继承和服务器CLI。没有把CPU fixture写成真实ImageNet/CUDA已通过。
+
+### 21.3 本地验证与未执行部分
+
+初轮48项测试通过（6项新集成+42项相关既有回归）；补VAL两项并完成审查修正后，8项集成测试通过，42项未受后续修改影响的既有测试复用，共50项当前检查覆盖。包括真实head O2M/O2O、同权重推理完全一致、原B损失逐层一致、新项实际节点/直接梯度、空正样本、D/E混用拒绝、真实MMDetection ConcatDataset包装下的4批初始化CPU流程fixture、输出防覆盖、VAL独立分母、缓存比较和fallback披露。
+
+```bash
+/opt/anaconda3/envs/mmrot/bin/python -m pytest -q \
+  tests/test_port_shape_e_h_integration.py \
+  tests/test_port_shape_e_preflight.py \
+  tests/test_port_center_size_compensation.py \
+  tests/test_port_center_size_d_diagnosis.py
+```
+
+配置检查、Python AST及diff空白检查通过。最终配置/源码快照为`work_dirs/port_shape_e_h_v1_config_final_20261001.json`，状态`CONFIG_ONLY_INITIALIZATION_UNVERIFIED`。真实ResNet ImageNet加载、CUDA强度/显存和初始化保护待服务器检查；CPU流程fixture替换了backbone/FPN/CUDA及图像I/O。当前B/E初始化一致的检查也不能证明恢复了未存档的历史B初始张量，正式比较沿用原配置/来源和seed协议，不冒称历史逐位复现。
+
+### 21.4 上传及服务器顺序
+
+上传包：`work_dirs/port_shape_e_h_v1_code_20261001.tar.gz`，相对项目根目录打包E配置、head/注册/损失、检查及VAL工具、所复用工具和4个相关测试；不含数据、权重或历史结果。旧B/D配置及结果保持原身份，本文第19/20节历史源码SHA不能改写成新head的SHA。
+
+将包放到服务器项目根目录，先运行原初始化的有限检查：
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+conda activate mmrotljj
+tar -xzf port_shape_e_h_v1_code_20261001.tar.gz
+CUDA_VISIBLE_DEVICES=3 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/preflight_port_shape_e_h_v1.py \
+  --gpu 0 \
+  --out-json work_dirs/port_shape_e_h_v1_init_preflight.json
+```
+
+此命令4个E batch及对应B原目标重算，不做optimizer步骤；首次初始化依赖原ImageNet缓存/加载机制。成功状态`INITIALIZATION_CHECK_COMPLETE_REVIEW_REQUIRED`。返回终端及主JSON，失败时连同已有`.artifacts.json`/`.progress.jsonl`；重跑换新的输出名，不覆盖旧证据。
+
+**短检查评审通过后**再执行下面正式训练，2张GPU与B相同，每卡batch2、seed0、24epoch；脚本`dist_train.sh`内已固定`--seed 0`。不传load_from、resume或改变lr/epoch。新实验目录应没有既有训练产物，已有产物时保留并先核对身份，不能直接重新启动覆盖。
+
+```bash
+CUDA_VISIBLE_DEVICES=2,3 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+bash tools/dist_train.sh \
+  crane_project/configs/crane_symeood_k1_port_day2night_shape_e_h_v1.py 2
+```
+
+训练完成后，沿用既定5个epoch的原VAL选权；没有TEST参数：
+
+```bash
+PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/ckpt_sweep.py \
+  --config crane_project/configs/crane_symeood_k1_port_day2night_shape_e_h_v1.py \
+  --work-dir work_dirs/crane_symeood_k1_port_day2night_shape_e_h_v1 \
+  --sweep-dir work_dirs/crane_symeood_k1_port_day2night_shape_e_h_v1/val_sweep_port_v1 \
+  --epochs 16 18 20 22 24 --center-thresh 15 --mcml-limit 5 --gpu 3
+PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/compare_port_shape_e_h_val_v1.py \
+  --out-json work_dirs/port_shape_e_h_v1_val_compare.json
+```
+
+VAL返回sweep_results.json及比较JSON，以固定选权和预登记门槛决定是否联合改善；不因比较报告另选epoch，不在结果后放宽门槛或扫系数。若数值/接入检查失败先修复具体问题；未通过覆盖与联合几何条件保留B。当前TEST已经多次暴露，本轮没有连接或使用TEST；TEST不能调参/重选权重。保持等比例、原图还原及深度约束，E-H的收益与独立深度准确性仍待验证。

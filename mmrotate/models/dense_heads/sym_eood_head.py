@@ -81,6 +81,7 @@ class SymEOODHead(RotatedRetinaHead):
                  filter_padding_anchors: bool = False,
                  candidate_selection=None,
                  center_size_compensation=None,
+                 shape_compensation=None,
                  **kwargs):
         super().__init__(*args, **kwargs)
         # L_equi
@@ -138,6 +139,11 @@ class SymEOODHead(RotatedRetinaHead):
         self.center_size_compensation = (
             build_loss(center_size_compensation)
             if center_size_compensation is not None else None)
+        if center_size_compensation is not None and shape_compensation is not None:
+            raise ValueError('D and E shape compensation must be separate experiments')
+        self.shape_compensation = (
+            build_loss(shape_compensation)
+            if shape_compensation is not None else None)
         self.candidate_selection = dict(candidate_selection) if candidate_selection else None
         if self.candidate_selection is not None:
             expected = {'score_threshold', 'iou_threshold', 'margin', 'loss_weight'}
@@ -339,7 +345,7 @@ class SymEOODHead(RotatedRetinaHead):
         losses_cls, losses_bbox = [], []
         losses_equi, losses_invar = [], []
         losses_degraded_cls, losses_degraded_aux2_cls = [], []
-        losses_center_size = []
+        losses_center_size, losses_shape = [], []
         for lvl in range(num_levels):
             level_losses = self.loss_single(
                 cls_scores[lvl], bbox_preds[lvl],
@@ -361,6 +367,8 @@ class SymEOODHead(RotatedRetinaHead):
             lc, lb, le, li, ldc, lda = level_losses[:6]
             if self.center_size_compensation is not None:
                 losses_center_size.append(level_losses[6])
+            if self.shape_compensation is not None:
+                losses_shape.append(level_losses[6])
             losses_cls.append(lc)
             losses_bbox.append(lb)
             losses_equi.append(le)
@@ -372,6 +380,11 @@ class SymEOODHead(RotatedRetinaHead):
         if self.center_size_compensation is not None:
             result['loss_center_size_compensation'] = losses_center_size
             result['center_size_positive_count'] = sum(
+                ((labels >= 0) & (labels < self.num_classes)).sum()
+                for labels in labels_list).detach().float()
+        if self.shape_compensation is not None:
+            result['loss_shape_compensation'] = losses_shape
+            result['shape_positive_count'] = sum(
                 ((labels >= 0) & (labels < self.num_classes)).sum()
                 for labels in labels_list).detach().float()
         if self.candidate_selection is not None:
@@ -790,6 +803,14 @@ class SymEOODHead(RotatedRetinaHead):
             # normalizer; negatives never enter this regression objective.
             extra = self.center_size_compensation(
                 decoded_pred_bboxes[pos_inds], decoded_gt_bboxes[pos_inds],
+                weight=bbox_weights[pos_inds][:, 0],
+                avg_factor=num_total_samples)
+            result += (extra,)
+        if self.shape_compensation is not None:
+            # Reuse the ACTUAL decoded tensors supplied to the main KLD loss.
+            # No new centre term, positive selection, decoder or normalizer.
+            extra = self.shape_compensation(
+                pos_pred_bboxes, pos_gt_bboxes,
                 weight=bbox_weights[pos_inds][:, 0],
                 avg_factor=num_total_samples)
             result += (extra,)
