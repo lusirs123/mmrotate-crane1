@@ -769,3 +769,94 @@ H_shape ~= 0.5*sqrt(u^2+v^2)
 通过后只安排一次同初始化、同seed、同预算的B/最终E对照。第15.3节VAL选权契约及覆盖、连续性、联合几何门槛保持不变；同时报输出中心命中、输出覆盖和全帧正确覆盖，分开报告普通real与严重错位帧，检查尺寸signed bias/p90和sim纯角度。不能把论文AP或本项目总体RIoU代替这些目标。单次微小收益不称稳定/显著。
 
 所有设计变化必须发生在实验前，并将E0和最终E的身份区分，不能同名覆盖历史方案。当前TEST已多次暴露，本轮未使用TEST，不据其定公式/系数或重选权重；等比例变换、原图还原和深度约束维持，几何改进不等同独立深度精度已验证。后续如获实施授权，只在本地改代码并交付服务器指令，不连接服务器。
+
+## 19. E候选的局部实现、必要检查和代码审查（2026-10-01）
+
+### 19.1 授权、实现范围与最新状态
+
+用户授权按第18.5节完成检查、代码审查及服务器指令。本轮在本地实现独立候选损失和有限TRAIN探针，修复第17.3节的直接梯度测量问题；没有连接服务器、启动训练、更新权重或重选epoch。B epoch24仍是有效方案。
+
+新增形状模块只由探针显式导入；没有接入B的head、训练配置或损失包默认导入。原SymKLD、分配、分类、推理、等比例增强、原图坐标还原及深度链路均未修改。没有重新开展D完整审计。本节取代第18节“未实施/尚未执行”的状态描述，但不代表正式E训练设计已冻结。
+
+| 文件 | 本轮用途 |
+|---|---|
+| `mmrotate/models/losses/covariance_shape_loss.py` | 独立E0/E-H协方差形状候选，GT detach、空样本、权重及全局正样本归一化 |
+| `crane_project/tools/preflight_port_shape_e_v1.py` | 解析几何检查；冻结B实际主损失正样本上的TRAIN数值/梯度检查 |
+| `crane_project/tools/diagnose_port_center_size_d_v1.py` | 修复主KLD直接梯度的图节点捕获，不改变D模型或原结果 |
+| `tests/test_port_shape_e_preflight.py` | 候选数学/梯度/协议/有限流程的CPU测试 |
+| `tests/test_port_center_size_d_diagnosis.py` | 补充直接KLD图依赖及非零梯度回归断言 |
+
+### 19.2 检查实现和冻结边界（事实）
+
+E0采用`0.25*f(S)`，`f(S)=min(sqrt(1+S)-1,10)`，S为同中心对称KL迹项。E-H探针采用单位权重，T使用第18.4节同中心Bhattacharyya协方差项，稳定化形式固定为：
+
+```text
+H_eps = sqrt(-expm1(-T) + eps) - sqrt(eps)
+eps = 1e-6
+```
+
+这是零点平滑的本项目适配，不是论文理想Hellinger的逐值复现。沿用当前高斯映射及边长最小1像素、det最小1e-6、逆矩阵限幅等保护；新增形状项的内部运算采用float64，再返回预测张量dtype。浮点精度与保护激活时，E0不是原float32 SymKLD形状分项的逐位相同实现。内部双精度只影响候选探针，不更改B原损失。报告分别记录边长/行列式/逆矩阵保护、负舍入、raw及loss限幅、Hellinger大误差尾部。
+
+TRAIN探针只载入已按原VAL契约选定的B epoch24，验证sweep角色、B配置SHA、checkpoint SHA、内嵌配置、epoch24及seed0；不读取VAL预测或重选权重。复用原有限TRAIN检查的4张图片：索引`0/1810`和`905/2184`，分别为real_seq01_00000、sim_seq08_00000、real_seq06_00006、sim_seq08_00374。本地真实数据加载确认TRAIN为real1810+sim748，两尺度视图顺序相同。
+
+每对图片分别检查clean与0.5等比例缩小、warmup O2M与late O2O，共8个batch、16次图像视图，只有4张独立图片。关闭随机翻转；通过调度计数器重放分配阶段。冻结的epoch24特征并不等同真实训练初期特征，不能据warmup重放代表初始化时梯度。
+
+捕获实际主KLD使用的decoded正样本节点，以完全相同的正样本、权重和归一化计算E0与单位E-H。检查完整输出回归卷积、完整输出分类卷积、完整可训练FPN、一个backbone参数的范数/余弦，以及decoded xywhθ的直接梯度。FPN本轮是完整范数；backbone仍仅一个参数，不能称完整backbone检查。参数级报告来自real+sim混合batch，不是按域拆分的FPN梯度。
+
+禁止非有限损失/梯度、丢失非空正样本图依赖、新增直接xy梯度或输出分类卷积直接梯度；要求两候选回归卷积和FPN信号非零。GT detach另由单元测试核验。共享参数仍会间接改变中心、分类和覆盖，直接xy为0不保证这些指标不变。
+
+额外计算实际B、B+E0、B+单位E-H的完整目标裁剪前后范数。单位E-H仅用于强度/裁剪压力检查，不是建议的训练系数。没有optimizer step；记录参数SHA前后相同，调度计数器可变。描述性强度参考为各batch完整FPN的`norm(E0)/norm(unit E-H)`中位数，并报告范围。该参考不能自动冻结lambda_H，仍须看分配阶段/尺度差异、保护、回归与共享参数比例。
+
+### 19.3 直接梯度探针修复和RIoU必要缺口（事实）
+
+第17.3节原探针把主KLD对另一次正样本切片求导，`allow_unused=True`返回None后显示成0。修复后捕获主KLD实际节点，并核验D另一次切片数值/GT/权重/归一化相同，再在主节点上重算D分项、断言D标量相同。对非空节点的缺失依赖直接报错；新增依赖计数和按域非零KLD断言。旧JSON中主KLD的decoded/domain直接0仍是失效测量，不能改写为新测量；既有参数级梯度不受此节点问题影响。本轮没有重跑D服务器探针。
+
+几何小算例还暴露本地OpenCV 4.13.0的近共线/共享边交集问题：例如理论RIoU为0.95的单边缩小框，既有`compute_riou`可算出约0.20，可能制造错误的下降方向结论。新增独立float64凸多边形裁剪用于机制检查，并以包含框、相交/分离、旋转正方形、对称性和大坐标平移的解析结果验证。不修改历史离线评估器、选权指标或报告。
+
+只为排除该缺口，复用原D诊断JSON已保存的B/D VAL输出，与双精度结果交叉核对1772对框；没有重新推理。源JSON SHA256为`4062ce140b77a5e80b4d208c7cb71ceb1a7bcc84d413fd9bab25a153a7c3c487`。
+
+| 固定输出组 | 框对数 | 最大RIoU绝对差 | 差值>1e-3 | RIoU≥0.5判断变化 |
+|---|---:|---:|---:|---:|
+| B real | 374 | 1.4677e-5 | 0 | 0 |
+| B sim | 512 | 3.8857e-6 | 0 | 0 |
+| D real | 374 | 3.1918e-6 | 0 | 0 |
+| D sim | 512 | 3.0969e-6 | 0 | 0 |
+
+该核对支持第17节这些缓存输出上的D取舍结论不受此误差影响，不能外推全部oracle替换、其他OpenCV版本或TEST。交叉核对保存在`work_dirs/port_shape_e_v1_existing_val_riou_crosscheck_20261001.json`。
+
+### 19.4 本地验证和审查结论（事实及限制）
+
+30项CPU测试通过，覆盖两模式/dtype、宽高交换+角度周期、正常区等比例缩放、中心直接梯度为零、尺寸与非方形角度有效梯度、GT detach、空样本、权重归一化、double gradcheck、极端尺寸保护、解析公式、错误图节点回归、冻结身份及输出防覆盖。有限流程使用真实head，但backbone/图像/CUDA I/O是CPU fixture；不代表真实ResNet+CUDA路径已通过。最后修正D探针临时图引用清理后，受影响16项D测试再次通过。
+
+```bash
+/opt/anaconda3/envs/mmrot/bin/python -m pytest -q \
+  tests/test_port_shape_e_preflight.py tests/test_port_center_size_d_diagnosis.py
+```
+
+解析几何包括长宽比1/2.3/3，完全一致、±5%等比例尺寸、单长/短边缩小、2/5度角差、联合误差、大误差及只变中心，每种比较E0/单位E-H，共60条。最终使用独立float64 RIoU后，微小归一化下降步没有loss上升>1e-12或RIoU下降>1e-10。方形纯角差和只变中心对协方差形状项无辨识力，符合表示性质。有限算例不能证明任意误差的RIoU方向一致，更不能证明检测覆盖、VAL几何或泛化收益。
+
+最终当前源码报告为`work_dirs/port_shape_e_v1_geometry_cpu_reviewed_20261001.json`，状态`GEOMETRY_ONLY_RUNTIME_UNVERIFIED`。初版`...geometry_cpu_20261001.json`保留但其OpenCV算例RIoU已由本节替代；`...fix1...`和`...final...`为中间快照，以reviewed报告中的源码SHA为本次交付依据。
+
+代码审查未发现当前局部实现的阻断问题。审查修复了直接图依赖测量和D探针新增临时引用清理；新脚本捕获hook采用finally恢复，输出文件拒绝覆盖，失败保留已有进度。AST语法及diff空白检查通过。当前不能验证真实CUDA显存/速度、实际B权重的保护和梯度分布；这些由下面服务器短检查补齐。没有把通过CPU检查写成已验证E收益。
+
+### 19.5 交付与服务器指令（待验证）
+
+上传包：`work_dirs/port_shape_e_preflight_v1_20261001.tar.gz`，只含19.1节的5个代码/测试文件，路径相对项目根目录；不含模型、数据或训练配置。现有服务器项目需保留B/D配置、旧preflight依赖、TRAIN数据、B权重和原B VAL sweep。将包放在服务器项目根目录，解压后运行：
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+conda activate mmrotljj
+tar -xzf port_shape_e_preflight_v1_20261001.tar.gz
+CUDA_VISIBLE_DEVICES=3 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/preflight_port_shape_e_v1.py \
+  --gpu 0 \
+  --out-json work_dirs/port_shape_e_v1_train_preflight.json
+```
+
+默认冻结身份目录为`work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/val_sweep_port_v1`；仅在原sweep确实移动时用`--reference-sweep`指定它，不得临时换epoch。物理卡3被映射为进程内gpu0。这个命令仅做8个batch检查，optimizer steps/训练epoch均为0，无VAL/TEST推理。
+
+成功状态应为`TRAIN_PROBE_COMPLETE_REVIEW_REQUIRED`，正式配置字段仍为`NOT_FROZEN`。返回终端输出及`work_dirs/port_shape_e_v1_train_preflight.json`；若失败，另返回同名`.artifacts.json`和`.progress.jsonl`（如果已经生成）。脚本拒绝覆盖旧文件；重跑使用新的`--out-json`，无需删除旧证据。
+
+**下一步判断规则：** 先看有限/连接/保护/裁剪，再看尺度和分配阶段的强度范围与回归/FPN方向。负余弦本身不等于有害。若E-H信号合理，再基于数学性质和TRAIN参考冻结一个公式及lambda_H，并登记后只进行一次同初始化、同seed、同预算的B/E对照；不自动照搬0.25，不扫描多个系数，也不先训练再按VAL改设计。E-H不满足要求时，记录原因后评估保留E0或暂停，不能自动改成另一套算法。
+
+第15.3节VAL选权及覆盖、连续性、联合几何条件仍有效：中心命中率只统计输出帧，另报输出覆盖率及全帧中心正确覆盖；区分普通real与严重错位组，报尺寸signed bias/p90和sim纯角度。TEST已经多次暴露，本轮不用于公式、系数、门槛或权重调整。保持等比例、原图还原及深度估计约束，不把几何检查当独立深度准确性证据。

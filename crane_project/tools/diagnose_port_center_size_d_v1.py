@@ -467,9 +467,14 @@ def runtime_probe(cfg, identities, gpu, per_domain, progress_path=None, control_
                   ('classification_conv',[head.retina_cls.weight,head.retina_cls.bias]),
                   ('fpn_parameter_probe',[model.neck.fpn_convs[0].conv.weight]),
                   ('backbone_parameter_probe',[model.backbone.layer4[-1].conv3.weight])]
-        captured, levels = [], []
+        captured, main_captured, levels = [], [], []
         original_extra = head.center_size_compensation.forward
+        original_bbox = head.loss_bbox.forward
         original_single = head.loss_single
+        def bbox_forward(pred,target,weight=None,avg_factor=None,**kwargs):
+            value = original_bbox(pred,target,weight=weight,avg_factor=avg_factor,**kwargs)
+            main_captured.append((pred,target,weight,avg_factor,value))
+            return value
         def extra_forward(pred,target,weight=None,avg_factor=None,**kwargs):
             value = original_extra(pred,target,weight=weight,avg_factor=avg_factor,**kwargs)
             captured.append((pred,target,weight,avg_factor,value))
@@ -492,11 +497,12 @@ def runtime_probe(cfg, identities, gpu, per_domain, progress_path=None, control_
                     delta_wh_clip_coordinate_count=int((flat[positive,2:4].abs()>abs(math.log(16/1000))).sum())))
             return original_single(*args,**kwargs)
         head.center_size_compensation.forward=extra_forward
+        head.loss_bbox.forward=bbox_forward
         head.loss_single=MethodType(loss_single_observed,head)
         for scale in (1.,.5):
             for phase in ('warmup_o2m','transition_o2m_to_o2o','late_o2o'):
                 for batch_number, pair in enumerate(zip(real,sim)):
-                    captured.clear(); levels.clear(); model.zero_grad(set_to_none=True)
+                    captured.clear(); main_captured.clear(); levels.clear(); model.zero_grad(set_to_none=True)
                     set_probe_phase(head,phase)
                     phase_state=dict(assigner_calls=head.assigner._local_call_count,
                         classification_calls=int(head.loss_cls._local_iter))
@@ -504,8 +510,17 @@ def runtime_probe(cfg, identities, gpu, per_domain, progress_path=None, control_
                     if any(m.get('flip',False) for m in batch['img_metas']):
                         raise ValueError('Unexpected flip')
                     losses=model(return_loss=True,**batch)
+                    if len(captured)!=len(main_captured) or len(captured)!=len(levels):
+                        raise RuntimeError('Main/D positive levels differ')
+                    # Identical values in sibling slices do not share a graph node.
+                    # Rebuild D on the ACTUAL KLD positive nodes, checking identity.
+                    for main,extra in zip(main_captured,captured):
+                        if (not torch.equal(main[0],extra[0]) or not torch.equal(main[1],extra[1])
+                                or not torch.equal(main[2],extra[2]) or main[3]!=extra[3]):
+                            raise RuntimeError('Main/D positive values or normalization differ')
                     center,size = [],[]
-                    for p,t,w,n,value in captured:
+                    for (p,t,w,n,_),extra in zip(main_captured,captured):
+                        value=extra[4]
                         c,s=d_parts(p,t,w,n)
                         if not torch.allclose(c+s,value,rtol=2e-5,atol=1e-7):
                             raise RuntimeError('Decomposed D loss differs from actual emitted loss')
@@ -519,12 +534,19 @@ def runtime_probe(cfg, identities, gpu, per_domain, progress_path=None, control_
                     if not all(bool(torch.isfinite(v).all()) for v in terms.values()):
                         raise RuntimeError('Nonfinite diagnostic loss')
                     gradient=gradient_report(terms,groups)
-                    pos=[p for p,t,w,n,v in captured]; targets=[t for p,t,w,n,v in captured]
+                    pos=[p for p,t,w,n,v in main_captured]; targets=[t for p,t,w,n,v in main_captured]
                     direct={}
+                    dependencies={}
                     decoded_gradients={}
                     for name,loss in [('d_center',sum(center)),('d_size',sum(size)),('symkld',bbox)]:
                         gs=gradient_vector(loss,pos)
                         decoded_gradients[name]=gs
+                        dependencies[name]=dict(
+                            node_scope='actual_main_symkld_positive_tensors',
+                            nonempty_levels=sum(len(p)>0 for p in pos),
+                            connected_nonempty_levels=sum(g is not None and len(p)>0 for g,p in zip(gs,pos)))
+                        if any(g is None and len(p)>0 for g,p in zip(gs,pos)):
+                            raise RuntimeError('Missing direct gradient dependency: '+name)
                         direct[name]={key:grad_norm([g[:,j:j+1] if g is not None else None for g in gs])
                                       for j,key in enumerate(('x','y','w','h','angle'))}
                     domain_direct={}
@@ -532,7 +554,7 @@ def runtime_probe(cfg, identities, gpu, per_domain, progress_path=None, control_
                         domain_grads={}
                         for name,gradients in decoded_gradients.items():
                             transformed=[]
-                            for g,(p,t,w,n,v),level in zip(gradients,captured,levels):
+                            for g,(p,t,w,n,v),level in zip(gradients,main_captured,levels):
                                 if g is None or not len(t): transformed.append(None); continue
                                 # Dimensionless local coordinates: center/GTshort, log edges, radians.
                                 short=t[:,2:4].min(-1).values
@@ -562,7 +584,8 @@ def runtime_probe(cfg, identities, gpu, per_domain, progress_path=None, control_
                         image_sha256=[sha(m['filename']) for m in batch['img_metas']],
                         input_shapes=[list(m['img_shape']) for m in batch['img_metas']],
                         losses={k:scalar(v) for k,v in terms.items()}, gradients=gradient,
-                        direct_decoded_box_gradient=direct, levels=deepcopy(levels),
+                        direct_decoded_box_gradient=direct, direct_gradient_dependencies=dependencies,
+                        levels=deepcopy(levels),
                         domain_direct_gradient=domain_direct,
                         positives=positive_geometry(torch.cat(pos),torch.cat(targets)),
                         gradient_before_clip=before,gradient_after_clip=after,
@@ -577,15 +600,17 @@ def runtime_probe(cfg, identities, gpu, per_domain, progress_path=None, control_
                     model.zero_grad(set_to_none=True)
                     del batch,losses,terms,center,size,other_terms,bbox,cls,other,total,pos,targets,gs,c,s,value,p,t,w,n
                     del decoded_gradients,domain_grads,transformed,gradients,g,factors,ids,short
-                    captured.clear()
+                    del main,extra,_,loss
+                    captured.clear(); main_captured.clear()
         parameter_sha_after=parameter_digest(model)
         if parameter_sha_before!=parameter_sha_after:
             raise RuntimeError('Diagnostic unexpectedly changed model parameters')
         snapshots[arm]['parameter_sha256_before']=parameter_sha_before
         snapshots[arm]['parameter_sha256_after']=parameter_sha_after
         snapshots[arm]['parameters_unchanged']=True
-        head.center_size_compensation.forward=original_extra; head.loss_single=original_single
-        del model,head,groups,original_extra,original_single,extra_forward,loss_single_observed,parameters
+        head.center_size_compensation.forward=original_extra; head.loss_bbox.forward=original_bbox
+        head.loss_single=original_single
+        del model,head,groups,original_extra,original_bbox,original_single,extra_forward,bbox_forward,loss_single_observed,parameters
         torch.cuda.empty_cache()
     assignment=[]
     indexed={(r['arm'],r['phase'],r['scale'],r['batch_number']):r for r in rows}

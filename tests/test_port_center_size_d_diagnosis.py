@@ -306,3 +306,9 @@ def test_runtime_orchestration_with_actual_head_and_cpu_io_fixture(tmp_path,monk
     assert all(r['domain_direct_gradient']['real']['positive_count']>0 for r in report['rows'])
     assert all(r['domain_direct_gradient']['sim']['positive_count']>0 for r in report['rows'])
     assert all(r['actual_objective_includes_d']==(r['arm']=='d') for r in report['rows'])
+    for r in report['rows']:
+        dep=r['direct_gradient_dependencies']['symkld']
+        assert dep['connected_nonempty_levels']==dep['nonempty_levels']>0
+        assert sum(r['direct_decoded_box_gradient']['symkld'].values())>0
+        for domain in ('real','sim'):
+            assert r['domain_direct_gradient'][domain]['dimensionless_norms']['symkld']>0
