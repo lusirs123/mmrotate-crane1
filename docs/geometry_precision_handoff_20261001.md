@@ -2,7 +2,7 @@
 
 > 用途：在新对话中继续几何精度优化。本文汇总本轮对话、现有代码及收到的实验结果；保留事实、推断和待验证内容的区别。后续优先更新本文，不再为每次改动创建交接文件。
 >
-> **当前结论：保留 SymEOOD＋尺度增强 B。中心—尺寸补偿 D 在 VAL 上改善了 real 覆盖，但 TEST 未形成整体收益，不替换 B。下一步继续研究几何精度，不恢复已经关闭的 DINO 蒸馏路线，不立即调参或重训。**
+> **当前结论：保留 SymEOOD＋尺度增强 B。D 和固定E-H v1均未形成联合收益。E-H在VAL选epoch22，改善real覆盖/连续性及sim角度，但尺寸/RIoU退化；固定TEST上real全帧中心正确数与B相同、输出多1帧，real RIoU基本持平，sim角度及RIoU退化，不替换B。后续先补有限TRAIN/VAL机制证据，不据已多次暴露的TEST调参或重选权重，不恢复DINO、候选排序或完整审计，不立即重训。**
 
 当前数据、已完成实验与论文素材已集中整理为[港口新数据与尺度增强实验总记录](detection/港口新数据集与EOOD_SymEOOD尺度增强实验总记录.md)。该主记录维护成果与论文口径，本文保留执行交接及后续设计；E仍只有设计，未实施。
 
@@ -1018,3 +1018,295 @@ python crane_project/tools/compare_port_shape_e_h_val_v1.py \
 ```
 
 VAL返回sweep_results.json及比较JSON，以固定选权和预登记门槛决定是否联合改善；不因比较报告另选epoch，不在结果后放宽门槛或扫系数。若数值/接入检查失败先修复具体问题；未通过覆盖与联合几何条件保留B。当前TEST已经多次暴露，本轮没有连接或使用TEST；TEST不能调参/重选权重。保持等比例、原图还原及深度约束，E-H的收益与独立深度准确性仍待验证。
+
+## 22. E-H真实初始化服务器检查评审与训练判断（2026-10-01）
+
+### 22.1 已提供证据与复核范围（事实）
+
+用户提供4行初始化终端结果、末尾`INITIALIZATION_CHECK_COMPLETE_REVIEW_REQUIRED`状态及`/Users/mac/Downloads/port_shape_e_h_v1_init_preflight.progress.jsonl`，询问是否可训练。JSONL有4条完整有限数值行，原字节保存为`work_dirs/port_shape_e_h_v1_init_preflight_server_20261001.progress.jsonl`，SHA256为`a18faa98a53df2017e682daa3167c8360e0bb88250ba7a3ef50b5af7be78908a`。本轮未连接服务器、未执行训练、未修改模型/系数/优化器。
+
+4行图像身份、尺度、loss_shape、FPN比例、裁剪范数及倍率与终端一致；每行18个正样本、5层全局分母18，实际主节点复用及B原损失一致字段均true。新增xy直接梯度及输出分类卷积梯度均0，wh/角度/回归/FPN信号非零。记录的decoder delta/中心/边长保护及形状协方差保护均0。范数比及clip10倍率独立复算一致。
+
+本次未提供主`port_shape_e_h_v1_init_preflight.json`或artifact，本地Downloads也未找到，故不能独立核验本次服务器源码SHA、最终参数SHA及完整初始化元数据。依据第21节已检查脚本和用户终端正常完成状态，这些检查在该脚本完成前应已执行通过；该推断不能写成“本地已读取完整元数据”。应保留主JSON作为本次正式实验前的身份归档，不要求重跑探针来补文件。
+
+### 22.2 严重裁剪及E新增信号（事实）
+
+| 尺度/图片对 | 主分类loss | 主KLD loss | E-H loss | 完整B裁剪前范数 | clip倍率 |
+|---|---:|---:|---:|---:|---:|
+| clean / seq01+sim00000 | 9467.136 | 1.0058 | 0.01277 | 1212340.375 | 8.2485e-6 |
+| clean / seq06+sim00374 | 3566.903 | 0.9466 | 0.01371 | 396018.594 | 2.5251e-5 |
+| half / seq01+sim00000 | 30230.578 | 2.5953 | 0.02155 | 4001913.250 | 2.4988e-6 |
+| half / seq06+sim00374 | 28751.330 | 2.3585 | 0.01762 | 3786760.750 | 2.6408e-6 |
+
+所有完整B/E目标均严重触发裁剪，到约10；B/E裁剪前范数在记录精度内相同。相同标量不等于两更新向量逐位相同，也不等于E完全没有梯度。
+
+主分类输出卷积梯度范数为2.2347e5–2.0357e6，主回归卷积原KLD仅70.33–192.43；分类输出卷积自身已贡献完整B范数平方的约25.9%–31.8%。这支持当前初始化存在原分类相关大梯度的判断；没有逐项拆开主/辅助分类和共享层梯度，不能宣称完整巨大梯度的精确归因。关闭E的B原目标已有同等严重裁剪，不能说是E-H新增项造成或是已证明的历史B训练故障。
+
+新增FPN/主KLD范数比为0.003927–0.009997（约0.393%–1.000%），回归卷积为0.003884–0.010188（约0.388%–1.019%）；FPN与主KLD余弦0.4303–0.8936，均正。新增FPN/完整B则仅2.31e-7–3.39e-6；在同一全局裁剪倍率下新增FPN分量范数约6.57e-7–1.07e-5，初始总更新中的几何信号很弱。这是有限初始化的观测，不是整个训练阶段的有效监督强度。全局裁剪同时压低原回归和E项，不能只针对E增大系数抵消；与主KLD相对比例也不会单靠统一裁剪改变。
+
+### 22.3 判断与执行边界（推断、待验证）
+
+**可以开始预登记的一次正式E-H v1对照。** 依据是接入/有限值/直接梯度检查通过，新增项没有造成目前的大梯度或保护激活，且同初始化B原目标已具有相同现象。这个结论是允许进行受控实验，不代表初始化状态理想、整个训练稳定或几何收益已验证。当前4批无optimizer步骤，不能证明大分类梯度会多久下降；第20节冻结B后期的较小loss/梯度也不能补出当前初始化的训练轨迹。
+
+保持0.05、eps、24epoch、seed0、两卡/每卡batch2、SGD/lr及clip10，不改分类权重、padding或分配，不从B续训，不扫描E系数。若以后单独研究原初始化/分类的大梯度，必须以另一个B/E共同协议处理，不能在本次E单因素对照中只改E。
+
+用既有每50 iter日志观察首个epoch的`loss_cls`、辅助分类、`loss_bbox`、`loss_shape_compensation`和`grad_norm`（MMCV OptimizerHook在grad_clip启用时记录的是裁剪前范数；本地源码已核对）。初始大值本身不当成E失败，也不当成“正常且无需关注”。若出现NaN/Inf或训练步骤报错，停止定位；若分类loss与极端裁剪持续不下降，优先检查初始化/分类链路，不因这些日志临时改E系数、lr或门槛。没有事后添加数值阈值来按日志挑“最好”的实验。
+
+正式命令沿用第21.4节：
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+conda activate mmrotljj
+CUDA_VISIBLE_DEVICES=2,3 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+bash tools/dist_train.sh \
+  crane_project/configs/crane_symeood_k1_port_day2night_shape_e_h_v1.py 2
+```
+
+训练目录须是该新实验，保留已有产物，不重复启动覆盖。后续只用既定VAL候选16/18/20/22/24及原选择规则；中心命中只统计输出帧，另报输出覆盖和全帧正确覆盖，保持连续性及联合几何门槛。当前TEST已多次暴露，不参与此次训练设计/调参/重选权重；深度精度仍无独立GT验证。
+
+## 23. E-H固定设计说明与后续VAL/TEST命令（2026-10-01）
+
+用户要求说明固定设计并给出VAL/TEST服务器指令。本轮只核对现有配置、损失和评估脚本，补充记录；没有改模型代码、连接服务器或运行推理。
+
+**事实：** 第21.1节公式与系数不变。协方差沿用B的`R(theta) diag((w/2)^2,(h/2)^2) R(theta)^T`映射；额外项只使用协方差，不使用均值中心。Hellinger模式、权重0.05、eps1e-6及局部float64固定，复用主KLD正样本、权重与全局正样本分母。保留B全部原目标与等比例增强等训练/推理设置，不叠加D，不从B权重续训。
+
+**机制推断与待验证：** 额外项共同约束尺寸和方向，协方差表示对宽高交换及相应角度变换等价，近方形框方向敏感性较弱。它检验相对形状监督是否能改善几何精度，不证明D退化根因或本方案已有收益。直接中心梯度为零不保证共享网络中心/分类/覆盖不变；深度精度仍无独立验证。
+
+以下命令在同一个服务器shell按阶段执行，使用物理GPU3；`ckpt_sweep.py`内部设置CUDA_VISIBLE_DEVICES，因此无需另加GPU映射。
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+conda activate mmrotljj
+export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
+EH_CONFIG=crane_project/configs/crane_symeood_k1_port_day2night_shape_e_h_v1.py
+EH_WORK=work_dirs/crane_symeood_k1_port_day2night_shape_e_h_v1
+EH_SWEEP="$EH_WORK/val_sweep_port_v1"
+
+# 阶段1：训练完成后，仅VAL推理与原规则选权。
+python crane_project/tools/ckpt_sweep.py \
+  --config "$EH_CONFIG" --work-dir "$EH_WORK" --sweep-dir "$EH_SWEEP" \
+  --epochs 16 18 20 22 24 --center-thresh 15 --mcml-limit 5 --gpu 3
+
+# 阶段2：读取固定B ep24与E已选VAL缓存，检查预登记条件，不重选权。
+python crane_project/tools/compare_port_shape_e_h_val_v1.py \
+  --e-sweep "$EH_SWEEP" \
+  --out-json work_dirs/port_shape_e_h_v1_val_compare.json
+
+# 阶段3：先评审VAL、冻结实验身份，再运行一次所选权重的TEST。
+python crane_project/tools/ckpt_sweep.py \
+  --config "$EH_CONFIG" --work-dir "$EH_WORK" --sweep-dir "$EH_SWEEP" \
+  --final-test-from "$EH_SWEEP/sweep_results.json" \
+  --center-thresh 15 --gpu 3
+
+# 阶段4：只读该TEST缓存，区分输出中心命中/输出覆盖/全帧正确覆盖。
+EH_EPOCH=$(basename "$(cat "$EH_SWEEP/selected_checkpoint.txt")" .pth)
+python crane_project/tools/audit_port_test_subsets_v1.py \
+  --gt-dir crane_project/data/crane_grab_port_day2night_v1/test/annfiles \
+  --pred-dir "$EH_SWEEP/final_test/$EH_EPOCH/preds/Task1_grab" \
+  --out-json work_dirs/port_shape_e_h_v1_test_subsets.json
+```
+
+阶段1、2完成后先阅读`sweep_results.json`的`selection_info`（包括fallback）和比较报告；覆盖、连续性及联合几何门槛不放宽，不根据比较另挑epoch。比较工具依赖服务器已有B原VAL缓存，默认B目录是`work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/val_sweep_port_v1`，已迁移则明确传`--b-sweep`原缓存目录。
+
+阶段3仅从原VAL选权JSON读取权重并核对身份，不扫描TEST epoch。TEST报告位于`$EH_SWEEP/final_test/$EH_EPOCH/final_test_metrics_v2.json`，逐帧缓存同目录`preds/`。阶段4是已有逐序列统计工具，不是新完整审计/候选归因；分别报告real_seq03、real_seq04和sim_seq09。原终端`R_center`是全帧正确覆盖，不能称为输出帧中心命中率。分序列字段依次为`output_conditional_center_hit_pct`、`output_coverage_pct`、`all_gt_frame_center_hit_pct`。合并real时应按计数/分母加权，不直接平均两序列百分比。
+
+保留已有报告；VAL扫描及比较工具拒绝覆盖已有结果，已完成则直接复用。TEST当前已多次暴露，只能报告冻结方案在该已暴露集合的表现，不据其改公式、系数、阈值或权重。未满足VAL目标仍保留B；如另报告E-H负结果，沿用相同冻结权重并披露身份。
+
+## 24. E-H v1正式VAL结果与是否继续TEST（2026-10-01）
+
+### 24.1 输入、核验及证据范围（事实）
+
+用户提供VAL扫描/比较终端附件`/Users/mac/.codex/attachments/5c1a3b48-d1f1-4d94-81e0-7d33082b1eb8/已粘贴的文本.txt`及完整`/Users/mac/Downloads/port_shape_e_h_v1_val_compare.json`。原JSON SHA256：`474434c3d8ca9967939dfdecc0e0c16aabdc985bd8bd0bcdc13f8c43d6e568f4`，原字节保存为`work_dirs/port_shape_e_h_v1_val_compare_server_20261001.json`。
+
+终端5个候选为16/18/20/22/24，4个可行，epoch22按原硬约束及软评分选中，没有fallback（`constraint_pass`）；B固定epoch24。比较JSON的选中权重身份与终端一致，两域GT标注SHA相同，B/E配置SHA与本地原配置相同。报告记录E ep22权重SHA `b61c5fed3fdec9b70b0c1ecf91699bff1a01e05ee665fb0eff593fb7e7d1ca5a`。本地没有服务器权重/PKL/sweep原文件，不能独立重算其SHA或完整5候选选权；依据已提供终端和报告核对身份。
+
+JSON包含两臂各887条逐帧框（real375、sim512）。逐帧图像ID/图像SHA/GT一致，独立复算输出、15px中心命中、长短边相对误差及signed log ratio，并用标准库重算配对/普通real组的均值、中位数、p90、RMSE及RIoU聚合，均与报告一致。几何失败条件独立复算一致。双精度RIoU交叉核对最大差异B 1.4677e-5、E 3.3156e-6，均无>1e-3项或0.5阈值变更，`metric_consistency_review_required=false`。这些输出上没有支持“此次几何退化由已知IoU数值问题造成”的证据。
+
+本轮未连接服务器、训练、推理、改代码、选其他epoch或读取新增TEST。主训练日志未提供，不能据当前VAL归因训练期梯度强度/裁剪或收敛故障。
+
+### 24.2 冻结B ep24 / E-H ep22的结果（事实）
+
+| 指标 | B ep24 | E-H ep22 |
+|---|---:|---:|
+| real输出覆盖 | 374/375，99.7333% | 375/375，100% |
+| real输出帧中心命中 | 360/374，96.2567% | 370/375，98.6667% |
+| real全帧中心正确覆盖 | 360/375，96.0000% | 370/375，98.6667% |
+| real最长无输出/RIoU失败 | 1 / 4 | 0 / 1 |
+| real全帧平均RIoU | 0.795505 | 0.788410 |
+| real共同输出长/短边平均相对误差，n374 | 8.4208% / 8.7580% | 10.3289% / 9.5451% |
+| real共同输出长/短边误差p90 | 16.5210% / 16.0180% | 20.5295% / 18.0957% |
+| real共同输出中心mean / RMSE，px | 9.5746 / 34.5779 | 9.0253 / 60.9479 |
+| sim三项覆盖 | 各512/512，100% | 各512/512，100% |
+| sim纯角度RMSE | 2.107151° | 1.706917° |
+| sim全帧平均RIoU | 0.885695 | 0.873045 |
+| sim长/短边平均相对误差，n512 | 3.8712% / 4.1388% | 5.2978% / 5.1285% |
+| sim长/短边误差p90 | 7.7625% / 7.5082% | 9.9034% / 9.5393% |
+| sim中心mean / p90，px | 1.6452 / 2.9585 | 1.8336 / 3.3853 |
+
+sim纯角度RMSE相对下降约18.99%；尺寸和RIoU退化不因sim中心仍全部命中而消失。两域长/短边的mean signed log ratio都更负：real长 -0.04755→-0.08196、短 -0.05762→-0.07488；sim长 -0.02267→-0.04972、短 -0.03175→-0.05042，支持整体尺度偏小偏差加重，但并非每帧都变小/退化。
+
+预登记15项检查中7项失败：两域共同输出长/短边误差下降共4项、两域全帧RIoU不降共2项、sim共同输出中心不劣1项；`all_conditions_met=false`。覆盖、最长失败及sim角度条件通过，不代表联合几何目标通过。
+
+### 24.3 严重错位修复与普通框/尾部代价（事实）
+
+B历史10个严重错位帧中9个被修复（中心<15且RIoU>=0.5），`real_seq07_00026`仍失败。包含补回B无输出帧在内，E-H共修复14个中心失败，同时新增4个：`real_seq07_00004`、`00009`、`00150`、`00190`。real总中心正确数净增10。RIoU>=0.5方面修复10个、新增4个，正确帧364→370。
+
+新增失败的中心误差分别约57.48、127.19、905.82、725.47px；其中00150由B 1.87px变905.82px，00190由B 7.34px变725.47px，两帧E的RIoU均0。它们是已报告输出框的实际尾部失败，不是无输出；仅凭框无法断言错检对象身份或分类/分配根因。
+
+排除原先已固定的10个B严重错位帧，普通real共同输出n364的RIoU 0.819545→0.793337；长/短边平均相对误差7.8524%/7.9396%→10.0509%/9.2536%；角度RMSE 2.232661°→2.382857°；中心mean 4.4375→8.8132px、RMSE 5.2923→61.4414px。普通组中心中位数3.6827→3.3901px、p90 7.8297→7.5622px改善，但上述新大偏移使均值/RMSE变差。全real平均中心误差轻微下降不能写成定位尾部风险得到保持。
+
+seq07全帧RIoU 0.737034→0.721660，长短边误差11.3629%/12.5475%→14.6164%/13.7206%；seq14 RIoU 0.884194→0.889655且中心改善，长边误差略降、短边误差略增。退化并非每个real序列一致，不用改善序列掩盖总体结果。GT尺寸替换的RIoU均值增益在共同输出real 0.07243→0.10177、sim 0.03020→0.04659，仅作当前框尺寸影响的描述，不能当训练根因的因果证据。
+
+### 24.4 判断、TEST建议与有限后续（推断、待验证）
+
+**E-H v1没有达到联合优化目标，保留B；当前不建议继续以最终候选确认目的运行TEST。** 这是原预登记条件下的判断，没有事后放宽条件。epoch22仍是本实验正式VAL所选权重，不改选18或24来规避尺寸退化，也不把当前结果改称单独角度优化成功。
+
+**机制推断：** 在这次单seed/不同VAL所选epoch比较中，额外协方差项的结果表现为sim方向及real严重错位改善，伴随尺寸低估和部分定位尾部代价。它不证明系数太大/太小、形状监督无效、中心补偿是D失败根因或初始化大分类梯度导致本次退化。原选权软评分没有直接长短边误差/平均RIoU项，因此选权合格与联合几何条件失败可同时成立；不能事后为E改变选权协议。
+
+下一步先复用本轮训练日志，有限核对后期主回归/形状loss、分类及裁剪轨迹；再在已有VAL框/原图上核对seq07尺寸低估与新增00150/00190大偏移。目的只补TRAIN/VAL机制缺口，不重做完整审计、不恢复候选排序、不立即扫系数或新训练。日志loss比本身不等于参数梯度比；若确需接收端梯度，再另行设计有限TRAIN检查。当前收益/取舍不能外推深度误差，也没有多seed显著/稳定性证据。
+
+若论文需要完整负结果或冻结取舍报告，可以单独明确决定运行一次固定epoch22的TEST；这属于结果报告，不是继续寻找可替换B的证据。无论其结果好坏，都不据TEST调公式、系数、阈值、选其他epoch或推翻本次VAL门槛。当前TEST已多次暴露，必须披露，不能称为未接触的独立确认集。本轮没有启动该TEST。
+
+## 25. 用户授权固定E-H epoch22执行TEST（2026-10-01）
+
+用户指出视频数据在VAL/TEST不同序列上可能表现不同，明确要求仍进行一次TEST。该授权更新第24节“不建议继续”的执行建议：现在交付固定E-H ep22的服务器TEST及已有缓存逐序列统计命令，不再请求确认。第24节VAL未通过联合条件的事实保持，当前有效方案仍为B。不同序列可能存在差异是合理待验证问题，不预先假定TEST一定更好。
+
+固定配置/系数/阈值，读取原VAL sweep所选epoch22，不扫描其他epoch，不根据TEST调整损失或改选权。原TEST已多次暴露，后续报告应披露。测试由用户在服务器执行，本地不连接服务器、不运行推理、不改模型或评估代码。
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+conda activate mmrotljj
+export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
+
+python crane_project/tools/ckpt_sweep.py \
+  --config crane_project/configs/crane_symeood_k1_port_day2night_shape_e_h_v1.py \
+  --work-dir work_dirs/crane_symeood_k1_port_day2night_shape_e_h_v1 \
+  --sweep-dir work_dirs/crane_symeood_k1_port_day2night_shape_e_h_v1/val_sweep_port_v1 \
+  --final-test-from work_dirs/crane_symeood_k1_port_day2night_shape_e_h_v1/val_sweep_port_v1/sweep_results.json \
+  --center-thresh 15 --gpu 3
+
+# 仅在上一步成功完成后执行：只读TEST TXT，不再推理。
+python crane_project/tools/audit_port_test_subsets_v1.py \
+  --gt-dir crane_project/data/crane_grab_port_day2night_v1/test/annfiles \
+  --pred-dir work_dirs/crane_symeood_k1_port_day2night_shape_e_h_v1/val_sweep_port_v1/final_test/epoch_22/preds/Task1_grab \
+  --out-json work_dirs/port_shape_e_h_v1_test_subsets.json
+```
+
+物理GPU3由ckpt_sweep内部映射，无需额外设置CUDA_VISIBLE_DEVICES。保留原VAL sweep与全部TEST产物，不覆盖已有不同身份报告。主结果：`work_dirs/crane_symeood_k1_port_day2night_shape_e_h_v1/val_sweep_port_v1/final_test/epoch_22/final_test_metrics_v2.json`；逐序列结果：`work_dirs/port_shape_e_h_v1_test_subsets.json`。带回两个JSON及终端打印；同时保留`preds/results.pkl`、`preds/Task1_grab/`供尺寸/定位逐帧分析。现有逐序列工具输出覆盖、RIoU、时序及原离线指标，不应冒称已新增尺寸误差分布报告。
+
+后续以B既有固定TEST产物为对照，分别报告real_seq03、夜间real_seq04、sim_seq09；中心命中以输出帧为分母，同时报输出覆盖和全帧中心正确覆盖。连续性使用既有序列/编号缺口规则，最长RIoU失败不等同最长无输出。合并real使用帧数/命中计数加权。不能把视频相邻帧当独立重复实验来宣称显著性，也不能把几何结果直接写成深度准确性验证。冻结模型的TEST表现与第24节VAL取舍并列记录。
+
+## 26. E-H epoch22冻结TEST结果与后续判断（2026-10-01）
+
+### 26.1 已读证据与一致性检查（事实）
+
+用户提供`/Users/mac/Downloads/final_test_metrics_v2.json`、`/Users/mac/Downloads/port_shape_e_h_v1_test_subsets.json`及终端附件`/Users/mac/.codex/attachments/664fa336-d299-4c0e-9265-3f65e4a8cf20/已粘贴的文本.txt`。
+
+原字节归档：`work_dirs/port_shape_e_h_v1_final_test_metrics_server_20261001.json`，SHA256 `028fe55ea7e7533ef6d6b4e54196864dacf02afa48def578f2211096848805e4`；`work_dirs/port_shape_e_h_v1_test_subsets_server_20261001.json`，SHA256 `1ae978f08e992365ec93e5bc8af29b65ee69793119b6cee14a2ecccb4a63c902`。
+
+主JSON为metric_protocol_version2、fixed_test_after_source_val_selection、epoch22、15px中心阈值、1440帧。配置SHA与本地固定E-H配置一致，权重SHA `b61c5fed3fdec9b70b0c1ecf91699bff1a01e05ee665fb0eff593fb7e7d1ca5a` 与第24节VAL报告相同。TEST标注SHA记录为`e0dbb1bd8aea7209314d8ed60bc44e965550ed606135cc0016e1075d717de13e`。本地无该TEST PKL/TXT与服务器权重，不能独立重算预测/权重SHA或逐帧几何，只核对报告身份及汇总一致性。
+
+终端完整逐序列JSON与附件JSON逐字段相同。独立反算每序列整数输出、中心/IoU正确计数，复核比例、缺失输出的RIoU零值归一化、失败区间长度/总数/最大值、两real序列按帧加权后的中心及RIoU，与主JSON一致；输出1432=668+192+572，与终端转换框数一致。MMCV提示为版本迁移warning，终端未见推理失败。
+
+B参考仍是第10节原B ep24固定TEST终端；本轮重新读取原附件`/Users/mac/.codex/attachments/3acfd6bd-c70c-4b04-9f21-8ea9bd67b0a3/已粘贴的文本.txt`核对1431框及原指标。未找到B新划分的逐序列JSON/完整预测，本轮不能作B/E逐帧交集或断言具体哪些B缺失被E修复。不能拿本地旧K1/旧划分TEST缓存冒充本次B。
+
+本轮只分析已授权的固定TEST结果、现有VAL与源码定义，未连接服务器、修改代码、训练或重新推理，不据TEST选其他epoch或设计系数。
+
+### 26.2 B / E-H固定TEST总体对照（事实）
+
+| 指标 | B ep24 | E-H ep22 | 取舍 |
+|---|---:|---:|---|
+| 总输出帧 | 1431 | 1432 | 多1帧，但无配对修复证明 |
+| real输出覆盖 | 859/868，98.9631% | 860/868，99.0783% | 略增 |
+| real输出条件中心命中 | 858/859，99.8836% | 858/860，99.7674% | 略降 |
+| real全帧中心正确覆盖 | 858/868，98.8479% | 858/868，98.8479% | 相同 |
+| real全帧mean RIoU | 0.8169 | 0.8166 | 基本持平，报告值略降 |
+| real DFR | 2.5103 | 2.5983 | 略退化 |
+| real ACI | 0.9440 | 0.9427 | 略退化 |
+| real MCML max / mean | 4 / 3.5 | 4 / 2.5 | 最长相同，均值改善 |
+| real MRF | 2.29 | 2.00 | 改善 |
+| sim三项覆盖 | 均100% | 均100% | 相同 |
+| sim角度RMSE | 1.8823° | 2.0353° | 增0.1530°，约8.13% |
+| sim全帧mean RIoU | 0.8816 | 0.8635 | 降0.0181 |
+| sim DFR | 2.4734 | 2.6200 | 退化 |
+| sim ACI | 0.9479 | 0.9502 | 改善 |
+| sim MCML max / mean | 0 / 0 | 0 / 0 | 相同 |
+| 两域TDR_w10 | 各100% | 各100% | 相同，不能视为全帧无失败 |
+
+B real输出/中心数为原终端+固定分母反算；E为本次逐序列直接反算。E real有输出但中心不正确为2帧，B原汇总为1帧；不能据此认为“新增那一帧就是错误输出”，因缺少配对输出身份。real RIoU差值仅约0.0003，不宣称显著退化或改善；sim变化是本次序列上的观测，也没有多seed/独立序列显著性结论。
+
+原sim A-RMSE为10px中心门控，未满足中心或无输出会计90°，不能通常等同纯角度。在本次sim572帧中，若哪怕1帧受90°惩罚，RMSE至少90/sqrt572=3.7631°；现有2.0353°（B 1.8823°也低于该界）排除了这种惩罚，因此依照当前完整分母实现，本次sim角度变化不能解释为门控/漏检惩罚增加。仍没有读取逐帧角度框直接重算。
+
+### 26.3 E-H各视频序列覆盖与连续性（事实）
+
+| 序列 | 输出/总帧 | 输出条件中心命中 | 全帧中心正确覆盖 | 全帧RIoU | 最长无输出 / RIoU失败 |
+|---|---:|---:|---:|---:|---:|
+| real_seq03 | 192/200，96% | 191/192，99.4792% | 191/200，95.5% | 0.748474 | 4 / 4 |
+| real_seq04，夜间 | 668/668，100% | 667/668，99.8503% | 667/668，99.8503% | 0.837035 | 0 / 1 |
+| sim_seq09 | 572/572，100% | 572/572，100% | 572/572，100% | 0.863504 | 0 / 0 |
+
+8个无输出全部来自seq03：110、112、142–145、185、188。其RIoU失败为110–112（含有输出的111）、142–145、185、188，共9帧。seq03有输出条件RIoU 0.779660，全帧因8个缺失变0.748474，不能只报99.48%输出中心命中掩盖96%输出覆盖。
+
+夜间seq04全部有输出，仅56帧RIoU失败；seq03 111帧为有输出但RIoU失败。两序列均各有1个输出框中心未达标，但报告没有列中心失败帧ID，不能仅因中心/IoU正确计数相等就认定中心失败也是111/56帧。未提供框及图像，不能断言只是微小中心偏差、错检对象或具体大小/方向原因。夜间seq04当前表现较好，但无B同序列数据，不能宣称它比B改善。
+
+real MCML<=5通过不等于用户全帧正确覆盖目标完全实现，仍有4帧连续无输出。TDR_w10定义为每10帧窗口至少1帧RIoU>=0.5，所以100%与上述缺失并不冲突；DFR/ACI只统计连续且都有框的帧间，缺失会断开时序，不能单独作为无间断输出证明。MCML mean是既有分段最长失败的均值，不是所有失败区间长度的简单平均。
+
+### 26.4 VAL/TEST解释及下一步（推断、待验证）
+
+**保留B；E-H v1记录为未达到联合目标的固定实验，不作为最终方案。** VAL的sim角度2.107151→1.706917改善没有在TEST sim_seq09重复（1.8823→2.0353），两集sim RIoU均低于B。real在VAL覆盖改善，TEST全帧中心正确数保持而非提高，最长失败也未进一步缩短。不同视频序列确实表现不同，做这次冻结TEST有价值；它没有提供整体替换B的证据。不能据此证明过拟合、协方差角度耦合、权重过大/过小或训练梯度故障是根因。
+
+TEST附件只有指标/区间，没有宽高误差、中心距离分布或原始框。因此无法断言TEST的RIoU下降具体由尺寸低估造成，也不能把第24节VAL尺寸结论直接移植到TEST。保持等比例/原图还原并未改变，独立深度准确性仍未验证。
+
+下一步优先补TRAIN/VAL机制证据：复用本次已有训练日志看后期分类、主KLD、新增H及裁剪轨迹；若仍不足，再在既定有限TRAIN clean/half样本和冻结B/E权重上核对主KLD与E-H对宽高、角度的梯度方向/强度，不更新参数、不增加全TRAIN审计。梯度检查目的为区分有限样本上尺寸纠偏响应、角度响应与主损失交互，不凭loss比或单个夹角定训练根因。根据TRAIN/VAL证据再预登记下一项有限实验，不直接扫E系数、加中心补偿或改选权协议。
+
+只为完善冻结TEST结果，必要时可读已有B/E TXT并补尺寸/定位分布，不需要重跑推理；这一步不用于新设计/系数/阈值选择。B逐序列JSON或固定缓存缺失时可由服务器已有产物补齐以公平描述视频差异，当前无需为了保留B的判断追加新TEST运行。当前TEST已多次暴露，须披露；不能把相邻帧当独立重复或把此次比较写成未接触测试集上的显著/稳定收益。
+
+## 27. 只读TRAIN日志复用工具、检查与服务器指令（2026-10-01）
+
+### 27.1 授权、实现及证据边界（事实）
+
+用户要求按第26节建议复用已有训练日志核对后期分类、主KLD、形状损失及裁剪轨迹，并给服务器指令。本轮新增`crane_project/tools/analyze_port_shape_e_h_train_logs_v1.py`与相关测试，使用Python标准库，不导入torch/mmcv，不加载权重/数据，不推理或执行optimizer，不改模型/配置/日志记录方式，不访问VAL/TEST指标，不连接服务器。
+
+工具读取MMCV TextLoggerHook实际生成的逐行JSON `.log.json`，仅mode=train纳入分析。元数据按seed0、B/E实验名、主SymKLDLoss/权重2、形状公式/系数、24epoch、norm2/clip10及work_dir核对；读取的是日志中已解析配置，使用受限AST字面量解析，不执行其中代码。明确冲突报错；元数据缺失/不能解析保留为需要评审，不能冒称完成原训练身份复现。每个输入原日志SHA及config文本SHA写入报告。
+
+只有一份日志时自动发现；同目录多份不选“最新”，要求显式指定，不能把不同实验/重训混成轨迹。同一run分段日志可显式列出，但重复epoch/iter或单文件倒退立即拒绝，不覆盖记录或静默去重。B日志不存在时仍分析E并明确B比较不可用；默认不重建B历史曲线。JSON损坏/无TRAIN行立即报错，不忽略坏尾行。
+
+按每epoch及固定1、2–4、5–16、17–24、17–22、23–24窗口报告mean/median/p90/min/max与缺失数；保留全部日志行的来源和轨迹。字段包括主loss_cls、主loss_bbox（KLD）、实际loss_shape_compensation、其他原loss及辅助分类/回归合计、总loss、lr、grad_norm和正样本计数（若存在）。新增形状/主KLD比是已加权窗口标量之比，不再次乘0.05；不将它等同参数梯度比。空/缺失项不填零，NaN/Inf/非标量记null并保存事件位置/原表示，输出严格有限JSON。另保存零值计数、epoch覆盖及总loss与可用组件和之差，供人工判断归零/舍入/缺口。
+
+**裁剪口径修正：** 本地核对MMCV OptimizerHook记录的是每步裁剪前范数；LoggerHook在每个日志窗口调用log_buffer.average，再由TextLoggerHook写入JSON且舍入。因此工具统计的是“日志窗口平均裁剪前范数>10的占比”，不是实际每步裁剪频率，也不计算10/平均范数作为平均裁剪倍率。窗口均值<=10不能证明该窗口没有裁剪。默认日志间隔50，日志轨迹无法补出逐step的短尖峰或精确裁剪轨迹，当前不为此重训。
+
+现有主头对NaN/Inf主分类/KLD已有归零保护，有限日志不证明保护从未触发；零值也可能来自舍入/样本情况，不能自动判为隐藏错误。loss曲线与grad_norm只提供训练数值/阶段线索，不直接证明宽高或角度梯度来源、泛化稳定性或几何失败根因。读取旧K1日志仅用于验证真实MMCV格式/AST解析，没有把其旧划分指标纳入B/E分析。
+
+### 27.2 验证与审查（事实）
+
+新增`tests/test_port_shape_e_h_train_logs.py`：12项标准库CPU检查通过，并在本地Python3.8环境验证兼容。覆盖TRAIN/VAL隔离、已加权比值/辅助聚合、窗口范数与实际裁剪口径区别、缺失/NaN/Inf/零分母、错误身份/系数、配置代码不可执行、重复/倒退日志、分段排序/来源、歧义发现、epoch缺口、B缺失/描述性对比、坏JSON/无TRAIN及真实CLI输出/拒绝覆盖。Python AST、diff空白检查及上传包内容逐字节校验通过。
+
+本地没有本次B/E正式训练日志，尚无新的训练轨迹结论；测试是流程/统计fixture，不是服务器数值结果。未改训练、增强、正样本、归一化、梯度裁剪、推理或几何/深度链路。本次只在工具内生成新分析报告，不修改输入日志。
+
+上传包：`work_dirs/port_shape_e_h_v1_train_log_tools_20261001.tar.gz`，含上述工具与测试2个文件，无数据、权重或日志，SHA256 `276a1013103a455bcf1c9bd23d2defe14610bf6d8bbd269acae36910dfdcbc73`。工具SHA `7103ebf0bfcc68a3a4ca7e871ae4bfaac6eb44ac0152fa9bd1c35b0e7ed268c6`。
+
+### 27.3 服务器只读命令
+
+把压缩包上传项目根目录后：
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+conda activate mmrotljj
+tar -xzf port_shape_e_h_v1_train_log_tools_20261001.tar.gz
+
+python crane_project/tools/analyze_port_shape_e_h_train_logs_v1.py \
+  --out-json work_dirs/port_shape_e_h_v1_train_log_review.json
+```
+
+默认搜索E目录`work_dirs/crane_symeood_k1_port_day2night_shape_e_h_v1`及B目录`work_dirs/crane_symeood_k1_port_day2night_aug_b_v1`的`*.log.json`。不需GPU/PYTHONPATH/模型依赖。若列出多份日志，则指定该正式run的真实时间戳文件（以下时间戳是占位示例）：
+
+```bash
+python crane_project/tools/analyze_port_shape_e_h_train_logs_v1.py \
+  --e-log work_dirs/crane_symeood_k1_port_day2night_shape_e_h_v1/YYYYMMDD_HHMMSS.log.json \
+  --b-log work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/YYYYMMDD_HHMMSS.log.json \
+  --out-json work_dirs/port_shape_e_h_v1_train_log_review.json
+```
+
+如果B日志确实无法取得或需要明确先分析E，使用`--no-b`，仍须在E多份时指定`--e-log`；报告注明无B轨迹，不因此新训练B。断点分段若确属同一run可在同一`--e-log`/`--b-log`后依次列多个文件，必须无重叠。已有输出不覆盖，先复用；新输入/修复后需重新出报告则使用新的输出名。
+
+带回完整`work_dirs/port_shape_e_h_v1_train_log_review.json`和终端窗口汇总。评审重点为首次大分类/大梯度是否回落、17–22及23–24的主/辅助分类、KLD、形状及正样本数、LR阶段及窗口梯度是否存在持续异常。单纯loss变小不等于尺寸/定位变好，也不能据形状loss比直接增大系数。如果日志已解释早期数值而无法解释几何退化，再按第26.4节有限TRAIN梯度检查补缺口，当前不先扩展全审计或启动新实验。B继续为有效方案，TEST多次暴露边界保持。
