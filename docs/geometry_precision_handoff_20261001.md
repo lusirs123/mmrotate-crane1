@@ -3179,7 +3179,7 @@ ROI/structure共同stem和质量头初值完全一致；普通ROI中的响应对
 2. `crane_project/tools/train_port_reliability_branches_v1.py`：CPU check、四视图smoke、固定8轮train及完整epoch恢复。
 3. `crane_project/tools/eval_port_reliability_branches_v1.py`：固定epoch8真实B VAL评分与score/geometry/ROI/structure对照。
 4. `crane_project/tools/port_reliability_branches_v1_protocol.json`：拟合前预算、采样、资格、选权和评价约定。
-5. `crane_project/tools/port_reliability_branches_v1_sources.json`：53项来源绑定，原47项保持不变；额外包含旧47项manifest及新增代码/协议/测试，排除自身循环SHA。当前SHA `c1c796ce155442f7e6479f776ae431050f852bfb69a40a78781af56553371986`。
+5. `crane_project/tools/port_reliability_branches_v1_sources.json`：53项来源绑定，原47项保持不变；额外包含旧47项manifest及新增代码/协议/测试，排除自身循环SHA。首版SHA `c1c796ce155442f7e6479f776ae431050f852bfb69a40a78781af56553371986`；checkpoint写入修复后的当前身份见R1.7。
 6. `tests/test_port_reliability_branches_v1.py`：9项必要CPU检查，参与新来源合同，上传服务器时也需保留此文件。
 
 train/smoke工作目录必须新建，已有目录不覆盖。checkpoint为三头/三优化器整体，记录epoch/步数、共享视图链SHA、Python/NumPy/torch/CUDA随机状态、训练方向政策、来源/数据/B/预算/运行环境合同；文件以同目录临时文件和exclusive原子链接提交，再写SHA标记。无标记或SHA不符不能加载。恢复仅允许完整正式epoch、合同与预算/环境相同，并使用新的工作目录保存后续内容，保留旧日志/权重；epoch8不可再续超预算。
@@ -3269,6 +3269,37 @@ python crane_project/tools/train_port_reliability_branches_v1.py \
 恢复后总预算仍20,464步/臂（不是再跑8轮），后续VAL路径相应指向新目录的epoch_08。任何已有out/work目录需换新名称，不能删除/覆盖原证据；smoke目录改变时同时明确传入对应`--smoke-report`。
 
 回传smoke的`completion.json`/`train_steps.jsonl`（4行），正式train的`completion.json`/`train_steps.jsonl`/`contract.json`，以及VAL的`val_compare.json`/`val_qualities.jsonl`。权重和SHA标记保留服务器，暂不必回传；CPU报告可一并留存。后续分析首先核对真实输出上的排名收益和拒绝代价，不用人工探针或训练loss代替真实VAL证据。
+
+### R1.7 服务器初始checkpoint写入失败与兼容性修复（2026-10-02）
+
+**回传事实：** CPU check正常打印`Saved .../input_check.json CPU only; no fitting/inference`。smoke加载B ep24后，在`run -> save_checkpoint -> torch.save(payload, temporary) -> PyTorchFileWriter(str(name))`处报`invalid file name: .../.checkpoint-khlvttv1`。按当前调用位置，失败发生在epoch00保存、dataset/训练循环之前，新增头优化步为0，未完成4视图smoke；不是GPU训练数值失败或OOM证据。服务器实际目录内容未读取，不将单纯加载B或CPU check包装成smoke通过。
+
+**根因及修复：** 旧实现把隐藏临时路径字符串直接交给torch ZIP writer，服务器版本在路径writer中拒绝该文件名；本机torch1.8的原保存测试未覆盖此版本差异。这是提供的保存代码兼容性问题。现使用`os.fdopen(fd, 'wb')`打开mkstemp的独占句柄，`torch.save(payload, stream)`选择buffer writer，再flush/fsync/关闭并进行原同文件系统exclusive硬链接提交及SHA标记。仍只清理自己创建的临时文件，写入失败不发布最终checkpoint；已存在文件继续拒绝覆盖。没有调整序列化内容、损失、坐标、B、图像视图、seed、8轮预算、恢复或VAL选权规则。
+
+本次修改仅涉及`crane_project/utils/port_reliability_branches_v1.py`、`tests/test_port_reliability_branches_v1.py`、53项来源manifest及本文。当前manifest SHA `422161facfa1251c54ff5f95b7b31ecb9ae7e830134a3b03f569987507296a03`；utility SHA `43ce41e59fde3c9a461173a3328378db085c36146a2bdce706779b0f85623ab4`，test SHA `797a3114aae43b06e820f349bfb78fae5462abbcbc1c396936680dbbc35bf9ad`。原47项和固定protocol保持，新manifest未重新放宽旧TRAIN cache身份。
+
+**本地验证事实：** 当前10项可靠性CPU回归通过。其中新增测试模拟拒绝路径的ZIP writer，要求实际传入可写二进制流，读取真实保存bundle核对；另模拟写入中断，验证句柄关闭、临时文件清理、无最终文件/SHA标记及既有文件未覆盖。原持续更新→保存恢复→继续更新的精确一致、完整末轮/损坏SHA拒绝等检查继续通过。Python3.8语法、53项来源合同及diff检查通过。当前旧v3 CPU报告仍保留为首版来源身份的历史记录，不称其新源码成绩；本次修复静态记录为`work_dirs/port_reliability_branches_v1_checkpoint_io_fix_local_20261002/review.json`。本机无服务器torch1.13/CUDA/B权重，真实服务器保存成功和完整smoke仍待验证；没有连接服务器。
+
+上传本节三个修改文件（包括参与来源合同的test），同步本文。保留原失败`work_dirs/port_reliability_branches_v1_smoke`，不能拿该目录恢复或通过smoke；本次在新目录从初始化开始，原B/TRAIN cache照常复用。
+
+```bash
+CUDA_VISIBLE_DEVICES=0 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/train_port_reliability_branches_v1.py \
+  --mode smoke --gpu 0 \
+  --work-dir work_dirs/port_reliability_branches_v1_smoke_io_fix_v1
+```
+
+新smoke内部自动核验更新后的来源及已有TRAIN输入合同。只有出现`PAIRED_SMOKE_SAVE_RELOAD_PASS_DISCARDED`才进入正式固定8轮；显式传新smoke报告，不能继续用默认旧失败目录：
+
+```bash
+CUDA_VISIBLE_DEVICES=0 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/train_port_reliability_branches_v1.py \
+  --mode train --gpu 0 \
+  --smoke-report work_dirs/port_reliability_branches_v1_smoke_io_fix_v1/completion.json \
+  --work-dir work_dirs/port_reliability_branches_v1_train
+```
+
+正式训练仍为8轮/20,464步每臂；R1.6的固定epoch08 VAL指令继续适用。若相应新work目录已存在，换新名称并同步smoke-report路径，不删旧证据。回传新smoke的completion及4行train_steps或新错误，以核对服务器实际保存/重载和任务梯度；本次不重做旧14视图、不改变评估阈值或使用TEST。
 
 ## 50. G v1服务器短拟合完成但报告保存失败：修复与旧缓存恢复（2026-10-02）
 

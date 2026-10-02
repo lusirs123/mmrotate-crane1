@@ -7,6 +7,7 @@ from copy import deepcopy
 import inspect
 import json
 import math
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -136,6 +137,46 @@ def test_fixed_epoch_and_checkpoint_corruption_rejected(tmp_path):
         stream.write(b'corrupt')
     with pytest.raises(ValueError, match='SHA'):
         branch.read_checkpoint(path, for_val=True)
+
+
+def test_checkpoint_uses_binary_stream_and_cleans_failed_write(tmp_path, monkeypatch):
+    """Cover the server ZIP path validator without installing another torch."""
+    arms = branch.make_arms()
+    optimizers = branch.make_optimizers(arms)
+    contract = dict(role='discarded_smoke', fixture='file_like_zip_writer')
+    original_save = torch.save
+    streams = []
+
+    def path_rejecting_save(payload, destination):
+        if isinstance(destination, (str, bytes)) or hasattr(destination, '__fspath__'):
+            raise RuntimeError('invalid file name: simulated PyTorch path writer')
+        assert 'b' in destination.mode and destination.writable()
+        streams.append(destination)
+        return original_save(payload, destination)
+
+    monkeypatch.setattr(branch.torch, 'save', path_rejecting_save)
+    path = tmp_path/'epoch_00.pth'
+    branch.save_checkpoint(path, arms, optimizers, contract, 0, 0, {}, 'chain')
+    assert streams[0].closed
+    assert branch.read_checkpoint(path, contract)['optimizer_steps_per_arm'] == 0
+    assert not list(tmp_path.glob('.checkpoint-*'))
+    before = branch.sha(path)
+    with pytest.raises(FileExistsError):
+        branch.save_checkpoint(path, arms, optimizers, contract, 0, 0, {}, 'chain')
+    assert branch.sha(path) == before
+
+    def failed_save(payload, destination):
+        streams.append(destination)
+        destination.write(b'incomplete ZIP')
+        raise OSError('simulated interrupted write')
+
+    monkeypatch.setattr(branch.torch, 'save', failed_save)
+    failed = tmp_path/'failed.pth'
+    with pytest.raises(OSError, match='interrupted'):
+        branch.save_checkpoint(failed, arms, optimizers, contract, 0, 0, {}, 'chain')
+    assert streams[-1].closed
+    assert not failed.exists() and not Path(str(failed)+'.sha.json').exists()
+    assert not list(tmp_path.glob('.checkpoint-*'))
 
 
 def test_empty_online_outputs_and_equivalent_geometry():

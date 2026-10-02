@@ -192,9 +192,14 @@ def save_checkpoint(path, arms, optimizers, contract, epoch, steps, b_state, vie
         optimizers={k: cpu_tree(v.state_dict()) for k, v in optimizers.items()},
         rng=rng_state(), frozen_b_state=b_state)
     fd, temporary = tempfile.mkstemp(prefix='.checkpoint-', dir=str(path.parent))
-    os.close(fd)
     try:
-        torch.save(payload, temporary)
+        # Some PyTorch ZIP writers reject hidden temporary path names. Passing
+        # an open binary stream selects the buffer writer instead of its path
+        # validator, while retaining exclusive same-filesystem publication.
+        with os.fdopen(fd, 'wb') as stream:
+            torch.save(payload, stream)
+            stream.flush()
+            os.fsync(stream.fileno())
         os.link(temporary, str(path))  # exclusive atomic commit on same filesystem
     finally:
         os.unlink(temporary)
