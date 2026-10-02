@@ -75,12 +75,17 @@ def checked_inputs(snapshot_path, cache, structure_report):
                 raise ValueError('Current TRAIN direction policy differs')
         delta = ready.corner_difference(ready.box_polygon(actual['gt_original']),
                                         ready.box_polygon(saved['gt_original']))
-        if delta > .001:
+        # Reuse readiness's 0.20px corner identity tolerance after exact byte
+        # binding. minAreaRect can pick another almost-equal enclosing edge
+        # across OpenCV builds. Labels always use the saved SERVER numbers;
+        # actual GPU-run loader parity below remains atol1e-5/rtol1e-6.
+        if delta > .20:
             raise ValueError('Current/saved numerical GT differs materially: '+saved['image'])
         max_corner = max(delta, max_corner)
     proof = dict(snapshot_sha256=SNAPSHOT_SHA, input_manifest_sha256=support.fingerprint(inputs),
         identity_sha256=support.fingerprint(identity), all_row_input_hashes_exact=True,
         current_train_source_bytes_match=True, local_vs_saved_max_corner_px=max_corner,
+        cross_opencv_corner_identity_tolerance_px=.20,
         train_frames=2558, qualification=support.qualification_counts(inputs),
         clean_support=support.support_report(support.support_rows(inputs, predictions)),
         b_cache_state=complete['b_state_before'],
@@ -94,7 +99,7 @@ def axis_for(source):
     seq = source['sequence']
     folder = 'axis_legacy_train_v1' if seq in ready.LEGACY_TRAIN else 'axis_k2p1'
     axis, _ = ready.read_axis(ready.DATA/'provenance'/folder/seq/'axis_json'/(source['image']+'.json'),
-        source['image'], source['image_size'], legacy=seq in ready.LEGACY_TRAIN)
+        source['image'], tuple(source['image_size']), legacy=seq in ready.LEGACY_TRAIN)
     return axis
 
 
@@ -204,6 +209,8 @@ def checked_smoke(path, sources, protocol, proof, frozen):
             or report['cache_sha256'] != proof['cache_sha256']
             or not report['save_reload_quality_exact'] or not report['b_raw_unchanged']):
         raise ValueError('New paired smoke did not pass the identical current contract')
+    if branch.sha(path.parent/'train_steps.jsonl') != report['train_log_sha256']:
+        raise ValueError('Paired smoke update log SHA differs')
     payload = branch.read_checkpoint(Path(report['checkpoint']))
     if (payload['contract']['role'] != 'discarded_smoke'
             or payload['optimizer_steps_per_arm'] != 4
@@ -268,6 +275,12 @@ def run(args, inputs, proof, cfg, sources, protocol):
                 values, record, raw_state = training_view(detector, item, source, args.gpu, view_seed)
                 record.update(epoch=epoch, slot=slot, dataset_index=int(index), optimizer_step=steps+1)
                 record['arms'] = branch.update_arms(arms, optimizers, *values)
+                if role == 'discarded_smoke':
+                    for name, update in record['arms'].items():
+                        if any(v <= 0 for v in update['quality_task_gradient_norms']):
+                            raise ValueError('Smoke has an inactive quality task: '+name)
+                    if any(v <= 0 for v in record['arms']['structure']['response_task_gradient_norms']):
+                        raise ValueError('Smoke has an inactive response task')
                 assert_detector_frozen(detector)
                 steps += 1
                 chain = branch.fingerprint(dict(previous=chain, view={k: record[k] for k in
@@ -324,9 +337,11 @@ def run(args, inputs, proof, cfg, sources, protocol):
         paired_view_chain_sha256=chain, save_reload_quality_exact=reload_exact,
         b_raw_unchanged=True, checkpoint=str(path.resolve()), checkpoint_sha256=branch.sha(path),
         train_log_sha256=branch.sha(args.work_dir/'train_steps.jsonl'), resume_from=str(args.resume) if args.resume else None,
+        resume_checkpoint_sha256=branch.sha(args.resume) if args.resume else None,
         runtime=runtime, max_allocated_mib=torch.cuda.max_memory_allocated(args.gpu)/2**20,
         max_reserved_mib=torch.cuda.max_memory_reserved(args.gpu)/2**20,
-        val_or_test_read=False, test_repeatedly_exposed=True)
+        val_or_test_dataset_read=False, val_or_test_metrics_used_for_training=False,
+        historical_val_source_sha_only=True, test_repeatedly_exposed=True)
     branch.write_new(args.work_dir/'completion.json', report)
     print('Saved', args.work_dir/'completion.json', report['status'], flush=True)
 
@@ -355,7 +370,8 @@ def main():
     if args.mode == 'check':
         branch.write_new(args.work_dir/'input_check.json', dict(proof, sources=sources, protocol=protocol,
             architecture=branch.architecture(branch.make_arms()),
-            status='FORMAL_TRAIN_CONTRACT_PASS_CPU_ONLY', val_or_test_read=False, optimizer_steps=0))
+            status='FORMAL_TRAIN_CONTRACT_PASS_CPU_ONLY', val_or_test_dataset_read=False,
+            val_or_test_metrics_used_for_training=False, historical_val_source_sha_only=True, optimizer_steps=0))
         print('Saved', args.work_dir/'input_check.json', 'CPU only; no fitting/inference')
     else:
         run(args, inputs, proof, cfg, sources, protocol)

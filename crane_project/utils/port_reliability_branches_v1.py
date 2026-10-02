@@ -128,6 +128,12 @@ def update_arms(arms, optimizers, p3, boxes, scores, meta, target, mask,
         if final_gradient is None or not bool(torch.isfinite(final_gradient).all()):
             raise ValueError('Missing/nonfinite quality gradient')
         task_norms = final_gradient.double().square().sum(dim=1).sqrt().cpu().tolist()
+        response_norms = None
+        if name == 'structure':
+            gradient = arm.response.weight.grad
+            if gradient is None or not bool(torch.isfinite(gradient).all()):
+                raise ValueError('Missing/nonfinite structure gradient')
+            response_norms = gradient.double().flatten(1).square().sum(dim=1).sqrt().cpu().tolist()
         if name == 'roi' and any(p.grad is not None for p in arm.response.parameters()):
             raise ValueError('Ordinary ROI response received gradients')
         trainable = [p for p in arm.parameters() if p.requires_grad]
@@ -138,6 +144,7 @@ def update_arms(arms, optimizers, p3, boxes, scores, meta, target, mask,
             loss_structure=float(sloss.detach()), loss_genuine=float(parts['genuine'].detach()),
             loss_probes=float(parts['probe'].detach()), preclip_norm=norm,
             clip_multiplier=min(1., 10./(norm+1e-6)), quality_task_gradient_norms=task_norms,
+            response_task_gradient_norms=response_norms,
             genuine_quality_before_update=online['qualities'][:genuine_count].detach().cpu().tolist())
         optimizer.step()
         if any(not bool(torch.isfinite(p).all()) for p in arm.parameters()):
@@ -229,6 +236,9 @@ def load_bundle(payload, arms, optimizers=None, restore_random=False):
         arms[name].load_state_dict(payload['arms'][name], strict=True)
         if optimizers is not None:
             optimizers[name].load_state_dict(payload['optimizers'][name])
+            for group in optimizers[name].param_groups:
+                if (group['lr'], group['momentum'], group['weight_decay']) != (.001, 0., 0.):
+                    raise ValueError('Loaded optimizer differs from fixed SGD protocol')
             device = next(arms[name].parameters()).device
             for state in optimizers[name].state.values():
                 for key, value in state.items():
@@ -324,8 +334,14 @@ def compare_component_rankings(rows, coverages=COVERAGES):
                         total_at_cutoff=sum(value(r) == cutoff for r in ordered) if count else 0,
                         accepted_at_cutoff=sum(value(r) == cutoff for r in ordered[:count]) if count else 0)
                     comparison[method] = stats
+                increments = {reference: dict(
+                    incorrect_accepted_structure_minus_reference=comparison['structure']['incorrect_accepted']-comparison[reference]['incorrect_accepted'],
+                    correct_rejected_structure_minus_reference=comparison['structure']['correct_rejected']-comparison[reference]['correct_rejected'],
+                    center_valid_accepted_structure_minus_reference=comparison['structure']['center_valid_accepted']-comparison[reference]['center_valid_accepted'])
+                    for reference in ('score', 'geometry', 'roi')}
                 curves.append(dict(requested_eligible_frame_coverage=coverage,
-                                   matched_actual_accept_count=count, methods=comparison))
+                    matched_actual_accept_count=count, methods=comparison,
+                    structure_increments=increments))
             summary['component_curves'][component] = curves
         result[group] = summary
     return result

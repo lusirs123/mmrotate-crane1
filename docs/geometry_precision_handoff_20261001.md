@@ -2,7 +2,7 @@
 
 > 用途：在新对话中继续几何精度优化。本文汇总本轮对话、现有代码及收到的实验结果；保留事实、推断和待验证内容的区别。后续优先更新本文，不再为每次改动创建交接文件。
 >
-> **2026-10-02最新任务分工：用户指定本对话继续优化检测几何精度，可靠性分析由另一个对话推进。第44节建议转向可靠性的安排保留为历史建议，不作为本对话的下一步。当前问题、原因边界及论文检索见第45节；按授权已实现G v1冻结B局部尺寸/方向细化及有限TRAIN检查入口，详见本文“G v1冻结B局部尺寸/方向细化”节。B ep24及原检测源码保持，24项CPU检查通过，真实TRAIN/CUDA与正式对照仍待服务器运行；可靠性记录独立保留。**
+> **2026-10-02最新任务分工：用户指定本对话继续优化检测几何精度，可靠性分析由另一个对话推进。第44节建议转向可靠性的安排保留为历史建议，不作为本对话的下一步。当前问题、原因边界及论文检索见第45节；G v1冻结B局部尺寸/方向细化及有限TRAIN检查见第48节。服务器终端已显示128视图采集、两臂各200步，但最后JSON报告保存失败；第50节已修复并提供严格复用旧缓存的复跑命令，40项CPU检查和新版静态入口通过。B ep24及原检测源码保持，真实几何结果/显存报告仍待回传，正式训练尚未启动；可靠性记录独立保留。**
 >
 > **当前结论：保留 SymEOOD＋尺度增强 B，VAL固定epoch24，作为后续可靠性研究的暂定检测前端。D 和固定E-H v1均未形成联合收益。E-H在VAL选epoch22，改善real覆盖/连续性及sim角度，但尺寸/RIoU退化；固定TEST上real全帧中心正确数与B相同、输出多1帧，real RIoU基本持平，sim角度及RIoU退化，不替换B。独立尺寸候选F-S v1的保存框数学与服务器有限TRAIN接入/初始化检查已完成；第34节已准备正式配置和VAL比较入口，固定beta/lambda=0.1、原15条件＋普通real中心mean/RMSE保护。2026-10-02已读取F-S完整24epoch训练日志与VAL扫描：原规则选epoch18、唯一可行，real覆盖/RIoU局部改善，sim RIoU低于B，不替换B；已记录显存峰值恒为3007MiB。完整17项VAL缓存比较已复核：7项失败，两域短边与sim纯角度改善，但长边/中心及sim重叠退化；普通real新增4个严重错位，不替换B。固定F-S ep18 TEST已回传并复核：real少21个输出、正确中心总数少26、最长RIoU失败4→9，sim角度/重叠退化；保留B，F-S不作为最终方案，最新分析见第44节。第35节保留上一轮流程建议；第36节按用户最新范围收束为B检测＋当前帧分量可靠性判别，连续状态接口留到大论文后续设计。不加入DINO，不据已多次暴露的TEST调参或重选权重，不恢复候选排序或完整审计。**
 
@@ -3137,3 +3137,200 @@ python crane_project/tools/preflight_port_geometry_g_v1.py \
 先看每域每尺度fit loss是否确有下降，再看图级TRAIN probe的长边、短边、纯角度RMSE/p90、RIoU及尾部是否联合改善，并比较aligned对ordinary的增量。报告原三口径：输出帧中心命中、输出覆盖、全帧中心正确覆盖；不以仅输出条件指标隐藏无输出或不配对框。稀疏TRAIN样本不报告伪视频连续性/DFR/ACI，也不只挑改善的域、尺度或分量。
 
 完成状态仅表示检查跑完，loss下降不等于局部特征有效或VAL改善。若只有fit改善、probe联合退化，或aligned不优于ordinary，应先报告容量/过拟合/采样等不确定性，不继续堆loss或自动放开B。若工程及可学性证据支持，再另锁定正式两臂预算、保存/重载与G头VAL选权合同；原17项联合门槛保留，不重选B或放宽既有条件。当前VAL已用于开发/选权、TEST已多次暴露；本轮不用TEST选方法、界限、预算或权重，未安排新TEST。
+
+## R1. 可靠性三臂正式训练、保存恢复与固定末轮VAL入口（2026-10-02）
+
+本节接续第47节可靠性路线，独立于第48节几何G。用户补回数值快照并授权实现正式分支训练/保存/验证。本地完成实现、必要CPU检查与代码复核；未连接服务器、未读取本地不存在的B权重、未启动真实GPU训练，尚无新可靠性VAL成绩。
+
+### R1.1 数值留存缺口已闭合（事实）
+
+实际回传`/Users/mac/Downloads/train_input_snapshot.json`是`identity + inputs`包装，与第47节展示的导出包装字段不同；以实际回传字节为准。SHA `27643a9e00eaef5f26221dd8c8d6b52ede991ad372f369d645b8d1a17b131af0`，归档在`work_dirs/port_reliability_train_support_v1_server_20261002/train_input_snapshot.json`。2558条inputs内容指纹精确等于缓存manifest `2094bb4cde19dd97909bcd02b36db19c09c6d5c348c0b246e9b159a68c1b4022`；全部逐行input SHA、索引/图名、缓存identity和complete及预测文件SHA均通过。使用回传的数值GT和资格，全部分组统计与原服务器报告精确相同，不能再将第47.3节的缺口称为未闭合。
+
+原1帧差异已定位为`real_seq05_00336`：本地重解析纯方向误差2.9987808947°，服务器保存GT下3.0002425552°；该帧无既有评价方向资格，仅新增TRAIN资格计数跨过>3°边界。保留服务器299个TRAIN角错误（real270、sim29）、既有评价220个，不改变3°阈值、不重跑GPU、不改写旧成绩。
+
+本机/服务器的每帧图像、标注、轴线字节及监督资格均匹配。数值GT在不同OpenCV构建中可能选取另一条近等价包围边：全TRAIN角点最大差0.1246240238px（`sim_seq08_00687`），不全是近零舍入。静态数据绑定复用既有readiness的0.20px角点身份容差，前提是原文件字节精确相同；正式标签始终取保存的服务器数值。服务器实际dataset loader与保存GT另作atol1e-5/rtol1e-6核对，不以0.20px替代该检查。该身份容差不改变几何评价边界。
+
+精确复核证据：`work_dirs/port_reliability_train_support_v1_server_20261002/input_snapshot_exact_review.json`。全TRAIN2558输出，中心坏1、尺寸坏56、TRAIN方向坏299，real1810与sim748分开；新增234方向资格来自真实native轴线，sim748方向来自Webots OBB，仍无native轴线。短边、可见性和深度GT限制沿用第47节。
+
+### R1.2 拟合前固定设计（实现事实；有效性待验证）
+
+基线固定SymEOOD＋尺度增强B ep24及全部原身份；新增评分头只产生中心/尺寸/方向质量，不改变原B框、score、输出数量、原坐标链或深度接口。相对B的绝对几何精度不会因评分头本身提高；本实验检验是否能更好地区分原框的分量质量。
+
+| 比较项 | 参数/可训练参数 | 输入及损失 |
+|---|---:|---|
+| score-only | 0/0 | 原B分类score排序，无拟合 |
+| geometry | 771/771 | 与ROI相同的8维score/几何描述，8→64→3，只有质量loss |
+| ordinary ROI | 52,293/52,227 | 原P3 stem、方形ROI/有效支持/几何描述，响应输入全零、响应层冻结、结构loss为0 |
+| structure ROI | 52,293/52,293 | 原两通道中心/有限无向线响应＋ROI，质量loss＋结构loss |
+
+ROI/structure共同stem和质量头初值完全一致；普通ROI中的响应对应MLP列虽声明可训练，因输入恒零而无有效梯度。因此这是结构输入＋辅助监督整包的增量对照，不是完全等有效容量或单独辅助loss的因果归因。
+
+固定预算为**8完整TRAIN轮，每轮2558图，每臂20,464步，seed1701，batch1**；没有lr/权重/结构搜索或早停。SGD lr0.001、momentum0、weight_decay0、global clip10；质量权重1、结构权重1，真实输出/13个固定探针质量loss沿用0.5/0.5（缺输出时仅探针）。中心15px、尺寸10%、方向3°连续参考及第46节TRAIN资格不改。真实轴线只作离线结构监督与资格核对，sim响应线由Webots OBB派生为代理，不声称新增sim轴线真值或可见性监督。
+
+每轮图序由`RandomState(1701+epoch).permutation(2558)`固定，每视图种子`1701+100000*epoch+slot`；三个头共享同一当前B TRAIN增强图像/P3/真实输出/score/GT与探针，不向在线头提供域/序列/GT/探针标识。保留B原随机等比例缩小及翻转管线。clean缓存只用于支持与身份诊断，不能变换clean框冒充增强图上的真实B输出。
+
+冻结B保持全部模块eval、requires_grad=False、无梯度、无优化器；每轮结束复核全部参数/缓冲SHA与原TRAIN缓存相同。每帧一次B特征提取，三个头串行反传，每视图释放图/特征，不积累整套GPU缓存；CPU打包保存新增头。实际峰值allocated/reserved保存在服务器报告，不将既有纯B峰值或CPU测试当正式训练显存保证。
+
+**选权规则：统一末轮epoch_08为主对照。** 检测mAP/原中心覆盖无法选质量头，故不作VAL权重选择。保存epoch00及每个完整epoch，VAL入口拒绝smoke和epoch0～7。单次小改善不称稳定/显著，sigmoid质量回归不称校准正确概率。
+
+### R1.3 新入口与保存/恢复合同（实现事实）
+
+1. `crane_project/utils/port_reliability_branches_v1.py`：三臂、配对更新、checkpoint及分量匹配覆盖评价。
+2. `crane_project/tools/train_port_reliability_branches_v1.py`：CPU check、四视图smoke、固定8轮train及完整epoch恢复。
+3. `crane_project/tools/eval_port_reliability_branches_v1.py`：固定epoch8真实B VAL评分与score/geometry/ROI/structure对照。
+4. `crane_project/tools/port_reliability_branches_v1_protocol.json`：拟合前预算、采样、资格、选权和评价约定。
+5. `crane_project/tools/port_reliability_branches_v1_sources.json`：53项来源绑定，原47项保持不变；额外包含旧47项manifest及新增代码/协议/测试，排除自身循环SHA。当前SHA `c1c796ce155442f7e6479f776ae431050f852bfb69a40a78781af56553371986`。
+6. `tests/test_port_reliability_branches_v1.py`：9项必要CPU检查，参与新来源合同，上传服务器时也需保留此文件。
+
+train/smoke工作目录必须新建，已有目录不覆盖。checkpoint为三头/三优化器整体，记录epoch/步数、共享视图链SHA、Python/NumPy/torch/CUDA随机状态、训练方向政策、来源/数据/B/预算/运行环境合同；文件以同目录临时文件和exclusive原子链接提交，再写SHA标记。无标记或SHA不符不能加载。恢复仅允许完整正式epoch、合同与预算/环境相同，并使用新的工作目录保存后续内容，保留旧日志/权重；epoch8不可再续超预算。
+
+smoke是固定`real_seq05_00000`原尺度、`real_seq05_00281`半尺度水平翻转、`sim_seq08_00000`原尺度、`sim_seq08_00374`半尺度水平翻转，三头持续更新4次；第2步保存→重建→重载→同视图质量精确一致后继续，第4步再保存重载。记录每个质量/响应任务末层梯度，要求有限且有效，普通ROI响应无梯度；B原框及全状态不变。smoke权重身份为`discarded_smoke`，正式拟合从原seed重新初始化。正式train自动核验当前合同下该smoke报告、日志SHA与4步checkpoint，检查失败直接停止，不能绕过失败继续正式训练。
+
+TRAIN日志逐步保存原数值GT、资格、当前增强B原坐标框/误差、视图种子/图张量SHA、每臂质量/结构/真实/探针loss、裁剪及任务梯度、更新步。保存/重载检查不再次运行旧14个独立预检视图。TRAIN阶段不建立VAL/TEST loader、不使用其指标拟合；旧冻结来源合同中的历史VAL缓存仅校验文件SHA。
+
+### R1.4 VAL评价与证据边界（固定设计；真实结果待验证）
+
+复用第39/47节已核验B VAL887帧、原PKL、选权JSON、数值GT/图像/标注身份。VAL严格要求服务器native checkpoint/PKL/selection存在且SHA匹配；当前B从同一VAL图像提取P3，原框/score/输出数与缓存逐帧核对（仅数值身份容差atol1e-4/rtol1e-6），不以新推理重写原基线。质量头仅接收真实B框，缺输出返回0×3，仍留在全帧分母；无探针、拟合、阈值搜索或TEST入口。评价前后检查B和各头参数/缓冲不变。
+
+每域/每序列和overall都报告原B：输出覆盖率、仅输出帧中心命中率、全帧中心正确覆盖。三个分量分别在预定100/99/98/95/90/80%档进行同实际接受数对照：`ceil(档位×可评价帧数)`，最多到可评价输出数；方向沿用GT aspect≥1.2评价资格。GT资格仅定义离线评价分组，不进入在线筛选。并列评分按图名稳定排序，报告边界并列数量，不将top-k曲线当部署阈值。
+
+曲线给出错误接受、正确拒绝、正确分量覆盖、误差RMSE/p90/p95、最长连续未接受段、中心有效接受数与可评方向上的联合正确数；另报structure相对score/geometry/ROI的计数增量。中心曲线的拒绝代价只是诊断，尺寸/方向拒绝不会删除原中心，部分接受不包装成完整OBB正确。连续段是源VAL已有序列的诊断，不新增时序状态/滤波/保持接口。保留real_seq07，不能只报告合并均值或有利覆盖档。
+
+只有真实B VAL在相同接受数量下，结构头相对score/geometry/ordinary ROI呈现有用的尺寸/方向分辨增量，才支持继续该结构可靠性方案；若只fit loss下降、VAL多数域/分量退化或不优于普通ROI，报告该固定设计的失败/不确定性，不据此自动重训或放宽条件。raw B三口径必须保持，实际中心门控/部署阈值未启用，不宣称中心坏框泛化、深度精度或端到端控制有效。此VAL已有开发/检测选权暴露，仅为单种子探索性比较；**TEST已多次暴露，本阶段不新增TEST、不用其调预算/阈值/架构/权重。**
+
+### R1.5 本地验证及修复（事实）
+
+新增9项CPU测试通过：共同初始化与普通ROI禁用两条结构路径、缺输出/近方形真实native资格、冻结BN/无B梯度、持续4步与2步保存恢复后继续的精确一致、随机状态、完整末轮资格/损坏checkpoint/覆盖保护、空在线输出/宽高角等价、匹配数/三种分母/严格边界/并列/拒绝代价，以及真实TRAIN数据管线的real/sim半尺度翻转＋模拟检测器原图误差目标。最后一项是实际数据管线加模拟输出，不是本地B推理或实测效果。原相关44项CPU检查也通过（第一次合计52项含当时新增8项）；必要语法和diff检查通过。
+
+代码复核修复两点：初始0.001px静态GT跨OpenCV容差过紧，改为已存在的0.20px身份约定且保存服务器标签；native轴线身份函数的图像尺寸要求tuple，snapshot中的list在调用前转tuple，避免所有real正式视图误报。新增实际管线测试验证后一修复。没有更改旧47项代码/合同、B、D/E/F-S，未改第48节并行G实现。
+
+最终CPU合同报告：
+
+- `work_dirs/port_reliability_branches_v1_train_check_local_20261002_v3/input_check.json`：`FORMAL_TRAIN_CONTRACT_PASS_CPU_ONLY`，全部2558快照/缓存/当前源身份通过，原统计299精确复算。
+- `work_dirs/port_reliability_branches_v1_val_check_local_20261002_v3/val_contract_check.json`：`VAL_CACHE_CONTRACT_PASS_CPU_ONLY`，887帧已保存报告/当前源身份通过。本地native权重/PKL/selection不可用，报告明确UNAVAILABLE；服务器正式VAL强制native校验，不能称本地native推理复核通过。
+
+v1 TRAIN检查在写结果前因过紧静态容差失败，v1/v2 VAL及v2 TRAIN是最终源码清单更新前记录；保留但以v3及当前53项合同为准。本地无CUDA/B权重，四视图真实GPU保存恢复、正式拟合、峰值显存和新VAL效果均待服务器；上述检查不能替代这些实测。
+
+### R1.6 服务器运行顺序（已检查命令语法，未执行）
+
+上传本节6个文件至项目对应位置（包括tests及两份JSON），同步本交接文档；不需要压缩包。确保服务器`work_dirs/port_reliability_train_support_v1/train_input_snapshot.json`是本次回传文件原样，SHA与R1.1一致。其余依赖是已经留在服务器的TRAIN cache、complete结构报告、固定B及原VAL sweep，不补新TEST。
+
+在mmrotljj和项目根目录先做CPU合同检查：
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/train_port_reliability_branches_v1.py \
+  --mode check \
+  --work-dir work_dirs/port_reliability_branches_v1_train_check
+```
+
+随后新的4视图persistent smoke，包含三臂更新与保存恢复：
+
+```bash
+CUDA_VISIBLE_DEVICES=0 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/train_port_reliability_branches_v1.py \
+  --mode smoke --gpu 0 \
+  --work-dir work_dirs/port_reliability_branches_v1_smoke
+```
+
+仅当状态为`PAIRED_SMOKE_SAVE_RELOAD_PASS_DISCARDED`时继续正式固定8轮。train还会自动校验该报告/日志/权重，不根据smoke小样本改善选超参：
+
+```bash
+CUDA_VISIBLE_DEVICES=0 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/train_port_reliability_branches_v1.py \
+  --mode train --gpu 0 \
+  --smoke-report work_dirs/port_reliability_branches_v1_smoke/completion.json \
+  --work-dir work_dirs/port_reliability_branches_v1_train
+```
+
+完成状态必须为`PAIRED_FORMAL_TRAIN_COMPLETE_FIXED_EPOCH8`；三臂各20,464步。固定epoch08 VAL评分：
+
+```bash
+CUDA_VISIBLE_DEVICES=0 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/eval_port_reliability_branches_v1.py \
+  --gpu 0 \
+  --branch-checkpoint work_dirs/port_reliability_branches_v1_train/epoch_08.pth \
+  --b-report work_dirs/port_shape_e_h_v1_val_compare.json \
+  --out-dir work_dirs/port_reliability_branches_v1_val
+```
+
+如果中断，使用实际已提交且SHA标记有效的完整epoch，不用partial或smoke；下面仅为已完成epoch03时的示例：
+
+```bash
+CUDA_VISIBLE_DEVICES=0 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/train_port_reliability_branches_v1.py \
+  --mode train --gpu 0 \
+  --smoke-report work_dirs/port_reliability_branches_v1_smoke/completion.json \
+  --resume work_dirs/port_reliability_branches_v1_train/epoch_03.pth \
+  --work-dir work_dirs/port_reliability_branches_v1_train_resume
+```
+
+恢复后总预算仍20,464步/臂（不是再跑8轮），后续VAL路径相应指向新目录的epoch_08。任何已有out/work目录需换新名称，不能删除/覆盖原证据；smoke目录改变时同时明确传入对应`--smoke-report`。
+
+回传smoke的`completion.json`/`train_steps.jsonl`（4行），正式train的`completion.json`/`train_steps.jsonl`/`contract.json`，以及VAL的`val_compare.json`/`val_qualities.jsonl`。权重和SHA标记保留服务器，暂不必回传；CPU报告可一并留存。后续分析首先核对真实输出上的排名收益和拒绝代价，不用人工探针或训练loss代替真实VAL证据。
+
+## 50. G v1服务器短拟合完成但报告保存失败：修复与旧缓存恢复（2026-10-02）
+
+### 50.1 终端事实、问题定位与结论边界
+
+用户回传终端并询问为何只有一张显卡、是否为完整训练，授权修复。原始终端保存在`work_dirs/port_geometry_g_v1_report_fix_local_20261002/terminal.txt`；未连接服务器，也未启动新的CUDA/正式训练。
+
+**终端事实：** 冻结B ep24加载成功，128视图采集完成，CPU ROI张量缓存20.3291015625MiB；ordinary/aligned均打印到step200。ordinary step1/200的当批loss为.1409845203/.0773882940，aligned为.1409845203/.0787623450。最后在`main -> write_new -> json.dump`报`TypeError: Object of type int64 is not JSON serializable`，程序未正常保存完整主报告。MMCV弃用与meshgrid警告不是这次失败原因；终端未显示OOM或数值失败。20.329MiB是CPU ROI张量体积，不能当作CUDA显存峰值。
+
+**本地已复现根因：** `support_report`原来用NumPy caps做比较，生成`numpy.bool_`，Python `sum`累计后得到`numpy.int64`；旧通用`write_new`不接受此类型。其统计阈值和比较本身未错误，失败发生在报告数值类型。原最终主报告写出又位于运行异常保护之外，且旧writer边序列化边写目标，因而可能留下截断文件，其前部即使出现COMPLETE也不能作为完整完成证据。这个缺陷来自提供的报告代码，已作局部修复。
+
+**结论边界：** 两臂末批loss低于首批是终端观察，不是同一固定样本平均loss比较，也不证明TRAIN probe联合改善；不能凭step200的ordinary/aligned微小差值选臂。尚未收到完整逐帧几何、实际采样预览和CUDA峰值，仍不判断G改善或正式训练放行。
+
+### 50.2 单GPU与训练范围（原固定设计未改变）
+
+原命令`CUDA_VISIBLE_DEVICES=3 --gpu 0`只暴露物理GPU3，并在单进程中使用其逻辑编号0；脚本原本也没有DDP或跨卡任务调度。这符合第48节的有限TRAIN检查：64图、128视图、两臂各200次小头更新、B更新0；并非覆盖全TRAIN的正式epoch训练，也不保存拟合头权重。**GPU数量和是否完整训练是两个不同问题；正式训练也可以单卡执行。**
+
+本次不把原小样本检查自动扩成正式训练、不调整步数或补权重导出。新增显式终端说明及`formal_training=false`、`single_process=true`、`gpu_devices_used`字段，误用多进程WORLD_SIZE>1则停止，避免多个进程重复跑同一检查。正式两臂仍需先依据完整短拟合证据锁定全TRAIN预算、checkpoint保存/重载与VAL选权合同，并实现正式入口；不能直接拿原检测器`dist_train.sh`来训练未接入该入口的G头。
+
+### 50.3 本次修复、来源及缓存兼容（事实）
+
+只修改G运行脚本、G来源manifest、G回归测试及本文；可靠性对话正在修改的其他文件未操作，原检测器/配置和G数学模块均未改动。
+
+1. `target_outside_bounds_by_component`明确产生原生Python整数；G本地JSON转换器把NumPy标量/数组转成数值、布尔与列表。未知对象及NaN/Inf仍拒绝，未用字符串转换或默认填零隐藏错误。
+2. 先在内存完整序列化，再同目录临时文件写入/flush/fsync，以原子硬链接发布目标；目标已存在则拒绝覆盖，只清理自己新建的临时文件。最终写报告纳入异常保护，必要时留下原生类型的最小FAILED记录，不再留下由序列化失败产生的半份COMPLETE JSON。
+3. 每臂成功完成后单独保存`.ordinary.json`/`.aligned.json`指标备份，记录来源、缓存身份、200次完成更新及成本；它们仍是指标报告，不是权重checkpoint。artifacts包含已有主报告、progress与两臂备份的SHA。
+4. 旧缓存兼容只接受原source manifest SHA `b92c8ea792b3066c5543c55163d47c7b1fa1a9634dbab8e393093fe9c61b4063`和旧runner SHA `38e3d88f73183b8e3d4f7f4831c606a19794e959c232d52bec9cc92ec4b943d3`的精确版本。旧manifest原文嵌入新manifest，并核验其SHA；52项绑定中仅runner允许这次变更，其余51项必须相同。B、protocol、TRAIN fixture/全标注身份仍按当前固定值精确比较。缓存manifest与payload身份须彼此相同，128视图顺序、各缓存文件SHA、检测器前后状态、GT/资格/CPU tensor形状等检查保留。
+5. 主报告分别保存当前执行identity和原缓存identity；旧版复用标为`cache_action=reused_legacy_report_only_fix`。不改写旧缓存、截断主报告或历史SHA；当前版同身份缓存复用标为`reused_current_cache`。
+
+原协议、64图fixture、G模型源码SHA仍分别为`777278e86a0598bc55b2d35cbfb5f79e0887574556888729b5c3c0d03862b9c2`、`616ac890b9a60689c7fb52c08bf58b4fe85e2542090b158d79ce0d429902209c`、`2545e32ef953d22ef359a56bfc1cadd38d28e69f22b30de6c7fa60f27092c51b`。新版runner SHA `45c5cd608f11364164efa0903d83606082e8066487453d472afd44f550fe0875`，新版manifest SHA `7840ab1c8d68d327d0ac6793d59b4e6cc0340d846087499f2d350692155dc200`；第48节v4及旧manifest身份保留为历史证据，本次服务器交付用本节修复版。
+
+**本地复核已完成：** torch1.8.0.post3/Python3.8环境40项CPU回归检查通过，包含完整两臂2步合成入口＋support/逐帧/联合delta JSON读回、非零越界计数、NumPy类型保持、NaN/Inf/未知对象拒绝、禁止覆盖/原子发布失败清理、原/新身份128视图缓存复用、缓存不被改写、B/TRAIN/protocol/fixture/头/旧runner身份变化及缓存文件变更拒绝、最终序列化失败转FAILED。Python3.8语法、52项当前来源绑定、G文件diff空白检查通过。静态主报告`work_dirs/port_geometry_g_v1_report_fix_local_20261002/static_check.json`状态`STATIC_CHECK_COMPLETE_NO_GPU_NO_UPDATES`，检测器/头真实数据更新均0。回归缓存是CPU合成缓存；服务器实际旧cache文件完整性与复跑CUDA仍待验证，不能称已经恢复服务器结果。
+
+### 50.4 服务器恢复指令（准备完毕，未执行）
+
+上传这两个修改后的运行文件到原项目同名位置：
+
+- `crane_project/tools/preflight_port_geometry_g_v1.py`
+- `crane_project/tools/port_geometry_g_v1_sources.json`
+
+测试文件可同步；无需重传未变的G模型/协议/fixture，也不制作压缩提交包。保留原失败输出、progress和已有`port_geometry_g_v1_roi_cache`，采用新输出名：
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+conda activate mmrotljj
+
+PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/preflight_port_geometry_g_v1.py \
+  --check-only \
+  --out-json work_dirs/port_geometry_g_v1_static_check_report_fix_v1.json
+```
+
+确认静态状态成功后复用原缓存：
+
+```bash
+CUDA_VISIBLE_DEVICES=3 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/preflight_port_geometry_g_v1.py \
+  --gpu 0 --reuse-cache \
+  --out-json work_dirs/port_geometry_g_v1_train_preflight_report_fix_v1.json \
+  --cache-dir work_dirs/port_geometry_g_v1_roi_cache
+```
+
+旧版完整缓存须显示`reused_legacy_report_only_fix`。这会跳过B特征提取，**仍重跑两臂共400次小头更新**；上次没有保存头权重或独立臂报告，不能仅“补写JSON”恢复全部数值。若原缓存不完整或SHA不符，应回传错误，不删保护或手改manifest。没有增加图像batch、头batch、ROI尺寸、训练预算或并行头，不引入新的模型图；具体显存仍看此次refiner成本字段，不保证绝对峰值不变。
+
+成功应为`TRAIN_SHORT_FIT_COMPLETE_REVIEW_REQUIRED`、`formal_training=false`、`detector_updates=0`、`head_updates_total=400`、`checkpoint_exported=false`。回传新主JSON、同名progress/artifacts和ordinary/aligned备份；另回传旧cache_manifest及12张previews便于真实空间支持复核，不必传20MiB特征payload。依据第48.6节联合几何/冻结与坐标门槛判断下一阶段，不调整B、不读TEST调参。TEST已在前序工作多次暴露，本轮无新增VAL/TEST执行。

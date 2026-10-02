@@ -8,12 +8,14 @@ CPU caches hold only detached local ROIs; complete caches can be reused.
 import argparse
 from collections import Counter
 from copy import deepcopy
+import hashlib
 import json
 import math
 import os
 from pathlib import Path
 import random
 import sys
+import tempfile
 
 import numpy as np
 import cv2
@@ -24,7 +26,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from crane_project.tools import check_port_reliability_readiness_v1 as ready
 from crane_project.tools.preflight_port_structure_reliability_v1 import (
-    check_cfg, flatten_prediction, measured, state_digest, write_new)
+    check_cfg, flatten_prediction, measured, state_digest)
 from crane_project.tools.audit_port_train_val_geometry_v1 import decompose, describe, summarize
 from crane_project.utils.port_geometry_refine_g_v1 import (
     ARMS, SETTINGS, LocalGeometryRefiner, assert_detector_frozen, canonical_boxes,
@@ -35,6 +37,65 @@ MANIFEST = ROOT/'crane_project/tools/port_geometry_g_v1_sources.json'
 PROTOCOL = ROOT/'crane_project/tools/port_geometry_g_v1_protocol.json'
 FIXTURE = ROOT/'crane_project/tools/port_geometry_g_v1_train_samples.json'
 CHECKPOINT = ROOT/'work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/epoch_24.pth'
+RUNNER_SOURCE = 'crane_project/tools/preflight_port_geometry_g_v1.py'
+REPORT_REVISION = 'report_fix_v1'
+LEGACY_MANIFEST_SHA = 'b92c8ea792b3066c5543c55163d47c7b1fa1a9634dbab8e393093fe9c61b4063'
+LEGACY_RUNNER_SHA = '38e3d88f73183b8e3d4f7f4831c606a19794e959c232d52bec9cc92ec4b943d3'
+
+
+def json_native(value):
+    """Preserve numeric types; never stringify unknown objects or hide NaN."""
+    if isinstance(value, np.generic):
+        return json_native(value.item())
+    if isinstance(value, np.ndarray):
+        return json_native(value.tolist())
+    if isinstance(value, dict):
+        if any(not isinstance(k, str) for k in value):
+            raise TypeError('Report keys must be strings')
+        return {k: json_native(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [json_native(v) for v in value]
+    if value is None or isinstance(value, (str, bool, int, float)):
+        return value
+    raise TypeError('Unsupported report type: '+type(value).__name__)
+
+
+def write_new(path, value):
+    """Serialize first, then atomically publish without overwriting any target."""
+    encoded = json.dumps(json_native(value), ensure_ascii=False, indent=2, allow_nan=False)+'\n'
+    path = Path(path)
+    fd, temporary = tempfile.mkstemp(prefix='.'+path.name+'.', suffix='.tmp', dir=str(path.parent))
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as stream:
+            stream.write(encoded); stream.flush(); os.fsync(stream.fileno())
+        # Same-directory hard link is atomic and fails if the target exists.
+        os.link(temporary, str(path))
+    finally:
+        os.unlink(temporary)
+
+
+def accepted_cache_identity(cached, current):
+    """Permit only the exact original cache across this report-only repair."""
+    if cached == current:
+        return 'reused_current_cache'
+    manifest = json.loads(MANIFEST.read_text())
+    raw = manifest.get('report_fix_compatible_previous_manifest_json', '')
+    if hashlib.sha256(raw.encode('utf-8')).hexdigest() != LEGACY_MANIFEST_SHA:
+        raise ValueError('Legacy cache manifest is not the reviewed exact version')
+    previous = json.loads(raw)
+    if (previous['protocol'] != manifest['protocol'] or previous['settings'] != SETTINGS or
+            manifest['settings'] != SETTINGS or set(previous['sources']) != set(current['sources']) or
+            previous['sources'].get(RUNNER_SOURCE) != LEGACY_RUNNER_SHA or
+            manifest['sources'] != current['sources']):
+        raise ValueError('Legacy cache source/settings identity differs')
+    if any(digest != current['sources'][p] for p, digest in previous['sources'].items() if p != RUNNER_SOURCE):
+        raise ValueError('Cache compatibility permits only the report runner change')
+    expected = deepcopy(current)
+    expected['manifest_sha256'] = LEGACY_MANIFEST_SHA
+    expected['sources'] = previous['sources']
+    if cached != expected:
+        raise ValueError('Legacy cache B/data/protocol/source identity differs')
+    return 'reused_legacy_report_only_fix'
 
 
 def checked_inputs():
@@ -288,13 +349,14 @@ def collect(cfg, protocol, samples, identity, cache_dir, gpu, progress):
 
 def checked_cache(cache_dir, identity, samples):
     cache = json.loads((cache_dir/'cache_manifest.json').read_text())
-    if cache['status'] != 'COMPLETE' or cache['identity'] != identity or cache['record_count'] != 128:
+    if cache['status'] != 'COMPLETE' or cache['record_count'] != 128 or 'local_roi.pt' not in cache['files']:
         raise ValueError('Incomplete/different local ROI cache')
+    accepted_cache_identity(cache['identity'], identity)
     for p, digest in cache['files'].items():
         if Path(p).is_absolute() or '..' in Path(p).parts or ready.sha(cache_dir/p) != digest:
             raise ValueError('ROI cache artifact identity differs')
     payload = torch.load(str(cache_dir/'local_roi.pt'), map_location='cpu')
-    if payload['identity'] != identity or payload['detector_state_before'] != payload['detector_state_after']:
+    if payload['identity'] != cache['identity'] or payload['detector_state_before'] != payload['detector_state_after']:
         raise ValueError('ROI cache detector identity differs')
     keys = [(r['image'], r['scale'], r['role']) for r in payload['records']]
     expected = [(s['image'], scale, s['role']) for scale in SETTINGS['scales'] for s in samples]
@@ -428,7 +490,7 @@ def support_report(records, protocol):
                 caps = np.asarray([SETTINGS['max_log_edge_residual']]*2+[SETTINGS['max_angle_residual_rad']])
                 report[role+'/'+domain+'/'+str(scale)] = dict(frames=len(rows), outputs=len(out), eligible_views=sum(r['eligible'] for r in rows),
                     gt_short_cells=describe([r['gt_input_short_cells'] for r in rows]),
-                    target_outside_bounds_by_component=[sum(abs(r['target_residual'][j]) > caps[j] for r in out) for j in range(3)],
+                    target_outside_bounds_by_component=[sum(bool(abs(r['target_residual'][j]) > caps[j]) for r in out) for j in range(3)],
                     support_means={a: describe([float(r['local'][a]['support'].mean()) for r in out]) for a in ARMS})
     return report
 
@@ -451,6 +513,27 @@ def geometry_deltas(reference, current):
     return result
 
 
+def write_failure(path, report, error):
+    report['status'] = 'FAILED_REVIEW_REQUIRED'
+    report['error'] = type(error).__name__+': '+str(error)
+    try:
+        write_new(path, report)
+    except (TypeError, ValueError) as serialization_error:
+        # A bad future report value must still leave a usable failure record.
+        write_new(path, dict(protocol=SETTINGS['protocol'], status=report['status'],
+            report_revision=REPORT_REVISION, formal_training=False,
+            detector_updates=report['detector_updates'], head_updates_total=report['head_updates_total'],
+            error=report['error'], failure_report_serialization_error=str(serialization_error),
+            full_report_available=False))
+
+
+def artifact_report(report, paths, cache_dir):
+    manifest = cache_dir/'cache_manifest.json'
+    return dict(protocol=SETTINGS['protocol'], status=report['status'], report_revision=REPORT_REVISION,
+        files={str(p): ready.sha(p) for p in paths if p.exists()},
+        cache_manifest_sha256=ready.sha(manifest) if manifest.exists() else None)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--check-only', action='store_true')
@@ -461,19 +544,25 @@ def main():
     args = ap.parse_args(); os.chdir(ROOT)
     out = Path(args.out_json).resolve(); progress_path = out.with_suffix('.progress.jsonl')
     artifacts = out.with_suffix('.artifacts.json'); cache_dir = Path(args.cache_dir).resolve()
-    for p in (out, progress_path, artifacts):
+    arm_paths = {arm: out.with_suffix('.'+arm+'.json') for arm in ARMS}
+    failure_path = out.with_suffix('.failure.json')
+    for p in (out, progress_path, artifacts, failure_path, *arm_paths.values()):
         if p.exists():
             raise FileExistsError('Refusing to overwrite '+str(p))
     out.parent.mkdir(parents=True, exist_ok=True)
     report = dict(protocol=SETTINGS['protocol'], evidence_role='TRAIN_only_finite_check', settings=SETTINGS,
-                  status='STARTED', detector_updates=0, head_updates_total=0, checkpoint_exported=False)
+                  report_revision=REPORT_REVISION, formal_training=False, single_process=True,
+                  gpu_devices_used=0, status='STARTED', detector_updates=0, head_updates_total=0,
+                  checkpoint_exported=False)
+    print('G v1 finite TRAIN check: 64 images / 128 views; 200 updates per arm; '
+          'frozen B updates=0; no fitted checkpoint export.', flush=True)
     with progress_path.open('x') as stream:
         extracted = [0]
         def progress(value):
             if value['stage'] == 'update':
                 report['head_updates_total'] += 1
                 return
-            stream.write(json.dumps(value, ensure_ascii=False, allow_nan=False)+'\n'); stream.flush()
+            stream.write(json.dumps(json_native(value), ensure_ascii=False, allow_nan=False)+'\n'); stream.flush()
             if value['stage'] == 'fit':
                 print('TRAIN', value.get('arm'), 'step', value.get('step'), 'loss', value.get('loss'), flush=True)
             elif value['stage'] == 'extract':
@@ -494,15 +583,23 @@ def main():
                     raise ValueError('--check-only does not load a feature cache')
                 report['status'] = 'STATIC_CHECK_COMPLETE_NO_GPU_NO_UPDATES'
             else:
+                if int(os.environ.get('WORLD_SIZE', '1')) != 1:
+                    raise ValueError('This finite check is single-process; do not launch with torchrun/DDP')
                 if not torch.cuda.is_available() or not 0 <= args.gpu < torch.cuda.device_count():
                     raise ValueError('A valid logical CUDA device is required')
                 torch.cuda.set_device(args.gpu)
+                report['gpu_devices_used'] = 1
+                print('Using one logical CUDA device:', args.gpu, '; this is the finite preflight, not formal training.', flush=True)
                 seed_all(); device = torch.device('cuda', args.gpu)
                 if args.reuse_cache:
                     payload, cache = checked_cache(cache_dir, identity, samples)
+                    report['cache_action'] = accepted_cache_identity(cache['identity'], identity)
+                    print('Reusing complete ROI cache:', report['cache_action'],
+                          '; B feature extraction skipped; rerunning 200 head updates per arm.', flush=True)
                 else:
                     cache_dir.mkdir(parents=True, exist_ok=False); (cache_dir/'previews').mkdir()
                     payload, cache = collect(cfg, protocol, samples, identity, cache_dir, args.gpu, progress)
+                    report['cache_action'] = 'fresh_extraction'
                 records = payload['records']; report['cache'] = cache
                 validate_records(records, samples)
                 report['cache_reused'] = args.reuse_cache
@@ -516,6 +613,10 @@ def main():
                 for arm in ARMS:
                     result, cost = measured(lambda: fit_arm(records, batches, initial, arm, device, progress), args.gpu)
                     report['arms'][arm] = result; report['refiner_costs'][arm] = cost
+                    write_new(arm_paths[arm], dict(protocol=SETTINGS['protocol'], report_revision=REPORT_REVISION,
+                        evidence_role='TRAIN_only_finite_check', formal_training=False, identity=identity,
+                        cache_identity=cache['identity'], arm=arm, completed_head_updates=len(batches),
+                        checkpoint_exported=False, result=result, cost=cost))
                 if report['arms']['ordinary']['initial_state'] != report['arms']['aligned']['initial_state']:
                     raise ValueError('Arm initialization differs')
                 report['final_geometry_deltas'] = {arm: geometry_deltas(report['arms'][arm]['initial'], report['arms'][arm]['final']) for arm in ARMS}
@@ -525,18 +626,15 @@ def main():
                     'No contiguous video evaluation, center improvement or independent depth verification.',
                     'Fixed final step only; manual spatial-support previews and joint geometry review required before formal training.',
                     'TEST repeatedly exposed in prior work; no TEST access or tuning in this check.']
-        except Exception as error:
-            report['status'] = 'FAILED_REVIEW_REQUIRED'; report['error'] = type(error).__name__+': '+str(error)
+            # Publication belongs to the guarded run; serialization cannot leave a partial COMPLETE report.
             write_new(out, report)
+        except Exception as error:
+            destination = failure_path if out.exists() else out
+            write_failure(destination, report, error)
             stream.flush()
-            write_new(artifacts, dict(protocol=SETTINGS['protocol'], status=report['status'],
-                files={str(p): ready.sha(p) for p in (out, progress_path)},
-                cache_manifest_sha256=ready.sha(cache_dir/'cache_manifest.json') if (cache_dir/'cache_manifest.json').exists() else None))
+            write_new(artifacts, artifact_report(report, [out, destination, progress_path]+list(arm_paths.values()), cache_dir))
             raise
-    write_new(out, report)
-    artifact = dict(protocol=SETTINGS['protocol'], status=report['status'], files={str(p): ready.sha(p) for p in (out, progress_path)},
-                    cache_manifest_sha256=ready.sha(cache_dir/'cache_manifest.json') if not args.check_only else None)
-    write_new(artifacts, artifact)
+    write_new(artifacts, artifact_report(report, [out, progress_path]+list(arm_paths.values()), cache_dir))
     print('Saved', out, 'status', report['status'], flush=True)
 
 

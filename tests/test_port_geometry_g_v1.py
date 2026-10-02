@@ -1,5 +1,6 @@
 """Frozen-B geometry refinement: CPU mechanism and interface regressions."""
 from copy import deepcopy
+import json
 import math
 
 import numpy as np
@@ -195,7 +196,7 @@ def test_real_pipeline_contract_rejects_non_train_path_before_instantiation():
         tool.fixed_specs(cfg, 1.)
 
 
-def test_cpu_runner_integration_preserves_boxes_coverage_and_initialization():
+def test_cpu_runner_integration_preserves_boxes_coverage_and_initialization(tmp_path):
     torch.manual_seed(1703)
     records, samples = [], []
     for scale in (1., .5):
@@ -207,7 +208,9 @@ def test_cpu_runner_integration_preserves_boxes_coverage_and_initialization():
                 local = {a: dict(roi=torch.ones(1, 256, 9, 9)*.1, support=torch.ones(1, 1, 9, 9)) for a in g.ARMS}
                 records.append(dict(image=name, domain=domain, sequence=domain+'_seq01', role=role,
                     frame_id=0 if role == 'fit' else 1, scale=scale, eligible=True,
-                    boxes_original=b, boxes_model=bm, gt_original=gt, local=local))
+                    boxes_original=b, boxes_model=bm, gt_original=gt, local=local,
+                    gt_input_short_cells=float(gt[:, 2:4].min()*scale/8),
+                    target_residual=[math.log(1.04), math.log(1.04), -.03]))
                 if scale == 1.:
                     samples.append(dict(image=name, domain=domain, sequence=domain+'_seq01', role=role, gt=gt[0].tolist()))
     tool.validate_records(records, samples)
@@ -219,6 +222,18 @@ def test_cpu_runner_integration_preserves_boxes_coverage_and_initialization():
     assert a['initial_all_task_gradients_effective'] and a['stem_gradient_after_zero_output_step_effective']
     assert all(x['center_error_px/mean'] == 0 for x in tool.geometry_deltas(a['initial'], a['final']).values())
     assert len([x for x in progress if x['stage'] == 'update']) == 4
+    records[0]['target_residual'][0] = .3
+    support = tool.support_report(records, dict(minimum_eligible_views={role: {d: 1 for d in ('real', 'sim')} for role in ('fit', 'probe')}))
+    assert all(type(n) is int for v in support.values() for n in v['target_outside_bounds_by_component'])
+    assert support['fit/real/1.0']['target_outside_bounds_by_component'] == [1, 0, 0]
+    # Serialize the entire integration report, including the formerly failing support counts.
+    report = dict(train_support=support, arms=dict(ordinary=a, aligned=b),
+                  aligned_minus_ordinary_final=tool.geometry_deltas(a['final'], b['final']))
+    json.dumps(report, allow_nan=False)
+    path = tmp_path/'integration.json'; tool.write_new(path, report)
+    restored = json.loads(path.read_text())
+    assert restored['train_support'] == support
+    assert restored['arms']['ordinary']['initial']['rows'][0]['pred'] == box()[0].tolist()
     records[0]['role'] = 'probe'
     with pytest.raises(ValueError, match='role/order'):
         tool.validate_records(records, samples)
@@ -250,3 +265,115 @@ def test_changed_runtime_source_binding_fails_before_data_or_gpu(monkeypatch, tm
     monkeypatch.setattr(tool, 'MANIFEST', path)
     with pytest.raises(ValueError, match='Reviewed source SHA differs'):
         tool.checked_inputs()
+
+
+def test_numeric_report_publication_keeps_numbers_and_rejects_overwrite(tmp_path):
+    path = tmp_path/'report.json'
+    value = dict(count=np.int64(7), valid=np.bool_(True), loss=np.float32(.25),
+                 values=np.asarray([1, 2], dtype=np.int64))
+    tool.write_new(path, value)
+    result = json.loads(path.read_text()); before = path.read_bytes()
+    assert result == dict(count=7, valid=True, loss=.25, values=[1, 2])
+    assert type(result['count']) is int and type(result['valid']) is bool
+    with pytest.raises(FileExistsError):
+        tool.write_new(path, dict(replacement=True))
+    assert path.read_bytes() == before
+    assert list(tmp_path.iterdir()) == [path]
+
+
+@pytest.mark.parametrize('value', [np.float64(float('nan')), np.float32(float('inf')), torch.tensor(1.)])
+def test_invalid_report_leaves_no_partial_file(value, tmp_path):
+    path = tmp_path/'bad.json'
+    with pytest.raises((ValueError, TypeError)):
+        tool.write_new(path, dict(value=value))
+    assert not path.exists() and not list(tmp_path.iterdir())
+
+
+def test_atomic_publication_failure_cleans_only_own_temporary(monkeypatch, tmp_path):
+    keep = tmp_path/'keep.txt'; keep.write_text('unchanged')
+    def fail(*args):
+        raise OSError('Simulated publication failure')
+    monkeypatch.setattr(tool.os, 'link', fail)
+    with pytest.raises(OSError, match='Simulated'):
+        tool.write_new(tmp_path/'bad.json', dict(count=np.int64(1)))
+    assert list(tmp_path.iterdir()) == [keep] and keep.read_text() == 'unchanged'
+
+
+def cache_identities():
+    manifest = json.loads(tool.MANIFEST.read_text())
+    protocol = json.loads(tool.PROTOCOL.read_text()); fixture = json.loads(tool.FIXTURE.read_text())
+    current = dict(manifest_sha256=tool.ready.sha(tool.MANIFEST), protocol_sha256=tool.ready.sha(tool.PROTOCOL),
+        fixture_sha256=tool.ready.sha(tool.FIXTURE), sources=manifest['sources'], frozen_b=protocol['frozen_b'],
+        train_annotation_identities=fixture['train_annotation_identities'])
+    old = deepcopy(current); old['manifest_sha256'] = tool.LEGACY_MANIFEST_SHA
+    old['sources'] = json.loads(manifest['report_fix_compatible_previous_manifest_json'])['sources']
+    return current, old, fixture['samples']
+
+
+@pytest.mark.parametrize('changed', ['B', 'TRAIN', 'protocol', 'fixture', 'head_source', 'old_runner', 'manifest'])
+def test_legacy_cache_rejects_changes_beyond_report_repair(changed):
+    current, old, _ = cache_identities()
+    assert tool.accepted_cache_identity(current, current) == 'reused_current_cache'
+    assert tool.accepted_cache_identity(old, current) == 'reused_legacy_report_only_fix'
+    if changed == 'B':
+        old['frozen_b']['checkpoint_sha256'] = '0'*64
+    elif changed == 'TRAIN':
+        old['train_annotation_identities']['train_annotation_sha256'] = '0'*64
+    elif changed in ('protocol', 'fixture', 'manifest'):
+        old[changed+'_sha256'] = '0'*64
+    else:
+        path = tool.RUNNER_SOURCE if changed == 'old_runner' else 'crane_project/utils/port_geometry_refine_g_v1.py'
+        old['sources'][path] = '0'*64
+    with pytest.raises(ValueError, match='identity differs'):
+        tool.accepted_cache_identity(old, current)
+
+
+def test_legacy_compatibility_rejects_altered_embedded_manifest(monkeypatch, tmp_path):
+    current, old, _ = cache_identities()
+    manifest = json.loads(tool.MANIFEST.read_text())
+    manifest['report_fix_compatible_previous_manifest_json'] += '\n'
+    path = tmp_path/'manifest.json'; path.write_text(json.dumps(manifest))
+    monkeypatch.setattr(tool, 'MANIFEST', path)
+    with pytest.raises(ValueError, match='reviewed exact version'):
+        tool.accepted_cache_identity(old, current)
+
+
+@pytest.mark.parametrize('legacy', [False, True])
+def test_complete_cache_reuse_preserves_files_and_checks_payload_hashes(legacy, tmp_path):
+    current, old, samples = cache_identities(); identity = old if legacy else current
+    records = []
+    for scale in g.SETTINGS['scales']:
+        for sample in samples:
+            records.append(dict(image=sample['image'], domain=sample['domain'], sequence=sample['sequence'],
+                role=sample['role'], scale=scale, eligible=False, boxes_original=torch.empty(0, 6),
+                boxes_model=torch.empty(0, 5), gt_original=g.canonical_boxes(torch.tensor(sample['gt']).reshape(1, 5)),
+                local={a: dict(roi=torch.empty(0, 256, 9, 9), support=torch.empty(0, 1, 9, 9)) for a in g.ARMS}))
+    payload = dict(identity=identity, records=records, detector_state_before='same', detector_state_after='same')
+    path = tmp_path/'local_roi.pt'; torch.save(payload, str(path))
+    tool.write_new(tmp_path/'cache_manifest.json', dict(status='COMPLETE', identity=identity, record_count=128,
+                   cpu_roi_bytes=tool.cpu_roi_bytes(records), files={'local_roi.pt': tool.ready.sha(path)}))
+    before = {p.name: tool.ready.sha(p) for p in tmp_path.iterdir()}
+    restored, cache = tool.checked_cache(tmp_path, current, samples)
+    tool.validate_records(restored['records'], samples)
+    assert restored['identity'] == cache['identity'] == identity
+    assert {p.name: tool.ready.sha(p) for p in tmp_path.iterdir()} == before
+    with path.open('ab') as stream:
+        stream.write(b'changed')
+    with pytest.raises(ValueError, match='artifact identity'):
+        tool.checked_cache(tmp_path, current, samples)
+
+
+def test_final_serialization_failure_is_guarded_and_publishes_honest_failure(monkeypatch, tmp_path):
+    cfg = tool.check_cfg()
+    # Deliberately invalid future identity tests the final publication exception path.
+    monkeypatch.setattr(tool, 'checked_inputs', lambda: (cfg, {}, [], dict(bad=np.float64(float('nan')))))
+    out = tmp_path/'failed.json'
+    monkeypatch.setattr(tool.sys, 'argv', ['preflight', '--check-only', '--out-json', str(out), '--cache-dir', str(tmp_path/'cache')])
+    with pytest.raises(ValueError, match='JSON compliant'):
+        tool.main()
+    report = json.loads(out.read_text())
+    assert report['status'] == 'FAILED_REVIEW_REQUIRED' and not report['full_report_available']
+    assert report['head_updates_total'] == 0 and report['formal_training'] is False
+    artifact = json.loads(out.with_suffix('.artifacts.json').read_text())
+    assert artifact['status'] == report['status']
+    assert artifact['files'][str(out)] == tool.ready.sha(out)
