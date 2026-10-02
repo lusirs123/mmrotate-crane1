@@ -2,9 +2,9 @@
 
 > 用途：在新对话中继续几何精度优化。本文汇总本轮对话、现有代码及收到的实验结果；保留事实、推断和待验证内容的区别。后续优先更新本文，不再为每次改动创建交接文件。
 >
-> **当前结论：保留 SymEOOD＋尺度增强 B。D 和固定E-H v1均未形成联合收益。E-H在VAL选epoch22，改善real覆盖/连续性及sim角度，但尺寸/RIoU退化；固定TEST上real全帧中心正确数与B相同、输出多1帧，real RIoU基本持平，sim角度及RIoU退化，不替换B。后续先补有限TRAIN/VAL机制证据，不据已多次暴露的TEST调参或重选权重，不恢复DINO、候选排序或完整审计，不立即重训。**
+> **当前结论：保留 SymEOOD＋尺度增强 B。D 和固定E-H v1均未形成联合收益。E-H在VAL选epoch22，改善real覆盖/连续性及sim角度，但尺寸/RIoU退化；固定TEST上real全帧中心正确数与B相同、输出多1帧，real RIoU基本持平，sim角度及RIoU退化，不替换B。独立尺寸候选F-S v1的保存框数学与服务器有限TRAIN接入/初始化检查已完成；第34节按用户授权准备正式配置和VAL比较入口，固定beta/lambda=0.1、原15条件＋普通real中心mean/RMSE保护。尚未启动正式训练，收益及正式显存待验证。不据已多次暴露的TEST调参或重选权重，不恢复DINO、候选排序或完整审计。**
 
-当前数据、已完成实验与论文素材已集中整理为[港口新数据与尺度增强实验总记录](detection/港口新数据集与EOOD_SymEOOD尺度增强实验总记录.md)。该主记录维护成果与论文口径，本文保留执行交接及后续设计；E仍只有设计，未实施。
+当前数据、已完成实验与论文素材已集中整理为[港口新数据与尺度增强实验总记录](detection/港口新数据集与EOOD_SymEOOD尺度增强实验总记录.md)。该主记录维护成果与论文口径，本文保留执行交接及后续设计。早期E经过预检后改为E-H；E-H已完成正式训练和VAL/TEST，F-S已完成前两项有限检查，阶段与结果以本文最新记录为准。
 
 2026-10-01文档整理补充：主记录第3节按实际代码说明SymNFL/SymKLD/SymPOLA及EOOD主头损失接入，第7节并入本文第15节的E机制、文献边界与验证门槛。本文公式中的`global_positive_count`指当前GPU batch跨FPN层汇总的正样本归一化（逐图至少计1），不是跨GPU all-reduce。此次只整理文档，未修改训练代码或重新运行实验；EOOD配置声明L1但本地主头未返回该项的发现，不能未经服务器历史版本核验就外推到已有训练。
 
@@ -1686,3 +1686,178 @@ python crane_project/tools/preflight_port_size_f_s_v1.py \
 - 本地配置报告SHA256：`90b4fae920cec029cfd8ba994c3cd2fb50faf48c81846561de43c5a54701e0c1`。
 
 实现/测试复核未留下影响本次数学或接入检查的已知代码问题。第一项已在本地完成；第二项完成工具、真实主头CPU验证及配置核对，服务器真实权重、ImageNet初始化和CUDA运行仍待回传，不作“GPU已通过”或“可正式训练”的结论。
+
+## 33. F-S服务器前两项检查结果评审与正式对照建议（2026-10-01）
+
+### 33.1 回传、身份与独立复核（事实）
+
+用户要求读取终端与4个结果文件，分析是否推荐正式实验对照。本轮只读核对相关实现、复算保存数值、归档回传并更新本文；没有改模型/训练/评估代码、连接服务器、重跑检测器、启动优化或TEST。第32节的服务器待验证事项现有实际回传；本节判断替代其当时的“尚不能判断正式训练”状态，不改写历史检查结果。
+
+以下文件按原字节归档到`work_dirs/`，没有覆盖原报告：
+
+| 归档文件 | SHA256 |
+|---|---|
+| `port_size_f_s_v1_saved_box_check_server_20261001.json` | `56ae0ad8f6f8f58992a549771b30628636881b0f0c8c3b67180a4aa3b05ee49d` |
+| `port_size_f_s_v1_train_preflight_server_20261001.json` | `c5f49d28732343d6b744f3b9b446cfbe4fe0d214eea381d835dfa37c38c0ca5d` |
+| `port_size_f_s_v1_train_preflight_server_20261001.artifacts.json` | `5cdd82d8d2e5f96af70bbf232840104615a26ec798bd5debca0345b226ee69fe` |
+| `port_size_f_s_v1_train_preflight_server_20261001.progress.jsonl` | `7a11df8a629f80c6e1255e7f3a42126c0208f32242e00b4947cd8251b3b365df` |
+| `port_size_f_s_v1_preflight_terminal_server_20261001.txt` | `8ff7884a2be30a6829f9b0f257abc6f4e49232f02536b0f405d4e084f3aef35b` |
+
+主报告状态为`TRAIN_PREFLIGHT_COMPLETE_REVIEW_REQUIRED`，数学报告为`SAVED_BOX_FORMULA_CHECK_COMPLETE_REVIEW_REQUIRED`；终端8行数值逐项匹配主报告，progress正常8行且与主报告rows完全相同。artifacts的`CHECK_STARTED`是GPU前快照，身份字段与主报告一致，不能把它解释为没有完成。`formal_training_authorized=false`保留了探针运行时的执行范围，不是接入失败或后续实验价值的自动判定。
+
+34个回传源码SHA与当前清单/项目一致，清单SHA仍为`4e27e775f3bfe3abbb4ab93ed4111b57532fe3dded55b018497908dd8354ec7f`；数学报告SHA与TRAIN前置绑定一致。候选仍为LogSizeLoss/beta=0.1/loss_weight=0.1/eps=1e-6/mean。B身份仍为原VAL选epoch24，checkpoint SHA `8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23`；checkpoint元数据检查model/data/optimizer/clip/lr/runner/load/resume、seed0/epoch24/iter15360匹配，没有换权重。
+
+TRAIN仍real1810＋sim748，固定4张图、clean/half各两批、两阶段共8批；实际执行16次检测器TRAIN前向（每批另关闭新增项），optimizer_steps=0。标注集合/4张图SHA匹配前次证据，两阶段输入张量、GT、metadata相同，half共同尺度及原图GT还原一致。后期每图1个正样本、每卡全局N=2；初始化每图9个、每卡全局N=18，5个FPN层都复用该分母，不能按层自行平均或把它称为两卡总数。后期O2O/tau=1，初始O2M/tau=9.991（一次前向后计数）沿用原调度，初始两个模型参数/state/buffer相同。两阶段参数/buffer均保持或恢复，B文件执行后SHA不变。
+
+实际物理GPU0映射gpu0，GTX1080；torch1.13.1+cu117/MMCV1.7.0/MMDetection2.25.1，reduce源码SHA与先前本地核查一致。两阶段峰值约4.28/4.30GiB，仅为单卡两图的诊断峰值，不能推断完整两卡训练预算或历史DDP梯度。当前B/F-S初始化一致也不能替代缺失的历史初始参数逐位比较；正式比较应披露历史B对照身份。
+
+### 33.2 数学、实际尺寸导数与保护（事实、机制边界）
+
+保存框数学检查覆盖16个原TRAIN节点、8个固定条件选择的描述性VAL框及34个合成扰动，共58例。最大非拐点有限差分误差1.36735e-7，低于预设2e-6；交换/周期/中心角度改变/共同尺度不变性误差至多1.12757e-17，共同尺寸偏小可被识别，方形排序拐点沿用分支导数政策。与本地已通过报告相比，主/尺寸loss最大差4.44e-16；不用重复同版本完整测试。8个VAL例子不是无偏抽样或几何改善证据。
+
+独立使用回传输入框、权重及分母复算全部80个实际正样本：F-S标量最大差3.21249e-9，log长短边导数最大差7.57492e-8，主KLD＋尺寸导数的相加误差至多1.65310e-8，均在现有float32容差内。归一化、范数比、裁剪倍率另行复算一致。复核结果为`work_dirs/port_size_f_s_v1_preflight_review_local_20261001.json`，SHA `32cdbe620139f1bd1c9da554b3bde14ec4e650d6363ac8eed114a5ae3c56764b`；此复算无检测器前向/优化，未独立重建完整FPN梯度向量，夹角仍来自已绑定源码的服务器报告。
+
+新增项的实际xy/theta直接导数、分类输出卷积梯度、回归输出xy/angle行梯度均为0，边长/回归卷积/FPN梯度均非零；关闭新增项时全部原loss保持一致。8批decoder尺寸delta限幅、边/中心裁剪、主KLD det/inverse/raw/loss保护、负raw、Gaussian边保护，以及尺寸eps保护/tie均为0。初始144条边中120条在SmoothL1线性段，这是预设大残差响应，不能当数值限幅故障；后期16条边均在二次段。
+
+| 实际节点 | 原主KLD纠偏（长/短） | 单独F-S纠偏（长/短） | 主KLD＋F-S纠偏（长/短） |
+|---|---:|---:|---:|
+| 冻结B后期，8个 | 8/8、8/8 | 8/8、8/8 | 8/8、8/8 |
+| 原初始化，72个 | 53/72、56/72 | 72/72、72/72 | 53/72、56/72 |
+
+这是4张原图的重复尺度/正样本视图，不是80个独立图像或全TRAIN纠偏率。初始总项仍有19条长边、16条短边导数不纠偏，本次F-S没有翻转它们；后期原KLD本身已全部纠偏。因此本结果支持“独立纠偏信号已接入”，不能声称“修复了所有原梯度错误”或“已证实尺寸偏小根因”。第32节E-H保存反例仍未被候选总项翻转；未依单框改系数。
+
+### 33.3 后期信号与初始化裁剪（事实、推断）
+
+P1=real_seq01_00000＋sim_seq08_00000；P2=real_seq06_00006＋sim_seq08_00374。以下比值为同批FPN参数梯度范数比，loss值已含0.1系数；cos是新增尺寸与完整B目标的FPN夹角余弦。
+
+| 阶段/批次/尺度 | F-S loss | 尺寸/主KLD FPN | 尺寸/完整B FPN | cos尺寸/完整B | 完整B裁剪前范数 |
+|---|---:|---:|---:|---:|---:|
+| 冻结B P1，1.0 | 0.000208554 | 5.700% | 4.887% | 0.3757 | 2.20680 |
+| 冻结B P2，1.0 | 0.000631553 | 11.793% | 11.732% | 0.9385 | 1.29292 |
+| 冻结B P1，0.5 | 0.000415661 | 3.697% | 3.569% | 0.3453 | 5.43601 |
+| 冻结B P2，0.5 | 0.001566467 | 5.728% | 5.607% | 0.4876 | 4.13899 |
+| 初始化 P1，1.0 | 0.024231814 | 2.320% | 0.0003222% | 0.00308 | 1212340.375 |
+| 初始化 P2，1.0 | 0.025464281 | 2.904% | 0.0009855% | 0.00488 | 396018.59375 |
+| 初始化 P1，0.5 | 0.044037815 | 1.280% | 0.00007515% | -0.05008 | 4001913.25 |
+| 初始化 P2，0.5 | 0.034859154 | 1.461% | 0.0001530% | -0.00159 | 3786760.75 |
+
+冻结B后期，尺寸/回归输出主KLD范数为1.92%–10.30%，尺寸/主KLD FPN为3.70%–11.79%，尺寸/完整B FPN为3.57%–11.73%。与主KLD及完整B的FPN cos分别0.3634–0.9403、0.3453–0.9385。完整B范数1.293–5.436，B＋F-S为1.420–5.479，四批均不触发clip10。**推断：** 在这些真实解码/共享层节点上，信号有效且未被完整目标裁剪，足以支持一次受控收益实验；正cos不保证普通框尺寸、覆盖或时序提高。
+
+初始化新增项相对主KLD FPN为1.28%–2.90%，相对完整B FPN仅7.51e-7–9.85e-6（无百分号的比例）。主分类loss3566.9–30230.6、辅助分类152.3–2790.3，完整梯度被既有分类目标主导；裁剪倍率2.50e-6–2.53e-5，裁剪后均约10。B/F-S初始裁剪前范数相同或仅相差0.25/4.00e6，不能据总范数相同说新增梯度为零。两个half批次与完整B的cos略负，说明与主KLD正cos不能替代完整目标响应。
+
+**限定推断：** 初始尺寸信号受到共同强裁剪，早期有效更新很弱；此现象同时存在于原B，既有B/E-H日志首窗口的大分类/裁剪与之相符且后来下降（第28节，窗口均值不等于逐step）。因此它不是本次F-S特有的数值失败，目前没有证据要求单独改F-S的lr/clip、增系数或加调度。零step探针不能预测新训练多久收敛，也没有证明初始状态理想或整个训练稳定。
+
+### 33.4 正式对照建议与固定评价条件（建议、待验证）
+
+**推荐进入一次固定F-S v1正式对照，不继续扩大预审。** 数学、实际节点、数值保护、状态恢复和后期共享信号已完成必要检查，没有发现会改变本次判断的接入/统计代码问题；新收益需要训练/VAL才能回答。此建议没有自动启动训练，也不是宣布F-S替换B。回传证据不足以证明最优系数、联合精度改善或根因。
+
+建议正式设置沿用当前唯一候选：B＋独立排序log长短边SmoothL1，beta=0.1、lambda=0.1、eps=1e-6，复用主KLD正样本/权重/当前GPU全局分母；不叠加D/H。从原ImageNet/seed0初始化，24epoch、两卡每卡2图（总batch4）、SGD/lr日程/clip10、TRAIN real1810＋sim748和等比例增强均保持；不从B/E续训，不扫系数或添加动态权重。优先复用匹配身份的B ep24/日志/VAL缓存，仅新增一次F-S训练；这是单seed历史B对照，不能称同期逐batch配对或显著/稳定改善。
+
+正式运行前把F-S的VAL比较身份入口准备齐全：现有`ckpt_sweep.py`可沿原配置入口处理F-S，但`compare_port_shape_e_h_val_v1.py`绑定E-H配置/候选身份，不能只换目录冒充F-S报告。本轮未修改评估工具；后续有限适配应复用原缓存/指标和门槛，核对F-S配置SHA及选权身份，不另做全量审计。这是评价交付缺口，不是需要重跑当前TRAIN预检的理由。
+
+原VAL候选16/18/20/22/24、硬约束/软评分/fallback及15项联合门槛不变，不根据尺寸/后期loss重选epoch。建议在F结果产生前把第31.4节提出的普通real共同输出中心mean/RMSE不得恶化一并固定，作为新增尾部保护，不参与选权评分；共同输出集合变化时重算同集合B基准，不能直接套用旧n364的4.4375/5.2923px。逐序列严重错位和连续性仍按原定义另报。
+
+real中心命中仅按输出帧统计，并单列输出覆盖率/全帧中心正确覆盖；B现有VAL是输出374/375、中心正确360/374、全帧正确360/375，不能写成全帧100%正确。两域长短边误差、signed bias、中心mean/普通real尾部、RIoU及sim纯角度RMSE共同判断；只尺寸改善而角度不改善或覆盖/定位/时序有代价，应报告部分收益并继续保留B，不放宽原目标。维持等比例变换、原图坐标还原及原深度约束；深度精度仍待独立GT检验。
+
+沿用正式训练既有每50iter日志观察分类/辅助分类、主KLD、新增尺寸loss及裁剪前grad_norm。初始共同大值不自动判失败；如NaN/Inf/步骤错误，定位具体数值问题；如大分类/极端裁剪持续不下降，优先查共同初始化/分类链路，不边看结果边改F-S系数、lr或评价条件。当前TEST已多次暴露，本轮不安排新TEST，不根据它设计、调参或重选权重。先完成固定TRAIN/VAL对照，再评审是否值得下一阶段。
+
+## 34. 固定F-S正式配置、VAL入口、代码复核与服务器指令（2026-10-01～2026-10-02）
+
+### 34.1 授权及实现（事实）
+
+用户授权按第33节建议修改项目、复核代码并提供服务器指令，明确不打压缩包；中途询问显存后要求继续。本轮新增以下文件，保留上一轮本文改动和所有历史源码/配置/报告；没有连接服务器、正式训练、真实模型VAL推理或TEST。
+
+| 文件 | 内容 |
+|---|---|
+| `crane_project/configs/crane_symeood_k1_port_day2night_size_f_s_v1_formal.py` | 独立正式入口，完整继承已验证的F-S候选，不改任何解析后的训练/模型/推理设置 |
+| `crane_project/tools/compare_port_size_f_s_val_v1.py` | CPU正式合同检查，及原B ep24/原规则F-S所选VAL缓存的只读比较 |
+| `crane_project/tools/port_size_f_s_v1_formal_protocol.json` | 在F正式结果产生前固定公式、17项条件、B身份/原10帧分组及41个相关源码SHA |
+| `tests/test_port_size_f_s_val_v1.py` | 身份/选权/分母/尾部/元数据/缓存来源/文本一致性/异常拒绝验证 |
+
+原候选`size_f_s_v1.py`保留创建时的预检注释及SHA。正式入口虽为新路径，但`Config.to_dict()`与候选完全相同（工作目录也相同）；仍只有相对B新增LogSizeLoss，beta=0.1/lambda=0.1/eps=1e-6/mean，不叠加D/H、不续训、不改初始化/预算。原34成员预检清单SHA仍`4e27e775f3bfe3abbb4ab93ed4111b57532fe3dded55b018497908dd8354ec7f`，旧数学/TRAIN报告继续有效，**不需重跑GPU预检**。
+
+正式入口SHA `441aa8ace4621c9eda00a80b764c76c53b82106e73f1987a4bc96c761e8ff758`；新比较工具SHA `37ee574a29011eee497dcc45f61e98b688e5cd2cd88d3ad1be59157a99e00382`；冻结协议SHA `734fa74aa4a38025bf3e682af63576d1e2a66ddce307ec9f208406a909d9a0d2`。以后VAL必须使用正式入口对应的配置SHA，不能换回候选配置路径假称相同缓存来源。
+
+### 34.2 评价合同及代码审查（事实、待验证边界）
+
+CPU `--check-only`核对固定源码、候选与正式解析配置等值、原已评审TRAIN报告SHA/状态/参数/零step、B身份和当前TRAIN标注SHA；没有模型构造、权重读取或GPU调用。新增`--require-reviewed-library`可在服务器拒绝与已评审预检不同的torch/MMCV/MMDetection及reduce合同；本地库不同，静态验证仅记录该差别，不伪称当前本地已等价服务器。正式训练仍为原ImageNet/seed0、24epoch、两卡每卡2图、SGD/lr/clip10、real1810＋sim748等比例增强。
+
+完整比较只读取B固定epoch24和F-S原VAL规则的已选epoch；要求16/18/20/22/24完整候选集合、原选择配置/metric版本/15px阈值、VAL标注SHA及配置SHA相符。B的原选权JSON/权重/PKL SHA固定；两域887条缓存沿原loader读取，验证PKL/TXT、生成provenance以及CPU读取的checkpoint元数据。训练配置字段用字面量AST核对，不执行checkpoint内配置代码；seed0、selected epoch及每epoch640iter必须匹配，不把不同loss或续训权重冒充F-S。
+
+几何分解、共享输出、signed log bias、逐序列无输出/RIoU失败及RIoU独立复核全部复用原函数，原15项门槛原样保留。现将普通real共同输出中心mean/RMSE不得恶化两项正式固定，总计17项；不进入选权评分。排除组固定为原B的10个零RIoU输出帧，两模型在同一共同输出集合上重算基准，另报该集合图名/计数和新增零RIoU输出。没有把旧n364常量套在新共同集合上。中心命中率只用输出帧分母，输出覆盖率和全帧中心正确覆盖单列；real基准360/375不是全帧100%。
+
+比较工具不推理、不写缓存/权重/选权JSON、不重选epoch；输出已有时拒绝覆盖，保留fallback信息、历史单seed对照及TEST已多次暴露等限制。17项通过只表示该次固定VAL满足预先条件，不自动替换B或证明稳定/显著收益及独立深度精度。当前没有F-S正式精度结果。
+
+### 34.3 必要验证与显存判断（事实、推断、待验证）
+
+最终15项新测试全部通过，另2项原选权约束/缺失指标测试通过，共17项相关检查。包含真实887条VAL标注＋合成GT预测下的实际PKL/DOTA/生成provenance/元数据读取和文本篡改拒绝；没有把这些合成预测写成模型效果。历史E-H报告只作为统计回归fixture，原15门槛与原报告逐项相同；其普通real尾部仍失败、B自身尾部等值通过。错误环境、候选缺失、改阈值/配置/标注/seed/保存配置、错序和报告覆盖均拒绝。
+
+Python3.8 AST、源码SHA及diff空白检查通过。首轮新工具的CONTROL导入位置错误在测试收集时发现并修复；最终版本没有留下影响本次范围的已知代码问题。原损失/头/分配/增强/解码与其已通过的38项检查未变化，没有重复完整审计或训练梯度测试。
+
+最新本地合同结果`work_dirs/port_size_f_s_v1_formal_contract_local_20261001_v2.json`（SHA `7b0132b9a294c059ec782ce8982ddf820c70b3a5df686d9071a5d6df65884163`）确认配置等值与TRAIN标注匹配；`library_matches_reviewed_preflight=false`明确表示本地torch1.8/MMCV1.7.2/MMDetection2.28.2与服务器1.13.1+cu117/1.7.0/2.25.1不同。服务器命令启用严格库合同，应为true；失败时先核对环境，不绕过它开始正式实验。初版本本地合同保留，最新冻结来源以上述v2为准。
+
+**显存静态事实：** LogSizeLoss没有参数/新网络分支/额外图像前向，复用原主KLD解码正样本，仅增加N×2的sort/log/SmoothL1和标量归一化；没有跨iteration保存张量/计算图的容器。正式配置不挂诊断钩子、不使用预检的多次autograd或retain_graph流程。图像/padding、backbone/FPN/辅助头、batch及优化器未改。已有预检后期/初始化峰值约4.28/4.30GiB；两阶段不是纯B/F-S显存配对，差值不能当F-S增量。
+
+**推断与待验证：** F-S本身预计只增加少量显存，没有发现导致持续累积或大幅新增特征张量的代码路径；不能保证正式训练峰值等于/低于预检。正式训练首轮会创建SGD动量、DDP通信缓存等，峰值可能高于4.3GiB。本地MMCV TextLogger已核对：`memory`是累计`max_memory_allocated`的MiB值，多卡取最大值；`nvidia-smi memory.used`还包含缓存/context/其他进程，二者不直接相减作为新增loss代价。用首epoch既有日志和另终端GPU观察确认，不为省显存自行减batch或改分辨率破坏对照。
+
+### 34.4 服务器上传、训练和VAL指令（用户自行执行）
+
+服务器已有第32节完整且SHA匹配的预检源码；保持相对路径上传以下**3个新增运行文件**即可，不打包、不上传本地测试/合同报告覆盖服务器预检：
+
+- `crane_project/configs/crane_symeood_k1_port_day2night_size_f_s_v1_formal.py`
+- `crane_project/tools/compare_port_size_f_s_val_v1.py`
+- `crane_project/tools/port_size_f_s_v1_formal_protocol.json`
+
+同一个服务器shell先执行下面代码。静态合同失败或F-S工作目录已存在时不启动训练，避免覆盖历史实验；合同报告已存在则保留并先读取，不重复启动新训练。该检查不重跑GPU探针，默认复用已回传的`work_dirs/port_size_f_s_v1_train_preflight.json`（迁移只改`--train-preflight`路径，SHA保持）。
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+conda activate mmrotljj
+export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
+FS_CONFIG=crane_project/configs/crane_symeood_k1_port_day2night_size_f_s_v1_formal.py
+FS_WORK=work_dirs/crane_symeood_k1_port_day2night_size_f_s_v1
+
+if python crane_project/tools/compare_port_size_f_s_val_v1.py \
+  --check-only --require-reviewed-library \
+  --out-json work_dirs/port_size_f_s_v1_formal_contract.json; then
+  if [ -e "$FS_WORK" ]; then
+    echo "已有F-S实验目录，保留产物，本条命令不重复启动训练。"
+  else
+    CUDA_VISIBLE_DEVICES=2,3 \
+    bash tools/dist_train.sh "$FS_CONFIG" 2
+  fi
+fi
+```
+
+若需要实时观察，在另一个终端执行（Ctrl+C结束观察，不影响训练）：
+
+```bash
+nvidia-smi -i 2,3 \
+  --query-gpu=index,memory.used,memory.total,utilization.gpu \
+  --format=csv -l 5
+```
+
+训练完成后，只运行F-S的原VAL选权，再读既有B缓存作比较，不重跑B、不附加TEST开关：
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+conda activate mmrotljj
+export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
+FS_CONFIG=crane_project/configs/crane_symeood_k1_port_day2night_size_f_s_v1_formal.py
+FS_WORK=work_dirs/crane_symeood_k1_port_day2night_size_f_s_v1
+FS_SWEEP="$FS_WORK/val_sweep_port_v1"
+
+python crane_project/tools/ckpt_sweep.py \
+  --config "$FS_CONFIG" --work-dir "$FS_WORK" --sweep-dir "$FS_SWEEP" \
+  --epochs 16 18 20 22 24 --center-thresh 15 --mcml-limit 5 --gpu 3
+
+python crane_project/tools/compare_port_size_f_s_val_v1.py \
+  --require-reviewed-library --f-sweep "$FS_SWEEP" \
+  --out-json work_dirs/port_size_f_s_v1_val_compare.json
+```
+
+比较默认B目录为`work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/val_sweep_port_v1`，仅在原缓存目录迁移时用`--b-sweep`定位；不改写原选权JSON/身份SHA。VAL扫选与比较既有结果继续复用，失败先报具体身份/数值问题，不为通过门槛改协议。训练前合同不含GPU测量；真实F-S训练稳定性、显存峰值和联合精度仍待服务器回传。
+
+回传训练末尾和首epoch含`memory`/分类/KLD/尺寸loss/grad_norm的日志、`port_size_f_s_v1_formal_contract.json`、`$FS_SWEEP/sweep_results.json`及`port_size_f_s_v1_val_compare.json`。先评审固定VAL结果，再决定后续；TEST已经多次暴露，本轮不新增TEST命令、不用它调系数/阈值/选权。
+
+2026-10-02交付复核：41个正式来源与34个历史来源SHA全部一致，新增Python文件符合3.8 AST，以上3个服务器shell代码块通过`bash -n`，diff空白检查通过。同版本已通过的17项相关测试没有无理由重复执行。最终仅新增正式配置/比较工具/冻结协议/测试并更新本文，没有生成新压缩包、修改原模型/损失源码或执行服务器操作。
