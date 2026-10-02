@@ -2,7 +2,7 @@
 
 > 用途：在新对话中继续几何精度优化。本文汇总本轮对话、现有代码及收到的实验结果；保留事实、推断和待验证内容的区别。后续优先更新本文，不再为每次改动创建交接文件。
 >
-> **2026-10-02最新任务分工：用户指定本对话继续优化检测几何精度，可靠性分析由另一个对话推进。第44节建议转向可靠性的安排保留为历史建议，不作为本对话的下一步。当前问题、原因边界及论文检索见第45节；G v1冻结B局部尺寸/方向细化及有限TRAIN检查见第48节。服务器终端已显示128视图采集、两臂各200步，但最后JSON报告保存失败；第50节已修复并提供严格复用旧缓存的复跑命令，40项CPU检查和新版静态入口通过。B ep24及原检测源码保持，真实几何结果/显存报告仍待回传，正式训练尚未启动；可靠性记录独立保留。**
+> **2026-10-02最新任务分工：用户指定本对话继续优化检测几何精度，可靠性分析由另一个对话推进。第44节建议转向可靠性的安排保留为历史建议，不作为本对话的下一步。当前问题、原因边界及论文检索见第45节；G v1有限TRAIN检查见第48～51节。第51节probe四组RIoU均略退化，不推荐当前G v1正式训练。第52节按授权新增真实/置乱ordinary ROI信息对应消融，固定两臂200步并重放既有ordinary参考；15项CPU检查及本地静态合同通过，真实缓存/CUDA运行仍待服务器验证。B ep24、原检测器和G数学/配置保持，真实采样预览仍待回传；可靠性记录独立保留。**
 >
 > **当前结论：保留 SymEOOD＋尺度增强 B，VAL固定epoch24，作为后续可靠性研究的暂定检测前端。D 和固定E-H v1均未形成联合收益。E-H在VAL选epoch22，改善real覆盖/连续性及sim角度，但尺寸/RIoU退化；固定TEST上real全帧中心正确数与B相同、输出多1帧，real RIoU基本持平，sim角度及RIoU退化，不替换B。独立尺寸候选F-S v1的保存框数学与服务器有限TRAIN接入/初始化检查已完成；第34节已准备正式配置和VAL比较入口，固定beta/lambda=0.1、原15条件＋普通real中心mean/RMSE保护。2026-10-02已读取F-S完整24epoch训练日志与VAL扫描：原规则选epoch18、唯一可行，real覆盖/RIoU局部改善，sim RIoU低于B，不替换B；已记录显存峰值恒为3007MiB。完整17项VAL缓存比较已复核：7项失败，两域短边与sim纯角度改善，但长边/中心及sim重叠退化；普通real新增4个严重错位，不替换B。固定F-S ep18 TEST已回传并复核：real少21个输出、正确中心总数少26、最长RIoU失败4→9，sim角度/重叠退化；保留B，F-S不作为最终方案，最新分析见第44节。第35节保留上一轮流程建议；第36节按用户最新范围收束为B检测＋当前帧分量可靠性判别，连续状态接口留到大论文后续设计。不加入DINO，不据已多次暴露的TEST调参或重选权重，不恢复候选排序或完整审计。**
 
@@ -3365,3 +3365,180 @@ python crane_project/tools/preflight_port_geometry_g_v1.py \
 旧版完整缓存须显示`reused_legacy_report_only_fix`。这会跳过B特征提取，**仍重跑两臂共400次小头更新**；上次没有保存头权重或独立臂报告，不能仅“补写JSON”恢复全部数值。若原缓存不完整或SHA不符，应回传错误，不删保护或手改manifest。没有增加图像batch、头batch、ROI尺寸、训练预算或并行头，不引入新的模型图；具体显存仍看此次refiner成本字段，不保证绝对峰值不变。
 
 成功应为`TRAIN_SHORT_FIT_COMPLETE_REVIEW_REQUIRED`、`formal_training=false`、`detector_updates=0`、`head_updates_total=400`、`checkpoint_exported=false`。回传新主JSON、同名progress/artifacts和ordinary/aligned备份；另回传旧cache_manifest及12张previews便于真实空间支持复核，不必传20MiB特征payload。依据第48.6节联合几何/冻结与坐标门槛判断下一阶段，不调整B、不读TEST调参。TEST已在前序工作多次暴露，本轮无新增VAL/TEST执行。
+
+## 51. G v1完整短拟合回传：probe联合审查，不进入当前正式方案（2026-10-02）
+
+### 51.1 回传身份与必要复算（事实）
+
+用户回传静态主报告/progress/artifacts及TRAIN主报告/progress/artifacts/ordinary/aligned两臂备份，共8个文件。原字节已归档到`work_dirs/port_geometry_g_v1_server_review_20261002/`，一次性复算脚本为该目录`review_received.py`，机器可读分析为`review.json`；只分析既有TRAIN，不连接服务器、不训练、不读新VAL/TEST，未修改任何运行模型/损失/协议。
+
+- 两份artifacts引用的全部回传文件SHA通过；静态progress为空是正常的静态模式。静态主SHA `b58d9be92cfe33bd7f60be61789ecec6216125028187703cb8d206700fc8c765`，TRAIN主SHA `ce38c0f399027de2a72bad8ff94fa5691cb1aa0d1e66048c8ef32d025487bc71`。静态与TRAIN当前identity相同，52项代码来源、protocol/fixture均匹配本地固定版。
+- 状态分别为`STATIC_CHECK_COMPLETE_NO_GPU_NO_UPDATES`与`TRAIN_SHORT_FIT_COMPLETE_REVIEW_REQUIRED`；`cache_action=reused_legacy_report_only_fix`。原缓存身份通过第50节精确兼容检查；主报告中缓存manifest内容按原writer格式重编码所得SHA `7dae321ea2c0fb3f60eb4eb20cee9ebfb8f404d5c0780308485a24ed16f5108d`与两份artifacts声明相同，确认静态/拟合指向同一缓存。两臂备份的result、cost、当前/旧身份均与主报告相同，均完成200步，总新增头400步、B更新0、未导出拟合头权重。
+- 初始模型SHA及两臂初始逐帧结果完全相同；128视图顺序及参考GT与固定fixture匹配，历史B重放容差通过。200个预生成batch与seed1703重建结果相同，每批4real+4sim、仅fit有效视图；probe未优化。20条progress快照与两臂主报告日志完全一致，不冒称400步完整裁剪日志。
+- 按已保存GT/框复算中心、边长、角度、分组汇总及三种几何delta，确认中心/score/输出数保持、界限有效；回传参考GT与服务器解析GT的五分量差均为0。纯几何字段一致；本地与服务器RIoU相关复算最大差`4.329842947958795e-6`（主要是描述性GT替换gain），不是完全逐位相同。保留服务器原值作主证据，不修改成绩或门槛；独立NumPy原图SmoothL1复算与回传loss最大差`4.743797923922877e-8`。
+- 三个首步任务梯度有效，step2 stem梯度有效，各臂报告finite检查通过。20条快照中clip multiplier均为1，最大记录norm ordinary .567772、aligned .752626，低于10；首步stem为0符合零最后层设计。最终平方投影0、三分量≥95%上限饱和计数均0，不支持把这次退化归为数值崩溃、已记录的大幅裁剪或残差饱和。
+
+原cache_manifest单文件、CPU feature payload及12张实际previews尚未回传；其文件SHA/张量校验由服务器运行代码执行，本地没有独立重读这些实际文件。主报告包含完整缓存声明及来源，不能把此声明等同于本地实看空间采样图。
+
+### 51.2 probe尺寸、纯角度与RIoU（事实，B/ordinary/aligned同框配对）
+
+probe为real8图、sim8图，两个视图，共**16张独立图名、32个相关视图**；每行8视图。B已在TRAIN中使用全部图，角色只隔离G头的拟合，不是独立VAL或序列泛化。角度采用全部输出框的纯pi周期角误差，不以protocol惩罚或预测近方形筛选替代。
+
+| probe分组 | 方法 | 长边平均绝对相对误差% | 短边平均绝对相对误差% | 纯角度RMSE° | 纯角度p90° | 全帧平均RIoU |
+|---|---|---:|---:|---:|---:|---:|
+| real原尺度 | B | 3.6494 | 3.6011 | 1.4333 | 2.3732 | .899582 |
+| real原尺度 | ordinary | 3.8527 | 3.9133 | 1.3087 | 2.0459 | .897322 |
+| real原尺度 | aligned | 3.9095 | 4.0332 | 1.3610 | 2.1368 | .896429 |
+| real半尺度 | B | 4.6231 | 5.2789 | 4.8263 | 7.4295 | .851549 |
+| real半尺度 | ordinary | 4.7433 | 4.4352 | 5.0104 | 8.1347 | .850575 |
+| real半尺度 | aligned | 4.8359 | 5.1678 | 4.8866 | 7.5126 | .851231 |
+| sim原尺度 | B | 1.8690 | 1.0052 | 1.1984 | 1.8887 | .939004 |
+| sim原尺度 | ordinary | 1.8921 | 1.3521 | 1.2266 | 2.1272 | .935460 |
+| sim原尺度 | aligned | 1.9171 | 1.4050 | 1.2475 | 1.8745 | .934464 |
+| sim半尺度 | B | 7.8345 | 5.8742 | 1.5627 | 2.1961 | .812432 |
+| sim半尺度 | ordinary | 5.3767 | 5.2381 | 1.8919 | 2.5310 | .811843 |
+| sim半尺度 | aligned | 6.0806 | 4.9060 | 1.7650 | 2.2856 | .811386 |
+
+观察：real原尺度是角度略好但两边尺寸与RIoU退化；real半尺度短边略好、长边及角度RMSE/p90退化，RIoU略退；sim原尺度两臂边长/角度RMSE/RIoU均退；sim半尺度尺寸有改善，但角度RMSE/p90及RIoU均退。两臂四组RIoU全部低于B；aligned相对ordinary仅real半尺度RIoU较好，其余3组较差，没有稳定旋转对齐增量。不能事后按域/尺度拼接选头或换step。
+
+两臂probe三口径均为输出覆盖32/32=100%、仅输出中心正确32/32=100%、全帧中心正确32/32=100%；全部固定128视图也均128/128。这只是当前稀疏样本且中心复制B的事实，不能外推成real全视频100%，也不能验证漏检帧、已有错位输出或真实连续性保护。普通B的real VAL360/375全帧中心正确覆盖仍是既有事实。
+
+**fit与probe对比：** 两臂4个fit组原图loss均下降；96 fit视图总体B长/短边误差3.5252%/3.4849%、角度RMSE2.9595°、RIoU.871079，ordinary为2.9009%/2.4560%、2.6323°、.877141，aligned为3.0034%/2.8975%、2.6005°、.875236。但32 probe总体B为4.4940%/3.9399%、2.7030°、.875642，ordinary为3.9662%/3.7347%、2.8240°、.873800，aligned为4.1858%/3.8780%、2.7569°、.873377。总体尺寸均值改善主要来自半尺度sim，不能覆盖逐组退化。原尺度real/sim probe的原图loss两臂均上升；半尺度probe loss下降亦未转化为RIoU收益。
+
+配对计数：ordinary的32个probe视图RIoU改善12、退化20；aligned改善10、退化22。三个绝对误差同时降低且RIoU升高的严格逐视图联合改善计数为ordinary1/32、aligned0/32；这是补充描述，并非新增或更改第48节的正式放行门槛。每组只有8视图，部分尾部由少数样本影响，不能称统计显著退化、稳定收益或已证明全量训练必失败。
+
+### 51.3 保存框机制补核：分量更准不必然有更好重叠（事实与推断分开）
+
+复用已保存框，额外计算“B中心/角度＋G尺寸”与“B中心/尺寸＋G角度”两个描述性混合框，未拟合新模型、未改变任何方法参数。这些RIoU变化是非加性的保存框替换，不是可部署消融或学习因果归因。
+
+| probe分组 | ordinary仅尺寸ΔRIoU | ordinary仅角度ΔRIoU | aligned仅尺寸ΔRIoU | aligned仅角度ΔRIoU |
+|---|---:|---:|---:|---:|
+| real原尺度 | -.002667 | +.000081 | -.003476 | +.000175 |
+| real半尺度 | +.000885 | -.001613 | -.000568 | +.000458 |
+| sim原尺度 | -.002940 | -.000549 | -.003751 | -.000687 |
+| sim半尺度 | -.002144 | +.000477 | -.000854 | -.000384 |
+
+尺寸修正本身已可降低RIoU，不能将退化全部归为角度。具体例子是半尺度`sim_seq08_00168`：B中心误差7.1989px保持不变，原GT短边19.2844px；ordinary长边误差16.8645%→4.3956%、短边13.7110%→3.3280%，纯角度.9777°→2.4444°，RIoU.527094→.511584。只套用ordinary尺寸、保留B角度，RIoU仍为.514731，低于B；这例支持“已有中心错位下尺寸更接近GT也可能减少交叠”的具体几何关系，不能推广成所有框尺寸变准都会变差，也不据此扩大预测框。
+
+**事实：** 原G loss只优化归一化长边/短边/角度误差，没有直接RIoU或中心纠偏；固定中心不能处理定位距离。support mask记录全部均值1、半尺度GT短边平均约2.1～2.2个P3单元，边长目标无超界，少数real角度目标超过10°但最终无上限饱和。无证据需要通过扩大残差上限、放松覆盖或增加loss权重来“救”这次结果。
+
+**推断/未确定原因：** fit获益而probe未形成联合获益，与小样本纠偏迁移不足或头容量/表征限制相容；分量代理目标与中心固定的重叠耦合确实存在。尚不能确定哪项主导，也不能证明P3缺乏边界信息、旋转采样必然无效、过拟合是唯一原因或D/E-H/F-S的原始根因已经查明。
+
+### 51.4 阶段判断、下一项有限检查与显存（建议及待验证）
+
+**结论：不推荐按当前G v1直接进入正式全TRAIN对照，保留B ep24。** 工程/有限更新检查通过，联合几何目标未通过；这是按原预定条件判断，不据TEST调参，也不是宣告局部细化路线永久关闭。不能用末批loss下降、整体尺寸均值下降或“全量数据可能更好”替代当前四组证据。
+
+先补回已存在的cache_manifest及12张空间采样预览，无须新的B推理或GPU拟合。下一项若继续，建议固定一项**ROI信息对应消融**，检验是否学到与当前图像对应的局部几何纠偏：复用现有缓存，比原ordinary ROI与同role/domain/scale内固定置乱ROI（mask随ROI移，保留本帧B描述符与GT目标）；两臂头/初始化、loss、200步、batch/seed及界限不变，图级两个尺度保持同一固定供体对应，fit/probe供体不混用。此方案还需授权实现和拟合前合同固定，本轮未执行。它检验局部信息对应的作用，不是证明ROI绝对无用或修复全部几何问题。即使真实ROI胜过置乱，也仍须满足原probe联合目标后才能支持正式阶段；不搜索step、混合两臂或同时改容量/权重/中心项。
+
+服务器成本记录：原采集B前向最大allocated343.3833MiB、reserved412MiB；原局部采样最大allocated172.9233MiB、reserved412MiB；本次缓存复用后两个小头阶段peak allocated均5.3311MiB、reserved6MiB，普通/对齐总阶段耗时约6.34s/5.68s。这里是PyTorch阶段统计，不是nvidia-smi进程总占用，不含CUDA上下文/其他库，也不能保证未来全TRAIN/多GPU训练的峰值。原采集runtime记录物理可见卡0，本次拟合可见卡3；缓存特征身份/原数值重放均已核对，不要求相同物理卡。
+
+### 51.5 后续回传打包命令（用户本轮授权，可只传一个压缩包）
+
+为减少文件上传操作，打包本次8个报告及仍缺的cache_manifest/12张previews；不包含20MiB`local_roi.pt`、B权重或其他实验目录。本轮只给指令，没有在本机或服务器自动生成包。采用时间戳新包名并保留原件：
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+bundle="work_dirs/port_geometry_g_v1_review_$(date +%Y%m%d_%H%M%S).tar.gz"
+tar -czf "$bundle" -C work_dirs \
+  port_geometry_g_v1_static_check_report_fix_v1.json \
+  port_geometry_g_v1_static_check_report_fix_v1.progress.jsonl \
+  port_geometry_g_v1_static_check_report_fix_v1.artifacts.json \
+  port_geometry_g_v1_train_preflight_report_fix_v1.json \
+  port_geometry_g_v1_train_preflight_report_fix_v1.progress.jsonl \
+  port_geometry_g_v1_train_preflight_report_fix_v1.artifacts.json \
+  port_geometry_g_v1_train_preflight_report_fix_v1.ordinary.json \
+  port_geometry_g_v1_train_preflight_report_fix_v1.aligned.json \
+  port_geometry_g_v1_roi_cache/cache_manifest.json \
+  port_geometry_g_v1_roi_cache/previews
+printf '%s\n' "$bundle"
+```
+
+后续上传该包即可集中检查，不再要求逐个上传同一套报告。B仍固定，TEST已多次暴露，本轮未使用其任何新结果或进行选权。
+
+## 52. G ROI信息对应消融：固定实现、代码复核与服务器指令（2026-10-02）
+
+### 52.1 本轮授权与问题（事实/待验证分开）
+
+用户授权按第51节下一步建议实现并给服务器/压缩指令。新增独立有限TRAIN入口，不改原G文件、B/D/E-H/F-S配置或可靠性分支。未连接服务器、未启动真实缓存拟合或正式训练，也未生成本地提交文件压缩包。
+
+**待验证问题：** 在保留本帧B框描述符和原图目标的条件下，正确对应本帧的局部ROI，是否比同分布但错配的ROI提供可复用的纠偏信息？这个检查帮助区分信息对应作用与通用框描述符/共享校正，不能直接证明P3信息缺失、过拟合是唯一根因或某个新方法已有效。matched严格重放第51节已有ordinary结果，因此本消融不可能把该已失败的当前G v1重新包装为通过联合门槛；机制证据只用于讨论后续设计。
+
+### 52.2 拟合前固定合同（固定设计）
+
+- 条件为`matched`（本帧ordinary ROI＋mask）和`shuffled`（供体ordinary ROI＋随附mask）。两臂仍使用原183,907参数G头、相同初始化、原图长/短边/pi周期角loss、Adam及所有界限；没有aligned臂、中心补偿、分类/质量头、教师、DINO或候选排序。
+- 原seed1703、Adam lr.001、weight_decay0、clip10、batch8（4real＋4sim）、每臂200次更新保持，合计新增头400步；相同200个batch须与第51节基线精确一致。仅报告初始与step200，不选step或搜索seed/超参，不导出头checkpoint。B前向/更新均0，只读既有CPU特征。
+- 置乱seed独立固定为1704。按固定fixture顺序分别对fit-real24、fit-sim24、probe-real8、probe-sim8进行无自供体的双射置乱；拒绝自身对应只为生成预声明derangement，不读取GT或结果选择映射。完整64图供体map已在protocol中写死并与确定性生成结果核对；同一图的clean/half使用同一供体图，取供体的相同尺度。不同角色/域/尺度不混用，不把probe特征用于fit。
+- **仅移动ROI与mask。** 本帧模型坐标B、原图B及score、GT参考、解析GT、frame/role等元信息原样保留；框描述符仍由本帧B模型框计算，供体框/score/GT从不替代本帧输入或目标。domain/role只用于离线配对/批次，不作为头输入；GT只进入独立loss。
+- 数据仍为64张TRAIN、128视图，fit48图/96视图、probe16图/32视图。此精确已审查缓存128视图均有真实B输出且中心资格有效；一旦替换缓存导致缺输出/不合资格，停止，不能临时筛选样本、GT造框或改变分母。
+- 两臂复用原G的`fit_arm`/`evaluate`，通过独立record视图新增matched/shuffled局部键；CPU张量只是共享引用，没有复制整套ROI或整张FPN。原dataset等比例变换、raw w/h还原、原图loss与深度约束均未改变；复制中心不能改善定位距离，改变尺寸/方向仍不能保证深度精度。
+
+**对照局限：** 单次同域同尺度置乱可能仍保留同视频/同类物体信息，且同时改变ROI图像内容、上下文及其与本帧几何描述的对应。它不是纯外观因果隔离或真实部署模块。真实ROI优于置乱只是相对机制线索；相对无增益也不能证明所有图像信息无效。probe仍来自TRAIN、B见过全部图，不是独立验证或序列泛化；当前TEST已多次暴露，本轮无VAL/TEST访问或选权。
+
+### 52.3 实现、重放保护与来源（事实）
+
+新增四个文件：
+
+1. `crane_project/tools/preflight_port_geometry_g_roi_ablation_v1.py`：独立静态/有限拟合入口、固定置乱adapter、原ordinary重放、两臂原图评价及归档。
+2. `crane_project/tools/port_geometry_g_roi_ablation_v1_protocol.json`：完整供体映射、原G超参、介入/数据/评价边界与预算。
+3. `crane_project/tools/port_geometry_g_roi_ablation_v1_sources.json`：原G52项SHA全部保留，追加原G source manifest及新入口/协议，共55项绑定；原合同不改，新manifest自身不循环绑定。测试不是服务器运行依赖。
+4. `tests/test_port_geometry_g_roi_ablation_v1.py`：必要CPU配对、数据保留、重放及完整入口回归。
+
+入口要求第51节完整TRAIN主报告SHA `ce38c0f399027de2a72bad8ff94fa5691cb1aa0d1e66048c8ef32d025487bc71`、原G source manifest SHA `7840ab1c8d68d327d0ac6793d59b4e6cc0340d846087499f2d350692155dc200`、真实cache_manifest SHA `7dae321ea2c0fb3f60eb4eb20cee9ebfb8f404d5c0780308485a24ed16f5108d`。保留原缓存128视图顺序、文件SHA、CPU tensor/GT/资格/形状和冻结状态核验；实际缓存B原图框/score/GT等需与旧ordinary初始逐行一致。没有旧特征时停止，不重新跑B采集或拼接新缓存。
+
+CUDA拟合前核对基线Python/torch/CUDA/cuDNN/NumPy/OpenCV版本字符串（允许物理卡可见编号不同）。matched先跑200步并保存备份，规范日志条件名后，完整result必须与基线ordinary逐项相同，包括模型SHA、初/末框、loss/梯度快照及汇总；不符则FAILED并停止在shuffled开始前。已有结果目录拒绝覆盖；主报告和两臂备份用原G已验证原子JSON writer，序列化失败留有效FAILED及已完成证据。
+
+正常结果目录包括`completion.json`、`progress.jsonl`、`artifacts.json`、`matched.json`、`shuffled.json`、`donor_assignment.json`、protocol/source副本、cache_manifest副本及12张`previews/`PNG。原缓存/旧报告保持，特征payload/B权重不复制到结果目录。12张图保持原G的GT绿色/B黄色/ordinary青色/旧aligned品红图例，**品红点不是本次shuffled**；本次只用ordinary，错配供体由donor_assignment追溯。artifacts绑定结果文件的相对路径和SHA，便于整个目录打包回传。
+
+当前新入口SHA `1c8f2c04ac3000c5b7ce0e06a71202fb5944d121350efbe57b6b5227cef8afba`，协议SHA `84f39b8050fd1b57b125516f0d7aa763fca9bcd6475c6be9ffc786905adfc88e`，新source manifest SHA `0250eafb9feef5fff88a4072dca02b1a0cb71f345f6fa1e0b866c2d8a2ada170`。
+
+### 52.4 本地检查与实际边界（事实）
+
+Python3.8/torch1.8.0.post3环境**15项CPU回归通过**：64图固定映射/双射/无自身与角色域隔离；两尺度同供体；只移动ROI/mask且无整套张量复制，框/GT/描述符保留；错配/缺输出/资格/重复视图拒绝；合成两步拟合真实ROI精确重放、置乱梯度有效与中心/score保护；完整报告JSON读回；source/runtime变化拒绝；静态入口输出/禁止覆盖；序列化失败有效FAILED；完整入口成功归档12个模拟预览以及重放失败时仅完成matched、没有shuffled文件。完整入口测试明确mock了CUDA调度并实际跑CPU合成两步，不是服务器CUDA或真实200步实验。
+
+实际本地静态入口通过，使用归档原TRAIN报告原字节、当前64图/全TRAIN标注身份和供体合同；报告`work_dirs/port_geometry_g_roi_ablation_v1_static_local_20261002/completion.json`，状态`STATIC_CONTRACT_COMPLETE_NO_CACHE_LOAD_NO_GPU_NO_UPDATES`，真实B/头更新均0。该静态模式不读取feature payload或使用GPU。本机没有该实际ROI缓存及CUDA环境，真实cache读取、200步精确重放/置乱收益和新显存峰值仍待服务器验证。
+
+代码复核确认没有检测器实例化/特征采集分支，不向头输入供体GT/box或改变本帧descriptor；原52项G依赖SHA保持。Python3.8语法、55项来源绑定及diff空白检查通过，下面命令以`bash -n`核验语法，未执行。命令副本位于`work_dirs/port_geometry_g_roi_ablation_v1_local_review_20261002/server_commands.sh`。不重复原40项同版本检查或完整几何审计。
+
+内存设计仍是既有20.329MiB CPU ROI tensor＋同批8的小头，每个条件串行拟合后释放；没有新增B/FPN图、图像batch、ROI分辨率或同时驻留两头。新record字典/JSON参考仍有CPU元信息开销；实际显存不能以设计或CPU测试保证，服务器会记录refiner阶段峰值。
+
+### 52.5 服务器运行、判读和压缩（已准备，未执行）
+
+上传上述前3个运行文件至服务器同名位置，第4个测试可选；原G、基线主报告和ROI缓存保持原位置。先激活原环境并做静态合同检查，输出目录须不存在：
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+conda activate mmrotljj
+
+PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/preflight_port_geometry_g_roi_ablation_v1.py \
+  --check-only \
+  --baseline-report work_dirs/port_geometry_g_v1_train_preflight_report_fix_v1.json \
+  --out-dir work_dirs/port_geometry_g_roi_ablation_v1_static
+```
+
+确认`STATIC_CONTRACT_COMPLETE_NO_CACHE_LOAD_NO_GPU_NO_UPDATES`后进行两臂有限检查（物理卡3、逻辑0）：
+
+```bash
+CUDA_VISIBLE_DEVICES=3 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/preflight_port_geometry_g_roi_ablation_v1.py \
+  --gpu 0 \
+  --baseline-report work_dirs/port_geometry_g_v1_train_preflight_report_fix_v1.json \
+  --cache-dir work_dirs/port_geometry_g_v1_roi_cache \
+  --out-dir work_dirs/port_geometry_g_roi_ablation_v1_train
+```
+
+成功状态`TRAIN_ROI_ABLATION_COMPLETE_REVIEW_REQUIRED`，`matched_reference_replay=EXACT_REPLAY_PASS`、`head_updates_total=400`、B前向/更新0、无checkpoint导出。若FAILED，保留并回传该结果目录，不手改SHA/版本保护、重抽映射或继续增加步数。已存在目录换新名，压缩命令相应更换，不删除旧证据。
+
+判读先检查重放/机械条件，再逐fit/probe/domain/scale比较尺寸、纯角RMSE/p90及RIoU；`matched_minus_shuffled_final`为matched减shuffled，RIoU正向、误差负向为相对改善。三口径输出覆盖、仅输出中心正确、全帧中心正确及全部稀疏视图保留。不以仅loss、整体均值或胜过置乱替代B联合目标，不统计伪连续性指标、不自动启动当前G正式训练。
+
+压缩静态和拟合目录，内含预览和所有结果，可以只回传一个包：
+
+```bash
+bundle="work_dirs/port_geometry_g_roi_ablation_v1_review_$(date +%Y%m%d_%H%M%S).tar.gz"
+tar -czf "$bundle" -C work_dirs \
+  port_geometry_g_roi_ablation_v1_static \
+  port_geometry_g_roi_ablation_v1_train
+printf '%s\n' "$bundle"
+```
+
+该包不含原B权重、旧`local_roi.pt`或其他实验目录。本轮只提供服务器压缩命令，未在本地生成包。TEST已多次暴露，原VAL选权、B ep24与第51节当前G不正式训练的结论均保持。
