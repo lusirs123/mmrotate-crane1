@@ -2,7 +2,7 @@
 
 > 用途：在新对话中继续几何精度优化。本文汇总本轮对话、现有代码及收到的实验结果；保留事实、推断和待验证内容的区别。后续优先更新本文，不再为每次改动创建交接文件。
 >
-> **当前结论：保留 SymEOOD＋尺度增强 B，VAL固定epoch24，作为后续可靠性研究的暂定检测前端。D 和固定E-H v1均未形成联合收益。E-H在VAL选epoch22，改善real覆盖/连续性及sim角度，但尺寸/RIoU退化；固定TEST上real全帧中心正确数与B相同、输出多1帧，real RIoU基本持平，sim角度及RIoU退化，不替换B。独立尺寸候选F-S v1的保存框数学与服务器有限TRAIN接入/初始化检查已完成；第34节已准备正式配置和VAL比较入口，固定beta/lambda=0.1、原15条件＋普通real中心mean/RMSE保护。2026-10-02用户告知正式实验正在进行，本轮未读取新训练日志，收益及正式显存仍待回传验证。第35节保留上一轮流程建议；第36节按用户最新范围收束为B检测＋当前帧分量可靠性判别，连续状态接口留到大论文后续设计。不加入DINO，不据已多次暴露的TEST调参或重选权重，不恢复候选排序或完整审计。**
+> **当前结论：保留 SymEOOD＋尺度增强 B，VAL固定epoch24，作为后续可靠性研究的暂定检测前端。D 和固定E-H v1均未形成联合收益。E-H在VAL选epoch22，改善real覆盖/连续性及sim角度，但尺寸/RIoU退化；固定TEST上real全帧中心正确数与B相同、输出多1帧，real RIoU基本持平，sim角度及RIoU退化，不替换B。独立尺寸候选F-S v1的保存框数学与服务器有限TRAIN接入/初始化检查已完成；第34节已准备正式配置和VAL比较入口，固定beta/lambda=0.1、原15条件＋普通real中心mean/RMSE保护。2026-10-02已读取F-S完整24epoch训练日志与VAL扫描：原规则选epoch18、唯一可行，real覆盖/RIoU局部改善，sim RIoU低于B，不替换B；已记录显存峰值恒为3007MiB。完整17项缓存比较尚待回传，最新分析见第41节。第35节保留上一轮流程建议；第36节按用户最新范围收束为B检测＋当前帧分量可靠性判别，连续状态接口留到大论文后续设计。不加入DINO，不据已多次暴露的TEST调参或重选权重，不恢复候选排序或完整审计。**
 
 当前数据、已完成实验与论文素材已集中整理为[港口新数据与尺度增强实验总记录](detection/港口新数据集与EOOD_SymEOOD尺度增强实验总记录.md)。该主记录维护成果与论文口径，本文保留执行交接及后续设计。早期E经过预检后改为E-H；E-H已完成正式训练和VAL/TEST，F-S已完成前两项有限检查，阶段与结果以本文最新记录为准。
 
@@ -2262,3 +2262,270 @@ python crane_project/tools/check_port_reliability_readiness_v1.py \
 不需要`CUDA_VISIBLE_DEVICES`，不加载模型、不进行前向/反向或申请CUDA显存。如果环境没有pytest，生产检查脚本本身不依赖pytest，第二条仍是实际复核入口。输出原生缓存验证应包含checkpoint/PKL/selection `HASH_VERIFIED`及PKL `ALL_ROWS_VERIFIED`、verified_frames=887；结构应为2558总帧、1810原始轴线及1810转换一致、748派生弱轴线。若只看到445，先检查旧轴线归档目录是否完整上传，不能将其解释成完整TRAIN只有445帧。
 
 机器报告的两个状态仍要求结果/语义复核，不是新训练自动放行标志。服务器结果回传后核对原生缓存与本地证据一致，再进入具体分支实现/有限TRAIN预检。TEST已多次暴露，本轮及后续设计均不据其调参或重选权重；当前VAL也已参与选权与开发，以上结论属于source探索性证据，不能包装成未知视频泛化或稳定显著收益。
+
+## 39. 服务器就绪检查回传：B原始缓存通过，旧轴线归档尚未识别（2026-10-02）
+
+### 39.1 接收证据与复核（事实）
+
+用户回传终端输出和`/Users/mac/Downloads/port_reliability_readiness_v1/`中的两个JSON、两页TRAIN检查图。四文件按原字节归档至`work_dirs/port_reliability_readiness_v1_server_20261002/`，没有覆盖第38节本地报告或原B缓存。此次只作结果与必要代码只读复核，并更新本文；没有修改检查/训练代码、连接服务器或启动可靠性训练。
+
+| 回传文件 | SHA256 |
+|---|---|
+| b_val_cache_check.json | `0634cce836297cdf132b7eaafd2220c6a1ca0b356fe5395558e75cadf0b83c66` |
+| train_structure_check.json | `ee2fceb3c6bd4d52bc13f12cbcef0d6a47a85732792dcb97a910bb2bf911c8fe` |
+| train_structure_review_01.png | `c71c08ce37e2ca12320c4c26d59b4e89ea5383e5ecbdc7e2272ffea8537848e6` |
+| train_structure_review_02.png | `fef47a71f8a9f49fc21d93a9d66a4933891022ed4de4b251234f04c7da611b34` |
+
+两报告tool SHA均为`f03b9c5b5e81f867f2469d2fe22e6f687fb64d3a5f6233cce0246b46958e9945`，与当前本地检查代码相同。服务器Python3.8.20/NumPy1.24.4/OpenCV4.13.0。两页图文件SHA与报告记录相同，已实际查看；第一页面旧三序列只有OBB派生轴线，第二页面seq12/13有原始轴线，符合报告来源分类。
+
+**B原始缓存通过：** checkpoint、PKL、selection均为`HASH_VERIFIED`，PKL为`ALL_ROWS_VERIFIED`、verified_frames=887。身份仍为固定B epoch24。当前GT转换角点差最大约0.00000636px，远低于0.2px转换等价容差。各域/序列全部风险—覆盖统计与第38节本地结果在1e-10数值容差内一致；此前本地只能从报告追溯的原始缓存缺口，此次由服务器结果补上。
+
+### 39.2 为什么仍是445，而不是1810（事实、推断边界）
+
+报告明确`train_frames=2558`、`native_axis_frames=445`、`native_conversion_consistent=445`、`obb_derived_weak_axis_frames=2113`、`legacy_snapshot_available=false`。检查代码只有在以下文件可读取时才核对旧三序列原始轴线：
+
+`crane_project/data/crane_grab_port_day2night_v1/provenance/axis_legacy_train_v1/manifest.json`
+
+因此，此次服务器**没有在该预期位置找到manifest**；具体是未上传、目录嵌套错误还是缺少manifest，仅凭报告不能进一步确定。脚本按既定检查行为将旧seq01/05/06回退为OBB派生来源，这不是代码版本错误、完整TRAIN只有445帧或旧轴线数值检查失败。
+
+2113＝旧real1365＋sim748。它表达本次服务器运行可用的监督来源，不改变本地已经恢复且核验的1810份real原始轴线事实。回传TRAIN/train_sim标注集合及seq12/13轴线集合SHA均与本地相同，未发现数据标签版本不一致。seq12/13全部445份数值检查通过；最大中点差0.05564px、端点差0.09434px、长边差0.11682px、L/2.1短边差0.11357px、方向差0.06341°。原始轴线可见性标签仍为0；样本中中央组件可辨识程度有差异，不能自动增加可见性GT。
+
+补齐第38节旧轴线目录后，**只重跑结构检查**即可，不必重跑已通过的B缓存或完整审计。本地目录仍有1365份JSON，manifest SHA为`3608905d465cc2a4d112202ee08102e14624775dc746213210ede7642ba5731b`。服务器使用新输出目录，保留本次445结果作为同步状态记录：
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+python crane_project/tools/check_port_reliability_readiness_v1.py \
+  --mode structure \
+  --out-dir work_dirs/port_reliability_readiness_v1_structure_complete
+```
+
+期望总帧2558、原始real轴线1810、转换一致1810、派生sim轴线748、`legacy_snapshot_available=true`；检查拒绝覆盖现有输出目录。当前两个`...REVIEW_REQUIRED`状态表示计算完成需解读，并非程序失败，也不表示正式训练已经获准或接入检查已经完成。
+
+### 39.3 新的关键发现：尺寸风险集中在seq07（事实与推断）
+
+以下错误数均以输出框计数；尺寸>10%、纯π周期方向>3°仅为第38节固定描述性参考，中心使用既有>=15px错误定义。
+
+| VAL序列 | 全帧/输出 | 中心错误输出 | 尺寸错误输出 | 方向错误输出 | 最大边长相对误差均值 | score与尺寸误差Spearman |
+|---|---:|---:|---:|---:|---:|---:|
+| real_seq07 | 226/225 | 14 | 171 | 57 | 13.9478% | -0.00937 |
+| real_seq14 | 149/149 | 0 | 10 | 10 | 4.6342% | -0.16633 |
+| sim_seq10 | 512/512 | 0 | 23 | 69 | 5.0708% | -0.07904 |
+
+real合并score与尺寸误差相关系数为-0.39862，但主要问题序列seq07内部几乎无单调排序关系。seq07按**该序列自己的**score p75=0.71881截取，最高四分之一57个输出仍有44个尺寸错误（77.19%）；seq14按自己的p75=0.91108截取38个输出，只有2个尺寸错误。不能将这些序列内p75样本误当成real整体p75的94帧；后者仍为20个尺寸错误、6个方向错误。
+
+**推断：** 合并域上的相关性可能较多受到序列难度、score分布与误差水平差异影响；现有描述不能完整分解其原因。后续不应只凭合并real或overall风险下降声称新评分器有效，必须保留每序列、同实际接受数量的score/普通ROI/结构分支对照。不能从当前相关性挑出cy、比例等“最佳特征”后将同一VAL当独立验证。
+
+第38节95%覆盖档仍成立：real接受356/375，条件中心命中97.1910%看似提高，但误拒14个正确中心，全帧中心正确接受覆盖96%→92.2667%，最长不接受段1→4；sim拒绝26个原本正确中心，正确接受覆盖100%→94.9219%，最长不接受段0→3。因此统一score整帧拒绝不符合保持中心正确覆盖的目标。新方案应检验分量质量评分，不能以尺寸/方向不可靠直接丢弃仍有价值的中心；部分可靠分量不等于完整OBB正确。
+
+### 39.4 是否推进新的可靠性（建议，尚未执行）
+
+**可以进入具体分支设计、代码接入和有限TRAIN预检；当前不建议直接开始正式训练。** 推进依据是B原始缓存身份已确认、确有score难区分的分量错误、原始real轴线具有可追溯监督基础；这些不是结构分支收益或原创性已经成立的证据。
+
+按以下顺序推进，不增加新完整审计：
+
+1. 上传完整旧TRAIN轴线目录及manifest，仅补结构复核，使服务器训练监督来源回到1810 real原始轴线＋748 sim派生轴线。设计/代码准备可同时进行，正式读取训练数据前应明确要求归档完整，不能默默按445范围训练一个不同实验。
+2. 首版锁定**冻结B的当前图像中心/无端序轴线响应＋分量质量头**，重点评价尺寸与方向。保持B原框、原score、原输出及原图映射；不用历史帧、DINO、候选接管、物理短边先验或推理改框。原始轴线来自已有OBB监督链，不声称新增独立GT；当前没有端点可见性监督。
+3. 在固定少量TRAIN样本上做必要前向/反向检查：B全程eval/no-grad及BN统计不变；结构分支梯度有效而不回流B；轴线与中心随等比例变换、padding/翻转的映射正确；小目标FPN分辨率与显存/耗时可接受。原始结构标签、原B真实输出的几何误差、有限分量探针分开记录，GT与探针身份不能进入在线特征。此项仍未实施，不能把本次CPU检查当作替代。
+4. 预检通过后锁定正式监督、预算和对照：score/静态几何基线→普通ROI分量头→结构分量头；分量探针若成为方法主张，再作对应控制。结构训练只用TRAIN；VAL保留事先定义的选型/校准/评价职责和视频分组边界，不能随机逐帧切分或边看结果边重写阈值。保存每序列同实际接受数量的误差/错误接受、覆盖与误拒代价，不只看合并均值。
+
+新增质量判断不会自动修正原框几何；其候选收益是更好识别可接受的分量，并保持中心利用与覆盖。还需用普通ROI及静态几何控制区分结构证据与额外模型容量/序列特征的作用。当前VAL已参与选权和开发，结论仍属探索性source证据；TEST已多次暴露，继续不用于标签、特征、阈值、结构设计或重选权重。F-S实验状态与协议不变。
+
+## 40. 服务器完整轴线复核通过，可进入结构可靠性有限TRAIN预检（2026-10-02）
+
+### 40.1 回传与身份核对（事实）
+
+用户上传`port_reliability_readiness_v1_structure_complete/`，终端显示2558总帧、1810原始轴线、1810转换一致、748派生轴线。实际读取JSON及两页检查图，并按原字节保存到`work_dirs/port_reliability_readiness_v1_structure_complete_server_20261002/`，不覆盖上一轮445结果。
+
+| 文件 | SHA256 |
+|---|---|
+| train_structure_check.json | `86e3126b9dda0301c22b83a8d196e2e6ef86267b855ee322d86de1b89c691e8f` |
+| train_structure_review_01.png | `879475e20bc863639c82a35d735592d153decc7b6d26cfd2113f4d666e2495d2` |
+| train_structure_review_02.png | `fef47a71f8a9f49fc21d93a9d66a4933891022ed4de4b251234f04c7da611b34` |
+
+报告工具SHA仍为`f03b9c5b5e81f867f2469d2fe22e6f687fb64d3a5f6233cce0246b46958e9945`，与当前本地检查代码一致；运行环境Python3.8.20/NumPy1.24.4/OpenCV4.13.0。全部source_identities的字段及SHA均与第38节完整本地结果一致，包括旧轴线manifest SHA `3608905d465cc2a4d112202ee08102e14624775dc746213210ede7642ba5731b`。两页PNG的实际SHA与JSON记录一致。
+
+### 40.2 缺口关闭与监督范围（事实、有限判断）
+
+`legacy_snapshot_available=true`；2558行只来自train1810/train_sim748，没有新增VAL/TEST监督行。real_seq01/05/06/12/13分别核对339/560/466/141/304份原始轴线，均转换一致；sim_seq08的748份仍为OBB派生弱轴线。旧归档识别缺口已关闭，不能继续将第39节445结果当成当前服务器完整监督范围。
+
+全体真实轴线最大残差：中心0.05803px、无端序端点0.09434px、长边0.13131px、L/k短边0.11540px、方向0.18972°，均在既定转换容差内。所有TRAIN多边形及可检查原始轴线未发现越界；seq05/06的difficulty=1仍完整保留，没有通过删除困难样本获得通过。
+
+两页固定12例已实际查看：旧三序列现有红色原始轴线，与OBB派生轴线基本一致；样本都指向中央参考组件。seq05小目标/模糊、seq06亮度与缆绳干扰仍存在，数值一致没有解决这些图像困难。支持下一步用参考中心和无端序轴线做结构监督；不把有限图像查看外推为1810张端点均清晰可见。报告`visibility_supervision_present=0`仍成立，全部real短边仍来自分序列L/k关系，不是独立实体边界标注。
+
+`NUMERIC_CHECK_COMPLETE_SEMANTIC_REVIEW_REQUIRED`是检查程序的固定完成状态，不是新失败。本轮有限语义复核已经完成，足以支持当前中心/轴线分支的接入预检；未自动产生全数据可见性标签或改写机器状态。
+
+### 40.3 下一步阶段与不必重复的工作（建议，尚未执行）
+
+**可以进入可靠性分支具体实现和有限TRAIN接入检查。** 第39节B原始缓存验证及本轮完整结构标签核对均已通过，不再重复B缓存、标注同步或完整几何审计。当前尚无新结构/质量模型的前向、反向、优化或正式对照结果，因此不能把本轮数据检查称为模型已可正式训练或收益已确认。
+
+下一项按第39.4节设计收束为：冻结B ep24；当前图像中央参考中心/无端序轴线响应；以真实B框的尺寸/方向分量质量为主要目标；保持原B输出与坐标还原。先固定实现与有限TRAIN检查方案，再本地改代码及验证、给服务器运行指令，不连接服务器。
+
+该预检要回答四个具体问题：
+
+1. B的backbone/FPN/主头保持eval且无梯度，BN统计、权重及同图原输出不变。
+2. 原图轴线与中心经等比例缩放、padding及所用翻转后的映射正确；原始real与派生sim监督来源分开。
+3. 结构/质量分支损失和梯度有限且有效；只有新分支可更新，GT误差/探针身份不进入在线输入。
+4. 小目标特征分辨率、实际峰值显存与耗时可接受；不能依据本次CPU检查承诺未来分支没有显存开销。
+
+预检通过再进入固定预算的普通ROI分量头/结构分量头及score/静态几何对照，重点保留seq07与各域、各序列的同实际接受数量评价。中心命中继续仅以输出帧统计，另报输出覆盖和全帧中心正确覆盖；尺寸/方向拒绝不能自动当成中心缺失，也不能将部分可靠分量记为完整正确OBB。TEST多次暴露及VAL探索性限制保留，F-S协议不变。
+
+本轮只接收、核对、归档结果并更新本文；没有修改代码、启动新模型训练或新增测试集评估。
+
+## 41. 冻结B上的结构/分量质量分支与有限TRAIN接入实现（2026-10-02）
+
+### 41.1 本轮授权、实现身份与范围（事实）
+
+用户授权按第40节下一步实现、复核代码并给服务器指令。新增独立模块`crane_project/utils/port_structure_reliability_v1.py`、入口`crane_project/tools/preflight_port_structure_reliability_v1.py`、固定合同`crane_project/tools/port_structure_reliability_v1_sources.json`及CPU测试`tests/test_port_structure_reliability_v1.py`。记录继续集中于本文，未连接服务器、未启动正式拟合、未读取新VAL/TEST预测。B仍为原VAL选定epoch_24，checkpoint SHA与第38节一致。正在运行的F-S及其41项源码均未修改，新增合同复核这些原SHA，并绑定新增模块/入口与原readiness工具，共44项源码。
+
+当前交付是**可运行的结构可靠性原型及有限TRAIN预检**。并未实现或完成正式ROI/结构对照训练、可靠性校准、接受阈值选择、完整VAL评估。`use_structure=False`仅预留同维度的ROI对照接口：将质量头中的结构响应块置零；未来普通ROI正式对照还须停用结构标签/loss，并固定相同采样和预算。仅切换该接口不能自动算作完整普通ROI对照。
+
+### 41.2 固定预检设计（实现事实，收益待验证）
+
+1. **冻结及复用B：** 全部B模块保持eval，所有参数requires_grad=False；一次`extract_feat`后复用P3（256通道、stride8）。原检测输出走未经修改的`simple_test_from_features`。质量网络内部再次detach特征、框和score；不计算B训练loss/分配，不推进训练阶段，不调用B优化器。
+2. **图像结构响应：** 新stem为1×1 Conv 256→32、ReLU、3×3 Conv 32→32、ReLU；1×1头输出参考中心和有限无端序轴线的两幅logit图。real使用原始轴线，sim使用OBB派生弱轴线；原始端点不增加可见性或独立短边标签。中心Gaussian及到有限线段距离Gaussian固定sigma=1个P3网格。soft正/负质量分别归一的BCE，仅计实际图像有效区域；padding不作结构监督。
+3. **原B框取证及分量评分：** 以当前框中心取图像方向的正方形上下文，边长max(2L,32个模型像素)，9×9双线性采样，两个方向使用同一个物理边长，避免矩形ROI独立拉伸。32通道局部特征池化至3×3；连接2幅9×9响应、9×9有效支持率及8维当前框/score几何量；64维MLP输出中心/尺寸/方向三个sigmoid质量值。共52,293个参数，无BN/dropout，无bbox delta或候选排序。网络只读取当前图像/P3、当前框、score及坐标元信息，不读取GT误差、探针类型、域/序列/帧身份或历史。
+4. **固定监督目标：** `q_c=exp(-e_center/15px)`、`q_s=exp(-max(|L/Lgt-1|,|S/Sgt-1|)/0.10)`、`q_a=exp(-e_angle/3°)`；误差在原图坐标计算，方向按pi周期，宽高交换＋pi/2等价。GT长短比<1.2时方向质量loss不计，沿用当前可评价方向定义。15px/10%/3°在这里是预先固定的连续目标尺度；10%/3°仍不是经验证的接受阈值。这些sigmoid值不称为已校准正确概率或物理不确定性。
+5. **有限离线探针：** 每图13个：GT本框1个；原图x/y各±15px共4个；共同尺寸、单长边、单短边各±15%共6个；方向±5°共2个。逐框重新计算全部分量误差，不凭探针类别分配标签。探针仅用于TRAIN接入监督，不是线上候选；全部探针复制该图原B score，原B无输出时使用统一0.5且没有伪造的真实B质量行。真实B与探针组分别平均SmoothL1，再按0.5/0.5组合；无真实B输出则仅使用探针组。结构loss与质量loss权重各1。
+6. **有限优化：** 第38节固定12张TRAIN图各一个scale1、不翻转视图；另加real_seq05_00281与sim_seq08_00374的scale0.5水平翻转视图，共14个。原B增强管线仅固定shrink/flip随机量，保留RResize、Normalize和1024padding。每个视图重新用seed1701初始化新分支，SGD lr0.001、momentum0、weight_decay0、clip10，仅更新新分支一次，随即丢弃。14次是相互独立的接入检查，不是14步拟合轨迹，不保存可部署模型。
+
+设计目的仍是检验当前帧参考结构是否能为尺寸/方向分量评分提供新增图像证据；机制借鉴第37节已核实的IoU-Net、OSKDet与分量质量研究，不能将它称为已验证创新、根因解决或尺寸/方向精度改善。
+
+### 41.3 坐标契约、隔离检查与运行记录（实现事实）
+
+静态核对发现原`RResize`将GT中心乘sx/sy、GT两边乘sqrt(sx*sy)，而`SymEOODHead`原推理rescale把框前四维分别除以[sx,sy,sx,sy]；keep_ratio整数取整会让sx/sy有微小差别。工具分别实现annotation与detector约定，**没有修改任一原契约**。原始轴线点使用实际sx/sy；翻转按未padding的img_shape反射，padding保持左上原点；非翻转视图另外与B原`rescale=True`输出逐项核对。框只为计算质量做long/short规范化，不改B返回的原始数组。
+
+每个视图检查B所有模块eval及无梯度、更新前后全部参数/缓冲SHA、重复同图的原B输出数组逐值完全一致；同时检查结构中心/轴线及可监督质量分量各自末层梯度、分支总梯度有限且非零、更新后仅新分支SHA改变。检查的是新增分支自身梯度，不重复之前主KLD/FPN根因审计。方向mask全零的图不要求方向监督梯度非零。线上genuine-only调用单独执行，无输出则返回0×3质量数组，不把GT探针伪装为原B检测。
+
+回传JSON逐视图保存输入/image/annotation/轴线SHA、模型/原图GT及轴线、坐标残差、P3占格、响应正质量、探针标签与三分量误差、分项loss/梯度/clip、B不变检查、新分支状态及实际CUDA显存/耗时。过程文件为同basename的`.progress.jsonl`，逐行刷新；异常会保存`FAILED_REVIEW_REQUIRED`及已完成行并退出。已有结果/进度文件一律拒绝覆盖，重试用新out路径。
+
+显存分别记录同步后的初始B前向、新分支前反向/更新、核对用B重复前向的allocated/reserved峰值及阶段起点增量。一次只处理1张图、至多14个质量框，不存跨视图张量图；新分支仍有真实计算/显存开销。预检包含两次窄范围任务梯度诊断、B重复前向和首图算子预热，数字不能当作正式训练净增量或部署延迟；GPU实际结果本地未验证。
+
+12张scale1原B样本另报输出帧中心命中率、输出覆盖、全帧中心正确覆盖；两个重复增强视图不混入分母。有限first/middle样本不提供整视频性能或连续性结论，也不计算接受阈值。
+
+### 41.4 本地验证与证据限度（事实）
+
+- Python3.8、torch1.8.0.post3、MMCV1.7.2兼容检查与py_compile通过；新17项CPU测试通过，原readiness 19项测试也通过，共36项。最终梯度诊断代码补充后重跑受影响的新17项，仍全部通过。小模型实测包含BN/卷积参数冻结、一次新分支更新、B状态/原数组保持；该fixture不是B ep24的GPU验证。
+- 当前完整TRAIN标注/1810轴线集合SHA、旧归档manifest、12张实际图/标注SHA与第40节完整服务器报告匹配；`--check-only`最终输出`STATIC_TRAIN_CONTRACT_PASS_NO_GPU`，报告`work_dirs/port_structure_reliability_v1_static_local_20261002_v2.json`。复用已核对报告和字节身份，没有重做2558帧完整图像/几何审计。
+- 真实CraneDataset/B管线在CPU上实际执行全部14个固定视图，GT变换最大差0.00039673、原图轴线往返最大差0.00006104px，均通过既定数值容差；最小GT短边为2.19117个P3网格。记录`work_dirs/port_structure_reliability_v1_pipeline_local_20261002.json`。该记录先于末层梯度诊断补充，只用于未变的坐标/数据管线；最终源码合同以v2静态报告为准。
+- 尚未运行真正B权重前向/服务器GPU反向，因此没有真实分支loss/梯度、峰值显存、耗时或评分收益证据。2.19网格说明有限样本没有完全塌为单格，不能证明所有小目标的轴线细节足够，也不保证尺寸/角度可靠性可学好。
+
+现阶段可以运行下面的**有限TRAIN接入预检**，不能直接因CPU通过就宣布正式可靠性模型已具备全部训练条件或可改善VAL。正式拟合前仍需固定TRAIN错误支持/探针比例、ROI和结构公平预算、分序列/域评价与接受覆盖条件；GT短边来源和相关视频帧限制保留。VAL已参与选权和开发、TEST已多次暴露；不用TEST调设计、调阈值或重选B。
+
+### 41.5 服务器运行指令（仅有限TRAIN预检）
+
+保留项目相对路径上传3个新增运行文件：
+
+- `crane_project/utils/port_structure_reliability_v1.py`
+- `crane_project/tools/preflight_port_structure_reliability_v1.py`
+- `crane_project/tools/port_structure_reliability_v1_sources.json`
+
+原`check_port_reliability_readiness_v1.py`及F-S合同源码须保持现有匹配版本。测试源码可留本地；无需上传本地work_dirs报告覆盖服务器证据，无需压缩文件包。服务器已有完整1810轴线报告、原轴线归档及B ep24。
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+conda activate mmrotljj
+
+python crane_project/tools/preflight_port_structure_reliability_v1.py \
+  --check-only \
+  --structure-report work_dirs/port_reliability_readiness_v1_structure_complete/train_structure_check.json \
+  --out-json work_dirs/port_structure_reliability_v1_static_server.json
+```
+
+先看静态状态`STATIC_TRAIN_CONTRACT_PASS_NO_GPU`。选择一张空闲GPU，下面的3应替换为实际空闲物理编号，避免与正在进行的F-S共用同卡；`--gpu 0`是可见卡内的逻辑编号：
+
+```bash
+CUDA_VISIBLE_DEVICES=3 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/preflight_port_structure_reliability_v1.py \
+  --gpu 0 \
+  --structure-report work_dirs/port_reliability_readiness_v1_structure_complete/train_structure_check.json \
+  --out-json work_dirs/port_structure_reliability_v1_train_preflight.json
+```
+
+正常完成状态`TRAIN_PREFLIGHT_COMPLETE_REVIEW_REQUIRED`；这是待人工核对接入结果，不是正式训练成功标志。回传主JSON及同名`.progress.jsonl`后核对14视图、B不变、各任务有效梯度、响应支持/ROI支持、小目标占格及实际显存，再确定后续正式对照入口。不中断或改动F-S，不运行VAL/TEST。
+
+## 41. F-S正式训练与VAL扫描回传：real局部改善，sim重叠未达标（2026-10-02）
+
+### 41.1 本轮输入、复核与证据缺口（事实）
+
+读取用户提供的`20261002_083108.log.json`及VAL终端。原字节分别保存为：
+
+| 本地归档 | SHA256 |
+|---|---|
+| `work_dirs/port_size_f_s_v1_training_log_server_20261002.log.json` | `7cf015ccd269b7a01a0f0ac242047c992734678484bd766a19f20ad0963c123a` |
+| `work_dirs/port_size_f_s_v1_val_sweep_terminal_server_20261002.txt` | `612cedada982ba8387b209eb679b4308915cf9b6ff5c1e0b2b601c86507da52e` |
+| `work_dirs/port_size_f_s_v1_returned_train_val_review_20261002.json` | `0405e2e420af47c77c9e96d6e2f8a5bf0e6eb265400e702a35e82cb5c4289acd` |
+
+复核JSON由本地只读复算生成，不是服务器正式17项缓存比较报告。安全解析日志配置的字面量与`dict(...)`，不执行输入中的配置文本；model/data/evaluation/optimizer/clip/lr/runner/checkpoint/log/load/resume/work_dir共12个字段与当前正式配置一致。seed0、auto_resume=false、两GPU、每卡2、24epoch、ImageNet初始化、原B增强、原主KLD权重2及F-S beta/lambda=0.1均符合设计；没有D/H叠加。日志记录torch1.13.1+cu117、MMCV1.7.0、GTX1080两卡。当前本地41项冻结源码SHA仍匹配；这不等于已取得服务器全部源码原字节。
+
+原`select_best_checkpoint`函数用终端打印的五组数值复算，选epoch18、`constraint_pass`、1/5可行，无fallback，与终端一致。**尚未收到F-S的`sweep_results.json`、正式合同JSON或`port_size_f_s_v1_val_compare.json`。** 因此原始权重/PKL/TXT身份、未舍入指标、17项逐帧几何条件及RIoU数值交叉核对仍待现有比较入口确认，不把终端解读替代该报告。
+
+### 41.2 VAL选权及相对B的结果（事实；F-S暂依终端）
+
+实际数据为VAL887帧：real375、sim512。`[TEST模式]`是既有离线评价器取得完整时序指标的运行模式名；此次命令及路径是VAL扫描，没有收到新增TEST结果。历史TEST已多次暴露的限制继续保留。
+
+| 候选 | real全帧中心正确覆盖@15px | real平均RIoU | sim原协议A-RMSE° | sim平均RIoU | real/sim最长RIoU失败 | 原选权中心约束 |
+|---|---:|---:|---:|---:|---:|---|
+| epoch16 | 95.20% | 0.7521 | 2.9964 | 0.8268 | 3 / 0 | 未通过 |
+| epoch18 | 97.60% | 0.8010 | 4.4161 | 0.8696 | 1 / 1 | 通过，唯一可行 |
+| epoch20 | 95.20% | 0.7832 | 1.9767 | 0.8627 | 4 / 0 | 未通过 |
+| epoch22 | 94.93% | 0.7811 | 1.9311 | 0.8677 | 2 / 1 | 未通过 |
+| epoch24 | 95.20% | 0.7847 | 1.7850 | 0.8759 | 2 / 1 | 未通过 |
+
+五者MCML均<=5；加权中心最优Wmax=0.9928、下界0.9878。epoch24的加权中心仅0.9856，软评分最高不能越过硬约束。保持epoch18，不能因其角度较差改选epoch24，也不扫描其他epoch或放宽门槛。
+
+| 固定VAL比较 | B epoch24（已有逐帧报告） | F-S epoch18（本次终端，缓存待核） |
+|---|---:|---:|
+| real输出覆盖 | 374/375，99.7333% | 375/375，100% |
+| real输出帧中心命中@15px | 360/374，96.2567% | 366/375，97.6000% |
+| real全帧中心正确覆盖@15px | 360/375，96.0000% | 366/375，97.6000% |
+| real全帧平均RIoU | 0.795505 | 0.8010 |
+| real最长无输出 / RIoU失败 | 1 / 4 | 0 / 1 |
+| sim输出/条件中心命中/全帧正确覆盖@15px | 三者均512/512，100% | 三者均512/512，100% |
+| sim全帧平均RIoU | 0.885695 | 0.8696 |
+| sim最长RIoU失败 | 0 | 1 |
+
+F-S ep18转换887框、正式推理max_per_img=1，支持全部887帧有输出的上述推算；其原始缓存对应关系仍待比较脚本核对。MCML按RIoU>=0.5判定成功，不能把sim MCML=1误说成无输出1帧或15px中心失败1帧。real多输出1帧、中心正确多6帧、RIoU约增加0.0055；sim RIoU下降约0.0161。这不是所有指标都差，但**已显示固定`sim_all_frame_riou_not_worse`不满足**；其余16项尚不能凭终端判断。五个候选sim RIoU均低于B，未见可通过重选当前五者解决该指标的证据。
+
+### 41.3 角度与中心评价口径（代码事实、有限推断）
+
+训练在线验证real中心阈值25px、sim10px；正式离线选权两域中心15px。在线`Weighted_R_center`不能与离线Wmax门槛混用。两种中心阈值均为原协议，当前不修改。对外中心命中仍只统计输出帧，并另报输出覆盖及全帧中心正确覆盖。
+
+离线sim原协议A-RMSE在中心>=10px或没有输出时，计90°，不是所有输出框的纯π周期角度RMSE。ep18在线sim中心召回0.9980约为511/512，而离线15px为512/512，在线/离线A-RMSE同为4.4161°。
+
+**推断，待逐帧缓存确认：** 若在线/离线帧对应一致，则有1帧中心在[10,15)px，被计入90°角度惩罚，贡献约81.12%的原协议平方误差。去掉这1个惩罚后，其余511帧角度RMSE由舍入汇总估算约1.9206°。这不是完整512输出帧的纯角度RMSE，被惩罚帧的真实角差未知，不能据4.4161断言F-S纯方向一定退化，也不能据1.9206宣称完整纯方向条件已通过。现有缓存比较会直接计算所需纯角度，无需新推理。
+
+### 41.4 TRAIN收敛、分类与显存（事实及限制）
+
+日志共301行：1元数据、288个TRAIN窗口、12次偶数epoch在线VAL。24epoch各有iter50至600的12个窗口，无重复、倒序、缺epoch，必要loss/grad/positive/memory/lr字段均有限且非零；日志采样不等于每步完整记录。总loss与实际各loss之和最大差2e-5，符合舍入量级。
+
+| 窗口 | 主分类loss中位 | 主KLD中位 | 已加权尺寸loss中位 | 裁剪前梯度范数中位/p90 | 尺寸/KLD比中位 |
+|---|---:|---:|---:|---:|---:|
+| epoch1 | 0.137915 | 0.583560 | 0.013600 | 44.4774 / 112.4176 | 2.1305% |
+| epochs5–16 | 0.054140 | 0.044195 | 0.001735 | 2.9296 / 3.7710 | 3.9399% |
+| epochs17–24 | 0.020670 | 0.015535 | 0.000735 | 1.7693 / 1.8999 | 4.6803% |
+
+尺寸项始终参与记录；`shape_positive_count`从O2M的18/卡逐渐转为O2O的2/卡，符合原分配阶段，不能当成检测输出减少。首窗口总loss3263、grad约461049，B已有首窗口也约3263/461046，不能将共同初始化大值归因于新尺寸项。epochs5–24没有任何日志窗口平均grad_norm>10，未见持续梯度爆炸；窗口均值不能证明每一步都未裁剪，也不能推算精确裁剪率。
+
+复用已核验B训练报告相同288个epoch/iter窗口，而非重跑B：epochs17–24 F-S分类中位0.020670比B0.015965高29.47%，KLD中位0.015535比B0.015985低2.82%。后期尺寸项和KLD下降，real覆盖却在ep18之后回退，说明优化目标下降没有保证固定VAL联合几何指标改善。**推断边界：** 分类差异值得记录，但没有real/sim分域梯度或因果干预证据，不能据此认定分类竞争、权重过大/过小或过拟合是根因；标量尺寸/KLD比不是梯度比，不能直接据4.68%调lambda。
+
+全部288条TRAIN的`memory`均3007MiB（约2.94GiB），已记录的累计allocated峰值没有增长，上传记录未出现OOM。它不是nvidia-smi显存，也不是B/F-S隔离额外占用对照；没有最后每步及reserved完整轨迹，不能承诺任意后续任务均无显存峰值。当前结果不支持尺寸项引起逐epoch显存累积的担忧。
+
+### 41.5 下一步：只补已有选中缓存的固定比较（建议，尚未执行）
+
+**当前保留B ep24，冻结F-S ep18，不推荐本轮新增TEST、调损失系数、延长训练或重选权重。** 已有sim重叠退化足以阻止直接替换B；尺寸是否改善、普通real中心保护与纯角度条件仍应完成既定报告，才能准确记录此单次实验的局部收益及代价，不提前给17项失败数量。
+
+若已有比较报告，直接回传；若尚未生成，服务器仅运行现有CPU缓存比较，不重跑TRAIN预检、推理或扫权重。输出已存在时程序拒绝覆盖，保留并读取原报告。
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+conda activate mmrotljj
+export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
+python crane_project/tools/compare_port_size_f_s_val_v1.py \
+  --require-reviewed-library \
+  --f-sweep work_dirs/crane_symeood_k1_port_day2night_size_f_s_v1/val_sweep_port_v1 \
+  --out-json work_dirs/port_size_f_s_v1_val_compare.json
+```
+
+回传`port_size_f_s_v1_val_compare.json`及同一F-S VAL目录的`sweep_results.json`；已有正式合同JSON可同时回传。只补逐帧几何、17条件、RIoU交叉核对和身份缺口，不追加完整审计。没有联合收益就将F-S记录为固定设计下未达到目标的实验，继续以B开展第36–40节已经收束的当前帧分量可靠性路线；该路线是质量识别研究，并不自动修正原框几何。不因本次F-S结果自行改动正在准备的可靠性源码或启动新实验。
+
+本轮仅读取、静态核对、复算与归档结果，并更新本文；未修改检测/可靠性源码、启动训练/推理、连接服务器或读取新增TEST。TEST历史多次暴露、VAL用于选权/开发、单seed及历史B对照的结论限制保留；等比例变换、原图还原与独立深度真值缺口均未改变。
