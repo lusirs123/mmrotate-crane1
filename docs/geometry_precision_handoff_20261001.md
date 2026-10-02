@@ -2,7 +2,7 @@
 
 > 用途：在新对话中继续几何精度优化。本文汇总本轮对话、现有代码及收到的实验结果；保留事实、推断和待验证内容的区别。后续优先更新本文，不再为每次改动创建交接文件。
 >
-> **2026-10-02最新任务分工：用户指定本对话继续优化检测几何精度，可靠性分析由另一个对话推进。第44节建议转向可靠性的安排保留为历史建议，不作为本对话的下一步。当前问题本质、原因证据边界及针对性论文检索见第45节；B ep24仍保留，本轮未修改模型或启动实验。**
+> **2026-10-02最新任务分工：用户指定本对话继续优化检测几何精度，可靠性分析由另一个对话推进。第44节建议转向可靠性的安排保留为历史建议，不作为本对话的下一步。当前问题、原因边界及论文检索见第45节；按授权已实现G v1冻结B局部尺寸/方向细化及有限TRAIN检查入口，详见本文“G v1冻结B局部尺寸/方向细化”节。B ep24及原检测源码保持，24项CPU检查通过，真实TRAIN/CUDA与正式对照仍待服务器运行；可靠性记录独立保留。**
 >
 > **当前结论：保留 SymEOOD＋尺度增强 B，VAL固定epoch24，作为后续可靠性研究的暂定检测前端。D 和固定E-H v1均未形成联合收益。E-H在VAL选epoch22，改善real覆盖/连续性及sim角度，但尺寸/RIoU退化；固定TEST上real全帧中心正确数与B相同、输出多1帧，real RIoU基本持平，sim角度及RIoU退化，不替换B。独立尺寸候选F-S v1的保存框数学与服务器有限TRAIN接入/初始化检查已完成；第34节已准备正式配置和VAL比较入口，固定beta/lambda=0.1、原15条件＋普通real中心mean/RMSE保护。2026-10-02已读取F-S完整24epoch训练日志与VAL扫描：原规则选epoch18、唯一可行，real覆盖/RIoU局部改善，sim RIoU低于B，不替换B；已记录显存峰值恒为3007MiB。完整17项VAL缓存比较已复核：7项失败，两域短边与sim纯角度改善，但长边/中心及sim重叠退化；普通real新增4个严重错位，不替换B。固定F-S ep18 TEST已回传并复核：real少21个输出、正确中心总数少26、最长RIoU失败4→9，sim角度/重叠退化；保留B，F-S不作为最终方案，最新分析见第44节。第35节保留上一轮流程建议；第36节按用户最新范围收束为B检测＋当前帧分量可靠性判别，连续状态接口留到大论文后续设计。不加入DINO，不据已多次暴露的TEST调参或重选权重，不恢复候选排序或完整审计。**
 
@@ -2932,3 +2932,208 @@ python crane_project/tools/check_port_reliability_train_support_v1.py \
 若已有服务器报告实际路径不同，用`--structure-report`指向原完整1810轴线报告、`--preflight-json`指向原14视图主JSON；不换报告内容或取消SHA核验。输出已存在时另取out目录；缓存中断/不匹配时另取cache目录，不删除旧证据。
 
 回传`train_contract_check.json`、`b_train_error_support.json`，以及cache内`identity.json`、`complete.json`、`predictions.jsonl`，以便核对真实坏框分布、遗漏/未评价数量、B及来源不变，并独立复算分母。审核后再固定ROI/结构同预算正式训练入口；本轮命令不能当作训练启动命令。
+
+## 47. 真实TRAIN支持回传复核与正式分支入口判断（2026-10-02）
+
+### 47.1 接收、身份与运行完整性（事实）
+
+用户回传五个文件及两段终端。原字节归档至`work_dirs/port_reliability_train_support_v1_server_20261002/`，独立核对记录为同目录`local_return_review.json`。本轮读取/复算及更新记录，没有修改检测或分支训练源码、连接服务器、重复B GPU推理或启动训练；其他几何实验的新增文件保留。
+
+| 文件 | SHA256 |
+|---|---|
+| identity.json | `d53a558fbb1d28676e390e5a05fbc628e46f3df8086000269155ba695228db21` |
+| complete.json | `527b1719879e8cd5aec08901124ee80ab99079801718e00b321e36d1d95263e5` |
+| predictions.jsonl | `b1c5646088295dab1b9af7c50069038752a7e10bfe754335785a8d3bf343e203` |
+| train_contract_check.json | `1e155de43f2f6760beb395b7e7e23e0232bd3d4968c527659487312dc1abf1a8` |
+| b_train_error_support.json | `6e53f64c5848bb7c329e69b047f399a764460acc0bf082bf0ded718b12293d2d` |
+
+三处identity完全相同，complete的identity内容指纹/预测文件SHA均匹配，报告内completion与独立文件完全一致。当前47项来源合同、原44项与F-S41项冻结身份保持一致；TRAIN标注/轴线/legacy manifest字节身份与已复核结构报告一致。固定B仍ep24且与第46节checkpoint/config SHA一致；本地无该权重，实际权重校验来自来源匹配的服务器运行记录，不能称为本地再次读取完整权重校验。
+
+2558条预测的索引、图名、六序列计数与顺序均通过，唯一图名2558，没有重复/缺帧；每条为一个有限正边、score>.05的真实B框，没有人工探针或缺输出。B参数31,560,792与160个缓冲的前后SHA完全相同，并与上轮14视图预检的初始B状态相同；优化步0。check/collect分别正常完成，后者`cache_action=collected_genuine_train_once`，与终端2558次一次性推理一致。此前FileExistsError是已有报告保护，不影响本次实际成功证据；不能将那次退出算作一次新推理。
+
+服务器torch1.13.1+cu117、MMCV1.7.0、OpenCV4.13.0、GTX1080。此次全程纯B batch1峰值allocated343.3828MiB、reserved412MiB；没有失败/OOM记录。这不是正式分支训练的净开销或未来峰值承诺，没有记录端到端耗时，不能据此给训练时长或部署FPS。
+
+### 47.2 TRAIN实际错误支持（服务器原成绩，不改变资格/边界）
+
+中心错误>=15px，尺寸错误为max(|L/Lgt−1|,|S/Sgt−1|)>10%，方向错误为纯pi角差>3°。方向分别按新增TRAIN资格与既有评价资格统计。
+
+| 域/序列 | 帧/输出 | 中心错误 | 尺寸错误 | TRAIN方向错误/可评价输出 | 既有评价方向错误/可评价输出 |
+|---|---:|---:|---:|---:|---:|
+| 全TRAIN | 2558/2558 | 1 | 56 | 299/2558 | 220/2324 |
+| real | 1810/1810 | 1 | 54 | 270/1810 | 191/1576 |
+| sim | 748/748 | 0 | 2 | 29/748 | 29/748 |
+| real_seq01 | 339/339 | 0 | 2 | 11/339 | 11/339 |
+| real_seq05 | 560/560 | 1 | 32 | 200/560 | 121/326 |
+| real_seq06 | 466/466 | 0 | 15 | 26/466 | 26/466 |
+| real_seq12 | 141/141 | 0 | 2 | 9/141 | 9/141 |
+| real_seq13 | 304/304 | 0 | 3 | 24/304 | 24/304 |
+
+输出覆盖real/sim均100%；**输出帧**中心命中real1809/1810=99.94475%、sim748/748=100%；全帧中心正确覆盖分别99.94475%/100%。本次数值相同是因为全部帧均输出，三个口径仍分开。real尺寸错误2.9834%、TRAIN方向错误14.9171%；sim分别0.2674%/3.8770%。既有评价资格下real方向错误12.1193%，不能将191/1576和270/1810当同一分母前后改善。
+
+seq05占real尺寸错误32/54=59.26%、TRAIN方向错误200/270=74.07%。新增234个TRAIN方向资格中服务器计79个>3°（33.76%）；**事实意义：** 原mask确实屏蔽了一批可用于方向监督的实际困难帧。该统计不证明模型方向已经改善或当前退化根因。seq05方向误差中位2.0962°、TRAIN RMSE11.3101°、p9016.2279°、max62.2879°，尾部不能用均值或好样本比例掩盖。
+
+唯一中心错误`real_seq05_00364`：GT中心约(384.65,286.95)，原B中心(575.15,532.85)，距离311.05588px；长边相对误差146.72%、短边67.79%，但纯方向差仅0.9513°。已只查看该关键原图及现有axis/OBB数值：参考组件在图像中部，原B框位于右下文字/背景附近，支持严重错位判断，非15px附近数值舍入。仍保留该difficulty=1帧；不删除、不把纯方向差强行改成90°。**启示：** 单分量数值合格不等于目标关联或完整OBB正确；后续另报中心有效/联合条件指标。此帧会显著抬高real中心RMSE（7.53395px），中心mean1.60460px不代表没有严重失败。
+
+只有1个真实中心错误、sim只有2个尺寸错误，且视频帧相关。这限制中心失败判别及sim尺寸失败泛化的证据强度，**不等于连续质量目标没有监督**：全部输出均有连续误差目标，固定探针仍可提供局部扰动监督；探针不能替代真实错误上的最终评价。无需为了凑坏帧数量重做完整审计或扩大扰动。
+
+按固定参考仅作TRAIN描述：real尺寸错误中20/54的score>=.8；既有评价方向错误中64/191的score>=.8；sim方向错误中6/29的score>=.8。阈值.8不作为部署规则或选型依据，score对几何并非完全无信息，但不能替代分量质量。所有这些是TRAIN、自身已训练检测器上的表现，不是可靠性模型独立验证成绩。
+
+复用第39节已有B VAL报告，不重做VAL推理：real374个输出中尺寸错误181（48.40%）、中心错误14，sim512个输出中尺寸错误23（4.49%）。与本次TRAIN的3.0%/0.27%不同，说明单凭TRAIN低误差/新分支loss下降不能推断困难VAL有效。跨不同视频的差异及检测器训练内乐观性均可能参与，当前数据不分解其原因。
+
+### 47.3 本地独立复算限度与最小数值留存缺口（事实、推断、待验证）
+
+当前本地NumPy1.21.3/OpenCV4.13.0/torch1.8与服务器数值运行环境不同。源文件身份、预测文件SHA及输出/顺序/资格均通过；重新解析同一原始标注后，全组中心/尺寸错误数量、输出中心命中/覆盖及既有评价方向错误数量均与服务器一致。
+
+但逐帧完整input指纹只893/2558完全相同：各序列119/203/197/58/99/217；本地整个input_manifest SHA为`3f17c2b8c5f6f254885cd98481187ee38852416cefde9091fa83acd9a9b02f44`，服务器为`2094bb4cde19dd97909bcd02b36db19c09c6d5c348c0b246e9b159a68c1b4022`。缓存只存每帧input SHA，并没有数值GT/资格内容，因此不能从指纹还原每帧服务器数值输入，不能称全部逐帧input SHA本地验证通过，也不能自动将差异归为数据不同或全部归为已证实的浮点问题。
+
+本地按新TRAIN资格角错误298（real269/seq05199），服务器299（real270/seq05200），三个层级同一个1帧差异；既有评价资格下两边都220。本地seq05_00057与_00336角差分别2.992374°、2.998781°，均无既有评价资格，是3°附近候选；哪一帧跨界**尚未确认**。分布最大差包括real评价角p95约0.00816°、中心p95约0.001922px。结合上轮微小GT取整差，数值解析/运行环境差异是合理解释，但没有逐帧服务器GT时不能宣称已定位原因。
+
+保留服务器原成绩，不改>3°边界、不放宽指纹检查、不重跑GPU。唯一必要补缺是服务器CPU导出原输入列表，并要求与缓存input_manifest及逐帧SHA精确匹配；这样即可在本地使用服务器原数值GT/资格独立复算全部原统计及定位1帧差异。未来正式训练/VAL结果直接保存原图数值GT、资格、原B框、三分量误差与质量分数，避免重复这个留存缺口。
+
+在原服务器项目根目录、mmrotljj中执行下列**CPU整理**，不推理/训练、不读VAL/TEST；命令语法本地已检查，未连接服务器执行：
+
+```bash
+PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" python - <<'PY'
+import json
+from pathlib import Path
+from crane_project.tools import check_port_reliability_train_support_v1 as t
+cache = Path("work_dirs/port_reliability_train_support_v1_cache")
+identity = json.loads((cache / "identity.json").read_text())
+assert identity["source_contract"] == t.checked_sources()
+inputs = t.train_inputs()
+assert t.fingerprint(inputs) == identity["input_manifest_sha256"]
+_, completion = t.read_cache(cache, identity, inputs)
+out = Path("work_dirs/port_reliability_train_support_v1/train_input_snapshot.json")
+t.prior.write_new(out, dict(protocol="port_reliability_train_support_v1_numeric_inputs", identity_sha256=t.fingerprint(identity), input_manifest_sha256=t.fingerprint(inputs), frames=len(inputs), server_opencv=completion["opencv_version"], inputs=inputs))
+print("Saved", out, "frames", len(inputs), "| CPU only, no inference/training")
+PY
+```
+
+只回传`train_input_snapshot.json`即可补精确复算；已有结果不覆盖。如上面断言失败，应回传具体报错，不修改断言或另跑B来掩盖。这个小缺口不阻碍下面正式入口实现，拟合前补齐原统计的精确复核即可。
+
+### 47.4 能否进入正式分支训练/保存/验证（判断与下一步设计，尚未实施）
+
+**可以进入这些入口的实现，并准备一次受控ROI/结构分支对照；当前不能宣称新版可靠性已有效。** 第40节标签核对、第43节真实GPU分支接入、第46～47节资格与真实TRAIN支持已经提供足够工程/监督基础；不再重复同版14视图预检或完整几何根因审计。主要检验尺寸/方向评分，中心保留辅助质量学习及覆盖保护，现阶段不以1个TRAIN真实失败声称中心坏框识别能力已成立。
+
+下一步范围建议固定为：
+
+1. 固定B ep24，分支只更新新增权重，全部B模块eval/无梯度、参数/缓冲不变。沿用52,293参数原型、既定连续目标/参考尺度、结构与质量权重、探针范围及新TRAIN资格。不加入DINO、细化框、候选排序、时序状态；sim方向GT来自Webots OBB，响应线段仍明确为代理。
+2. 先实现普通ROI分量头与结构分量头两臂，score-only为无需训练比较，静态几何分量评分作为低成本归因控制。两臂共享stem/质量头初始化、图像视图、更新预算、顺序/随机种子、质量目标/探针比例和坐标链。普通ROI同时禁用结构响应输入与结构loss；仅`use_structure=False`但仍给共享stem结构loss不是普通ROI对照。共同ROI/有效支持/score几何输入不改。首轮检验整个结构响应＋监督包的增量，不单独主张探针、辅助loss或容量本身的因果收益。
+3. 本次clean预测缓存用于支持诊断；正式训练若使用尺度/翻转增强，必须对**当前增强图像**跑冻结B并计算它的真实框误差，不能把clean缓存框简单变换后冒充该视图的实际B输出。GT/探针身份、域/序列/帧身份仅用于离线监督/分组，不进入在线分支输入。
+4. 拟合前另锁定分支训练预算、保存/恢复与选权协议。质量分支不改框，原mAP或检测中心覆盖无法选择质量权重，不能沿用检测器选权指标造成虚假“最佳质量模型”。首轮建议固定末轮权重为主比较，保留初始化和各轮记录，不作系数/结构/权重搜索；若选VAL分支权重，必须先固定质量专用规则且两臂一致，不能看完结果再选最有利者。
+5. 保存分支权重、优化器/epoch、方向政策、B/来源/输入合同、采样/预算及随机状态；恢复只允许同合同，加载验证使用完全相同B/分支定义。新增入口只补必要的多步更新及保存→重载→同图质量/原框一致检查，不重跑旧独立14视图。验证不读取探针或更新参数，全部B输出/score保持原样；缺输出返回0×3分量数组并留在全帧分母。
+6. 复用已确认的B VAL887帧及现有native PKL/GT身份，质量分数以真实B输出为主；每域/每序列按预先固定覆盖档的**相同实际接受数**比较错误接受、正确拒绝代价与分量误差/尾部。独立报告输出覆盖、输出中心命中、全帧中心正确覆盖与部分分量接受；尺寸/方向拒绝不自动删除仍可用中心。保留seq07困难结果，不以合并real/overall平均掩盖序列差异。
+7. 分支loss下降或结构热图/轴线对齐改善只是训练/辅助机制证据。只有真实B VAL在相同接受数量下优于score/静态几何/普通ROI，且中心利用覆盖代价符合固定条件，才支持结构可靠性有用。sim少量尺寸坏帧与相关视频帧限制保留；单次微小差异不称稳定/显著，sigmoid回归质量不称已校准正确概率。
+
+本轮结论是“可开始正式入口实现与受控可行性实验准备”，并非已完成训练器、通过完整拟合、解决几何退化根因或保证绝对定位/尺寸/方向改善。可靠性只评分原框；第45节几何细化候选保持独立。VAL已用于检测器选权/开发，此处属于探索性source比较；TEST已多次暴露，不用于新设计、阈值、训练预算或分支权重选择，本阶段不安排新TEST。
+
+## 48. G v1冻结B局部尺寸/方向细化：固定设计与有限TRAIN入口（2026-10-02）
+
+### 48.1 授权、问题与证据边界（事实与待验证假设）
+
+用户授权按第45.5节建议推进。本轮实施“冻结B＋局部几何细化”的设计、有限TRAIN检查代码、CPU验证与服务器指令；没有连接服务器、启动真实数据拟合或正式训练、运行VAL/TEST。可靠性对话的第46～47节及相关代码保持独立，未修改其目标、资格或训练入口。原B/D/E-H/F-S模型、配置、原选权与历史结果不变；B仍为ep24。
+
+**待验证问题：** 冻结B的当前帧P3局部特征，能否支持尺寸/方向纠偏；按预测OBB旋转对齐取样，是否比同容量普通局部采样有增量。借鉴第45.4节S²A-Net、R3Det、RoI Transformer的框引导采样机制；本实现是受限适配，不是这些整套方法的复现或已证明的新损失。
+
+G v1先固定中心，只预测长边、短边、pi周期方向残差。它隔离新增监督对B backbone/FPN、原分类/回归及分配的扰动；细化头内部仍共享表示，尺寸—方向取舍仍可能发生。这个对照不能确认D/E-H/F-S失败的根因，两个细化臂若都改善也不能单独归因于新增图像信息而排除几何描述符/容量的作用。
+
+**目标局限：** B real VAL全帧中心正确覆盖仍为360/375，不是100%。固定中心可保留B中心距离/输出覆盖，不能恢复漏检、改善定位距离或修复已有严重错位；RIoU失败连续性、尺寸/角度时序及深度仍可能恶化。未来受限中心细化需要单独设计和授权，不能在本检查中放开。
+
+### 48.2 固定模型与对照（固定设计）
+
+| 项目 | G v1合同 |
+|---|---|
+| 检测前端 | 原B ep24，严格config/checkpoint SHA及既有metadata核验；所有模块eval、参数requires_grad=False、grad=None；前后参数/缓冲SHA不变。 |
+| 对照 | B零残差基线；ordinary普通局部采样；aligned按当前预测OBB旋转采样。后两臂同头、同初始化、同样本/GT、同loss/优化器/批次/预算。 |
+| 采样 | 同帧冻结P3，stride8、256通道；9×9双线性点格；排序L/S各取1.5倍上下文，任一边至少2个P3单元即16输入像素。ordinary角度0，aligned角度为canonical B方向；仅旋转变化，无学习偏移。无效padding源单元先mask，另输入有效支持mask。 |
+| 描述符 | 两臂共同使用模型输入坐标的log(L/8)、log(S/8)、sin(2theta)、cos(2theta)，不输入GT、图名、域、序列或资格。 |
+| 细化头 | 257→32的1×1卷积、32→32的3×3卷积、flatten＋四维描述符→64→3；无BN/dropout，183,907参数。最后层权重/bias初始化为0，输出初始六列与B逐位相同。 |
+| 保留项 | 原B top1、score阈值.05、分数、中心、输出数/输出帧；不重排序、追加候选、重新分类、增加质量拒绝、裁剪或跟踪，不接DINO/教师。 |
+
+令小头输出为z，固定：
+
+\[
+ d_L=\log(1.25)\tanh z_L,\quad d_S=\log(1.25)\tanh z_S,
+ \quad d_\theta=(\pi/18)\tanh z_\theta;
+ \qquad L'=L e^{d_L},\ S'=S e^{d_S}.
+\]
+
+原图长/短边倍率分别限制在[0.8,1.25]，方向残差±10°。若L'<S'，两边投影到几何均值，方向保持投影前的canonical长方向；尤其原B raw w<h在投影成正方形后须显式保留此方向，避免排序tie产生伪90°跳变。通常保留raw w/h表示，square tie允许等价方向表示；不以预测近方形为理由移除角度失败。报告投影和≥95%残差上限的饱和次数。
+
+**原图坐标loss：** 三个归一化误差为log(L'/Lgt)/log(1.25)、log(S'/Sgt)/log(1.25)、wrap_pi(theta'−theta_gt)/(pi/18)；分别SmoothL1(beta=.1)，三个分量等权mean，再按batch mean。仅更新细化头；没有新增原KLD分项或B分类/中心loss。宽高交换和pi周期统一按canonical长短边计算。
+
+范围依据只来自原64张TRAIN：两视图两域的边长最大绝对log误差约.15585，小于.22314边长上限；real已有角度尾部超过10°（half最大约15.09°），因此并非所有方向目标均可完全到达。不据尾部扩大界限、不剔除不可达目标；固定上限是首版工程限制，未证明最优。
+
+### 48.3 有限TRAIN预算、数据与坐标（固定设计）
+
+复用原`port_train_val_geometry_v1.json`的SymEOOD TRAIN clean/half各64条现有证据，只提取TRAIN构成项目内fixture。实际固定64张（real32、sim32，覆盖六个TRAIN序列）；每域原固定样本顺序的每第4张为probe，其余fit：fit各24张、probe各8张。同图两个视图始终同角色，图级不交叉；共96 fit视图、32 probe视图。**这是TRAIN诊断probe，B已训练过全部图像，同视频相关性仍在，不能称独立验证或证明序列泛化。**
+
+- 两个视图是原审计的确定性未翻转1024等比例resize/pad，以及其固定0.5等比例缩小。只复用VAL管线定义，不实例化VAL/TEST数据集或读取其图片、标注/预测；没有声称本轮覆盖完整随机B增强/翻转训练链。
+- 每视图仅真实B单输出用于拟合；TRAIN离线中心距离<15px才配对监督。至少每域fit8/probe4个有效视图（两尺度合计），不足则停止。没有GT构造框、教师、合成扰动或界限可达性筛选。**在线不根据资格拒绝框：** 包括中心不正确的输出也保留并细化，missing保持空，全部固定视图进入评价分母。
+- seed1703；两臂完全相同初始化、预生成批次；batch8，每批4real＋4sim，从fit有效视图有放回抽样。每臂固定200次Adam更新，lr=.001、weight_decay=0、clip_norm10；合计400次新增头更新，B更新0。仅初始与最后step200比较，不选最佳step，不导出拟合权重。
+- 复用原TRAIN报告的原图数值GT参考，两臂/视图一致。当前TRAIN图片/标注须精确SHA一致；实际标注解析canonical GT须与参考allclose(atol1e-3,rtol1e-5)，不符则停。最终逐帧报告保存参考GT、实际解析GT、绝对差异及B/细化框，记录OpenCV/torch等版本，不从指纹推断数值完全相同。与第47节可靠性原输入补缺分开，不重新解释其成绩。
+- 原B raw模型框先按其w/sx、h/sy约定还原，再排序长短边；不在还原前交换宽高。GT保持原RResize的sqrt(sx*sy)尺寸约定，PortIsotropicShrink仍为单一仿射比例。运行时比对原B native rescale=True与复用坐标函数；历史B TRAIN框重放容差预定为中心/边长.1px、角度.001rad、score.001。
+- 旋转9×9是特征采样格，未改变原图或GT长宽比。原图内参与既有深度估计约束不动；改变尺寸/方向仍会改变深度输入，不能据此保证深度精度。
+
+### 48.4 实现、内存、输出与本地复核（事实，CUDA待验证）
+
+新增六个文件，均在项目对应目录：
+
+1. `crane_project/utils/port_geometry_refine_g_v1.py`：两个确定性采样器、同构细化头、原框保留/有界残差及独立loss。
+2. `crane_project/tools/preflight_port_geometry_g_v1.py`：固定TRAIN源/数据检查、冻结B特征采样、完整缓存复用、两臂短拟合与全部视图比较。
+3. `crane_project/tools/port_geometry_g_v1_train_samples.json`：TRAIN-only fixture、图级fit/probe、原数值GT与旧B两视图框。
+4. `crane_project/tools/port_geometry_g_v1_protocol.json`：预定设计、预算、容差与人工审查边界。
+5. `crane_project/tools/port_geometry_g_v1_sources.json`：52项来源绑定。原44项本地SHA均保持；运行时保留其43项代码/元数据绑定，排除历史VAL保存框JSON，新增G及关键坐标/采样依赖。原manifest本身仍绑定，不修改旧合同。
+6. `tests/test_port_geometry_g_v1.py`：必要CPU数学、梯度、坐标与运行入口回归检查，不是服务器运行依赖。
+
+图像batch1、no_grad冻结B；每张仅缓存两种采样的CPU ROI与mask，不保留整张FPN或检测计算图。128视图全输出时两臂ROI/mask张量约**20.329MiB CPU**，硬上限32MiB；该上限不是进程总RAM承诺。特征采集结束验证B状态并释放B/清CUDA allocator，再进行小头batch8更新。分别记录B前向（含必要native/model输出核对）、局部采样、两臂前向/反向/更新的allocated/reserved峰值；**CUDA实际峰值尚未运行验证，不能保证与历史训练完全一样或绝不增加。**
+
+缓存仅完整成功采集后写`cache_manifest.json`及CPU`local_roi.pt`，绑定源/数据/B、128视图顺序与文件SHA。复用须完整匹配，另验证CPU float32/无图、GT、资格及ROI形状。已有输出或缓存拒绝覆盖；中断缓存不冒充完成。每序列首个fit样本两尺度共12张局部PNG，显示GT参考框、B与两种采样点；这只是结构支持诊断图，不是native轴线标注，也未验证所有像素端点可见。
+
+本地环境torch1.8.0.post3/Python3.8：**24项CPU测试通过**，覆盖零残差六列逐位不变且方向梯度不为零、step2有效stem梯度、GT/输入/检测器不反传、三分量导数符号与中心差分、宽高交换/pi等价、两种采样唯一旋转区别、stride坐标/padding、原w/h还原顺序、正方形投影方向、缺帧分母、同初始化小型入口及非TRAIN路径/来源变更拒绝。最终Python3.8语法检查通过；源绑定和64样本/2558 TRAIN标注身份静态检查通过，B/head真实数据更新0。
+
+最终静态报告：`work_dirs/port_geometry_g_v1_static_check_local_20261002_v4.json`，状态`STATIC_CHECK_COMPLETE_NO_GPU_NO_UPDATES`，SHA `a4a0ed70d705a1fa4e77d077b601f5e34f28f961bc0d18faad33f44b3b41765d`；当前source manifest SHA `b92c8ea792b3066c5543c55163d47c7b1fa1a9634dbab8e393093fe9c61b4063`。开发期v1在manifest尚未生成时失败，v2/v3为后续数值留存/版本记录改动前的检查；均保留，最终交付以v4和当前合同为准。没有本地B权重/CUDA，真实特征、拟合收益、12张实际采样图和显存峰值均待服务器检查，不包装为已完成实验。
+
+### 48.5 服务器运行与回传（已准备，未执行）
+
+上传上述前五个运行文件到服务器项目同名位置；第六个测试文件可一并保留。既有冻结B及历史依赖应已在项目，不需要上传Downloads原几何报告或可靠性轴线报告，不压缩提交包。
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+conda activate mmrotljj
+
+PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/preflight_port_geometry_g_v1.py \
+  --check-only \
+  --out-json work_dirs/port_geometry_g_v1_static_check.json
+```
+
+先确认`STATIC_CHECK_COMPLETE_NO_GPU_NO_UPDATES`，再使用空闲物理卡（示例3，逻辑编号0）：
+
+```bash
+CUDA_VISIBLE_DEVICES=3 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/preflight_port_geometry_g_v1.py \
+  --gpu 0 \
+  --out-json work_dirs/port_geometry_g_v1_train_preflight.json \
+  --cache-dir work_dirs/port_geometry_g_v1_roi_cache
+```
+
+正常完成状态`TRAIN_SHORT_FIT_COMPLETE_REVIEW_REQUIRED`，`detector_updates=0`、`head_updates_total=400`、无拟合权重导出。若失败，回传FAILED报告和具体错误，不删保护或改源SHA来绕过。已经完整采集而需复算/重跑同版短拟合时，另取输出名并显式复用，避免重复B特征采集：
+
+```bash
+CUDA_VISIBLE_DEVICES=3 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/preflight_port_geometry_g_v1.py \
+  --gpu 0 --reuse-cache \
+  --out-json work_dirs/port_geometry_g_v1_train_preflight_reuse.json \
+  --cache-dir work_dirs/port_geometry_g_v1_roi_cache
+```
+
+回传主JSON、同名`.progress.jsonl`/`.artifacts.json`、cache的`cache_manifest.json`及12张`previews/`PNG。CPU`local_roi.pt`留服务器，必要时才补；不依赖新增TEST或正式权重。
+
+### 48.6 下一阶段判断（待验证，不自动放行正式训练）
+
+机械要求是冻结B参数/缓冲不变、初始精确B、中心/分数/输出数不变、有效有限三任务/后续stem梯度、合法有界框、来源及坐标一致；零最后层使首步stem梯度为零是预期，第二步必须有效。每步检查loss、梯度和更新参数有限；loss/裁剪/stem日志保留step1、2及每25步快照，不把快照当每步完整轨迹。裁剪快照、最终饱和/投影计数和实际采样图必须审查。
+
+先看每域每尺度fit loss是否确有下降，再看图级TRAIN probe的长边、短边、纯角度RMSE/p90、RIoU及尾部是否联合改善，并比较aligned对ordinary的增量。报告原三口径：输出帧中心命中、输出覆盖、全帧中心正确覆盖；不以仅输出条件指标隐藏无输出或不配对框。稀疏TRAIN样本不报告伪视频连续性/DFR/ACI，也不只挑改善的域、尺度或分量。
+
+完成状态仅表示检查跑完，loss下降不等于局部特征有效或VAL改善。若只有fit改善、probe联合退化，或aligned不优于ordinary，应先报告容量/过拟合/采样等不确定性，不继续堆loss或自动放开B。若工程及可学性证据支持，再另锁定正式两臂预算、保存/重载与G头VAL选权合同；原17项联合门槛保留，不重选B或放宽既有条件。当前VAL已用于开发/选权、TEST已多次暴露；本轮不用TEST选方法、界限、预算或权重，未安排新TEST。

@@ -1,0 +1,95 @@
+{
+  "protocol": "port_geometry_g_v1_train_preflight",
+  "settings": {
+    "protocol": "port_geometry_g_v1_train_preflight",
+    "seed": 1703,
+    "feature_level": 0,
+    "stride": 8,
+    "in_channels": 256,
+    "hidden_channels": 32,
+    "roi_size": 9,
+    "context_multiplier": 1.5,
+    "min_context_cells": 2.0,
+    "hidden_fc": 64,
+    "max_log_edge_residual": 0.22314355131420976,
+    "max_angle_residual_rad": 0.17453292519943295,
+    "loss_beta": 0.1,
+    "train_center_match_px": 15.0,
+    "steps_per_arm": 200,
+    "batch_size": 8,
+    "optimizer": "Adam",
+    "lr": 0.001,
+    "weight_decay": 0.0,
+    "clip_norm": 10.0,
+    "fit_images_per_domain": 24,
+    "probe_images_per_domain": 8,
+    "scales": [
+      1.0,
+      0.5
+    ],
+    "max_cpu_roi_bytes": 33554432
+  },
+  "evidence_role": "finite_TRAIN_learnability_and_integration_check",
+  "frozen_b": {
+    "selected_epoch": "epoch_24",
+    "checkpoint_sha256": "8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23",
+    "config_sha256": "9da972b7010540e12b2501d1c400db13c159381f495f539d6315e7adb498e345",
+    "selection_sha256": "ccaa55376d3d40175c86386fbb7c6e2e8db54a1e13b9b1611783c7255fb54352"
+  },
+  "fixture_sha256": "616ac890b9a60689c7fb52c08bf58b4fe85e2542090b158d79ce0d429902209c",
+  "train_sequence_counts": {
+    "real_seq01": 339,
+    "real_seq05": 560,
+    "real_seq06": 466,
+    "real_seq12": 141,
+    "real_seq13": 304,
+    "sim_seq08": 748
+  },
+  "arms": [
+    "ordinary",
+    "aligned"
+  ],
+  "role_counts": {
+    "fit": {
+      "real": 24,
+      "sim": 24
+    },
+    "probe": {
+      "real": 8,
+      "sim": 8
+    }
+  },
+  "minimum_eligible_views": {
+    "fit": {
+      "real": 8,
+      "sim": 8
+    },
+    "probe": {
+      "real": 4,
+      "sim": 4
+    }
+  },
+  "fit_schedule": "200 identical balanced batches per arm; batch8, 4real+4sim sampled with replacement from eligible fit views; seed1703",
+  "residual_loss": "mean of three SmoothL1(beta0.1): log(L/GT_L)/log1.25, log(S/GT_S)/log1.25, wrap_pi(theta-GT_theta)/(pi/18)",
+  "eligibility": "TRAIN fitting only: genuine B output and original center error<15px. No online filtering, no synthetic proposals, no residual-bound exclusion.",
+  "evaluation": "Initial identity and fixed final step200 only; all fixed TRAIN views retained including ineligible/missing outputs; separate fit/probe/domain/scale. Sparse TRAIN probe is not VAL or independent video generalization.",
+  "scope": {
+    "detector_updates": 0,
+    "head_updates_total": 400,
+    "formal_training": false,
+    "checkpoint_export": false,
+    "val_data_access": false,
+    "test_data_access": false
+  },
+  "baseline_tolerances": {
+    "center_and_edges_px": 0.1,
+    "angle_rad": 0.001,
+    "score": 0.001
+  },
+  "numeric_decrease_tolerance": 1e-06,
+  "model_state_tolerance": "Detector parameter and buffer SHA must be unchanged; original center/score and output count must be bitwise unchanged.",
+  "sampling_definition": "Detached P3 stride8, 9x9 bilinear points, 1.5x canonical L/S context, each side at least16 input pixels. Ordinary theta0; aligned canonical B theta; padded source cells masked. Same model-coordinate logL/8,logS/8,sin2theta,cos2theta descriptor in both arms.",
+  "residual_definition": "Original-coordinate long/short edge multipliers exp(log1.25*tanh(zL/S)); angle delta=(pi/18)*tanh(ztheta). If corrected L<S, project both to geometric mean and retain original canonical long direction at square tie. Original centers/scores copied bitwise; zero residual exact identity.",
+  "short_fit_review": "Completion is not approval. Inspect effective gradients, all fit losses, probe joint edge/angle/RIoU changes and ordinary/aligned increment, clipping/saturation/projection, actual support previews and memory. No fitted head export or new formal/VAL/TEST command.",
+  "gt_reference_policy": "Use the existing TRAIN report numeric original-coordinate GT reference for both arms and views. Current TRAIN annotation bytes must match; canonical parsed GT must allclose(reference,atol1e-3,rtol1e-5). Save reference, actual parsed numeric GT and absolute deltas; never infer equality from hashes alone."
+}
