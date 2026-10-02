@@ -2,7 +2,7 @@
 
 > 用途：在新对话中继续几何精度优化。本文汇总本轮对话、现有代码及收到的实验结果；保留事实、推断和待验证内容的区别。后续优先更新本文，不再为每次改动创建交接文件。
 >
-> **当前结论：保留 SymEOOD＋尺度增强 B，VAL固定epoch24，作为后续可靠性研究的暂定检测前端。D 和固定E-H v1均未形成联合收益。E-H在VAL选epoch22，改善real覆盖/连续性及sim角度，但尺寸/RIoU退化；固定TEST上real全帧中心正确数与B相同、输出多1帧，real RIoU基本持平，sim角度及RIoU退化，不替换B。独立尺寸候选F-S v1的保存框数学与服务器有限TRAIN接入/初始化检查已完成；第34节已准备正式配置和VAL比较入口，固定beta/lambda=0.1、原15条件＋普通real中心mean/RMSE保护。2026-10-02已读取F-S完整24epoch训练日志与VAL扫描：原规则选epoch18、唯一可行，real覆盖/RIoU局部改善，sim RIoU低于B，不替换B；已记录显存峰值恒为3007MiB。完整17项缓存比较尚待回传，最新分析见第41节。第35节保留上一轮流程建议；第36节按用户最新范围收束为B检测＋当前帧分量可靠性判别，连续状态接口留到大论文后续设计。不加入DINO，不据已多次暴露的TEST调参或重选权重，不恢复候选排序或完整审计。**
+> **当前结论：保留 SymEOOD＋尺度增强 B，VAL固定epoch24，作为后续可靠性研究的暂定检测前端。D 和固定E-H v1均未形成联合收益。E-H在VAL选epoch22，改善real覆盖/连续性及sim角度，但尺寸/RIoU退化；固定TEST上real全帧中心正确数与B相同、输出多1帧，real RIoU基本持平，sim角度及RIoU退化，不替换B。独立尺寸候选F-S v1的保存框数学与服务器有限TRAIN接入/初始化检查已完成；第34节已准备正式配置和VAL比较入口，固定beta/lambda=0.1、原15条件＋普通real中心mean/RMSE保护。2026-10-02已读取F-S完整24epoch训练日志与VAL扫描：原规则选epoch18、唯一可行，real覆盖/RIoU局部改善，sim RIoU低于B，不替换B；已记录显存峰值恒为3007MiB。完整17项VAL缓存比较已复核：7项失败，两域短边与sim纯角度改善，但长边/中心及sim重叠退化；普通real新增4个严重错位，不替换B。用户已授权固定ep18做一次TEST，尚待服务器执行，最新分析与指令见第42节。第35节保留上一轮流程建议；第36节按用户最新范围收束为B检测＋当前帧分量可靠性判别，连续状态接口留到大论文后续设计。不加入DINO，不据已多次暴露的TEST调参或重选权重，不恢复候选排序或完整审计。**
 
 当前数据、已完成实验与论文素材已集中整理为[港口新数据与尺度增强实验总记录](detection/港口新数据集与EOOD_SymEOOD尺度增强实验总记录.md)。该主记录维护成果与论文口径，本文保留执行交接及后续设计。早期E经过预检后改为E-H；E-H已完成正式训练和VAL/TEST，F-S已完成前两项有限检查，阶段与结果以本文最新记录为准。
 
@@ -2529,3 +2529,100 @@ python crane_project/tools/compare_port_size_f_s_val_v1.py \
 回传`port_size_f_s_v1_val_compare.json`及同一F-S VAL目录的`sweep_results.json`；已有正式合同JSON可同时回传。只补逐帧几何、17条件、RIoU交叉核对和身份缺口，不追加完整审计。没有联合收益就将F-S记录为固定设计下未达到目标的实验，继续以B开展第36–40节已经收束的当前帧分量可靠性路线；该路线是质量识别研究，并不自动修正原框几何。不因本次F-S结果自行改动正在准备的可靠性源码或启动新实验。
 
 本轮仅读取、静态核对、复算与归档结果，并更新本文；未修改检测/可靠性源码、启动训练/推理、连接服务器或读取新增TEST。TEST历史多次暴露、VAL用于选权/开发、单seed及历史B对照的结论限制保留；等比例变换、原图还原与独立深度真值缺口均未改变。
+
+## 42. F-S VAL缓存比较复核完成，按用户授权准备固定epoch18 TEST（2026-10-02）
+
+### 42.1 输入、身份与代码复核（事实）
+
+用户上传`port_size_f_s_v1_val_compare.json`和服务器比较终端，要求读取、检查代码、分析并给TEST指令。本轮按原字节归档，保留第41节尚缺比较报告的历史状态，以本节关闭该缺口。
+
+| 归档/复核文件 | SHA256 |
+|---|---|
+| `work_dirs/port_size_f_s_v1_val_compare_server_20261002.json` | `b382caca0d9264344906e3e9393ca5906f2a86e383182c5b51e3fa4f594a3117` |
+| `work_dirs/port_size_f_s_v1_val_compare_terminal_server_20261002.txt` | `0690e4c2cfd6223d7b581c5a8f924e460547da2bd10ba55d63106a923dadc85c` |
+| `work_dirs/port_size_f_s_v1_val_compare_review_local_20261002.json` | `645eaa82f5e1bf94c4820c46e8536d6e46ae98d18bede14eac5204646eb131de` |
+
+终端打印的条件JSON与报告对应字段完全一致。正式合同SHA、服务器预检SHA及B身份均与第34节一致，`library_matches_reviewed_preflight=true`。服务器检查的B/F-S checkpoint训练配置均`MATCH`，seed0、epoch24/18、累计iter15360/11520一致。F-S依原VAL规则选择epoch18、1/5可行、`constraint_pass`，没有fallback或按比较重选。
+
+F-S冻结身份：checkpoint SHA `ccfe1133b9e0fdb8f79de1b0cb272203d81b87b1a27d45377b3200fbdff47259`；VAL PKL SHA `8bded40f92333a507ffdbe520ac7634447254e76ac919c704d5fb3090b09024e`；选权JSON SHA `821bb9b67c0512697a5b41aeab398f868447aa3e5e16b6c89476fa4ec2ff24bd`；正式配置SHA仍`441aa8ace4621c9eda00a80b764c76c53b82106e73f1987a4bc96c761e8ff758`。
+
+**本地必要复核：** 读取比较入口、条件计算、几何分解、缓存加载、LogSizeLoss及固定TEST/分序列入口；当前41项冻结源码仍匹配。两臂各887帧（real375/sim512），图像ID顺序/唯一性、图像SHA与GT配对一致；B逐帧记录与此前冻结B报告完全相同。用独立标准库公式复算中心、排序长短边误差/signed log ratio、π周期纯角度、惩罚、各组mean/median/p90/RMSE与配对改善数量；用序列/编号缺口规则复算失败区间，再独立组装17项布尔比较，均一致。原比较函数回放亦一致。
+
+RIoU float64交叉检查回放一致：B最大差1.4677e-5，F-S最大差0.000689878；均无>1e-3项及0.5阈值判定变化，`metric_consistency_review_required=false`。没有发现可解释当前失败的分母、配对、门槛方向或RIoU阈值数值错误。原测试已通过且相关源码未变，本轮不重复同版本测试；新增回传数据的数学复核已完成。服务器原权重/PKL/sweep字节仍未上传本机，其SHA属于服务器已核验报告，不能写成本地直接读取原文件。
+
+合同内`optimizer_steps=0`/`formal_training_executed=false`表示CPU合同检查自身没有执行训练；不是说正式F-S未训练或训练失败。该字段仅有阅读口径易混淆，不影响评价。本轮没有自动修改只读审查的源码。
+
+### 42.2 17项条件及实际取舍（事实）
+
+**10项通过、7项失败，`all_conditions_met=false`；F-S不替换B。** 失败为两域长边误差下降（2项）、两域共同输出中心mean不增（2项）、sim全帧RIoU不降（1项）、普通real共同输出中心mean/RMSE保护（2项）。两域短边误差及sim纯角度均改善，不能再概括为尺寸和方向全部退化。
+
+覆盖再次确认：real B输出374/375、输出中心360/374=96.2567%、全帧中心正确360/375=96%；F-S输出375/375、输出中心及全帧正确366/375=97.6%。sim两臂输出覆盖、条件中心命中及全帧正确覆盖均512/512。阈值仍15px，条件中心率仅以输出帧为分母。
+
+| 既定配对/全帧指标 | B ep24 | F-S ep18 |
+|---|---:|---:|
+| real全帧平均RIoU | 0.795505 | 0.801033 |
+| real最长无输出 / RIoU失败 | 1 / 4 | 0 / 1 |
+| real共同输出长/短边平均相对误差（n374） | 8.4208% / 8.7580% | 9.2371% / 7.5428% |
+| real共同输出中心mean/RMSE，px | 9.5746 / 34.5779 | 11.3402 / 66.1317 |
+| 普通real共同输出中心mean/RMSE（n364），px | 4.4375 / 5.2923 | 10.1442 / 65.1515 |
+| 普通real共同输出RIoU（n364） | 0.819545 | 0.809662 |
+| sim长/短边平均相对误差（n512） | 3.8712% / 4.1388% | 5.6969% / 3.7872% |
+| sim中心mean，px | 1.6452 | 1.7547 |
+| sim完整输出纯角度RMSE | 2.107151° | 1.920707° |
+| sim全帧平均RIoU | 0.885695 | 0.869585 |
+| sim最长RIoU失败 | 0 | 1 |
+
+sim长边p90从7.7625%升至10.5489%，长边mean signed log ratio从-0.022673降至-0.056288；短边从-0.031747到-0.029720。支持当前sim长边偏小倾向加重而短边改善，不是等比例两边同步改善。real长边也略退化，不能据尺寸loss下降声称尺寸总体更准。sim共有352/512帧长边误差变差、319/512帧RIoU变差；并非仅那个协议角度惩罚帧影响整体。
+
+### 42.3 新严重错位与角度惩罚（事实、推断边界）
+
+F-S real_seq07零RIoU输出共7帧，其中3帧属于B历史严重组，4帧是新增：
+
+| 新增帧 | F-S中心误差，px |
+|---|---:|
+| real_seq07_00003 | 769.7530 |
+| real_seq07_00186 | 408.5113 |
+| real_seq07_00194 | 855.4976 |
+| real_seq07_00200 | 212.1999 |
+
+这4帧全部保留在事先固定的普通real组，贡献该组约99.4324%的中心平方误差。该组中心median从3.6827降到3.3401px、p90从7.8297降到7.6044px，同时RMSE从5.2923升到65.1515px。说明多数/典型帧改善与新增极端尾部错误并存；不能删除新增错位、重定义普通组或仅报告median来宣称定位整体改善。虽然旧10帧错位组得到部分修复、总体中心正确数增加，新的极端错误仍违反用户的定位可靠性目标。
+
+第41节角度推断已由逐帧记录确认：`sim_seq10_00211`中心误差10.6138px，小于15但达到原角度门槛10px，实际纯角差1.9819°，被原协议计90°。sim完整输出纯角度RMSE确为1.920707°，相对B约下降8.85%；原协议RMSE4.416079°保留。两者分别回答纯方向精度与含中心惩罚的协议表现，不修改原选权指标或把纯角度替换入选权。
+
+上述结果能确认“改善短边/方向但损害长边及部分定位”，不能证明尺寸项系数过大、分类竞争、背景接管或某一梯度机制就是根因。单seed历史B对照及VAL已用于选权/开发的限制保留。不得由待看的TEST再设计系数、阈值或权重。
+
+### 42.4 用户授权的固定TEST及服务器指令（待执行）
+
+用户本轮明确要求“也去test测试看一下”。按该授权提供一次**原VAL冻结F-S ep18**的TEST，观察既定方案在其他视频序列的结果；不是重新筛选模型的阶段。保持原配置、坐标还原、15px中心门槛及全部评价条件，不扫描TEST epoch、不改F-S系数。TEST已多次暴露，不能称未接触的独立测试集；无论结果怎样，禁止依据它改选epoch或反过来放宽VAL门槛。B仍是目前保留方案。
+
+先确认服务器原VAL选权文件SHA为本节冻结值。以下命令复用已有入口、串行使用物理GPU0；若该卡被占用，只将`--gpu`改为实际空闲物理编号。脚本自身设置CUDA_VISIBLE_DEVICES，无需再套可见卡映射。不连接服务器，也不重新运行B TEST。
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+conda activate mmrotljj
+export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
+FS_CONFIG=crane_project/configs/crane_symeood_k1_port_day2night_size_f_s_v1_formal.py
+FS_WORK=work_dirs/crane_symeood_k1_port_day2night_size_f_s_v1
+FS_SWEEP="$FS_WORK/val_sweep_port_v1"
+FS_TEST="$FS_SWEEP/final_test/epoch_18"
+
+# 读取既定VAL选择，只执行该权重的TEST；没有新扫描。
+python crane_project/tools/ckpt_sweep.py \
+  --config "$FS_CONFIG" --work-dir "$FS_WORK" --sweep-dir "$FS_SWEEP" \
+  --final-test-from "$FS_SWEEP/sweep_results.json" \
+  --center-thresh 15 --gpu 0
+
+# 仅在上述TEST报告已生成后读取同一缓存，分别报告三序列及中心分母。
+if test -f "$FS_TEST/final_test_metrics_v2.json" && test ! -e work_dirs/port_size_f_s_v1_test_subsets.json; then
+  python crane_project/tools/audit_port_test_subsets_v1.py \
+    --gt-dir crane_project/data/crane_grab_port_day2night_v1/test/annfiles \
+    --pred-dir "$FS_TEST/preds/Task1_grab" \
+    --out-json work_dirs/port_size_f_s_v1_test_subsets.json
+fi
+```
+
+TEST入口校验原选权角色/版本/配置SHA及选中checkpoint路径/SHA，`--final-test-from`分支直接返回，不运行VAL扫描。期望1440帧（real_seq03=200、real_seq04=668、sim_seq09=572）。既有分序列脚本提供输出条件中心命中、输出覆盖、全帧中心正确覆盖及无输出/RIoU失败区间；它不是新的完整诊断，也不改预测。它的输出写入没有拒绝覆盖保护，所以**若该F-S分序列报告已存在，直接读取回传，不重复执行第二步**；新的独立文件名与旧B/E-H报告不冲突。TEST入口保留旧预测及不相同的最终报告，身份不匹配时拒绝，不绕过检查。
+
+回传上述`final_test_metrics_v2.json`、`work_dirs/port_size_f_s_v1_test_subsets.json`及TEST末尾终端。保留同目录`preds/results.pkl`、其provenance及`Task1_grab`供必要时复用，不默认再添加全量诊断。当前命令主要评估覆盖/重叠/时序及原协议角度；单独尺寸/纯角度若需解释，应复用既有框，不能用后续结果重写方案。
+
+完成后按B固定TEST旧结果与F-S ep18新结果报告各域/序列的收益及代价，再收束本次F-S实验。后续可靠性研究继续使用已固定B，不能依据这次TEST切换前端；不自动增加新的损失试验或重启已关闭路线。本轮只有本地结果复核、原字节归档和本文更新；没有改检测/可靠性源码、执行训练或TEST、连接服务器。新的TEST仅待用户在服务器执行。
