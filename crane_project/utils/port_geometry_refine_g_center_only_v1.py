@@ -73,4 +73,4 @@ def regression_loss(refined_original, gt_original, frozen_b_original):
     errors = (refined_original[:, :2]-gt[:, :2])/scale
     parts = F.smooth_l1_loss(errors, torch.zeros_like(errors),
         beta=CENTER_SETTINGS['center_loss_beta'], reduction='none').mean(dim=0)
-    return CENTER_SETTINGS['loss_component_coefficient']*parts.sum(), parts
+    return parts.sum()/3., parts

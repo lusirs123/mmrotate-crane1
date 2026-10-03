@@ -1,0 +1,95 @@
+{
+  "protocol": "port_geometry_g_center_only_v1_train_preflight",
+  "evidence_role": "finite_TRAIN_center_task_intervention",
+  "reference_g_settings": {
+    "protocol": "port_geometry_g_v1_train_preflight",
+    "seed": 1703,
+    "feature_level": 0,
+    "stride": 8,
+    "in_channels": 256,
+    "hidden_channels": 32,
+    "roi_size": 9,
+    "context_multiplier": 1.5,
+    "min_context_cells": 2.0,
+    "hidden_fc": 64,
+    "max_log_edge_residual": 0.22314355131420976,
+    "max_angle_residual_rad": 0.17453292519943295,
+    "loss_beta": 0.1,
+    "train_center_match_px": 15.0,
+    "steps_per_arm": 200,
+    "batch_size": 8,
+    "optimizer": "Adam",
+    "lr": 0.001,
+    "weight_decay": 0.0,
+    "clip_norm": 10.0,
+    "fit_images_per_domain": 24,
+    "probe_images_per_domain": 8,
+    "scales": [
+      1.0,
+      0.5
+    ],
+    "max_cpu_roi_bytes": 33554432
+  },
+  "center_settings": {
+    "max_center_over_b_short": 0.3,
+    "center_coordinate_system": "original_image_xy",
+    "center_scale": "detached_original_B_short_edge",
+    "center_squash": "z_xy / sqrt(1 + sum(z_xy**2))",
+    "loss_component_coefficient": 0.3333333333333333,
+    "center_loss_beta": 0.1
+  },
+  "conditions": [
+    "b_identity",
+    "saved_joint_center_b_shape",
+    "independent_center_b_shape"
+  ],
+  "parameter_counts": {
+    "total": 184037,
+    "trainable": 183842,
+    "frozen_bypassed_shape": 195
+  },
+  "baseline_report_sha256": "ce38c0f399027de2a72bad8ff94fa5691cb1aa0d1e66048c8ef32d025487bc71",
+  "joint_report_sha256": "7adb734eae56d703584f2a1a0d025465c07bf80b6ddb18612df0cdb07bf10452",
+  "cache_manifest_sha256": "7dae321ea2c0fb3f60eb4eb20cee9ebfb8f404d5c0780308485a24ed16f5108d",
+  "prior_center_manifest_sha256": "5ff6be9e37e0b3fb51dca2bab55f169853532270326929fd2b4a3c424e6b9ff3",
+  "fixed_sample_counts": {
+    "fit": {
+      "real": 24,
+      "sim": 24
+    },
+    "probe": {
+      "real": 8,
+      "sim": 8
+    }
+  },
+  "intervention": "Remove shape supervision from shared stem/FC64 updates. Keep original shape output tensors frozen and bypassed; copy B raw w/h/angle/score exactly.",
+  "initialization": "Copy exact reviewed untrained joint state, including zero xy and frozen zero shape tensors. Same shared initialization and two center units; require full digest equal saved joint initial.",
+  "center_definition": "Same .30*S_B radial xy squash, original coordinates and detached ORIGINAL B short edge. No clipping/rejection/GT-selected bound.",
+  "loss": "Only(p_x+p_y)/3; each raw SmoothL1(beta.1) part uses errors=(c_new-c_GT)/(.30*S_B). No shape loss, constant loss gain or mean-of-two reweighting.",
+  "optimizer": "Same seed1703 Adam lr.001 wd0 clip10, identical200 fit-only balanced batches8(4real+4sim). Initial/final evaluation; all200 updates logged, no intermediate selection.",
+  "scope": {
+    "detector_forward_calls": 0,
+    "detector_updates": 0,
+    "additional_joint_updates": 0,
+    "new_head_updates": 200,
+    "formal_training": false,
+    "checkpoint_export": false,
+    "val_access": false,
+    "test_access": false
+  },
+  "evaluation": "All128 views by fit/probe/domain/scale. Center mean/RMSE/p90, signed xy residual and desired/actual movement, RIoU mean/p10/min and paired tails. Explicit output/conditional-correct/all-frame-correct fractions. Shapes/angles exact B are constraints, not gains.",
+  "tolerance": {
+    "center_px": 1e-06,
+    "riou": 1e-05
+  },
+  "review": "All4 probe center mean/RMSE/p90 and RIoU mean/p10/min non-regressing vs B; no new center or overlap tail failures. Both real fit center mean/RMSE non-regressing. At least one real probe jointly improves center mean and RIoU mean vs B AND saved joint-center hybrid beyond numerical tolerance. Diagnostic continuation only, never formal approval.",
+  "runtime_policy": "Same python/torch/cuda/cudnn/numpy/opencv strings as reviewed baseline and joint; physical GPU number may differ.",
+  "limitations": [
+    "Repeated TRAIN probe16 identities/32 related views, all seen by B; not independent VAL.",
+    "Task interaction is a hypothesis; no per-task shared gradient cosine evidence or PCGrad intervention.",
+    "Removing shape gradients changes optimization, not proof of a unique root or final five-parameter method.",
+    "Single-frame sparse checks cannot guarantee real video continuity or depth accuracy.",
+    "TEST repeatedly exposed; no TEST tuning, checkpoint selection or access in this run.",
+    "Failure ends incremental same-cache P3+FC64 trials; no weight/capacity/bound/step sweep."
+  ]
+}

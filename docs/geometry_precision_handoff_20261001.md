@@ -2,7 +2,7 @@
 
 > 用途：在新对话中继续几何精度优化。本文汇总本轮对话、现有代码及收到的实验结果；保留事实、推断和待验证内容的区别。后续优先更新本文，不再为每次改动创建交接文件。
 >
-> **2026-10-03最新任务分工：本对话继续检测几何优化，可靠性由另一个对话推进。第54～55节FC16未通过联合目标，结束该容量尝试。第56～57节G-center v1的服务器初始化、原形状梯度保持及完整200步检查已通过；probe的real两组中心误差增大、RIoU下降，sim半尺度中心/尺寸/RIoU改善但角度退化，四组均未通过预先固定条件。保留B ep24，不放行本版正式训练或新增VAL/TEST；若继续冻结ROI路线，下一项建议仅做固定预算的中心单任务机制对照，尚未实施。原运行源码及可靠性工作保持。本轮直接临时读取回传包，没有新增本地结果副本、一次性复算脚本或压缩包。**
+> **2026-10-03最新任务分工：本对话继续检测几何优化，可靠性由另一个对话推进。第54～55节FC16未通过联合目标，结束该容量尝试。第56～57节G-center v1的服务器初始化、原形状梯度保持及完整200步检查已通过；probe的real两组中心误差增大、RIoU下降，sim半尺度中心/尺寸/RIoU改善但角度退化，四组均未通过预先固定条件。保留B ep24，不放行本版正式训练或新增VAL/TEST。第58节中心单任务机制对照已按用户授权落实为G-center-only v1，第59节记录代码、13项CPU测试、真实来源/报告静态核验及服务器命令；GPU200步尚未运行，尚无效果证据。原G/G-center代码及可靠性工作保持，没有新增本地回传副本、一次性复算脚本或源码压缩包。**
 >
 > **当前结论：保留 SymEOOD＋尺度增强 B，VAL固定epoch24，作为后续可靠性研究的暂定检测前端。D 和固定E-H v1均未形成联合收益。E-H在VAL选epoch22，改善real覆盖/连续性及sim角度，但尺寸/RIoU退化；固定TEST上real全帧中心正确数与B相同、输出多1帧，real RIoU基本持平，sim角度及RIoU退化，不替换B。独立尺寸候选F-S v1的保存框数学与服务器有限TRAIN接入/初始化检查已完成；第34节已准备正式配置和VAL比较入口，固定beta/lambda=0.1、原15条件＋普通real中心mean/RMSE保护。2026-10-02已读取F-S完整24epoch训练日志与VAL扫描：原规则选epoch18、唯一可行，real覆盖/RIoU局部改善，sim RIoU低于B，不替换B；已记录显存峰值恒为3007MiB。完整17项VAL缓存比较已复核：7项失败，两域短边与sim纯角度改善，但长边/中心及sim重叠退化；普通real新增4个严重错位，不替换B。固定F-S ep18 TEST已回传并复核：real少21个输出、正确中心总数少26、最长RIoU失败4→9，sim角度/重叠退化；保留B，F-S不作为最终方案，最新分析见第44节。第35节保留上一轮流程建议；第36节按用户最新范围收束为B检测＋当前帧分量可靠性判别，连续状态接口留到大论文后续设计。不加入DINO，不据已多次暴露的TEST调参或重选权重，不恢复候选排序或完整审计。**
 
@@ -4168,3 +4168,70 @@ real两组及sim原尺度单独使用本次学到的中心也未提高平均RIoU
 - Wang等，**Side-Aware Boundary Localization for More Precise Object Detection**，ECCV2020：[官方论文PDF](https://www.ecva.net/papers/eccv_2020/papers_ECCV/papers/123490392.pdf)，[作者摘要](https://arxiv.org/abs/1912.04260)。逐边定位及分桶后细化，提供边界空间证据与定位表示的后续方向。其水平框设置不能直接搬成OBB方案；当前也未证明边界特征不足，因此列为中心单任务失败后的备选研究依据，不在下一实验叠加分桶/边界头。
 
 以上检索支持问题与对照思路，不构成当前方案有效性的证据。本轮未声称穷尽最新文献；没有修改运行代码、训练或连接服务器。当前probe被反复开发使用且B见过，TEST亦已多次暴露；本次设计不用TEST调参或选权。保持等比例、原图还原及深度接口约束不等于验证深度精度或连续性。仍保留B ep24，结论只集中记入本文。
+
+## 59. G-center-only v1实现、代码复核及服务器命令（2026-10-03）
+
+用户授权按第58节修改代码。本节为实施与本地验证事实；不把第58节历史设计阶段或有限检查误写成正式训练/收益。
+
+### 59.1 实现范围及固定契约
+
+新增运行文件（上传时保持项目相对位置）：
+
+| 文件 | SHA256 |
+|---|---|
+| `crane_project/utils/port_geometry_refine_g_center_only_v1.py` | `4abf4fd9f39c417d2e9035a048020843e590918f4d0935af67ae17e262dadd01` |
+| `crane_project/tools/preflight_port_geometry_g_center_only_v1.py` | `80ab470c1acee5f3e1b8356c6fd874c302e9fc6e78b970cc3a9eaf5c1d77a31d` |
+| `crane_project/tools/port_geometry_g_center_only_v1_protocol.json` | `8821263cf4787d469b8305c59418c36b5e83e60124c7fb7415a9323cf293ec7b` |
+| `crane_project/tools/port_geometry_g_center_only_v1_sources.json` | `8049731476d380866e8969448c0fb54d18787340e542ff793bab34e5b72f9017` |
+
+测试`tests/test_port_geometry_g_center_only_v1.py` SHA `11728a7032334d95562e9581a7fac6708485e3b348e1db66b906f015226fbacb`。旧G、ROI消融、FC16及joint运行源码/协议/manifest均未改；可靠性文件不在本轮修改范围。不生成上传源码包。
+
+新头继承相同stem/FC64及两个中心零输出单元，复制整个已审查joint未训练state。保留195个原形状末层参数以保持state身份，但`requires_grad=False`且前向完全不调用；总参数184,037、可训练183,842。前向仍只接受detach ROI/support、B original/model框描述符，没有GT/域/图名输入；原B raw宽高/角度/score精确复制，仅原图xy变化。稳定径向squash、`.30*S_B`及中心loss两项各`1/3`与joint一致，不能改成两项mean。GT形状与修正后的边长均不能降低中心loss。空输出保留空框接口；训练loss要求非空配对目标。完整来源保护仍要求现有128视图全eligible，不暗中增加/删除样本。
+
+runner绑定旧59来源及新util/runner/protocol共62来源；继续验证原TRAIN、原baseline、原CPU缓存及旧joint身份。旧joint完成报告SHA精确`7adb734eae56d703584f2a1a0d025465c07bf80b6ddb18612df0cdb07bf10452`，由已保存中心＋B形状重算hybrid，无额外joint拟合。实际新初始化仍要求与服务器旧joint完整state digest一致；优化前中心两分量及共有参数梯度须精确旧joint中心任务，冻结形状梯度为None。首步共有stem梯度0符合零末层，step2及全部200步有效性/裁剪另报。
+
+相同seed1703、Adam .001/wd0、clip10、batch8及同200个fit-only批次；新增200更新，joint/B更新0、B前向0，无检测器构建、checkpoint导出或VAL/TEST访问。每步中心loss/原始两项/权重/梯度范数/clip/stem记录保留；初始/最终全部128视图按8组报告。新增逐视图所需/实际位移、有符号残差、符号计数、中心与RIoU好坏计数。覆盖3种分子分母显式列出；纯角不变与10px协议角罚项变化分别解释。
+
+评价严格按58.2实现，RIoU增加min非退化检查；不要求复制的尺寸/方向产生严格收益。预声明数值容差中心`1e-6 px`、RIoU`1e-5`，容差内按持平，严格收益需超出容差；中心命中/低交叠事件及分子分母无容差。`diagnostic_continuation_conditions_met`只表示有限对照符合继续研究条件，`formal_training_approved`固定False，不能自动升级训练。输出目录不覆盖；完成小头结果先保存`center_only.json`，即使后续比较失败也保留200步结果和失败artifacts，不导出权重。
+
+### 59.2 本地复核与剩余缺口（事实）
+
+最终13项CPU测试通过（Python3.8/torch1.8，约1.15s）：共有初始化/可训练划分、形状层彻底旁路、中心两项旧权重、GT形状/尺寸膨胀无影响、旧joint中心梯度精确一致、两步真实优化到stem、输入/GT detach、原raw形状/score保持、极大有限激活/径向界/等比例单位/空框、保存hybrid不修改原报告、缺输出与新增中心失败的三个分母、完整分组/real fit/超容差联合收益门槛、拒绝未审查joint、静态不加载缓存/GPU/head、CPU两步模拟完整入口、失败保留小头结果/原更新预算、序列化失败摘要等。AST按Python3.8解析及JSON解析通过。
+
+真实静态入口在系统临时目录运行：直接读取用户回传tar中joint completion（只在临时目录落盘），结合现有原G baseline，通过62来源及TRAIN/协议/报告身份校验，恢复128个hybrid行，状态`STATIC_CENTER_ONLY_CONTRACT_COMPLETE_NO_CACHE_LOAD_NO_GPU_NO_UPDATES`、更新0。临时输出/依赖缓存自动清理；不在项目新增解包结果、review脚本或复算报告。原同版本测试不重复全量运行。
+
+本地没有服务器实际ROI payload及CUDA环境，尚未验证服务器同初始化digest、真实缓存上的200步、几何效果和显存峰值。两步合成CPU入口是工程测试，不是本项目性能证据。内存结构仍是原CPU小ROI＋小头，不加载B/FPN计算图；参数不增加，但不能承诺特定设备allocator峰值，GPU报告继续记录allocated/reserved及耗时。服务器环境/缓存/初始化不符必须解释差异，不刷新旧SHA来绕过保护。
+
+### 59.3 服务器执行与结果回传
+
+在`/media/omnisky/personal_files/ljj/symEOOD`、原`mmrotljj`环境，上传59.1四个运行文件，保留旧源码/缓存/结果。先静态（使用原baseline和上一轮joint的真实服务器文件）：
+
+```bash
+PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/preflight_port_geometry_g_center_only_v1.py \
+  --check-only \
+  --baseline-report work_dirs/port_geometry_g_v1_train_preflight_report_fix_v1.json \
+  --joint-report work_dirs/port_geometry_g_center_v1_train/completion.json \
+  --out-dir work_dirs/port_geometry_g_center_only_v1_static
+```
+
+静态完成后执行固定有限TRAIN对照（单卡是小头检查，不是完整检测器训练）：
+
+```bash
+CUDA_VISIBLE_DEVICES=2 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/preflight_port_geometry_g_center_only_v1.py \
+  --gpu 0 \
+  --baseline-report work_dirs/port_geometry_g_v1_train_preflight_report_fix_v1.json \
+  --joint-report work_dirs/port_geometry_g_center_v1_train/completion.json \
+  --cache-dir work_dirs/port_geometry_g_v1_roi_cache \
+  --out-dir work_dirs/port_geometry_g_center_only_v1_train
+```
+
+预期完成`TRAIN_CENTER_ONLY_CHECK_COMPLETE_REVIEW_REQUIRED`，不表示精度通过。若out目录存在，换新的目录名且同步下方tar参数；不覆盖或删除旧结果。
+
+```bash
+tar -czf "work_dirs/port_geometry_g_center_only_v1_review_$(date +%Y%m%d_%H%M%S).tar.gz" \
+  -C work_dirs port_geometry_g_center_only_v1_static port_geometry_g_center_only_v1_train
+```
+
+只回传这两个结果目录，不含ROI缓存、模型权重或源码包。审查新/旧中心纠偏方向、real fit和probe中心/RIoU联合变化后再决定后续；失败按58.2收束同缓存路线。保留B ep24；当前TEST已多次暴露，本轮不用于调参、方法或权重选择。等比例/原图/深度接口约束保持，仍未验证视频连续性或深度精度。
