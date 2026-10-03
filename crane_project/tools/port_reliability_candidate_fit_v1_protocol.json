@@ -1,0 +1,197 @@
+{
+  "protocol": "port_reliability_candidate_fit_v1",
+  "evidence_sha256": {
+    "probe.json": "7b99eea6fe67f84857703697f6604bfdbde587868874330589bef34f23f67f91",
+    "cases.jsonl": "8d4f93d4de2d047e352b07535f65dbb045b9a65891b116b30a3070b8f67551a7"
+  },
+  "checkpoint_sha256": "edbf3ed3f310899c8939a92b10e1a7226d78e20bcfada986eecc88ecbe0f75a0",
+  "cases": [
+    {
+      "image": "real_seq01_00094",
+      "domain": "real",
+      "sequence": "real_seq01",
+      "dataset_index": 93,
+      "slot": 824,
+      "view_seed": 802525,
+      "optimizer_step": 18731,
+      "logged_view_image_sha256": "e3b80943634c91666f5e6c89fa8fa6fa9397d772b925745b4a90b607d64cc19e",
+      "selection_roles": [
+        "max_size_error"
+      ],
+      "logged_errors_original": [
+        [
+          5.942249298095703,
+          0.24264681339263916,
+          5.317930221557617
+        ]
+      ]
+    },
+    {
+      "image": "real_seq05_00416",
+      "domain": "real",
+      "sequence": "real_seq05",
+      "dataset_index": 754,
+      "slot": 1007,
+      "view_seed": 802708,
+      "optimizer_step": 18914,
+      "logged_view_image_sha256": "5dda2884e2714ff67d468d30442a5bc1c08296fca9f0c5526147effec88586e1",
+      "selection_roles": [
+        "max_angle_error"
+      ],
+      "logged_errors_original": [
+        [
+          1.2500982284545898,
+          0.10567224025726318,
+          61.8592529296875
+        ]
+      ]
+    },
+    {
+      "image": "real_seq01_00000",
+      "domain": "real",
+      "sequence": "real_seq01",
+      "dataset_index": 0,
+      "slot": 1149,
+      "view_seed": 802850,
+      "optimizer_step": 19056,
+      "logged_view_image_sha256": "260e7ce587c0637f585ac6851c46a0f310ebc9462e8b04f7a59a04b5ff69592a",
+      "selection_roles": [
+        "first_dataset_index"
+      ],
+      "logged_errors_original": [
+        [
+          1.0683599710464478,
+          0.04617297649383545,
+          3.0358550548553467
+        ]
+      ]
+    },
+    {
+      "image": "real_seq13_00086",
+      "domain": "real",
+      "sequence": "real_seq13",
+      "dataset_index": 1592,
+      "slot": 1645,
+      "view_seed": 803346,
+      "optimizer_step": 19552,
+      "logged_view_image_sha256": "a239f247908f28341b6c66b8877292b4917ea76e272569625ec78684795ba982",
+      "selection_roles": [
+        "max_center_error"
+      ],
+      "logged_errors_original": [
+        [
+          15.375873565673828,
+          0.054574012756347656,
+          1.1383056640625
+        ]
+      ]
+    },
+    {
+      "image": "sim_seq08_00195",
+      "domain": "sim",
+      "sequence": "sim_seq08",
+      "dataset_index": 2005,
+      "slot": 548,
+      "view_seed": 802249,
+      "optimizer_step": 18455,
+      "logged_view_image_sha256": "95f43ec5f4090cc5cfca8d7c5dc3f7562824cf74ee144667bb1b5eb1d849049e",
+      "selection_roles": [
+        "max_size_error"
+      ],
+      "logged_errors_original": [
+        [
+          0.5421872735023499,
+          0.12471544742584229,
+          0.7649128437042236
+        ]
+      ]
+    },
+    {
+      "image": "sim_seq08_00663",
+      "domain": "sim",
+      "sequence": "sim_seq08",
+      "dataset_index": 2473,
+      "slot": 787,
+      "view_seed": 802488,
+      "optimizer_step": 18694,
+      "logged_view_image_sha256": "aeed6f152962bda4a99aea3b4bcdb834b1bfce9e8e04a0df0753710df9f822d3",
+      "selection_roles": [
+        "max_center_error"
+      ],
+      "logged_errors_original": [
+        [
+          13.902229309082031,
+          0.05337345600128174,
+          0.15081056952476501
+        ]
+      ]
+    },
+    {
+      "image": "sim_seq08_00000",
+      "domain": "sim",
+      "sequence": "sim_seq08",
+      "dataset_index": 1810,
+      "slot": 1726,
+      "view_seed": 803427,
+      "optimizer_step": 19633,
+      "logged_view_image_sha256": "a7c74b375d9cce9e9378ea5379d6224cfa10802de0abd92e401ac4bd86292202",
+      "selection_roles": [
+        "first_dataset_index"
+      ],
+      "logged_errors_original": [
+        [
+          1.1579817533493042,
+          0.015108942985534668,
+          0.3376708924770355
+        ]
+      ]
+    },
+    {
+      "image": "sim_seq08_00255",
+      "domain": "sim",
+      "sequence": "sim_seq08",
+      "dataset_index": 2065,
+      "slot": 2025,
+      "view_seed": 803726,
+      "optimizer_step": 19932,
+      "logged_view_image_sha256": "94e3f6c691cbfaff6654491b7836c1be00ab7db0af90b922a66456e4097b0e7c",
+      "selection_roles": [
+        "max_angle_error"
+      ],
+      "logged_errors_original": [
+        [
+          2.9195563793182373,
+          0.053209781646728516,
+          10.508340835571289
+        ]
+      ]
+    }
+  ],
+  "steps": 2000,
+  "lr": 0.001,
+  "optimizer": "Adam",
+  "weight_decay": 0,
+  "gradient_clip": 10,
+  "milestones": [
+    100,
+    500,
+    1000,
+    2000
+  ],
+  "batch": "all eight views; equal view mean; unchanged genuine/probe .5/.5 SmoothL1 and masks",
+  "fit": "CPU single thread; three independent copies of completed epoch08 quality MLP; all other parameters frozen",
+  "candidates": "one genuine B plus original thirteen probes per view; no new samples or perturbations",
+  "selection": "fixed final step only; no best iteration, no coefficient or budget sweep",
+  "parity": "original TRAIN image SHA/metadata exact; existing B numeric tolerance; CPU/GPU quality absolute tolerance 1e-6",
+  "metrics": "per-view genuine/probe component MAE; per-domain GT-to-perturbation gap, sign >1e-6, target-gap residual and fraction",
+  "optimizer_interpretation": "Diagnostic Adam differs from original formal SGD; not an equal-budget formal comparison or causal proof",
+  "val_or_test_read": false,
+  "test_repeatedly_exposed": true,
+  "deployable_weights_saved": false,
+  "failure_interpretation": "Failure of this finite budget does not prove information absent; success is only selected in-sample learnability",
+  "papers": [
+    "https://arxiv.org/html/2511.08186v1",
+    "https://arxiv.org/abs/2007.11056"
+  ],
+  "paper_role": "Motivate candidate-conditioned evidence; neither PQA nor BorderDet implemented in this diagnostic"
+}

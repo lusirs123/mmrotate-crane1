@@ -1,0 +1,10 @@
+{
+  "protocol": "port_reliability_candidate_fit_v1",
+  "protocol_sha256": "e7382a8e0f549beea1871e81b950ca5b67c9c0590790bbcf1dde43d74cda948b",
+  "parent_manifest_sha256": "bbd3db9f5c6875e65489637ce2425dc9aeaa1df4ec03b01c8d774d8fcd86fcde",
+  "sources": {
+    "crane_project/tools/fit_port_reliability_candidates_v1.py": "54998fb392b038a7b093de706bace3e9afff614fdeb3d920df60ce7d9e103aed",
+    "crane_project/utils/port_reliability_candidate_fit_v1.py": "a24dad2f2b9e9f111e073be018928308d9648d15d97626078428ec8816dbd195",
+    "tests/test_port_reliability_candidate_fit_v1.py": "20f90e4517a682fdb34fc3011508f4aaa923cdea0a161cc921aa590977d1fdcf"
+  }
+}
