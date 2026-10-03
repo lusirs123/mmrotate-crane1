@@ -1,0 +1,31 @@
+{
+  "status": "EXISTING_VAL_TABLES_AND_FIGURES_EXPORTED",
+  "real_data": true,
+  "inputs": {
+    "work_dirs/port_reliability_branches_v1_server_review_20261003/val_compare.json": "b0076ad9ebf3226317d2328c1ba71d71bd4a4b7e5ad5f90b17fe23315232a4e0",
+    "work_dirs/port_reliability_branches_v1_server_review_20261003/val_qualities.jsonl": "d0c84a58cbb3aa589874026fdc8d0b87bbf43ef1b747bb5f504cf1c42c7359b1",
+    "work_dirs/port_reliability_branches_v1_server_review_20261003/completion.json": "d75aa81edd5c2187d56cbe793eb701141074ad1b41fa1addd057538137c8fb3f"
+  },
+  "script_sha256": "4aca8abf1d5ed2da1444e7ae61f7b0584b1e31596b9c94f8a68decf4beed20a9",
+  "outputs": {
+    "baseline_coverage.csv": "b8d4142b77ce7c0d860452a6c44a7c779d4b1610669046c7a9adf98f1dd2d5d7",
+    "component_coverage_all_methods.csv": "6b06d91e6bb84eb9e8db6df43ce5f106f92e69d11969b65bd1644ecebf7dbc87",
+    "fig1_component_risk_coverage.png": "c8657120f5631b6e833ac9b3e1fc40e99ce28d171673ea6d9de5257cf4bde98f",
+    "fig1_component_risk_coverage.svg": "8046a08d0817799fbddf63f13db497350e40fe4f2727f7bfca0a95ed10ace672",
+    "fig2_correct_component_coverage.png": "8f5cd1601d3da54924b0fd30424c13c905e4b418302e99c97ea2722e0389c3da",
+    "fig2_correct_component_coverage.svg": "8151ecadc025ddb6c8ff6e58f4ead6c99afc69b159a7c81753c46aebfeda8c64",
+    "val_tables.md": "684e1c63ad2176c74b9a15ff149e6a5a06853c98b7a96e4eac41521aac867ff1"
+  },
+  "csv_records": {
+    "baseline": 6,
+    "all_method_component_points": 432
+  },
+  "detector_epoch": 24,
+  "branch_epoch": 8,
+  "branch_checkpoint_sha256": "edbf3ed3f310899c8939a92b10e1a7226d78e20bcfada986eecc88ecbe0f75a0",
+  "new_fitting": false,
+  "new_inference": false,
+  "test_read": false,
+  "test_repeatedly_exposed": true,
+  "deployment_threshold_selected": false
+}

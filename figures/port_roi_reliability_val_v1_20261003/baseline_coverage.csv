@@ -1,0 +1,7 @@
+stratum,frames,outputs,center_correct_outputs,missing_outputs,output_coverage,center_hit_rate_on_outputs,all_frame_center_correct_coverage
+all,887,886,872,1,0.9988726042841037,0.9841986455981941,0.9830890642615558
+domain:real,375,374,360,1,0.9973333333333333,0.9625668449197861,0.96
+domain:sim,512,512,512,0,1.0,1.0,1.0
+sequence:real_seq07,226,225,211,1,0.995575221238938,0.9377777777777778,0.9336283185840708
+sequence:real_seq14,149,149,149,0,1.0,1.0,1.0
+sequence:sim_seq10,512,512,512,0,1.0,1.0,1.0

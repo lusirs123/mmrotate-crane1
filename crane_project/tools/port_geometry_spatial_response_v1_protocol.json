@@ -1,0 +1,88 @@
+{
+  "protocol": "port_geometry_spatial_response_v1",
+  "settings": {
+    "image_limit": 12,
+    "scales": [
+      1.0,
+      0.5
+    ],
+    "view_limit": 24,
+    "stride": 8,
+    "channels": 256,
+    "roi_size": 9,
+    "shift_model_px": 1.0,
+    "patch_margin_cells": 1,
+    "max_patch_side_cells": 64,
+    "agreement_atol": 1e-05,
+    "agreement_rtol": 0.0001,
+    "ratio_epsilon": 1e-12
+  },
+  "fixed_images": [
+    "real_seq13_00179",
+    "real_seq13_00066",
+    "real_seq01_00283",
+    "sim_seq08_00202",
+    "sim_seq08_00744",
+    "sim_seq08_00190",
+    "real_seq13_00168",
+    "real_seq05_00100",
+    "real_seq05_00420",
+    "sim_seq08_00709",
+    "sim_seq08_00168",
+    "sim_seq08_00432"
+  ],
+  "evidence_role": "repeated_TRAIN_spatial_representation_diagnosis_not_training",
+  "prior_manifest_sha256": "4051f9c8cb804a424d0f6fdf8bfa54bd0634c86595ab8635b069054a17e9ebd5",
+  "evidence_sha256": {
+    "completion": "9224032e9f6ef16665d590e2f30e8e85e443159b76175720ba9490e02f4388cd",
+    "analysis": "419ef9128ea9c8c4db05140e1e79adeb83e116f7bb2ca76d7a184e3a7ff78b77",
+    "selection": "1c6825cb087d230c4b2051844122ee5416c0c9d5d7f5e3f3551285c8d3d27dd8"
+  },
+  "cache_manifest_sha256": "7dae321ea2c0fb3f60eb4eb20cee9ebfb8f404d5c0780308485a24ed16f5108d",
+  "shifts": {
+    "x_minus": [
+      -1.0,
+      0.0
+    ],
+    "x_plus": [
+      1.0,
+      0.0
+    ],
+    "y_minus": [
+      0.0,
+      -1.0
+    ],
+    "y_plus": [
+      0.0,
+      1.0
+    ]
+  },
+  "scope": {
+    "images": 12,
+    "views": 24,
+    "feature_extractions": 24,
+    "head_inference_calls": 48,
+    "detector_updates": 0,
+    "head_updates": 0,
+    "formal_training": false,
+    "checkpoint_export": false,
+    "val_access": false,
+    "test_access": false
+  },
+  "cache": "Read reviewed CPU cache once; all128 records validated, measure only24 fixed views. Static checks manifest only, no torch.load, checkpoint or CUDA.",
+  "replay": "Same B ep24 eval/no_grad, TRAIN deterministic1024/isotropic.5. One view at a time, one FPN extraction and two native head calls for raw/original agreement. Re-extracted ordinary AND aligned ROI/support must agree elementwise with cache at atol1e-5/rtol1e-4. Failure stops, no cache replacement.",
+  "runtime": "Full extraction requires reviewed python/torch/cuda/cudnn/numpy/opencv strings and cached mmcv/mmdet/mmrotate/gpu model. No runtime override. Static is CPU compatible.",
+  "intervention": "Ordinary ROI center ONLY +/-1 model input pixel in x/y, unchanged B context/shape/angle. No shifted image, new predictions, GT-driven channels, ranking, fitting, loss or seed sweep. Central difference is feature RMS per input/original pixel, not signed correction evidence.",
+  "measurements": "All256 channels: RMS, spatial demeaning and channel quantiles, neighbor differences; native P3 patch and valid mask separately. Report absolute and relative changes, null ratio at zero denominator. Native patch <=64x64 cells; persist scalar2D maps only, no full FPN or channel tensor.",
+  "coordinates": "Existing raw w/h-angle association and original restoration; GT annotation sizes use sqrt(sx*sy). Offline GT/B/center-only/joint positions mapped to ordinary/aligned9x9 indices and stride8 native grid. Model and original displacement units explicit. GT never enters B forward or shift sampling.",
+  "display": "Native decoded input crop, uniform display affine; discrete cell heatmaps, printed ranges, four shifts share per-view range. No energy maximizer labeled as correct center; no interpolation interpreted as additional resolution.",
+  "review": "All24 views and eight role/domain/scale groups; human review required, no response threshold approves formal training. Engineering identity/finite guards only.",
+  "limitations": [
+    "Fixed12 extremes/ordinary identities selected by previous saved outcomes; not prevalence estimates.",
+    "TRAIN probe repeatedly exposed and B trained on all; two scales are related views, not independent VAL.",
+    "P3 energy/derivatives do not establish semantic boundaries or a recoverable correction direction.",
+    "GT boxes and raw pixels cannot certify subpixel true center; no relabeling.",
+    "B remains retained; sparse output/conditional/all-frame fractions do not guarantee video continuity or depth accuracy.",
+    "TEST repeatedly exposed; no new VAL/TEST, thresholds, weights or method selection here."
+  ]
+}
