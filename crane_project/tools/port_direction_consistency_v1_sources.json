@@ -1,0 +1,10 @@
+{
+  "protocol": "port_direction_consistency_v1",
+  "protocol_sha256": "a5c1ceee951744efe63083b18c0f5b19e3cff229affc472b96430f26f8f4852b",
+  "parent_candidate_manifest_sha256": "c5c5c0f6ca0a8a4df2a6770dbb97090be89b63534a37fb7ce442606cc45936e3",
+  "sources": {
+    "crane_project/utils/port_direction_consistency_v1.py": "8cb8e390e2161ce35a09d39858ac81de7c44a725b4cceafe434f1a285c6cdfa6",
+    "crane_project/tools/diagnose_port_direction_consistency_v1.py": "209b30401227510ffd14d74517d060e03736707982f14328826ee324a0f6e338",
+    "tests/test_port_direction_consistency_v1.py": "f6ebffcc75679cab4b870e6bac44a75a1eee419d8e27b62f7652aca634f1a1be"
+  }
+}

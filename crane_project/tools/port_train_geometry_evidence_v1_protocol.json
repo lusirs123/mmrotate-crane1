@@ -1,0 +1,70 @@
+{
+  "protocol": "port_train_geometry_evidence_v1",
+  "evidence_role": "bounded_repeated_TRAIN_geometry_and_pixel_diagnosis",
+  "settings": {
+    "center_bins_px": [
+      1.0,
+      2.0,
+      5.0,
+      15.0
+    ],
+    "short_cell_bins": [
+      2.0,
+      4.0
+    ],
+    "aspect_bins": [
+      1.2,
+      2.0
+    ],
+    "center_tolerance_px": 1e-06,
+    "riou_tolerance": 1e-05,
+    "raw_crop_context": 2.5,
+    "max_display_zoom": 6.0,
+    "tile_size": 420,
+    "crop_height": 360,
+    "image_limit": 12,
+    "native_stride": 8
+  },
+  "arms": [
+    "b",
+    "ordinary",
+    "aligned",
+    "joint",
+    "joint_center_b_shape",
+    "center_only"
+  ],
+  "baseline_report_sha256": "ce38c0f399027de2a72bad8ff94fa5691cb1aa0d1e66048c8ef32d025487bc71",
+  "joint_report_sha256": "7adb734eae56d703584f2a1a0d025465c07bf80b6ddb18612df0cdb07bf10452",
+  "center_only_report_sha256": "5f7c70f1f3e65147d9d568fbbe9da23591bf7bd2d83ef68a6b59ad5bdda6b081",
+  "prior_manifest_sha256": "8049731476d380866e8969448c0fb54d18787340e542ff793bab34e5b72f9017",
+  "scope": {
+    "train_images": 64,
+    "related_views": 128,
+    "image_render_limit": 12,
+    "detector_forward_calls": 0,
+    "detector_updates": 0,
+    "head_updates": 0,
+    "feature_cache_loads": 0,
+    "feature_measurements": 0,
+    "gpu_devices_used": [],
+    "val_access": false,
+    "test_access": false,
+    "checkpoint_export": false,
+    "label_changes": false
+  },
+  "grouping": "Every group keeps fit/probe, real/sim and scale1/.5 separate. Further stratify by sequence, frozen B center px, GT input short-edge stride8 units, GT aspect. No pooling related views for independent-sample claims.",
+  "selection": "Within each fit/probe x real/sim stratum, in order: center-worse AND RIoU-worse sorted by greatest RIoU loss, greater center loss, image, scale; then center-better AND RIoU-better sorted by greatest RIoU gain, greater center gain, image, scale; then scale1 view closest to frozen B scale1 center-error median, image tie break. Exclude already selected image including its other scale. Empty slot stays unavailable, no fallback. Display both scales. Tolerances apply only to sign classification.",
+  "metrics": "Recompute strict rotated IoU and original-coordinate geometry from saved raw boxes, retaining raw w/h/angle/score association. Center<15px only output frames; also output coverage and all-frame correct, all fractions explicit. Pure periodic angle and 10px protocol angle penalty distinct. Center-only proxy loss uses detached original B short edge and original (px+py)/3.",
+  "supervision": "Native CraneDataset poly2obb_np le90; compare raw DOTA quadrilateral, fitted rectangle, reference GT, corner residual, image-edge margin. Record native parse differences; reference is NEVER replaced. Selected image and annotation bytes must match fixture SHA. No automatic semantic-label/visibility verdict.",
+  "pixel_views": "Native LoadImageFromFile decoded BGR pixels, channel permutation to RGB; native RResize1024 keep_ratio and fixed PortIsotropicShrink.5, no flip. Preserve dimension rounding, GT sizes*sqrt(sx*sy), detector raw w/h*sx/sy. Display-only crop/enlargement uses same uniform affine for pixels and overlays. Separate raw and overlay tiles; no sharpening. Stride8 dots are coordinate convention only, NOT measured FPN activations or precision limit.",
+  "static": "Verify source, TRAIN fixture, selected image/annotation bytes and reviewed report identities; recompute128 saved views and fixed selection. No image pixel rendering, heads, ROI cache, GPU or updates.",
+  "review": "Full run completes with HUMAN_REVIEW_REQUIRED, never approves training or assigns annotation faults. Fill worksheet after checking object scope, boundary visibility, occlusion and visible support for desired versus actual correction. Only if these first two checks remain inconclusive consider a separate frozen ROI/P3 spatial evidence check.",
+  "limitations": [
+    "TRAIN probe16 identities/32 correlated views is repeatedly development-used; B trained on all64. Not independent VAL.",
+    "B epoch24 remains retained; no new checkpoint/architecture/loss/threshold choice.",
+    "Diagnostic extremes are not representative prevalence; all128 views are reported.",
+    "No direct FPN or ROI-response measurement; valid-mask support is not feature quality.",
+    "Images can expose inconsistencies but cannot prove true subpixel target geometry or unique failure cause.",
+    "TEST repeatedly exposed; no TEST access/tuning/selection. Sparse TRAIN coverage does not establish video continuity or depth precision."
+  ]
+}
