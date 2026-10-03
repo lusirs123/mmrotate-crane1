@@ -3732,6 +3732,59 @@ TEST已多次暴露，后续只能作冻结方案的补充表现报告；视频�
 
 **阶段执行建议：** 当前先用既有TEST完成冻结方案流程，不为此阻塞稿件整理。新的未接触视频如能取得，建议封存到后续创新方案冻结后作独立补充；如果现在评价后据它开发创新，它也会成为暴露数据。新集不是已确认存在的资产，本轮未抽帧、标注、采集或实现TEST入口。后续按R1.18另补固定模型评价入口，不把仅VAL脚本改路径直接用于TEST。
 
+### R1.20 固定B ep24＋原质量ep08的TEST入口完成（2026-10-03）
+
+**当前性能身份（事实）：** 原正式ordinary ROI质量臂已训练、保存/重载并完成固定缓存VAL，详见R1.9/R1.19；尚无这组质量模型的TEST评分。已有E-H/F-S等检测器TEST报告不能替代ROI质量TEST。VAL显示real中心、sim尺寸/方向部分档位有收益，real尺寸/方向没有总体优于score；本轮没有新增性能数值或权重。
+
+**新增本地代码（事实）：** `crane_project/tools/eval_port_reliability_branches_v1_test.py`、`port_reliability_branches_v1_test_protocol.json`、`port_reliability_branches_v1_test_sources.json`，以及`tests/test_port_reliability_test_v1.py`。独立新增TEST入口，未修改原TRAIN/VAL脚本、质量网络、检测配置或已有缓存。新的61项来源清单SHA为`19a1d6d11a34f2cd7f0172541529a6e6faf922a7a55b74b4e459d1a5df64148b`，保留原cached-VAL来源清单SHA`c77b4cf89fe4cdc50b39869166ae3939452706ae0ac51346ce3ec906291a6b10`和正式TRAIN来源合同。
+
+固定B ep24的checkpoint SHA为`8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23`；原完成质量ep08 SHA为`edbf3ed3f310899c8939a92b10e1a7226d78e20bcfada986eecc88ecbe0f75a0`。除SHA外仍检查原正式完成状态、20464步/臂、原训练协议/来源/数据快照/方向资格/架构、completion和train_steps文件身份；不接受诊断短fit、smoke或新训权重。运行只加载原三臂，不创建优化器，detector/quality更新均0。
+
+**固定数据及评分合同（事实）：** 原1440帧TEST（real_seq03 200、real_seq04 668、sim_seq09 572），逐文件核对主manifest、真实图像/标注SHA及实际CraneDataset加载顺序。标注集SHA`e0dbb1bd8aea7209314d8ed60bc44e965550ed606135cc0016e1075d717de13e`，图像集合身份SHA`6448e47b9a715f47f04eacaaabb54a32b522c72208bf6e82793284de2aad665d`。TEST单尺度预处理须精确等于原VAL管线，保持等比例/整数舍入限制、raw w/h与尺度的关联及原图还原；原深度接口未修改，也未验证深度精度。
+
+四方法score/geometry/ROI/structure均保存，主要臂事先指定ROI，不按TEST改选方法。六档100/99/98/95/90/80%原覆盖网格及中心<15px、尺寸最大相对误差≤.1、π周期方向≤3°、评价GT长短比≥1.2的既有口径不变。分组为all/real/sim/序列，三个分量独立按同接受数评价。显式报原输出数/总帧数、中心正确输出数/输出帧数、中心正确输出数/全帧数；另报分量资格/接受/正确接受全资格帧覆盖、错误接受、正确误拒、连续未接受段及误差尾部。原中心、OBB和score一直保留，离线排序不生成部署门限，部分分量接受不等于完整OBB可靠。
+
+**预测来源规则（事实）：**
+
+- 默认`--prediction-source cache`复用B原生TEST `val_sweep_port_v1/final_test/epoch_24/preds/results.pkl`及真实score。先验证原B源VAL选择报告、生成权重/配置/标注/PKL SHA，再反序列化；须有同目录上层的B `final_test_metrics_v2.json`或PKL `.provenance.json`，两份均在时须都匹配。无生成来源的DOTA文本或score=1替代不能使用。
+- 缓存/证明缺失时可在看本次性能前显式选`--prediction-source online`，用同B ep24和质量ep08在新目录评分当前运行的B输出。来源在报告中单列，不覆盖或混合历史缓存，也不能分别跑后按结果挑更好来源。权重/来源核对失败不能通过改SHA清单或放宽容差放行。
+- 缓存模式对全部1440帧同时记录当前B与缓存六字段差、形状/数值不符ID；沿用原`atol=1e-4, rtol=1e-6`，不跳过帧、不用当前预测替换缓存。分支前后同P3上的B raw输出须精确相同，全部B和质量参数/缓冲区摘要须不变、无梯度且eval。GT/domain/sequence不进入质量头，只在评分后的离线错误/分层记录使用。没有输出的帧完整保留，质量为空。
+- 一次图像/P3只供本帧使用、batch1、no_grad，逐帧JSONL保存且不累计GPU张量。报告的时间/峰值显存包含所有质量臂及完整一致性核对，不冒充ROI独立延迟或部署速度。
+
+**本地代码复核及验证（事实）：** 使用现有本机Python3.8/torch环境，新增18项CPU测试通过；覆盖原完成权重身份、反序列化前生成来源拒绝、报告/sidecar同时核对、缺帧/多类/伪score/多输出拒绝、真实图像字节与划分核验、GT改变不影响质量、分支破坏B输出即拒绝、尺度还原/raw宽高关联/非等比例拒绝、缓存和online完整流程、缺输出/数值差异保留、四方法六档同数对照、零优化器/权重不变和排他原子JSON保存。测试用合成CPU样例，不是TEST效果证据。实际1440图/标注身份和CraneDataset顺序静态检查通过；最新本地报告`work_dirs/port_reliability_branches_v1_test_check_local_20261003_v2/input_check.json`状态为`STATIC_TEST_CHECK_COMPLETE_NATIVE_ASSETS_REQUIRED`，无推理或指标。本机缺真实B/分支权重和原生缓存，尚未完成真实CUDA TEST。保留同时进行的几何记录和其他修改。
+
+**服务器执行（待验证）：** 上传上述四个新增文件到对应项目路径，不压缩提交包；原训练目录的ep08/completion/train_steps和B ep24保留。在`/media/omnisky/personal_files/ljj/symEOOD`、`mmrotljj`下执行：
+
+```bash
+PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/eval_port_reliability_branches_v1_test.py \
+  --mode check --prediction-source cache \
+  --branch-checkpoint work_dirs/port_reliability_branches_v1_train/epoch_08.pth \
+  --out-dir work_dirs/port_reliability_branches_v1_test_check
+```
+
+`FIXED_TEST_CHECK_READY_NO_INFERENCE`表示输入就绪；若`STATIC_TEST_CHECK_COMPLETE_NATIVE_ASSETS_REQUIRED`，先看缺的是权重还是缓存/证明。权重必须齐全；只有缓存/证明缺失时，可改用下述显式online来源。默认缓存完整时运行：
+
+```bash
+CUDA_VISIBLE_DEVICES=3 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/eval_port_reliability_branches_v1_test.py \
+  --mode run --prediction-source cache --gpu 0 \
+  --branch-checkpoint work_dirs/port_reliability_branches_v1_train/epoch_08.pth \
+  --out-dir work_dirs/port_reliability_branches_v1_test_cached_v1
+```
+
+显式online替代指令（不追加训练、不覆盖缓存）：
+
+```bash
+CUDA_VISIBLE_DEVICES=3 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/eval_port_reliability_branches_v1_test.py \
+  --mode run --prediction-source online --gpu 0 \
+  --branch-checkpoint work_dirs/port_reliability_branches_v1_train/epoch_08.pth \
+  --out-dir work_dirs/port_reliability_branches_v1_test_online_v1
+```
+
+已有输出目录须换新名，禁止覆盖证据。成功应同时有`test_compare.json`、全部1440行`test_qualities.jsonl`、`completion.json`和`input_check.json`；完成状态只表示固定评分流程跑完，仍需审阅覆盖/质量收益及代价，不放行TEST调参。本TEST已多次暴露，仅报告冻结探索性方案在既有划分上的表现；不据结果选权/门限/新结构，也不称未接触确认、校准概率或显著稳定收益。本轮无服务器连接、GPU训练/真实模型前向、数据重划分或打包。
+
 ## 50. G v1服务器短拟合完成但报告保存失败：修复与旧缓存恢复（2026-10-02）
 
 ### 50.1 终端事实、问题定位与结论边界
@@ -4773,3 +4826,70 @@ tar -czf "work_dirs/port_geometry_spatial_response_v1_review_$(date +%Y%m%d_%H%M
 先确认工程身份/重放全部通过，再同时看原生P3、ordinary ROI的全通道空间变化、原图边界/周围结构及四方向响应，比较同图两尺度和正/负/普通样本，不单看热图亮度。P3变化明显而ROI变化受损时，才进一步提出有限采样/编码检查；两者都弱时，优先寻找更直接的边界定位证据；两者有响应也不能证明能正确读取修正方向，需判断它与可见目标边界是否对应。这些均为待验证分支，不能由一个RMS阈值或能量最大点判定根因/正确中心。
 
 不放行同缓存FC头的权重、容量、步数搜索或正式训练；后续改进须在本次证据之后另定固定对照。维持等比例、原图还原和深度接口约束，未证明深度精度或时序改善。可靠性属于另一对话，保留其同时已有修改。TEST已多次暴露，本项无VAL/TEST访问，不据TEST重新选权/调参/选方法。
+
+## 64. 冻结B真实空间响应回传：重放精确、表示有空间变化，正确定位读取仍待验证（2026-10-03）
+
+### 64.1 来源、执行及工程复核（事实）
+
+用户终端和 `/Users/mac/Downloads/port_geometry_spatial_response_v1_review_20261003_153922.tar.gz` 一致。包2,688,368字节，SHA `5f058474b97d79550434e8f98bd3ab412d3464c5a4e5e219c8b3d002b13a80f1`，64个普通文件＋4个目录，无重复/越界路径或链接。静态/完整artifacts分别绑定5/57个文件，全部SHA与实际成员一致（artifacts自身不列入清单）。静态completion SHA `a7eb985d31df63918ce8c20602141cc097a97f8cdc9397a14ce7adc64dc9e27e`，完整completion SHA `8f0796cab36f62e66fd023f2a07957f6bb4129309721c9ec2ab08ef1cb24c339`。完整cached_roi/groups/progress SHA分别 `26af8a24f0bac720f606150efe547e3e67fb1d586d705acee9f731353598c8b3`、`b06329e473c92190b51e351da5bfb3a9db781a51b48dfa7a35bddc8c24a692b9`、`454ee9944782c83e28d133c1e4da0f90ee722ee7c6bfe899ae67b55d41746d0b`。
+
+两份identity精确相等，68来源SHA、固定protocol/selection/cache manifest与63节一致；原B、旧baseline/joint/center-only及像素核对来源链保留。两尺度依原固定12图顺序，24行JSON/PNG和progress的24个view事件精确配对，cached_roi的24行与逐视图对应字段精确一致，24张PNG均1600×1160。12个本机TRAIN图及标注SHA再核对通过，原几何72份复制（24视图×B/center-only/joint）与之前analysis逐字段精确一致。人工表24行/72个审查字段仍NOT_REVIEWED；本节人工图像观察不自动把模板改为完成。
+
+静态状态`STATIC_SPATIAL_CONTRACT_COMPLETE_NO_CACHE_LOAD_NO_GPU_NO_UPDATES`，约5.60s，GPU/缓存加载/提取/更新均0。完整状态`TRAIN_SPATIAL_RESPONSE_COMPLETE_HUMAN_REVIEW_REQUIRED`，约17.47s，一次原CPU缓存加载、24次特征提取、48次原生检测头调用、完成24视图、单逻辑GPU0（物理3）、检测器及头更新0，无VAL/TEST、正式训练、标签改动或checkpoint导出。GPU为GTX1080，torch1.13.1+cu117/CUDA11.7/cuDNN8801，环境和缓存抽取合同一致。参数/缓冲区前后摘要精确一致，并匹配原缓存B；checkpoint meta为seed0/epoch24/iter15360及配置MATCH。
+
+**重放结果：** 24视图模型坐标及原图坐标B预测最大差均0；ordinary/aligned两种ROI及各自support对原缓存逐元素最大差均0。相对更早固定TRAIN预测的最大中心/边长差`6.8664551e-5px`、周期角差`3.5762787e-7rad`、score差`1.1026859e-6`，均在原声明容差内，不能与“本次对原ROI缓存差0”混成同一个参照。没有发现特征重放、来源、尺度还原或预算工程问题。
+
+实测全视图最大GPU allocated含采样`343.383789MiB`、reserved`412MiB`；24次提取＋双头前向计时合计约1.963s，完整脚本时间含来源核对、加载、图像及报告。该小预算诊断没有显存异常增长，不是以后训练/新架构的显存保证。静态“No CUDA runtime”提示出现在刻意隐藏CUDA的模式；MMCV弃用和meshgrid未来参数提示均未导致本次失败。
+
+### 64.2 数值与坐标独立复算（事实和局限）
+
+从返回2D标量图独立复算全部ROI/P3总RMS、空间去均值RMS、相对量、96个方向差图RMS、48个中心差分图RMS及输入/原图单位换算，最大汇总差`5.5511151e-17`。用NumPy float64复算float32 support均值最大差`2.9434393e-9`，原声明数值约定下合理；support最小`.9999999404`、均值1，平移support最大变化`5.9604645e-8`，是浮点舍入量级。全部P3 patch的native有效mask为1，没有这些视图中的padding有效性代价。
+
+逐点中心差分幅度满足正/负位移差图所约束的三角不等式；中心差分每原图像素RMS严格为每输入像素RMS乘对应sx/sy。按独立NumPy几何公式核对B/GT/细化中心的ordinary/aligned分数网格坐标，最大差`2.3645885e-7`网格单位。raw B输入坐标转回原图相对旧保存B最大差`5.9898831e-5px`（float32映射/舍入），在原恢复容差内；annotation尺寸继续使用sqrt(sx*sy)，未重配w/h-angle。原生patch为6×9～14×33等矩形，最大462个原生单元，低于固定64×64上限；未存完整P3或通道tensor。
+
+8组成员/全部统计mean、median、p90、RMSE独立复算差0。每组3视图，三种粗覆盖为3/3；合计输出覆盖24/24、条件中心<15px正确24/24、全视图正确24/24。这里是精确重放B的稀疏视图事实，没有新增性能提升、视频覆盖保证或深度/连续性验证。
+
+**本地验证限制：** 返回的是特征标量图、通道统计和GPU重放结果，不是256通道tensor。可复核标量统计自洽、坐标、来源及分组，不能从RMS图重新恢复通道符号、通道邻差或重新执行真实grid_sample/优化；实际tensor重放由服务器执行并在报告内记录。未重复同版本已通过的12项测试，也没有启动额外GPU抽取/训练。本机直接读tar，图像与拼图仅在系统临时目录使用并清理，项目内没有解包副本或review_received.py；不连接服务器。
+
+### 64.3 实际空间证据（事实与解释边界）
+
+24视图ordinary空间去均值RMS范围`.055143～.177727`，相对总RMS范围`.506841～.865877`；全通道空间变化并未趋于常量。96个固定±1输入像素平移的ROI差RMS范围`.007001～.013756`，相对基线总RMS为`3.678%～14.623%`。这些是特征幅度，绝不是定位误差、正确概率或精度收益。
+
+下表每组6个固定诊断视图（fit/probe各3），不视为代表性总体：
+
+| 域/尺度 | ordinary空间RMS均值 | 空间RMS/总RMS范围 | ±1输入像素差RMS/总RMS范围 |
+|---|---:|---:|---:|
+| real 1.0 | .091766 | .5068～.6348 | 4.730%～7.423% |
+| real .5 | .066371 | .7128～.8659 | 8.515%～14.623% |
+| sim 1.0 | .116533 | .5398～.6766 | 3.678%～7.299% |
+| sim .5 | .077377 | .5676～.8171 | 5.565%～12.241% |
+
+**不能据半尺度相对响应更大认定半尺度更精确。** 分母/绝对能量与输入像素对应原图尺度均不同：real本次1输入像素约`.6875～1.875`原图像素，半尺度约`1.375～3.75`；sim分别1/2原图像素。按原图单位报告的x方向中心差分RMS均值，real `.008380→.004221`、sim `.010749→.004657`；y方向real `.007813→.004394`、sim `.009466→.004011`。归一化和单位必须同时读，仍不能把这些幅度自动等同可用定位信息量。
+
+查看全部24视图的分组拼图，并放大核对real_seq13_00168半尺度、real_seq05_00100半尺度、sim_seq08_00709原尺度和sim_seq08_00168半尺度等。框、GT/B/已有修正中心与原生网格位置没有明显错位。多个图的目标附近全通道能量低于周围，real可见周围框架/细杆，sim可见中央深色带状/框架投影；空间去均值图在部分目标区域也有局部结构。四方向差图显示响应沿横纵结构分布，并非简单“最高亮度就是目标/正确中心”。弱能量也不是缺少所有几何特征，通道聚合图不足以确定某根杆或某条可见边界的语义归属。
+
+正/负位移RMS图往往相似：这首先是范数不保留符号及平滑场对称小位移的数学结果，不是头已失去左右方向信息的证据。已有结果同图两尺度效果相反，不能据热图形状把纠偏失败都归于某条强背景线。固定24诊断视图原尺度中心改善3/12、退化9/12，半尺度6/12改善/6/12退化，只是复制旧center-only在本次选图上的结果，不替代原全部32 probe结论。
+
+**机制推断：** 本次不支持“ROI全常量、采样完全无响应、padding导致本批退化”这些强解释；也没有证明ROI完全保留了足够的目标特定定位信息。当前更有依据的问题是：已有有变化的空间表示及几何描述，怎样读出与目标范围相关的细定位方向/边界？语义干扰、有限头先验/监督形式、P3空间细节与跨尺度读取都仍可能参与，尚无唯一根因。
+
+### 64.4 复用保存框补核对监督位置支持（事实，非新抽取）
+
+为避免下一空间目标被采样区域截断，额外仅用已有保存raw B/GT和采样公式核对四角/四边中点的**几何位置**是否在分数ROI索引[0,8]内，不读取新特征、不按结果换样本。全24当前视图：ordinary完整包含GT四角13/24、角点80/96；四边中点则96/96、24/24完整。aligned两类点均96/96、24/24完整。
+
+进一步复用上一完整analysis的128视图：ordinary角点420/512、四角完整75/128；中点493/512、四点完整116/128，缺失中点的12视图来自sim_seq08的6图两尺度（含probe seq08_00370/00617）。aligned四角和中点均512/512、128/128完整。ordinary未旋转但使用B规范化长/短边作为x/y上下文跨度，故斜长框可能超出部分采样支持；这不等于输入图像或B预测框被裁掉。
+
+**边界：** 仅证明几何目标位置在所采矩形内，不保证9×9点恰好命中可见边界、感受野不包含周围结构或该位置具有判别力。原aligned+FC64也未满足联合精度要求（51节），不能把这个支持差异宣布为旧G失败根因，或只切aligned就认为能解决问题。它用于选择下一目标坐标的可行范围。
+
+### 64.5 下一项建议：显式空间位置监督的有限对照（拟议，尚未实现）
+
+保持B ep24，不放行正式训练，不继续同P3+展平FC路线的loss系数/容量/step搜索。建议另立一个**旋转ROI内四边中点定位**的小预算检查，检验空间监督/读取是否能把实际特征转成目标特定几何位置；不是已经确认新损失或根因。
+
+- 输入复用服务器原aligned CPU ROI，原64身份×两尺度和既有48 fit/16 probe图级划分，不重新抽全P3、不用这12个选例取代fit/probe总体。选aligned仅为固定旋转局部坐标与上述位置支持，不能将后续整体收益单独归因于aligned。
+- 四个目标点从原固定TRAIN OBB计算，为相对B局部坐标的四边中点，不新增人工关键点。保留9×9空间网格，以小共享卷积预测位置分布/连续位置，使监督直接落在空间位置，避免只输出展平描述的全局中心向量。连续读出避免硬argmax整数网格量化；上采样不声称提高原生P3分辨率。具体结构、loss、连续读出及固定预算在实施前另定协议，不在看结果后搜索。
+- 明确旋转周期、raw宽高交换、近方形轴的匹配规则；目标点对齐到冻结B参考轴，处理物理等价OBB点排列，GT只进入离线监督。初始化/零修正须精确还原原B，几何退化/越界处理必须预先固定，不能根据GT或新结果决定在线接受修正。
+- 设原B零修正参照、真实匹配ROI与固定同域/同角色/同尺度打乱ROI对照（recipient的B几何、GT、score不换，两尺度同图配对）。这是新空间目标的信息归因对照，不重跑旧FC候选排序。相同初始状态/优化预算，无step/seed/系数选择；如只学到框/场景先验，matched未必优于shuffled，不能拿fit loss下降放行。
+- 第一判读是四点误差/空间分布是否与目标对应、matched相对shuffled的probe增量；再以预先固定的几何读出离线检查中心、长短边、纯周期角及严格RIoU的联合变化，并报告中心三个分母。点误差改善不保证最终OBB提升，不把未验证的点读出部署到B。真实正式训练/后续VAL必须另定，不能凭这次短fit替换B。
+
+文献复核： [SABL（ECCV2020，官方论文）](https://www.ecva.net/papers/eccv_2020/papers_ECCV/papers/123490392.pdf)提供逐边空间定位、分桶＋细偏移的思想，研究对象为水平框，借鉴定位表示不照搬重评分/NMS分支；[Oriented RepPoints（CVPR2022，官方论文页）](https://openaccess.thecvf.com/content/CVPR2022/html/Li_Oriented_RepPoints_for_Aerial_Object_Detection_CVPR_2022_paper.html)提供旋转目标的点集表示和对背景离群点的空间约束思路。这里不引入其新的样本分配/质量排序。二者没有验证本项目冻结ROI、四中点或小预算方案，不能引用为项目收益证明，也未穷尽近期文献。
+
+保留覆盖/连续性、定位/尺寸/sim方向联合目标。下一项是测试有空间变化的特征能否被更明确的位置监督有效读取，不再追加完整审计；如果matched也无probe增量，停止该表示的同缓存扩展，另讨论更直接像素/浅层空间证据。本轮只分析及更新本文，未改运行代码或启动训练。可靠性由另一对话推进，保持其已有文件。TEST已多次暴露，本次无TEST调参/选权/选型，也未证明深度或时序精度。
