@@ -3466,6 +3466,31 @@ python crane_project/tools/diagnose_port_reliability_mechanism_v1.py \
 
 然后probe的`--review-report`改为`work_dirs/port_reliability_mechanism_v1_review/review.json`。GPU完成状态`FIXED_EPOCH8_TRAIN_MECHANISM_PROBE_COMPLETE_REVIEW_REQUIRED`，回传`probe.json`、`cases.jsonl`和`previews/`8张PNG；如失败回传具体错误和已有逐案例记录，不绕过来源/视图匹配。allocated/reserved峰值由本次GPU报告实测，不作绝不增加的承诺。源码与CPU输入检查已完成，真实GPU响应定位、输入敏感性、任务夹角和是否支持下一版设计仍待回传。
 
+### R1.11 GPU诊断入口缺少本地CPU报告的修复（2026-10-03）
+
+**事实：** 服务器命令引用 `work_dirs/port_reliability_mechanism_v1_review_local_20261003/review.json`，该相对路径在服务器不存在；异常发生在读取报告处，尚未加载GPU模型。这是运行前置报告缺失，不是训练或显存错误。
+
+**修复：** probe 的 `--review-report` 改为可选。省略或指定路径不存在时，从已经过来源核验的服务器日志与缓存生成 `<out-dir>_review/review.json`，然后继续原固定8视图检查。已有报告仍严格核对来源、协议、证据及选图；旧版本或损坏报告不静默替换。自动报告目录已有有效报告可复用，不完整目录拒绝覆盖。GPU目录仍须为新目录。科学协议、权重、选图和优化器更新0的约束不变。
+
+同步上传以下三文件（测试文件也在来源合同内）：
+- `crane_project/tools/diagnose_port_reliability_mechanism_v1.py`
+- `crane_project/tools/port_reliability_mechanism_v1_sources.json`
+- `tests/test_port_reliability_mechanism_v1.py`
+
+本修复manifest SHA：`bbd3db9f5c6875e65489637ce2425dc9aeaa1df4ec03b01c8d774d8fcd86fcde`。R1.10的manifest及CPU报告作为历史版本保留，不用于本版GPU入口。
+
+**验证事实：** 14项CPU回归通过，覆盖自动生成、缺失显式路径、有效报告复用、失效/损坏报告拒绝、残留目录保护及原GPU流程模拟。使用归档的完整服务器六文件与TRAIN快照重新运行CPU review成功，固定8视图；报告位于 `work_dirs/port_reliability_mechanism_v1_review_path_fix_20261003/review.json`。实际CUDA诊断仍待服务器运行，未连接服务器、未重训、未读取TEST。
+
+另用上述完整证据验证了真实CLI `probe`模式的缺失报告回退：在GPU函数边界停止，确认自动CPU报告已完成、来源与8个预定视图通过核验、GPU输出目录尚未创建。验证记录位于 `work_dirs/port_reliability_mechanism_v1_probe_path_fix_local_20261003_review/implementation_check.json`，明确标记CUDA未执行；该目录中的 `review.json` 是实际复算报告。61项来源哈希、Python3.8语法、diff及下方服务器命令的zsh语法检查通过。
+
+服务器项目根目录运行（不需要上传本地review.json）：
+```bash
+CUDA_VISIBLE_DEVICES=3 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/diagnose_port_reliability_mechanism_v1.py \
+  --mode probe --gpu 0 \
+  --out-dir work_dirs/port_reliability_mechanism_v1_probe_path_fix_v1
+```
+
 ## 50. G v1服务器短拟合完成但报告保存失败：修复与旧缓存恢复（2026-10-02）
 
 ### 50.1 终端事实、问题定位与结论边界
@@ -4114,3 +4139,32 @@ real两组及sim原尺度单独使用本次学到的中心也未提高平均RIoU
 仍完整报告原三个覆盖分母、原图中心mean/RMSE/p90、RIoU/尾部及真实修正方向；大小/角度精确B不是新的精度收益，稀疏中心不保证连续性/深度。若独立中心仍不能保持real定位并改善交叠，则停止本轮同缓存P3＋FC64残差头的增量试验，再单独设计更有代表性的源域几何支持或特征精度证据，不能继续用同probe搜索“成功参数”。若中心单任务更好，也只能支持该固定优化设置下的任务交互影响，不能单独证明共享冲突是整个项目根因，更不能自动组合成最终方案。上述代码未改、检查未启动，需后续授权。
 
 本轮仅更新本文：直接读取压缩包、临时依赖缓存退出清理，不留存解包副本、review脚本或新结果文件。没有修改原运行源码、重跑未变化的测试、连接服务器；保留另一对话新增的可靠性诊断文件。
+
+## 58. 下一项中心单任务对照及针对性文献（2026-10-03，设计未实施）
+
+用户本轮请求具体建议和论文搜索，未请求实施。沿用57.4的有限对照，不启动正式训练或改运行代码。
+
+### 58.1 要回答的问题与固定变量
+
+事实依据：joint的real原尺度fit中心也退化，不能只归为probe过拟合；real纠偏出现近一致左下偏移；无剪裁/饱和证据；保存的“joint中心＋B形状”在三个probe组RIoU仍低于B。待验证问题是：同一输入、初始化和预算下，去掉形状监督对共有表示的更新，是否能改善中心纠偏？这不是已经确认梯度冲突，也不是最终尺寸/角度方案。
+
+建议名称G-center-only v1。复用ordinary P3 ROI、描述符、stem/FC64及共同初始化，两个中心输出零初始化；可保留原三形状输出层但冻结且完全旁路，避免顺带改变随机初始化。输出w/h/angle及score/输出帧精确复制B。中心解码仍`c'=c_B+.30*S_B*z/sqrt(1+||z||²)`，`S_B`为detach原B短边。唯一优化loss为`(SmoothL1(e_x,beta=.1)+SmoothL1(e_y,beta=.1))/3`，`e=(c'-c_GT)/(.30*S_B)`；保留原每轴1/3，不改为两项均值，不把常数形状误差计为训练收益。
+
+固定seed1703、Adam lr.001/wd0、clip10、batch8(4real+4sim)、同200批次；48个fit图名/96视图用于更新，16个probe图名/32视图仅评价。新增200个小头更新；B前向/更新0，既有joint参考更新0，不导出用于部署的小头权重。比较三臂：原B、保存joint中心＋B形状、新独立中心＋B形状。既有joint完整输出仅作背景，不能拿其形状变化混入中心任务对照。
+
+### 58.2 预先约定的判读与退出
+
+完整报告fit/probe×real/sim×1/.5：中心mean/RMSE/p90、归一化误差及x/y有符号残差/实际与所需位移、严格RIoU mean/p10/min、逐帧好坏计数和paired尾部事件；输出覆盖、仅输出中心<15px命中率、全帧正确覆盖分别报分子分母。尺寸/纯角须精确B，属于实现约束，不计为改善。所有200步loss/norm/clip和最终径向饱和记录保留，不按中间step选结果。
+
+继续研究门槛：四个probe组相对B中心mean/RMSE/p90不退、RIoU mean/p10/min不退，无新增中心失败、低于.5或零RIoU事件；real两个组fit中心mean/RMSE不退。至少一个real probe组中心mean和mean RIoU同时严格改善，且对应指标优于保存的joint中心参考，才说明该对照对当前real问题有继续价值。仅浮点容差范围内变化按持平，微小单次收益不称稳定或显著。以上是下一项机制检查的门槛，不替代原正式VAL条件；不要求不变的尺寸/角度产生虚假严格收益。
+
+若只优于joint仍劣于B：最多说明去掉形状训练减轻了当前设置的损害，不能替换B。若中心距离改善而RIoU退：代理目标/纠偏方向仍未满足需求。若real仍退：停止本轮同缓存P3+FC64增量搜索，不扫权重、宽度、位移上限或步数。下一阶段若需要，另设计代表性TRAIN与定位特征支持检查；不得直接宣布P3是根因。即使通过也只是单次有限TRAIN证据，不能自动正式训练或组合为五参数新方法。
+
+### 58.3 检索核实的论文及借鉴边界
+
+- Yu等，**Gradient Surgery for Multi-Task Learning**，NeurIPS2020：[官方论文页](https://proceedings.neurips.cc/paper/2020/hash/3fe78a8acf5fda99de95303940a2420c-Abstract.html)，[作者摘要](https://arxiv.org/abs/2001.06782)。研究多任务梯度干扰及PCGrad投影。借鉴独立任务参照与共享梯度诊断；当前仅有norm没有夹角，不能直接套PCGrad。单任务胜出也只说明任务交互，不证明负梯度内积是主因。若以后测夹角需非零共享梯度且同一参数状态/批次；零末层初始共享梯度为0不能定义有效夹角。当前未保存最终头tensor，旧JSON无法补算，重放joint会额外增加200步，暂不隐含加入本次预算。
+- Song等，**Revisiting the Sibling Head in Object Detector**，CVPR2020：[作者论文页](https://arxiv.org/abs/2003.07540)。TSD讨论分类/定位空间需求不同并解耦特征采样。可借鉴“不同任务是否适合共享表示”的问题，但其研究对象是分类与定位，不是中心与尺寸/方向；不是本项目冲突的直接证明，本轮不同时改ROI采样。
+- Yang等，**Learning High-Precision Bounding Box for Rotated Object Detection via Kullback-Leibler Divergence**，NeurIPS2021：[官方论文页](https://proceedings.neurips.cc/paper/2021/hash/98f13708210194c475687be6106a3b84-Abstract.html)。讨论旋转框参数耦合、随对象形状调整梯度及尺度不变性。用于解释需联合检查中心/形状与交叠，不能只看欧氏距离；B已用SymKLD，论文不支持在本项目直接再加KLD或调整系数。
+- Wang等，**Side-Aware Boundary Localization for More Precise Object Detection**，ECCV2020：[官方论文PDF](https://www.ecva.net/papers/eccv_2020/papers_ECCV/papers/123490392.pdf)，[作者摘要](https://arxiv.org/abs/1912.04260)。逐边定位及分桶后细化，提供边界空间证据与定位表示的后续方向。其水平框设置不能直接搬成OBB方案；当前也未证明边界特征不足，因此列为中心单任务失败后的备选研究依据，不在下一实验叠加分桶/边界头。
+
+以上检索支持问题与对照思路，不构成当前方案有效性的证据。本轮未声称穷尽最新文献；没有修改运行代码、训练或连接服务器。当前probe被反复开发使用且B见过，TEST亦已多次暴露；本次设计不用TEST调参或选权。保持等比例、原图还原及深度接口约束不等于验证深度精度或连续性。仍保留B ep24，结论只集中记入本文。

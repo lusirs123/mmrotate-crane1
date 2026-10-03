@@ -252,3 +252,44 @@ def test_small_gpu_orchestration_with_cpu_fixture_never_updates_weights(tmp_path
     assert records[0]['genuine_count'] == 1 and len(records[0]['probe_names']) == 13
     assert len(records[0]['qualities']['structure']) == 14
     assert report['cases'] == 1
+
+
+@pytest.mark.parametrize('missing_path', [False, True])
+def test_prepare_review_builds_and_reuses(tmp_path, monkeypatch, missing_path):
+    args = Namespace(out_dir=tmp_path/'probe',
+        review_report=tmp_path/'missing.json' if missing_path else None)
+    cases = [dict(image='train_only')]
+    monkeypatch.setattr(tool, 'choose_cases', lambda logs: cases)
+    calls = []
+    def build(a, logs, rows, inputs, proof, completion, sources, protocol):
+        calls.append(a.out_dir)
+        a.out_dir.mkdir()
+        (a.out_dir/'review.json').write_text(json.dumps(dict(
+            status='CPU_GENUINE_SUPPORT_REVIEW_COMPLETE', sources=sources,
+            evidence_sha256=proof, protocol_contract=protocol, gpu_cases=cases)))
+    monkeypatch.setattr(tool, 'cpu_review', build)
+    tool.prepare_review(args, [], [], {}, {}, {}, {}, {})
+    assert args.review_report == tmp_path/'probe_review/review.json'
+    assert len(calls) == 1 and not args.out_dir.exists()
+    args.review_report = None
+    tool.prepare_review(args, [], [], {}, {}, {}, {}, {})
+    assert len(calls) == 1
+    tool.prepare_review(args, [], [], {}, {}, {}, {}, {})
+    assert len(calls) == 1  # explicit existing report is validated too
+    with pytest.raises(ValueError):
+        tool.prepare_review(args, [], [], {}, {}, {}, {'changed': True}, {})
+    assert len(calls) == 1
+
+
+def test_prepare_review_preserves_invalid_evidence(tmp_path, monkeypatch):
+    args = Namespace(out_dir=tmp_path/'probe', review_report=tmp_path/'invalid.json')
+    args.review_report.write_text('{broken')
+    monkeypatch.setattr(tool, 'cpu_review', lambda *a: pytest.fail('must not replace evidence'))
+    with pytest.raises(json.JSONDecodeError):
+        tool.prepare_review(args, [], [], {}, {}, {}, {}, {})
+    assert args.review_report.read_text() == '{broken'
+    args.review_report = None
+    (tmp_path/'probe_review').mkdir()
+    with pytest.raises(FileExistsError, match='Preserve incomplete'):
+        tool.prepare_review(args, [], [], {}, {}, {}, {}, {})
+    assert not args.out_dir.exists()

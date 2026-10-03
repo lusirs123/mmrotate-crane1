@@ -254,13 +254,42 @@ def cpu_review(args, logs, rows, inputs, proof, completion, sources, protocol):
     return report
 
 
-def gpu_probe(args, logs, inputs, proof, completion, sources, protocol, training_protocol):
-    review = json.loads(args.review_report.read_text())
+def validate_review(path, logs, proof, sources, protocol):
+    review = json.loads(path.read_text())
     cases = choose_cases(logs)
     if (review['status'] != 'CPU_GENUINE_SUPPORT_REVIEW_COMPLETE' or review['sources'] != sources
             or review['evidence_sha256'] != proof or review['protocol_contract'] != protocol
             or review['gpu_cases'] != cases or not 0 < len(cases) <= 8):
         raise ValueError('Requires unchanged completed CPU review and predeclared TRAIN cases')
+    return review
+
+
+def prepare_review(args, logs, rows, inputs, proof, completion, sources, protocol):
+    # A local review is optional: reconstruct it from verified server evidence.
+    requested = args.review_report
+    if requested is not None and requested.exists():
+        validate_review(requested, logs, proof, sources, protocol)
+        return
+    review_dir = args.out_dir.with_name(args.out_dir.name + '_review')
+    report_path = review_dir/'review.json'
+    if requested is not None:
+        print('Review report missing:', requested, flush=True)
+    if review_dir.exists():
+        if not report_path.is_file():
+            raise FileExistsError('Preserve incomplete review directory; choose a new --out-dir: ' + str(review_dir))
+        validate_review(report_path, logs, proof, sources, protocol)
+        print('Reusing verified CPU review:', report_path, flush=True)
+    else:
+        review_args = deepcopy(args)
+        review_args.out_dir = review_dir
+        cpu_review(review_args, logs, rows, inputs, proof, completion, sources, protocol)
+        validate_review(report_path, logs, proof, sources, protocol)
+    args.review_report = report_path
+
+
+def gpu_probe(args, logs, inputs, proof, completion, sources, protocol, training_protocol):
+    validate_review(args.review_report, logs, proof, sources, protocol)
+    cases = choose_cases(logs)
     path = args.train_dir/'epoch_08.pth'
     payload = previous.base.fixed_bundle(path, sources['training_sources'], training_protocol)
     if branch.sha(path) != protocol['branch_checkpoint_sha256']:
@@ -383,7 +412,8 @@ def main():
     parser.add_argument('--train-cache', type=Path, default=Path('work_dirs/port_reliability_train_support_v1_cache'))
     parser.add_argument('--structure-report', type=Path, default=Path('work_dirs/port_reliability_readiness_v1_structure_complete/train_structure_check.json'))
     parser.add_argument('--b-checkpoint', type=Path, default=prior.CHECKPOINT)
-    parser.add_argument('--review-report', type=Path)
+    parser.add_argument('--review-report', type=Path,
+        help='Existing CPU review; if omitted or missing, build <out-dir>_review/review.json from verified evidence')
     parser.add_argument('--out-dir', type=Path, required=True)
     parser.add_argument('--gpu', type=int, default=0)
     args = parser.parse_args()
@@ -391,13 +421,12 @@ def main():
     os.chdir(ROOT)
     if args.out_dir.exists():
         raise FileExistsError('Preserve existing evidence; choose a new --out-dir')
-    if args.mode == 'probe' and args.review_report is None:
-        parser.error('--review-report is required for the fixed TRAIN probe')
     sources, protocol, training_protocol = checked_sources()
     logs, rows, inputs, proof, completion = checked_evidence(args, sources, protocol, training_protocol)
     if args.mode == 'review':
         cpu_review(args, logs, rows, inputs, proof, completion, sources, protocol)
     else:
+        prepare_review(args, logs, rows, inputs, proof, completion, sources, protocol)
         gpu_probe(args, logs, inputs, proof, completion, sources, protocol, training_protocol)
 
 
