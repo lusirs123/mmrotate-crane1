@@ -1,0 +1,117 @@
+{
+  "protocol": "port_simple_component_reliability_v1_fixed_test",
+  "parent_protocol": {
+    "protocol": "port_simple_component_reliability_v1",
+    "frozen_b": {
+      "epoch": 24,
+      "checkpoint_sha256": "8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23",
+      "config_sha256": "9da972b7010540e12b2501d1c400db13c159381f495f539d6315e7adb498e345"
+    },
+    "feature_names": [
+      "score_logit",
+      "log_relative_geometric_size",
+      "log_aspect"
+    ],
+    "center_policy": "retain_valid_B_output_no_extra_rejection",
+    "error_limits": {
+      "center_px": 15.0,
+      "size_max_relative": 0.1,
+      "angle_deg": 3.0
+    },
+    "fitting": {
+      "l2": 0.1,
+      "max_iterations": 100,
+      "gradient_tolerance": 1e-08
+    },
+    "class_weighting": "equal_total_weight_for_bad_and_good_TRAIN_outputs",
+    "direction_training": "saved_native_real_axis_and_Webots_OBB_qualification_all_2558_eligible",
+    "direction_evaluation": "saved_GT_aspect_at_least_1.2_offline_only",
+    "working_coverage": 0.95,
+    "calibration": "one_pooled_VAL_cutoff_per_size_angle_model_ceil_coverage_times_all_frames_capped_by_outputs_accept_whole_ties",
+    "calibration_uses_GT": false,
+    "score_reference": "same_pooled_VAL_coverage_rule_on_1_minus_original_B_score",
+    "methods": [
+      "raw",
+      "score_only",
+      "simple"
+    ],
+    "online_inputs": [
+      "current_original_B_top1",
+      "original_image_width_height"
+    ],
+    "output_flags": [
+      "center_accepted",
+      "size_accepted",
+      "angle_accepted"
+    ],
+    "detector_updates": 0,
+    "roi_or_structure_training": false,
+    "future_history_domain_or_GT_online_inputs": false,
+    "test_used_for_fit_or_calibration": false,
+    "test_repeatedly_exposed": true,
+    "evidence_role": "TRAIN_fit_and_source_VAL_calibration_descriptive_evaluation_not_independent_confirmation",
+    "reviewed_artifacts": {
+      "train_identity": "d53a558fbb1d28676e390e5a05fbc628e46f3df8086000269155ba695228db21",
+      "train_complete": "527b1719879e8cd5aec08901124ee80ab99079801718e00b321e36d1d95263e5",
+      "train_snapshot": "27643a9e00eaef5f26221dd8c8d6b52ede991ad372f369d645b8d1a17b131af0",
+      "train_predictions": "b1c5646088295dab1b9af7c50069038752a7e10bfe754335785a8d3bf343e203",
+      "val_report": "b0076ad9ebf3226317d2328c1ba71d71bd4a4b7e5ad5f90b17fe23315232a4e0",
+      "val_predictions": "d0c84a58cbb3aa589874026fdc8d0b87bbf43ef1b747bb5f504cf1c42c7359b1"
+    },
+    "counts": {
+      "train": {
+        "real_seq01": 339,
+        "real_seq05": 560,
+        "real_seq06": 466,
+        "real_seq12": 141,
+        "real_seq13": 304,
+        "sim_seq08": 748
+      },
+      "val": {
+        "real_seq07": 226,
+        "real_seq14": 149,
+        "sim_seq10": 512
+      }
+    },
+    "smoke_selection": "first_and_last_VAL_frame_per_sequence_by_original_frame_order_not_error"
+  },
+  "parent_manifest_sha256": "48d0155cb85babbc1ea960979e3d7a5eedd735a339a3b5f64e82d0d4b35449d3",
+  "reviewed_policy_files": {
+    "policy.json": "bbc3075fdb2f6a9f817cffa645b82aa43b4be9ca95ede4f929c23f02e784d7a8",
+    "fit_report.json": "3dddd830c051b3947cba8581ccce66bda0f2ae7efbdfa1580afba675d1b36458",
+    "val_decisions.jsonl": "15fcbb1cd558204cd1347c72134ffcb75f7d86ab2de5aaecbe8c63ee77c0cdf3",
+    "completion.json": "155d782225a3dd238b070de378340b8d316da8950831545faedd3edcb7512708"
+  },
+  "reviewed_test_files": {
+    "completion.json": "4e514b97da3997573fe3b7959f86df2d96c2579989eefa4e6a63d96700a33233",
+    "input_check.json": "b50f8aef14d4baacca41ac3e3e6f454ba93ed31fd898551a9319ef93d76f6110",
+    "test_compare.json": "56f1e238db0236c6cb06d095daa3d0d5d53575b4d3f5eb6851b3878e86408ab3",
+    "test_qualities.jsonl": "d95cdeb8958bfff69f82fcc0c9f4650557245070ae68745971b1bff7e2ae23e9"
+  },
+  "reviewed_test_data_identity": {
+    "frames": 1440,
+    "manifest_sha256": "128bd9aac390ad878a46c005a22f44d322a5acf61a47ad128991eb7444a4886f",
+    "annotations_sha256": "e0dbb1bd8aea7209314d8ed60bc44e965550ed606135cc0016e1075d717de13e",
+    "image_identity_sha256": "6448e47b9a715f47f04eacaaabb54a32b522c72208bf6e82793284de2aad665d",
+    "records_sha256": "21c09c8c6d289252a1f0077994190ba916e527f9e068faec874cbef1769ecbd1",
+    "sequence_counts": {
+      "real_seq03": 200,
+      "real_seq04": 668,
+      "sim_seq09": 572
+    }
+  },
+  "methods": [
+    "raw",
+    "score_only",
+    "simple"
+  ],
+  "test_repeatedly_exposed": true,
+  "test_used_for_selection": false,
+  "cache_scope": "exact reviewed server numeric B and GT, original current dataset not rehashed; no fresh inference",
+  "center_policy": "retain_B_output_no_independent_correctness_predictor",
+  "evaluation": "fixed VAL deployment cutoffs plus offline same-count score diagnostic; no TEST cutoff generation",
+  "old_quality_scores_used": false,
+  "GPU_used": false,
+  "detector_updates": 0,
+  "reliability_updates": 0
+}

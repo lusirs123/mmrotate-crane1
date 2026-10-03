@@ -1,0 +1,98 @@
+{
+  "protocol": "port_geometry_midpoint_formal_v1",
+  "settings": {
+    "epochs": 24,
+    "batch_size": 8,
+    "seed": 1703,
+    "lr": 0.001,
+    "weight_decay": 0.0,
+    "clip_norm": 10.0,
+    "train_scales": [
+      1.0,
+      0.5
+    ],
+    "val_scale": 1.0,
+    "max_cpu_tensor_bytes": 1073741824,
+    "train_center_match_px": 15.0,
+    "balanced_batch_real": 4,
+    "balanced_batch_sim": 4
+  },
+  "midpoint_settings": {
+    "seed": 1703,
+    "permutation_seed": 1704,
+    "in_channels": 256,
+    "hidden_channels": 32,
+    "roi_size": 9,
+    "context_multiplier": 1.5,
+    "stride": 8,
+    "min_context_cells": 2.0,
+    "prior_sigma_cells": 1.0,
+    "loss_beta": 0.1,
+    "steps_per_arm": 200,
+    "batch_size": 8,
+    "lr": 0.001,
+    "weight_decay": 0.0,
+    "clip_norm": 10.0,
+    "max_center_over_b_short": 0.3,
+    "max_log_edge_residual": 0.22314355131420976,
+    "max_angle_residual_rad": 0.17453292519943295,
+    "min_pair_length_px": 1e-06,
+    "roi_bound_tolerance": 1e-05
+  },
+  "parameter_count": 17696,
+  "frozen_b": {
+    "selected_epoch": "epoch_24",
+    "checkpoint_sha256": "8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23",
+    "config_sha256": "9da972b7010540e12b2501d1c400db13c159381f495f539d6315e7adb498e345",
+    "pkl_sha256": "cbfa341c53faf859a4eb96ab62a2470611cde0493896f50fcc7f805f53020725",
+    "selection_sha256": "ccaa55376d3d40175c86386fbb7c6e2e8db54a1e13b9b1611783c7255fb54352",
+    "annotation_sha256": "8bd2e2da86d52b555e2cac5e1098361bd01a4ca09f9df9cb0642e07accc1f6be"
+  },
+  "train_counts": {
+    "real_seq01": 339,
+    "real_seq05": 560,
+    "real_seq06": 466,
+    "real_seq12": 141,
+    "real_seq13": 304,
+    "sim_seq08": 748
+  },
+  "val_counts": {
+    "real_seq07": 226,
+    "real_seq14": 149,
+    "sim_seq10": 512
+  },
+  "selection_config": {
+    "r_center_delta": 0.005,
+    "mcml_limit": 5,
+    "weight_sim": 0.7,
+    "weight_real": 0.3,
+    "soft_w_tdr": 0.35,
+    "soft_w_r_center": 0.25,
+    "soft_w_aci": 0.2,
+    "soft_w_angle": 0.2
+  },
+  "authorization": "New user-authorized full-TRAIN head candidate; does not change the historical failed probe verdict.",
+  "initialization": "New seed1703 zero-output midpoint head. Do not resume or initialize from the exposed-TEST short-fit head.",
+  "training": "Frozen B eval/no_grad. Extract every TRAIN identity at1.0/.5 and VAL at1.0 once. Only aligned detached local ROI/support cached on CPU. Train only midpoint for24 epochs.",
+  "sampling": "Every eligible TRAIN view visited each epoch. Independently shuffle each domain, cycle the smaller domain and pad the last batch to4+4. No VAL, GT-error or TEST sampling preference.",
+  "eligibility": "All TRAIN views recorded; optimize only B-present views with original center error<15px, inherited from finite v1. Eligibility uses TRAIN GT offline only; report missing/mismatched counts by sequence/scale. All VAL frames evaluated without eligibility filtering.",
+  "augmentation": "Deterministic1.0/.5 isotropic views, no new flips/photometry. This is the head adaptation protocol, not a rerun of B random0.5..1.0 augmentation.",
+  "objective": "Unchanged normalized four-midpoint SmoothL1 beta.1. No added temporal, center, edge, angle, classification or reliability loss.",
+  "checkpoint": "Save all24 head/optimizer/RNG snapshots with file-stream atomic no-overwrite IO and exact reload verification. Smoke updates discarded. Keep B checkpoint separate and immutable.",
+  "selection": "Use existing ckpt_sweep SELECTION_CONFIG and select_best_checkpoint on ALL24 full-VAL results only; no averaging, TEST selection or subset search. Selection does not automatically approve replacement.",
+  "validation": "Paired same-cache B/midpoint/candidate; all887 VAL frames, both domains and every sequence. Output/conditional center/all-frame coverage separately; pure periodic angle distinct from protocol penalty. Compute full-video temporal metrics on VAL via historical evaluator test-mode, with split explicitly VAL.",
+  "online": "B native original/model boxes, scale_xy and detached aligned P3 only. Original midpoint architecture/point matching/decoder/fallback and score/count invariants unchanged. No GT/domain/sequence online inputs.",
+  "scope": {
+    "detector_updates": 0,
+    "train_frames": 2558,
+    "train_views": 5116,
+    "val_frames": 887,
+    "cache_feature_extractions": 6003,
+    "full_detector_finetuning": false,
+    "test_access": false,
+    "formal_head_training": true,
+    "automatic_promotion": false,
+    "original_probe_gate_passed": false,
+    "test_repeatedly_exposed": true
+  }
+}

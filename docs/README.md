@@ -6,6 +6,7 @@
 | --- | --- | --- |
 | 当前港口数据与 EOOD / SymEOOD | [新数据与尺度增强实验总记录](detection/港口新数据集与EOOD_SymEOOD尺度增强实验总记录.md) | 数据划分/标注，SymNFL/SymKLD/SymPOLA实际机制，尺度/光照及D/E设计，四格对照、结果取舍与论文素材；E尚未实施 |
 | 当前几何精度优化接续 | [几何优化交接](geometry_precision_handoff_20261001.md) | B保留、D负结果、已做核查、代码/产物入口及E设计边界 |
+| 四中点几何修正候选 | [midpoint v1方法与结果快照](detection/旋转ROI四边中点几何修正_midpoint_v1_方法与结果_20261003.md) | 冻结B的旋转ROI四点修正，有限TRAIN/probe与探索性TEST、文献差异和论文主张；时序补救待验证 |
 | 当前B分量可靠性接续 | [独立可靠性交接](reliability_handoff_20261003.md) | 简单中心/尺寸/方向三个判断优先；完整保留结构/ROI实验、TRAIN/VAL/TEST证据和旧规则迁移边界 |
 | 冻结 DINOv2 与 SymEOOD 检测 | [检测融合主文档](dino/冻结DINOv2与SymEOOD检测融合.md) | 方法、数据协议、结果、模型身份、复现入口；文末并入语义救援技术记录 |
 | OBB 观测可靠性 | [连续输出主文档](obb/OBB观测可靠性与连续输出.md) | Base V3、V5.1–V5.3、在线接口、指标与边界 |

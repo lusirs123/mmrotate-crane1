@@ -1,0 +1,11 @@
+{
+  "protocol": "port_simple_component_reliability_v1_fixed_test",
+  "sources": {
+    "crane_project/tools/eval_port_simple_reliability_v1_test.py": "55dba17fe326d0263f3a10a38cf81d685778073fc3cfc23eb4064aed147ff5bc",
+    "crane_project/tools/port_simple_reliability_v1_test_protocol.json": "436948f2b0ab11eea388c38a7a28e50f1e8ef604a1e5d335a7e6be0585b6f96e",
+    "crane_project/tools/run_port_simple_reliability_v1.py": "d9f83f3d45d9c2fd577fe9defba2133d5c7be4f0b8155024ccf79da86f42cde4",
+    "crane_project/utils/port_simple_component_reliability_v1.py": "05cb0fb1f59fd353725134471bc98bc0026d5beb789526618add08eb46837309",
+    "crane_project/tools/port_simple_reliability_v1_sources.json": "48d0155cb85babbc1ea960979e3d7a5eedd735a339a3b5f64e82d0d4b35449d3",
+    "tests/test_port_simple_reliability_test_v1.py": "a6c49a6ba139d2abc514ff279f5e6586126049739f3422464a6596d67cee0dac"
+  }
+}
