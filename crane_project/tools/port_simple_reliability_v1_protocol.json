@@ -1,0 +1,41 @@
+{
+  "protocol": "port_simple_component_reliability_v1",
+  "frozen_b": {
+    "epoch": 24,
+    "checkpoint_sha256": "8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23",
+    "config_sha256": "9da972b7010540e12b2501d1c400db13c159381f495f539d6315e7adb498e345"
+  },
+  "feature_names": ["score_logit", "log_relative_geometric_size", "log_aspect"],
+  "center_policy": "retain_valid_B_output_no_extra_rejection",
+  "error_limits": {"center_px": 15.0, "size_max_relative": 0.1, "angle_deg": 3.0},
+  "fitting": {"l2": 0.1, "max_iterations": 100, "gradient_tolerance": 1e-8},
+  "class_weighting": "equal_total_weight_for_bad_and_good_TRAIN_outputs",
+  "direction_training": "saved_native_real_axis_and_Webots_OBB_qualification_all_2558_eligible",
+  "direction_evaluation": "saved_GT_aspect_at_least_1.2_offline_only",
+  "working_coverage": 0.95,
+  "calibration": "one_pooled_VAL_cutoff_per_size_angle_model_ceil_coverage_times_all_frames_capped_by_outputs_accept_whole_ties",
+  "calibration_uses_GT": false,
+  "score_reference": "same_pooled_VAL_coverage_rule_on_1_minus_original_B_score",
+  "methods": ["raw", "score_only", "simple"],
+  "online_inputs": ["current_original_B_top1", "original_image_width_height"],
+  "output_flags": ["center_accepted", "size_accepted", "angle_accepted"],
+  "detector_updates": 0,
+  "roi_or_structure_training": false,
+  "future_history_domain_or_GT_online_inputs": false,
+  "test_used_for_fit_or_calibration": false,
+  "test_repeatedly_exposed": true,
+  "evidence_role": "TRAIN_fit_and_source_VAL_calibration_descriptive_evaluation_not_independent_confirmation",
+  "reviewed_artifacts": {
+    "train_identity": "d53a558fbb1d28676e390e5a05fbc628e46f3df8086000269155ba695228db21",
+    "train_complete": "527b1719879e8cd5aec08901124ee80ab99079801718e00b321e36d1d95263e5",
+    "train_snapshot": "27643a9e00eaef5f26221dd8c8d6b52ede991ad372f369d645b8d1a17b131af0",
+    "train_predictions": "b1c5646088295dab1b9af7c50069038752a7e10bfe754335785a8d3bf343e203",
+    "val_report": "b0076ad9ebf3226317d2328c1ba71d71bd4a4b7e5ad5f90b17fe23315232a4e0",
+    "val_predictions": "d0c84a58cbb3aa589874026fdc8d0b87bbf43ef1b747bb5f504cf1c42c7359b1"
+  },
+  "counts": {
+    "train": {"real_seq01": 339, "real_seq05": 560, "real_seq06": 466, "real_seq12": 141, "real_seq13": 304, "sim_seq08": 748},
+    "val": {"real_seq07": 226, "real_seq14": 149, "sim_seq10": 512}
+  },
+  "smoke_selection": "first_and_last_VAL_frame_per_sequence_by_original_frame_order_not_error"
+}

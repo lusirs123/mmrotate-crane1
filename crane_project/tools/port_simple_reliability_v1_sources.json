@@ -1,0 +1,24 @@
+{
+  "protocol": "port_simple_component_reliability_v1",
+  "protocol_sha256": "d9e91ea72ea1d0543206d73fedab2a957aa3d18dbb880e118b62bf18f2409b61",
+  "sources": {
+    "crane_project/tools/run_port_simple_reliability_v1.py": "d9f83f3d45d9c2fd577fe9defba2133d5c7be4f0b8155024ccf79da86f42cde4",
+    "crane_project/utils/port_simple_component_reliability_v1.py": "05cb0fb1f59fd353725134471bc98bc0026d5beb789526618add08eb46837309",
+    "crane_project/tools/port_simple_reliability_v1_protocol.json": "d9e91ea72ea1d0543206d73fedab2a957aa3d18dbb880e118b62bf18f2409b61",
+    "crane_project/configs/crane_symeood_k1_port_day2night_aug_b_v1.py": "9da972b7010540e12b2501d1c400db13c159381f495f539d6315e7adb498e345",
+    "crane_project/configs/crane_symeood_k1_port_day2night_v1.py": "1ff8e362448809dae597f829434e3f72a74142a015659b50d296c779261cd6c0",
+    "crane_project/configs/crane_symeood_k1.py": "008335f315ed356fab606b95f5095cf1112a63720b7ad1a10c5ac4756d50b759",
+    "configs/_base_/default_runtime.py": "046fc7f2d6a8dd3891b2ad90f1c5c5ea3e45345a1f44163318a6b8e8e33ceb77",
+    "configs/_base_/schedules/schedule_1x.py": "eef4b63abefd4e51bce476a012013d63ec27e06c87516a2352ff57b5f46f80e9",
+    "mmrotate/datasets/crane_custom_dota.py": "e6a8569af8e1d84bb3cc98a3fc91554ca871525fffea91b9efff70c6857f7d59",
+    "mmrotate/datasets/pipelines/transforms.py": "83f45d9dfa202094320262533b3315a7c9f4eb604c2894ec7adc26be64fd51a6",
+    "mmrotate/datasets/pipelines/port_train_augment.py": "cca4502b44114fda6c4a366f8955d36803783a0c8bee0d30111e90e7b5c5fcde",
+    "mmrotate/models/dense_heads/sym_eood_head.py": "e5615005bf6dc0699f73ab35e639dbda9affdbd0b62b69e15de9c0ca33158c73",
+    "mmrotate/models/detectors/sym_eood_detector.py": "f473edbca4c926b7d54e722bbde35e360ce0189bec17f9248f8da18bcac6883a",
+    "mmrotate/models/losses/sym_nfl_loss.py": "a6c39094f6b5eb10fd98da4aee828c4561dff15e6fdc2cf0946942cb73ce4f1b",
+    "mmrotate/models/losses/sym_kld_loss.py": "e4466cda533d665e28e0f88c404b320051a3d0c747275e769e5d92441d0f7880",
+    "mmrotate/models/losses/sym_kld_calculator.py": "5feb50ef35da410d2102b3782d60afbf9fcb02324281688a5fd4b456b25531be",
+    "mmrotate/core/bbox/assigners/sym_pola.py": "6a362ca854f262a4219ca55a4773271a405a2e2672ec263a65039814ca1c7416",
+    "mmrotate/core/bbox/coder/delta_xywha_rbbox_coder.py": "c8194ab705da451b127eabaa3055179cceb1f5e130f39982de10b68cc2779f6a"
+  }
+}
