@@ -1,0 +1,89 @@
+{
+  "protocol": "port_geometry_g_center_v1_train_preflight",
+  "evidence_role": "finite_TRAIN_bounded_center_intervention",
+  "reference_g_settings": {
+    "protocol": "port_geometry_g_v1_train_preflight",
+    "seed": 1703,
+    "feature_level": 0,
+    "stride": 8,
+    "in_channels": 256,
+    "hidden_channels": 32,
+    "roi_size": 9,
+    "context_multiplier": 1.5,
+    "min_context_cells": 2.0,
+    "hidden_fc": 64,
+    "max_log_edge_residual": 0.22314355131420976,
+    "max_angle_residual_rad": 0.17453292519943295,
+    "loss_beta": 0.1,
+    "train_center_match_px": 15.0,
+    "steps_per_arm": 200,
+    "batch_size": 8,
+    "optimizer": "Adam",
+    "lr": 0.001,
+    "weight_decay": 0.0,
+    "clip_norm": 10.0,
+    "fit_images_per_domain": 24,
+    "probe_images_per_domain": 8,
+    "scales": [
+      1.0,
+      0.5
+    ],
+    "max_cpu_roi_bytes": 33554432
+  },
+  "center_settings": {
+    "max_center_over_b_short": 0.3,
+    "center_coordinate_system": "original_image_xy",
+    "center_scale": "detached_original_B_short_edge",
+    "center_squash": "z_xy / sqrt(1 + sum(z_xy**2))",
+    "loss_component_coefficient": 0.3333333333333333,
+    "center_loss_beta": 0.1
+  },
+  "conditions": [
+    "b_identity",
+    "fixed_center_fc64_saved",
+    "joint_center_fc64"
+  ],
+  "parameter_counts": {
+    "fixed_center": 183907,
+    "joint_center": 184037
+  },
+  "baseline_report_sha256": "ce38c0f399027de2a72bad8ff94fa5691cb1aa0d1e66048c8ef32d025487bc71",
+  "cache_manifest_sha256": "7dae321ea2c0fb3f60eb4eb20cee9ebfb8f404d5c0780308485a24ed16f5108d",
+  "prior_manifest_sha256": "0250eafb9feef5fff88a4072dca02b1a0cb71f345f6fa1e0b866c2d8a2ada170",
+  "fixed_sample_counts": {
+    "fit": {
+      "real": 24,
+      "sim": 24
+    },
+    "probe": {
+      "real": 8,
+      "sim": 8
+    }
+  },
+  "intervention": "Same ordinary ROI/stem/FC64 and descriptor. Add two zero xy units; no center input descriptor, learned ROI movement, new sampling, classification or assignment.",
+  "center_definition": "c_new=c_B+.3*S_B*z_xy/sqrt(1+sum(z_xy**2)); radial movement<.3*S_B in original image xy. S_B=min(original B raw w,h), detached. No GT target clipping or out-of-bound sample removal.",
+  "bound_evidence": "Only96 saved fit TRAIN views inspected before fixing. Largest required radial shift/S_B=.27409; .30 is a conservative finite-check design, not a selected optimum. Probe/VAL/TEST not used to choose bounds.",
+  "loss": "Keep original mean of3 normalized SmoothL1(beta.1) parts EXACTLY. Add(p_x+p_y)/3, errors=(c_new-c_GT)/(.3*S_B), beta.1. Each of5 raw component means has coefficient1/3; do not average5 or use corrected edges for center normalization.",
+  "initialization": "Seed1703 untrained FC64 digest must equal reviewed reference; copy every shared tensor, add zero xy output tensors. Initial six-column boxes exact B.",
+  "optimizer": "Original Adam lr.001 weight_decay0 clip10, identical200 balanced batches8 (4real+4sim), fit only. All200 clipping/loss snapshots recorded; initial/final only evaluated.",
+  "runtime_policy": "Same python/torch/cuda/cudnn/numpy/opencv version strings as saved reference; physical GPU number may differ.",
+  "scope": {
+    "detector_forward_calls": 0,
+    "detector_updates": 0,
+    "additional_reference_updates": 0,
+    "new_head_updates": 200,
+    "formal_training": false,
+    "checkpoint_export": false,
+    "val_access": false,
+    "test_access": false
+  },
+  "evaluation": "All128 views retained. Separate fit/probe/domain/scale, original center mean/RMSE/p90, relative center error, edges mean/p90, pure angle RMSE/p90, strict RIoU mean/p10/min, output coverage, conditional center hits<15px, all-frame center correctness. Protocol angle10px penalties reported separately. New center failures, zero-RIoU outputs and RIoU<.5 paired tails.",
+  "review": "Fixed probe non-regression checks against B, plus center and other-geometry strict gains, are descriptive finite-check gates. No automatic formal-training approval; preserve future original17 VAL conditions. Comparison with fixed-center includes two units and center supervision together, not proof of a unique root cause.",
+  "limitations": [
+    "TRAIN probe16 image identities/32 correlated views repeatedly inspected in development; B trained on all, not independent VAL.",
+    "Output frame decisions/scores remain B; moving centers no longer guarantees center-correct coverage.",
+    "A bounded single-frame head cannot recover absent outputs or guarantee continuity/depth.",
+    "Frozen P3 support, component-loss/RIoU mismatch and generalization may still limit the method.",
+    "TEST repeatedly exposed; no TEST tuning, checkpoint selection or access here."
+  ]
+}
