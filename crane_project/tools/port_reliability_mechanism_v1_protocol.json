@@ -1,0 +1,42 @@
+{
+  "protocol": "port_reliability_mechanism_v1",
+  "train_epoch": 8,
+  "max_gpu_views": 8,
+  "optimizer_steps": 0,
+  "test_read": false,
+  "test_repeatedly_exposed": true,
+  "branch_checkpoint_sha256": "edbf3ed3f310899c8939a92b10e1a7226d78e20bcfada986eecc88ecbe0f75a0",
+  "evidence_sha256": {
+    "completion.json": "d75aa81edd5c2187d56cbe793eb701141074ad1b41fa1addd057538137c8fb3f",
+    "contract.json": "dbbea6b914a185c02e07f2ba4738f843def29828dd7a1ba1e1be4205653fe9ab",
+    "train_steps.jsonl": "9a9b28b1c0a441c6dcbe01c49746fad84f4e1e86c1bd1818028fd362f93d78ed",
+    "val_compare.json": "b0076ad9ebf3226317d2328c1ba71d71bd4a4b7e5ad5f90b17fe23315232a4e0",
+    "val_qualities.jsonl": "d0c84a58cbb3aa589874026fdc8d0b87bbf43ef1b747bb5f504cf1c42c7359b1",
+    "parity_diagnosis.json": "52eab6523d75dbd4ad58a9a77e2362a6dad5afbd20e33d1c0493471c38805a7c"
+  },
+  "review": {
+    "windows": [1, 8],
+    "train_scores": "original genuine pre-update quality records; not fixed final-head evaluation",
+    "probe_scores": "only aggregate loss in original logs; individual predictions require the small GPU probe",
+    "val_scores": "same verified saved B boxes and final ep08 quality arrays, no new model inference",
+    "statistics": "continuous-target MAE/RMSE; Spearman quality vs negative error; diagnostic AUROC with undefined zero-class groups; geometry/score associations",
+    "groups": "all, domain and sequence, preserving missing outputs and TRAIN/evaluation direction roles",
+    "causality": "descriptive associations and support differences do not prove a shortcut or a unique root cause"
+  },
+  "gpu_probe": {
+    "case_selection": "per domain, fixed ep08 first dataset index and maximum genuine center/size/angle error; ties image ascending; duplicate view merged; TRAIN only",
+    "views": "exact original TRAIN random augmentation replay using saved view_seed; exact image tensor SHA and metadata required",
+    "B_prediction": "current frozen B prediction retained and separately compared to logged output; old identity tolerances unchanged, differences recorded",
+    "fixed_heads": "same completed ep08 geometry/ordinary ROI/structure weights; no optimizer and no export of changed weights",
+    "structure_input_zero": "zero only the response descriptor input in the same trained structure head; restore its flag; distribution-changing sensitivity, not retrained ablation",
+    "response_evidence": "global center/line peaks; annotation-weighted response; line excess above median and unsigned PCA inside predicted B square context; flat direction undefined",
+    "real_reference": "validated native annotation axis, with no visibility or pixel-truth guarantee",
+    "sim_reference": "Webots OBB-derived finite-line proxy, no native axis",
+    "gradients": "existing quality loss vs response loss on shared stem; weighted genuine vs probes and three exact component contributions; autograd.grad only",
+    "gradient_claim": "local norms and cosines do not establish a training-wide cause or justify changing a coefficient",
+    "online_inputs": "detached P3, predicted B boxes/scores and metadata; GT/probes/axis used offline for TRAIN diagnosis only",
+    "resources": "one view and one frozen B feature extraction at a time; separate allocated/reserved peaks; no whole-FPN cache"
+  },
+  "invariants": "original B/source manifests, ep08 selection, 15px/10%/3deg thresholds, direction qualification, isotropic transforms and original coordinate/depth interfaces unchanged",
+  "test_reporting": "a future frozen four-method TEST report is allowed as exposed-set complementary evidence; no TEST-driven threshold/weight/method selection or claiming a fresh untouched holdout; this diagnostic does not implement or run TEST"
+}

@@ -6,7 +6,7 @@ import torch
 from torch.nn import functional as F
 
 from crane_project.utils.port_structure_reliability_v1 import (
-    SETTINGS, balanced_response_loss, canonical_boxes, feature_points, quality_loss)
+    SETTINGS, balanced_response_loss, canonical_boxes, quality_loss)
 
 COMPONENTS = ('center', 'size', 'angle')
 REFERENCES = np.array([15., .10, 3.])
