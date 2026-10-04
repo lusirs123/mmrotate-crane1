@@ -1,0 +1,14 @@
+{
+  "protocol": "port_midpoint_reliability_v1",
+  "sources": {
+    "crane_project/utils/port_midpoint_reliability_v1.py": "c5ea0f328e73e7dc508420942839cbb4fd7cb049ee2fd8b436fd4170d1897c71",
+    "crane_project/tools/run_port_midpoint_reliability_v1.py": "34e08f5d8cb7bba4aef015dd1f2ff4f88b37e0415ab5d6e4abeff923b200d373",
+    "crane_project/tools/port_midpoint_reliability_v1_protocol.json": "9b7274a8872adeffa85dc738b10c42458fd940e22bec671f2e898b80c5b10216",
+    "tests/test_port_midpoint_reliability_v1.py": "3e34cb8b3c6180fb6ca5989a5abc30f94ddd62ab81b8c3d69f3abaf936a0cd4d",
+    "crane_project/tools/analyze_port_geometry_midpoint_size_temporal_v1.py": "4957360cf61f04c493a3da4c5eb1d419ce2d85b7e8748f860fc54f92c5f8b09a"
+  },
+  "protocol_sha256": "9b7274a8872adeffa85dc738b10c42458fd940e22bec671f2e898b80c5b10216",
+  "parent_reference_manifest_sha256": "f76716d160e93b44b35fc1add5a4805d20b6537508feeaf5b4a951c0c51f2a09",
+  "parent_formal_manifest_sha256": "2d489e06b06ce390cd6dc3dfeee8a849134e37b103d11951e4830dda91c37804",
+  "scope": "new migration only; prior reference/formal contracts remain unchanged"
+}

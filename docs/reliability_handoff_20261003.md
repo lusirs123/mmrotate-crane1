@@ -1,12 +1,12 @@
-# SymEOOD＋尺度增强B：当前分量可靠性交接
+# SymEOOD 分量可靠性交接：B结果与正式midpoint迁移
 
-更新：2026-10-04；TEST主结果仍为服务器`port_simple_reliability_v1_test_review_20261003_205844.tar.gz`。第8/9节为冻结评分可分性检查，第10节为二维尺寸参考实现，第11节为本次服务器结果：工程流程完成，参考尺寸与错误辨识不合格，未替换当前simple或推进TEST。
+更新：2026-10-04；现有TEST主结果仍是B＋simple v1的服务器`port_simple_reliability_v1_test_review_20261003_205844.tar.gz`，不能迁为midpoint成绩。第8/9节为冻结评分可分性检查，第10/11节为尺寸参考v1实现及失败结果；第12节为用户授权的正式midpoint前端迁移和固定TRAIN读取改进，服务器效果待验证。
 
-本文只维护当前B＋simple v1模型、协议、服务器结果和有限可靠性优化候选。用户要求旧流程/旧成绩从当前正文删除并替换为新结果，此前已重写；旧记录在[替换前归档](archive/20261003_reliability_replaced_by_simple_v1/README.md)保留，原始实验文件和模型未删除。检测几何优化继续维护[独立几何交接](geometry_precision_handoff_20261001.md)，本轮未改其内容。
+本文维护已验证B＋simple v1证据，以及用户本轮要求的B＋正式midpoint可靠性迁移。此前替换的旧流程在[替换前归档](archive/20261003_reliability_replaced_by_simple_v1/README.md)保留，原始实验文件和模型未删除。检测几何优化维护[独立几何交接](geometry_precision_handoff_20261001.md)，本轮没有修改该窗口的代码/记录。按最新偏好，后续服务器结果不复制为本地复核目录，仅在本文记录必要结论。
 
 ## 1. 当前决定与模型
 
-固定前端SymEOOD＋等比例尺度增强B，VAL选择epoch24；可靠性为`port_simple_component_reliability_v1`，不是ROI/结构分支。
+已有可靠性证据固定前端SymEOOD＋等比例尺度增强B（VAL epoch24），模型为`port_simple_component_reliability_v1`。最新授权是迁到B＋正式midpoint（原完整VAL规则选head_epoch_23），实现见第12节；尚无新版可靠性服务器成绩。下述第2—11节B指标保留原协议身份，不等于新前端结果。
 
 当前模型不使用DINO、候选融合、Base V3/V5.1、历史保持或缺测预测。连续状态、物理摆角、深度/空间风险及报警接口留给大论文。
 
@@ -32,7 +32,7 @@ TEST1440帧：real_seq03 200、real_seq04 668、sim_seq09 572。缺失9帧全部
 
 标志是模型的建议使用/拒绝决策，不是已知GT标签。在线输入仅`pred_original`与`[W,H]`；GT、domain、sequence、历史或未来帧都不进入API。保留等比例变换和原图坐标链；尺寸/方向拒绝不删除中心，接口保持不等于深度精度得到保证。
 
-## 3. 当前服务器TEST主结果
+## 3. 已验证B＋simple v1服务器TEST结果（未含正式midpoint）
 
 ### 3.1 中心、输出覆盖与连续性
 
@@ -308,6 +308,22 @@ python crane_project/tools/run_port_size_reference_v1.py \
 **解释与限制（推断，未定根因）：** 已证实当前“真实预测热图→二阶矩参考→尺寸一致性”整体没有通过，而理想标注热图的解析读取通过。当前最直接障碍是参考短边普遍高估；仅有loss下降不能证明范围学准。源码采用背景位置p²加权BCE，p很小时该项约按p³下降；二阶矩按距离平方累积非目标响应，存在训练像素损失与尺寸读取敏感度不一致的机制风险。广泛低响应、平滑/多峰、P3空间分辨率、模型/训练预算及跨视频泛化都仍可能参与。本包未保存完整预测热图、逐位置loss或范围质量贡献，不能据当前统计断言背景尾部是主因、方向结构已被证明无效或整个PQA思路无效；本版只是自定义有限改编。
 
 **最推荐下一步（待授权实现）：** 不增加训练轮数或换权重，先用固定epoch04补一次TRAIN热图—读取诊断。预先按拟合五个序列各首尾选10图，加real_seq13与sim留出段各首尾4图；不按错误/效果挑帧，不新增VAL/TEST读图或调门限。保存原始预测图/GT几何目标/变换metadata/叠图，分报拟合与留出的参考尺寸、中心、峰/背景、GT范围内外质量与对二阶矩的贡献，GT范围仅离线诊断。由此区分拟合内范围没学准、读取对尾部敏感和新增分支泛化不足。若拟合图核心定位/范围已准但低响应显著放大矩，优先设计抗尾部的几何模板拟合读取及数值可用性；若核心范围也不准，再针对参考监督/分辨率设计一个限定版本。方法修改仅由拟合TRAIN证据制定，留出与全部VAL用于固定后评价。当前v1不替换simple、不扩展方向/中心、不放行大规模正式对照或新TEST。大小论文和独立几何交接均未修改。
+
+## 12. 正式midpoint迁移与固定TRAIN读取改进（2026-10-04）
+
+**授权及事实：** 用户确认检测前端已为B＋midpoint，授权按推荐迁移可靠性。本轮新增`run_port_midpoint_reliability_v1.py`、`port_midpoint_reliability_v1.py`、同名protocol/sources和单测，复用既有实现，没有修改检测/参考训练或旧来源清单。固定B epoch24与正式完整VAL选定`head_epoch_23.pth`（SHA `2c4c5ae9e071cbdb13fb722f4b2d3986861c62bd60c53568c72fb9b02d662f0b`），不加载短拟合或按最新文件改选。formal `selection.json`、24轮VAL选权证据、实际权重字节、原ROI缓存和原TRAIN/VAL证据均校验身份。第11节“待授权”由本次授权取代，但失败结果不改写。
+
+**实现与比较：** `collect`逐份读取已有`train_s1.pt`/`val_s1.pt`，只前向冻结midpoint，不提取新图像/P3、不加载半尺度缓存。保留全部2558 TRAIN/887 VAL、完整回退、B输出数量/score和原资格；VAL重放须与正式选择一致（框容差1e−4/1e−6、score精确相同），评分保留已核验正式VAL数值并报重放差。`fit`沿用三特征、正负类平衡Newton/L2=.1及95% pooled VAL覆盖规则，重新拟合尺寸/方向参数与门限，输出三个标志。中心继续保留有效最终框，不新训练中心预测器。报告配对正式B＋旧policy、midpoint＋旧policy、midpoint＋新policy，分域/逐视频、同数score错误接受/正确误拒与错误类AUROC/AP。中心正确<15px仅统计输出帧，另报输出覆盖与全帧正确覆盖。sim监督仍为Webots OBB，无需轴线。
+
+**固定读取候选（待真实证据）：** `probe`复用尺寸参考epoch04（SHA `72b621fe2f0b78ac5292f2142eb318ab256791ab87ce54eee75e50f217e0673a`）及共享冻结B P3。在既有参考划分中按每序列首尾固定10张拟合＋4张留出TRAIN；不按GT误差挑帧。两个读取器共用最终midpoint框上下文：旧二阶矩，与新增主峰连通半峰核心的robust log-Gaussian模板拟合。固定半峰=.5、至少16核心单元、IRLS10次/Huber=.15、log-RMSE≤.15、condition≤1e8、原模型短边≥16px及边界保护；不搜门限。协方差由拟合曲率还原，长短边=4σ，不再套截断矩校正。上下文仍依赖最终框中心/长边；只改中心/方向的固定参考探针不代表完整链解耦。
+
+保存预测/目标热图、变换metadata、同尺度PNG及GT范围外响应质量与长/短轴二阶矩贡献，分报拟合/留出、两方法可用性及共同可用集合误差、长短边双侧辨识。GT只进入离线诊断及理想数值检查；新读取器不自动替换simple标志、不被称为已校准错误概率。拟合内核心范围也不准时，继续改读取不能认定解决问题；本次真实热图结果决定是否值得后续学习改进。
+
+**影响解释（事实与推断）：** 几何修正会改变最终框、simple特征及正确/错误标签；所以原B可靠性参数不能直接视为新前端性能，几何改善也不保证风险排序/状态准确率改善。冻结B P3未改变，允许复用参考权重；这不保证新上下文下有效。可靠性API不接受GT、不写回任何最终OBB/score/数量，`smoke`检查6张固定VAL在线输出及模型状态前后相同。等比例变换/原图坐标还原沿用原链，接口不变不等于深度精度保证。参考留出仅针对epoch04分支；新simple拟合全部TRAIN，不能把那4图称为对整条新管线的独立留出。
+
+**本地核验：** 22项新增单测中21项CPU通过，1项实际Torch适配/空输出状态检查因本地无Torch跳过，服务器须执行。已验证来源合同、Python3.8语法、CLI、完整模拟collect/fit输出与重载、锁定VAL数值保护，以及真实既有TRAIN/VAL来源身份。固定10张拟合角色的标注派生理想热图均通过，最大尺寸相对误差0.03854%；仅为解析数值证据，未运行真实epoch04/midpoint权重、GPU前向、新simple拟合或TEST。服务器显存/速度与方法效果待运行，不承诺零性能下降。
+
+**服务器顺序：** 上传新增5文件，并确认依赖`analyze_port_geometry_midpoint_size_temporal_v1.py`与本地版本相同。项目根目录运行本版unittest，再依次`check → probe → collect → fit → smoke`；probe仅产生待审证据，其工程完成不自动批准参考部署。collect/fit迁移不依赖参考效果通过。每阶段使用新目录，来源不一致时停止，不能更新旧manifest绕过、重建B缓存或跳帧。只复用`work_dirs/crane_symeood_k1_port_day2night_midpoint_formal_v1/selection.json`、`work_dirs/port_geometry_midpoint_formal_v1_roi_cache`及原参考/简单policy输入。此次不训练检测/参考/ROI、不修改大小论文；TEST已多次暴露，本版没有TEST入口，也不以其选择权重/规则。服务器输出留在服务器，本地不新增回传结果副本或复核报告目录。
 
 <a id="legacy-35"></a>
 <a id="legacy-36"></a>

@@ -1,0 +1,41 @@
+{
+  "context_multiple": 3.0,
+  "context_min_original_px": 64.0,
+  "min_context_cells": 16,
+  "min_peak": 0.1,
+  "min_mass": 1.0,
+  "min_reference_short_model_px": 16.0,
+  "max_edge_mass_fraction": 0.05,
+  "risk_scale": 0.1,
+  "protocol": "port_midpoint_reliability_v1",
+  "front_end_name": "SymEOOD_B_midpoint_formal_v1_ep23",
+  "midpoint_epoch": 23,
+  "midpoint_sha256": "2c4c5ae9e071cbdb13fb722f4b2d3986861c62bd60c53568c72fb9b02d662f0b",
+  "reference_epoch": 4,
+  "reference_sha256": "72b621fe2f0b78ac5292f2142eb318ab256791ab87ce54eee75e50f217e0673a",
+  "template_reader": {
+    "core_peak_fraction": 0.5,
+    "min_core_cells": 16,
+    "max_condition": 100000000.0,
+    "irls_steps": 10,
+    "huber_log_delta": 0.15,
+    "max_fit_log_rmse": 0.15
+  },
+  "probe": {
+    "fit_views": 10,
+    "held_views": 4,
+    "selection": "first_last_each_existing_reference_partition_sequence_no_error_selection",
+    "size_fraction": 0.15,
+    "numerical_max_relative_error": 0.05
+  },
+  "simple": "unchanged_three_features_balanced_Newton_l2.1_TRAIN_fit_pooled_VAL_95pct_coverage_no_GT_cutoff",
+  "cache_views": "formal_train_s1_val_s1_only_no_half_scale_load",
+  "test_read": false,
+  "test_repeatedly_exposed": true,
+  "detector_updates": 0,
+  "midpoint_updates": 0,
+  "reference_updates": 0,
+  "template_or_risk_threshold_search": false,
+  "reference_is_candidate_not_deployed_flag": true,
+  "evidence_role": "source_TRAIN_refit_and_source_VAL_calibration_not_independent_confirmation"
+}
