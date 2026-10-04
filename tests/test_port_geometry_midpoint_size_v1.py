@@ -2,7 +2,10 @@
 from copy import deepcopy
 import json
 import math
+import os
 from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 import torch
@@ -192,6 +195,29 @@ def test_source_contract_static_does_not_import_runtime_load_tensors_or_overwrit
     altered=deepcopy(t.read_json(t.SOURCES)); altered['sources'][str(Path(t.__file__).relative_to(t.ROOT))]='bad'
     path=tmp_path/'bad_sources.json';t.write_json(path,altered);monkeypatch.setattr(t,'SOURCES',path)
     with pytest.raises(ValueError,match='Source SHA'):t.checked_contract(train,cache)
+
+
+@pytest.mark.parametrize('relative',[True,False])
+def test_python38_script_entry_resolves_file_and_preserves_failed_or_existing_outputs(tmp_path,relative):
+    train,cache,_=fake_contract(tmp_path)
+    script=Path(t.__file__).resolve()
+    target=str(script.relative_to(t.ROOT)) if relative else str(script)
+    out=tmp_path/'static'
+    command=[sys.executable,'-B',target,'--check-only','--training-dir',str(train),
+             '--cache-dir',str(cache),'--out-dir',str(out)]
+    env=dict(os.environ,CUDA_VISIBLE_DEVICES='',PYTHONDONTWRITEBYTECODE='1')
+    result=subprocess.run(command,cwd=str(t.ROOT),env=env,capture_output=True,text=True)
+    assert result.returncode==0,result.stderr
+    report=t.read_json(out/'completion.json')
+    assert report['status']=='STATIC_SIZE_CONTRACT_PASS_NO_TENSOR_LOAD_NO_GPU_NO_UPDATES'
+    assert report['head_updates_total']==report['cache_tensor_loads']==0
+    assert report['gpu_devices_used']==[]
+    # The same protection applies to directories left by failed attempts.
+    sentinel=out/'failure_sentinel.json';sentinel.write_text('{"preserve":true}\n')
+    original={p.name:p.read_bytes() for p in out.iterdir() if p.is_file()}
+    again=subprocess.run(command,cwd=str(t.ROOT),env=env,capture_output=True,text=True)
+    assert again.returncode!=0 and 'Existing results are preserved' in again.stderr
+    assert {p.name:p.read_bytes() for p in out.iterdir() if p.is_file()}==original
 
 
 def test_cache_loader_reads_train_shards_only_and_rejects_bad_eligibility(tmp_path,monkeypatch):

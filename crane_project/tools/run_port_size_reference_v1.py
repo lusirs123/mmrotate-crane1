@@ -61,7 +61,7 @@ def prepare(args):
         partition=names, partition_sha256=simple.fingerprint(names),
         fixed_numeric_sha256=simple.fingerprint([train, val, policy]),
         frozen_b=original['frozen_b'], role='TRAIN_REFERENCE_FEASIBILITY',
-        b_has_seen_detector_TRAIN=True, new_reference_has_not_seen_holdout_labels=True)
+        b_has_seen_detector_TRAIN=True, new_reference_does_not_fit_holdout_labels=True)
     old_val = {r['image']: r for r in (json.loads(x) for x in (args.val_dir/'val_qualities.jsonl').read_text().splitlines())}
     return protocol, src, train, val, policy, proof, split, raw_sources, contract, old_val
 
@@ -87,15 +87,23 @@ def probe_record(row, reference, protocol):
                 nuisance_control_max_risk_difference=None if baseline is None else max(invariant.values()))
 
 
+def ideal_selection(split):
+    # Use fitting-role labels only, including for this numerical release gate.
+    # Two endpoints of each of five fitting sequences, plus two interior views
+    # of real_seq01 and sim_seq08. No error label or result chooses the views.
+    selected = []
+    groups = {}
+    for r in split['fit']: groups.setdefault(r['sequence'], []).append(r)
+    for seq in sorted(groups): selected.extend([groups[seq][0], groups[seq][-1]])
+    for seq in ('real_seq01', 'sim_seq08'):
+        rows = groups[seq]; selected.extend([rows[len(rows)//3], rows[2*len(rows)//3]])
+    if len({r['image'] for r in selected}) != 14: raise ValueError('Ideal fitting views are not unique')
+    return selected
+
+
 def ideal(args, prepared):
     protocol, _, _, _, _, _, split, _, contract, _ = prepared
-    # Two predetermined endpoints from each fit sequence, and two endpoints
-    # from each held-out sequence. These are numerical, not learned results.
-    selected = []
-    for rows in (split['fit'], split['holdout']):
-        groups = {}
-        for r in rows: groups.setdefault(r['sequence'], []).append(r)
-        for seq in sorted(groups): selected.extend([groups[seq][0], groups[seq][-1]])
+    selected = ideal_selection(split)
     records = []
     for row in selected:
         for shrink, flip in ((1., False), (.5, True)):

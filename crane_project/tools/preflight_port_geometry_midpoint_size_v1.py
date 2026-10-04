@@ -81,7 +81,9 @@ def checked_contract(training_dir, cache_dir):
         raise ValueError('Fixed size preflight protocol differs')
     manifest = read_json(SOURCES)
     parent = read_json(PARENT)
-    required = {str(p.relative_to(ROOT)) for p in (Path(__file__), PROTOCOL,
+    # Python3.8 keeps __file__ relative when launched as `python path/script.py`.
+    # Normalize it before comparing with the resolved absolute project root.
+    required = {str(p.relative_to(ROOT)) for p in (Path(__file__).resolve(), PROTOCOL,
         ROOT/'crane_project/utils/port_geometry_midpoint_size_v1.py',
         ROOT/'tests/test_port_geometry_midpoint_size_v1.py', PARENT,
         ROOT/'crane_project/tools/analyze_port_geometry_midpoint_size_temporal_v1.py')}
@@ -385,7 +387,12 @@ def publish(out):
 
 
 def run(args):
-    out = Path(args.out_dir); out.mkdir(parents=True,exist_ok=False)
+    out = Path(args.out_dir)
+    try:
+        out.mkdir(parents=True,exist_ok=False)
+    except FileExistsError:
+        raise FileExistsError('Output directory already exists: %s. Existing results are preserved; '
+                              'use a new --out-dir suffix, including after a failed run.' % out) from None
     report = dict(protocol=VERSION, status='STARTED', settings=deepcopy(SETTINGS),
         detector_updates=0, detector_forward_calls=0, feature_extractions=0,
         head_updates_total=0, val_access=False, test_access=False, weight_bytes_read=False,

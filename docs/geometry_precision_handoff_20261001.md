@@ -2,6 +2,8 @@
 
 > 用途：在新对话中继续几何精度优化。本文汇总本轮对话、现有代码及收到的实验结果；保留事实、推断和待验证内容的区别。几何优化后续优先更新本文，不再为每次改动创建交接文件；可靠性另在[独立可靠性交接](reliability_handoff_20261003.md)维护。
 >
+> **2026-10-04入口修复见第78节：服务器Python3.8相对路径启动保留相对`__file__`，导致源码清单relative_to失败，已改为先resolve。首次失败创建的输出目录继续保留，不覆盖；重跑使用path_fix_v1新目录。新增相对/绝对CLI回归，共26项CPU检查通过；固定损失、协议、样本和预算不变，原69/73来源不改。真实服务器静态/CUDA检查仍待重跑。**
+>
 > **2026-10-04最新实现见第77节：用户授权只增加解码后尺寸监督，已实现point-only／point＋0.025×匹配两边log尺寸损失的有限TRAIN对照。复用正式TRAIN CPU缓存，128身份/256视图、每分支200步、同初始化/批次；24项CPU检查通过，原69/73来源未改。真实服务器缓存、CUDA梯度及效果仍待运行；不导出权重，不放行正式训练或TEST，不改变已测midpoint-formal v1性能身份。**
 >
 > **2026-10-04最新服务器诊断核验见第76节：已收到第75节VAL短边/对角线残差包，来源、哈希、887帧/882对及全部派生结果核对通过。real短边静态与动态误差增大，但对角线GT相对变化残差下降；sim短边与对角线动态残差均增大。下一步建议只做解码后尺寸监督的有限TRAIN对照，尚未修改模型或放行新正式训练；不以压低DFR代替GT跟随精度。**
@@ -4316,3 +4318,42 @@ tar -czf "work_dirs/port_geometry_midpoint_size_v1_review_$(date +%Y%m%d_%H%M%S)
 ```
 
 只打包新文本结果，没有权重、ROI缓存或源码。后续新增正式TRAIN/VAL入口需另按对照结果决定；本轮未连接服务器，不提供新TEST指令。
+
+## 78. midpoint-size v1相对启动路径修复与失败目录保留（2026-10-04）
+
+**服务器事实与原因：** 用户按第77节相对路径命令在Python3.8执行`--check-only`。该版本的`__file__`为`crane_project/tools/preflight_port_geometry_midpoint_size_v1.py`，而ROOT已resolve为绝对路径；源码清单直接`Path(__file__).relative_to(ROOT)`因此失败。用户已在正确项目目录，重新cd无法修复这项代码错误。失败发生在张量加载/模型构建/更新之前；首次运行已创建输出目录并保留失败产物，第二次同目录触发`exist_ok=False`的防覆盖保护，不是新的训练或缓存故障。
+
+**实现修复：** [运行入口](../crane_project/tools/preflight_port_geometry_midpoint_size_v1.py)先将`__file__`resolve再求项目相对路径；输出目录存在时给出明确提示，包含失败后也必须使用新`--out-dir`后缀，继续不删除、不覆盖、不自动续跑。新增[两项真实CLI回归](../tests/test_port_geometry_midpoint_size_v1.py)，分别在Python3.8进程用相对/绝对脚本路径运行合成元数据静态合同，并检查再次运行完整保留已有文件。只更新新75项manifest中的runner/test两条SHA；utility、损失系数0.025、固定协议、样本/批次/200步预算及旧69/73来源保持。
+
+**验证事实：** Python3.8.20/torch1.8.0.post3下全部26项CPU检查通过（约3.86s）。真实CLI测试仅使用临时合成缓存身份元数据，不反序列化tensor、不使用GPU，不能称真实服务器静态检查已通过。原服务器失败目录保留，不连接服务器；另一工作线的现有修改保留。
+
+只重新上传本次改变的三个文件：`crane_project/tools/preflight_port_geometry_midpoint_size_v1.py`、`tests/test_port_geometry_midpoint_size_v1.py`、`crane_project/tools/port_geometry_midpoint_size_v1_sources.json`。使用新目录重跑：
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+
+CUDA_VISIBLE_DEVICES="" PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/preflight_port_geometry_midpoint_size_v1.py \
+  --check-only \
+  --training-dir work_dirs/crane_symeood_k1_port_day2night_midpoint_formal_v1 \
+  --cache-dir work_dirs/port_geometry_midpoint_formal_v1_roi_cache \
+  --out-dir work_dirs/port_geometry_midpoint_size_v1_static_path_fix_v1
+```
+
+必须先收到`STATIC_SIZE_CONTRACT_PASS_NO_TENSOR_LOAD_NO_GPU_NO_UPDATES`，再运行原有限对照，使用对应新输出目录：
+
+```bash
+CUDA_VISIBLE_DEVICES=3 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/preflight_port_geometry_midpoint_size_v1.py \
+  --gpu 0 \
+  --training-dir work_dirs/crane_symeood_k1_port_day2night_midpoint_formal_v1 \
+  --cache-dir work_dirs/port_geometry_midpoint_formal_v1_roi_cache \
+  --out-dir work_dirs/port_geometry_midpoint_size_v1_train_path_fix_v1
+
+tar -czf "work_dirs/port_geometry_midpoint_size_v1_path_fix_v1_review_$(date +%Y%m%d_%H%M%S).tar.gz" \
+  -C work_dirs \
+  port_geometry_midpoint_size_v1_static_path_fix_v1 \
+  port_geometry_midpoint_size_v1_train_path_fix_v1
+```
+
+若新目录也已存在，再更换后缀并同步压缩参数，继续保留旧结果。正常有限对照完成状态仍为`TRAIN_SIZE_SHORT_FIT_COMPLETE_REVIEW_REQUIRED`，不改变原审查门槛或自动放行正式训练/TEST。

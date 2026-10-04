@@ -111,6 +111,9 @@ class SizeReferenceTests(unittest.TestCase):
         fit_sim = [r['frame_id'] for r in split['fit'] if r['sequence'] == 'sim_seq08']
         held_sim = [r['frame_id'] for r in split['holdout'] if r['sequence'] == 'sim_seq08']
         self.assertEqual(min(held_sim)-max(fit_sim)-1, 32)
+        ideal_names = {r['image'] for r in entry.ideal_selection(split)}
+        self.assertEqual(len(ideal_names), 14)
+        self.assertFalse(ideal_names & {r['image'] for r in split['holdout']+split['guard']})
         changed = deepcopy(rows)
         for r in changed: r['gt'] = 'changed labels'
         self.assertEqual([r['image'] for r in split['fit']], [r['image'] for r in size.partition(changed, PROTOCOL)['fit']])
