@@ -1,0 +1,11 @@
+{
+  "protocol": "port_midpoint_size_template_v1",
+  "sources": {
+    "crane_project/tools/eval_port_midpoint_size_template_v1.py": "c6af45877c870333b6f948d195fe5bc328277c3f9370c075d560d19b080d3ba7",
+    "crane_project/utils/port_midpoint_size_template_v1.py": "877f248a40057379251f5365efb34cbc32f7a6a59d7733fc103507cc173a38cc",
+    "crane_project/tools/port_midpoint_size_template_v1_protocol.json": "981d59d01b2d3f2b2e99f3c576db84bf91e51aa73cc9bb65b508c92158936d77",
+    "tests/test_port_midpoint_size_template_v1.py": "486cbef52ba9f8f5737275b4a11f237aac0c648c6bca9fbc715da5684c9b1844"
+  },
+  "protocol_sha256": "981d59d01b2d3f2b2e99f3c576db84bf91e51aa73cc9bb65b508c92158936d77",
+  "parent_midpoint_manifest_sha256": "ec4ff3d468e0521a00b765ddf67655c8ffd6705dec34e81a52000bd85e02a4a8"
+}

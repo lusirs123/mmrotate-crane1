@@ -1,0 +1,86 @@
+{
+  "protocol": "port_midpoint_size_template_v1",
+  "front_end": "frozen_B_ep24_formal_midpoint_ep23",
+  "reference": "frozen_size_reference_ep04",
+  "frames": {
+    "reference_holdout_train": 432,
+    "val": 887
+  },
+  "reference_holdout_domains": {
+    "real": 304,
+    "sim": 128
+  },
+  "VAL_domains": {
+    "real": 375,
+    "sim": 512
+  },
+  "readers": [
+    "moments",
+    "template"
+  ],
+  "reader_settings": "unchanged_port_midpoint_reliability_v1_protocol",
+  "template_parameters": {
+    "core_peak_fraction": 0.5,
+    "min_core_cells": 16,
+    "max_condition": 100000000.0,
+    "irls_steps": 10,
+    "huber_log_delta": 0.15,
+    "max_fit_log_rmse": 0.15
+  },
+  "methods": [
+    "score",
+    "simple",
+    "moments",
+    "template"
+  ],
+  "coverage_fractions": [
+    0.9,
+    0.95
+  ],
+  "coverage_role": "offline_same_count_diagnostic_no_deployment_cutoff",
+  "score_ties": "risk_then_image_label_free_order_and_boundary_tie_min_max_report",
+  "availability": "explicit_unavailable_never_accurate_or_trusted_by_definition",
+  "common_and_own_defined_support": true,
+  "full_output_availability_as_reject_diagnostic": true,
+  "center_limit_original_px": 15.0,
+  "size_max_relative_limit": 0.1,
+  "angle_limit_deg": 3.0,
+  "online_inputs": "current_RGB_frozen_P3_final_midpoint_box_image_geometry_only",
+  "GT_used_only_offline": true,
+  "box_parity_atol": 0.0001,
+  "box_parity_rtol": 1e-06,
+  "score_parity": "exact",
+  "GPU_batch_size": 1,
+  "autograd": false,
+  "save_full_maps": false,
+  "reviewed_migration_stages": {
+    "contract_sha256": "7afc84669a0144c42de0c28a452aaf111fc54129b301614df862a5603500d20f",
+    "collect": {
+      "completion_sha256": "130c7e977c0522bd86547e337bfdc049c16c32df4ef980d72509559bdca576bb",
+      "artifacts": {
+        "collection_report.json": "cc373f5237c6d0db6af05da4fe79d1a402ff419ed6cd3836a98baf57e065f1fd",
+        "input_check.json": "a3d20a3f6d8af97d71299316717cf47adf6bd06a9c8d4d6d57f7ed7590b0db8b",
+        "predictions.jsonl": "a896c0ea404172b16d8a1402e855325cf1151c718e7cd3f479ecaf15f206c135"
+      }
+    },
+    "fit": {
+      "completion_sha256": "e249bf2a2b64ce6a5d64925226cf5754613b22d12cb6541d042b52cb3c79ea3e",
+      "artifacts": {
+        "fit_report.json": "f98e9993312027b3e44cbd5a789d9cd1b2f45d18e2935da81cb56edae7b55fb7",
+        "input_check.json": "3428d0fad528a6f5edffe7ec57322cf8bdedf2b4aeebe709d7202aa12b581706",
+        "policy.json": "1adac499369bade5ef1f79495260002697d2b698c80ebf5424d3d77438fae4af",
+        "val_decisions.jsonl": "fb94720d411dec12436d7f6310b847048d9d1f3a585e930b34c9c65f56cc0812"
+      }
+    }
+  },
+  "detector_updates": 0,
+  "midpoint_updates": 0,
+  "reference_updates": 0,
+  "policy_updates": 0,
+  "reader_parameter_search": false,
+  "deployment_cutoff_created": false,
+  "test_read": false,
+  "test_repeatedly_exposed": true,
+  "reference_holdout_is_not_detector_or_simple_holdout": true,
+  "evidence_role": "fixed_candidate_reference_holdout_feasibility_exploratory_source_VAL"
+}

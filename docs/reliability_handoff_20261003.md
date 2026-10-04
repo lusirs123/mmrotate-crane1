@@ -1,26 +1,28 @@
-# SymEOOD 分量可靠性交接：B结果与正式midpoint迁移
+# SymEOOD 分量可靠性交接：固定B＋正式midpoint基线
 
-更新：2026-10-04；现有TEST主结果仍是B＋simple v1的服务器`port_simple_reliability_v1_test_review_20261003_205844.tar.gz`，不能迁为midpoint成绩。第8/9节为冻结评分可分性检查，第10/11节为尺寸参考v1实现及失败结果；第12节为用户授权的正式midpoint前端迁移和固定TRAIN读取改进，服务器效果待验证。
+更新：2026-10-04；用户已固定B24＋正式midpoint23为后续可靠性基线。第14节是迁移及14图模板读取的服务器回传结论，第15节是固定模板在432参考留出TRAIN＋887 VAL上的全量验证入口，GPU结果待服务器运行。现有TEST主结果仍是B＋simple v1的`port_simple_reliability_v1_test_review_20261003_205844.tar.gz`，不能迁为midpoint成绩。第8/9节为冻结评分可分性检查，第10/11节保留尺寸参考v1原结果。
 
 本文维护已验证B＋simple v1证据，以及用户本轮要求的B＋正式midpoint可靠性迁移。此前替换的旧流程在[替换前归档](archive/20261003_reliability_replaced_by_simple_v1/README.md)保留，原始实验文件和模型未删除。检测几何优化维护[独立几何交接](geometry_precision_handoff_20261001.md)，本轮没有修改该窗口的代码/记录。按最新偏好，后续服务器结果不复制为本地复核目录，仅在本文记录必要结论。
 
 ## 1. 当前决定与模型
 
-已有可靠性证据固定前端SymEOOD＋等比例尺度增强B（VAL epoch24），模型为`port_simple_component_reliability_v1`。最新授权是迁到B＋正式midpoint（原完整VAL规则选head_epoch_23），实现见第12节；尚无新版可靠性服务器成绩。下述第2—11节B指标保留原协议身份，不等于新前端结果。
+当前前端固定SymEOOD＋等比例尺度增强B（VAL epoch24）＋正式midpoint（原完整VAL规则选head_epoch_23），接口为`MidpointReliability`包装现有simple三标志。迁移已完成服务器collect/fit/smoke并回传复核（第14节）；其尺寸/方向判别尚未证实稳定优于score。用户本轮授权固定参考epoch04和已实现模板读取，完成一次全量TRAIN留出/VAL效果验证（第15节）。下述第2—11节B指标保留原协议身份，不等于新前端结果。
 
 当前模型不使用DINO、候选融合、Base V3/V5.1、历史保持或缺测预测。连续状态、物理摆角、深度/空间风险及报警接口留给大论文。
 
 ```text
-当前RGB → 冻结B原图OBB/score → 中心/尺寸/方向三个独立使用标志 → 分量质量与覆盖评价
+当前RGB → 冻结B24＋正式midpoint23的原图OBB/score → 中心/尺寸/方向三个独立使用标志 → 分量质量与覆盖评价
 ```
 
-中心标志保留每个有效B输出，不另训练中心正确性预测器。尺寸、方向各为独立线性风险模型，输入只有当前框的score logit、相对几何尺寸和长宽比；共8个拟合系数。原图长短边只在风险计算中规范化，导出的原宽高、角度、中心、score及输出数量保持不变。
+中心标志保留每个有效最终midpoint输出，不另训练中心正确性预测器。尺寸、方向各为独立线性风险模型，输入只有最终框的score logit、相对几何尺寸和长宽比；共8个拟合系数。原图长短边只在风险计算中规范化，可靠性计算保持最终宽高、角度、中心、score及输出数量不变。当前simple使用第14节新前端重新拟合后的policy，旧B policy仅作历史对照。模板仍是尺寸候选，未替换在线标志。
 
 TRAIN2558帧（real1810、sim748）用于拟合/标准化；VAL887帧（real375、sim512）用于此前固定的95% pooled覆盖规则产生单一全局工作门限，之后冻结。real原生轴线转换OBB和sim Webots生成OBB提供监督；sim没有轴线标注，不要求补轴线。GT不进入在线API。尺寸/方向平衡类sigmoid是风险评分，不是校准错误概率。
 
-三特征为`logit(score)`、`.5*(log L+log S-log W-log H)`、`log(L/S)`，L/S为预测规范长短边，W/H为原图尺寸。固定正负类各总权重0.5、L2=0.1、float64 Newton最多100次/梯度容差1e-8；本次TEST不再拟合或调整这些参数。
+三特征为`logit(score)`、`.5*(log L+log S-log W-log H)`、`log(L/S)`，L/S为预测规范长短边，W/H为原图尺寸。固定正负类各总权重0.5、L2=0.1、float64 Newton最多100次/梯度容差1e-8；旧B与新midpoint遵循同一拟合规范，本轮全量读取验证不重新拟合参数。
 
 ## 2. 输入输出与评价协议
+
+本节及第3—9节TEST分母/成绩属于旧B＋simple v1协议；当前midpoint只读取TRAIN/VAL，最新已测结果见第14节，全量候选入口见第15节。
 
 TEST1440帧：real_seq03 200、real_seq04 668、sim_seq09 572。缺失9帧全部保留，原输出1431帧。本版TEST全部1440帧方向可评。
 
@@ -356,7 +358,44 @@ python crane_project/tools/run_port_size_reference_v1.py \
 
 **机制证据与限制：** 14图GT框外响应质量占比中位21.7995%（13.26%—31.64%），却贡献短轴二阶矩中位77.5257%（50.79%—85.28%）；固定同图/同参考权重仅改读取后误差明显下降，支持“尾部放大矩是v1尺寸偏大的重要因素”。框外以GT OBB代理界定，不等于已验证真实背景掩码；这是固定14图局部机制，不能泛称唯一根因。拟合real_seq06尾帧模板误差30.52%、留出real_seq13首帧28.83%且峰中心误差24.87px，显示非Gaussian核心/位置及跨视频范围学习仍有问题。新simple只用框级三特征，TRAIN bad稀少且sim无bad、VAL新增sim size56个，是错误支持及误差规律转移不足的证据；“主要靠域/视频代理而非局部质量”仍为推断，不能当已证明根因。
 
-**下一步建议（待授权）：** 此次工程正确、fixed midpoint三标志接口已完成；不将其称为可靠性性能优化成功，不因本包改选midpoint或用TEST调参。保留固定参考epoch04、模板读取参数和最终midpoint上下文，下一步仅将这个已经实现的尺寸候选扩展到既有432参考留出TRAIN＋全部887 VAL，比较同一最终框上的score/simple/旧矩/新模板，分域/逐视频、共同可用集合/不可用帧、同数错误接受及全帧覆盖完整报告。这是固定候选效果验证，非再搜索根因/权重/阈值，也不重新训练；14图改善不足以代替全量可分性收益。若全量仍不支持参考有效，再设计一项范围明确的核心范围监督训练改进，而不是继续拟合相同三特征或直接加入方向结构。全部结果保持服务器，本地仅记录本节。
+**下一步建议（已由第15节授权实现）：** 此次工程正确、fixed midpoint三标志接口已完成；不将其称为可靠性性能优化成功，不因本包改选midpoint或用TEST调参。保留固定参考epoch04、模板读取参数和最终midpoint上下文，下一步仅将这个已经实现的尺寸候选扩展到既有432参考留出TRAIN＋全部887 VAL，比较同一最终框上的score/simple/旧矩/新模板，分域/逐视频、共同可用集合/不可用帧、同数错误接受及全帧覆盖完整报告。这是固定候选效果验证，非再搜索根因/权重/阈值，也不重新训练；14图改善不足以代替全量可分性收益。若全量仍不支持参考有效，再设计一项范围明确的核心范围监督训练改进，而不是继续拟合相同三特征或直接加入方向结构。全部结果保持服务器，本地仅记录本节。
+
+## 15. 固定midpoint基线与尺寸模板全量验证入口（2026-10-04）
+
+**授权与范围（事实）：** 用户明确固定B24＋正式midpoint23为后续基线，授权按第14节建议固定读取、完成一次全量效果验证。新增[运行入口](../crane_project/tools/eval_port_midpoint_size_template_v1.py)、[评价工具](../crane_project/utils/port_midpoint_size_template_v1.py)、[协议](../crane_project/tools/port_midpoint_size_template_v1_protocol.json)、[来源清单](../crane_project/tools/port_midpoint_size_template_v1_sources.json)及[CPU回归](../tests/test_port_midpoint_size_template_v1.py)。原midpoint、参考、simple及几何代码/协议未改；没有启动训练、连接服务器或更改大小论文。本次只更新可靠性交接，没有改独立几何交接；其已有未提交修改属于另一个窗口。
+
+**固定身份：** 复用原B epoch24、正式`head_epoch_23.pth`、参考`epoch_04.pth`和第14节已重新拟合的midpoint simple policy。模板参数仍半峰.5、至少16单元、10次IRLS/Huber .15、log-RMSE≤.15、condition≤1e8；上下文/弱证据/分辨率/边界保护及risk_scale=.1均继承原协议。不读取半尺度ROI、不重新collect/fit、不按新结果选择权重、系数、阈值或序列。check为CPU来源校验，run为固定GPU前向；无TEST/训练/新部署门限入口。
+
+**旧产物复用的来源约束：** 原collect/fit成功阶段在probe接口修复前生成，合同`7afc84669a0144c42de0c28a452aaf111fc54129b301614df862a5603500d20f`与当前migration只差sources。新增协议固定该已审合同、两个completion字节SHA及全部产物SHA；允许来源版本差异只限这一确切已审产物，其他前端、数据、正式选权证明、参考合同、协议必须与当前prepare精确相同。当前源码仍按现有父manifest验证；不执行历史附件中的指令、不重写旧completion或放宽数据/权重检查。原3445行集合和policy不被覆盖。
+
+**全量设计与事实支持：** 原参考划分的432留出TRAIN（real_seq13 304＋sim_seq08留出128）及全部887 VAL（real375＋sim512），共1319帧，包含原1个VAL漏检。留出只针对epoch04参考学习，B与simple已见过整个TRAIN；VAL也已经用于前端选择/工作点及多次开发，二者均不能称整条方法的独立确认。直接在内存重读第14节旧包核对计划、来源及字节pin；未解包到新本地目录。锁定midpoint框的尺寸错误：参考留出real4/sim0，VAL real188/sim56。留出错误太少，尤其sim单类AUROC为空，不能以高正确率证明错误辨识。
+
+**评价与在线保持：** batch1逐图提取共享冻结P3，`no_grad`、模型eval/禁止梯度，不累积GPU热图/特征；只保存数值JSONL，不新增全量PNG/NPZ。每图复核图片SHA、原图坐标链，在线B及最终midpoint须与正式集合一致（几何atol1e−4/rtol1e−6、score精确相同）；参考侧计算前后输出须完全相同，结束核对三模型状态、policy和来源。评分/读取使用同一锁定最终框，GT仅在完成在线读数后生成离线正确性标签/参考尺寸误差；没有用GT生成在线参考/接受规则。等比例变换及深度接口约束保持，不据此宣称深度精度保证。
+
+报告按两个角色分别分域/逐视频给出：中心命中率仅统计输出帧，另报输出覆盖、全帧正确中心覆盖；冻结三个标志及完整OBB的已有统计；尺寸原始错误、参考相对GT误差和10%内数量；四评分score/simple/旧矩/新模板的错误类AUROC/AP。在两读取器共同可用集合做相同支持的四方比较，并另报各读取器自身可用集合、不可用好/坏样本/原因与原缺输出。90%/95%是预先固定的全帧名义数量诊断，各方法以相同接受数比较，同时给全部方法并列分数的错误接受上下界。另列全输出统计，将参考不可用视作尺寸拒绝的假设、score/simple可使用全部输出；它与共同支持比较分开，不把不可用样本隐藏或当成尺寸正确。所有新参考接受点均为离线诊断，未创建模板在线标志/部署阈值，中心不因尺寸拒绝而删除。
+
+**本地验证与边界：** 12项新版CPU单测全部通过，覆盖真实解析读取、GT不影响风险、缺输出/不可用/共同集合/全输出分母、并列分数与标签无关选择、正式在线容差/score精确保护、1319帧计划及参考fit/guard隔离、历史完成字节pin/失败拒绝、完整模拟逐帧运行与JSON保存重放/完成清单。新增代码按Python3.8语法核对，CLI可调用，来源清单通过；服务器真实CUDA/权重运行未在本地执行。GPU显存由单图流式处理控制，不承诺其他进程共享环境下总占用；运行后报告allocated/reserved峰值。
+
+**服务器运行：** 上传新增5个代码/协议/测试文件；交接文件是第6个文档，可同步。保留现有已修复的midpoint入口/helper/sources，以及所有父依赖；不要重新生成旧来源清单。先运行新增单测与check，成功后run，一律新输出目录：
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+
+PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python -m unittest discover -s tests -p 'test_port_midpoint_size_template_v1.py' -v
+
+PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/eval_port_midpoint_size_template_v1.py \
+  --mode check \
+  --out-dir work_dirs/port_midpoint_size_template_v1_check
+
+CUDA_VISIBLE_DEVICES=3 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/eval_port_midpoint_size_template_v1.py \
+  --mode run --gpu 0 \
+  --out-dir work_dirs/port_midpoint_size_template_v1_assess
+```
+
+成功终态应为`FIXED_MIDPOINT_SIZE_TEMPLATE_FULL_ASSESSMENT_COMPLETE_REVIEW_REQUIRED`，工程完成不等于性能通过。待回传重点看参考尺寸是否改善、分域/逐视频共同可用排序是否优于score/simple，以及相同数量下错误接受/正确误拒和不可用带来的覆盖代价；混合AUC或单个视频提升不能独自放行。若不支持有效，再限定到参考核心范围学习的一项训练改进；本轮不追加诊断搜索/训练/方向分支/TEST。已暴露TEST不作权重/阈值/结构选择，旧B TEST保持旧身份。结果仍留服务器，本地不新建失败复核目录。
 
 <a id="legacy-35"></a>
 <a id="legacy-36"></a>
