@@ -2,7 +2,7 @@
 
 > 用途：在新对话中继续几何精度优化。本文汇总本轮对话、现有代码及收到的实验结果；保留事实、推断和待验证内容的区别。几何优化后续优先更新本文，不再为每次改动创建交接文件；可靠性另在[独立可靠性交接](reliability_handoff_20261003.md)维护。
 >
-> **2026-10-04当前优先级以第84节为准：用户要求先完成原版midpoint参数实验，并用熟悉的R_center/RIoU/A-RMSE/DFR/ACI等指标报告。第82/83节实际是新增size/motion损失系数筛查，不能代替原版参数敏感性；目前原版仅σ=1有正式结果，σ=.5/1.5尚未实现/运行。已补默认参数完整VAL及辅助网格的原指标复算，size .05半尺度A-RMSE因定位惩罚为22.7312°，不同于纯角4.1005°。下一项优先建议原版σ=.5/1/1.5同正式预算/完整VAL对照，辅助损失与额外残差诊断后置；本轮只读核对及记录，未改模型或启动训练。**
+> **2026-10-04当前执行以第85节为准：已授权并实现原版midpoint σ=.5/1/1.5同预算／完整VAL参数对照。原σ=1正式24轮/ep23结果严格核对后复用，仅新训练σ=.5/1.5；新增独立头/入口/固定协议及74项来源，原69项来源不改，27项CPU检查通过。已对既有正式包核对30项文本产物、24×902=21,648更新及887帧VAL；实际缓存、默认权重复放及CUDA smoke仍须在服务器验证。主表包含B及三种σ的单一标准尺度完整VAL熟悉指标；不叠加size/motion、不据已暴露TEST调σ／epoch。第84节未实现为当时状态；本轮未连接服务器或执行真实训练。**
 >
 > **2026-10-04最新参数回传核验见第83节：统一配对七配置已完成，旧point-only/motion=.025逐字节复用、五新配置各200步，31项产物/84项源码及全部初始化/批次/公式/56组汇总核对通过。size=.025四组短边静态MAE均改善，但sim动态及半尺度几何有代价；motion=.05四组RIoU和sim两尺度纯角改善，但sim短边/对角线动态目标未实现。六个预置联合条件均未通过；有局部效果，未更新正式midpoint ep23性能，不直接正式训练/TEST或叠加辅助项。下一项建议恢复对正式ep23四点对边间距/方向/共同位移残差的有限TRAIN零更新核对，尚未实现。第82节“尚待回传”为当时状态。**
 >
@@ -4959,3 +4959,102 @@ A-RMSE严格沿用原指标的定位惩罚：缺输出或中心误差≥10px赋9
 主结果表统一报告real/sim的输出覆盖、输出帧R_center、全帧中心正确覆盖、mean RIoU、sim A-RMSE、DFR、ACI、TDR_w10、MCML与可定义的MRF；纯角和尺寸/GT相对残差放辅助核验表。同预算、同VAL规则选择每参数的权重，全部配置保留，不以多数小改善宣布最优或事后放宽规则。是否采用新σ根据TRAIN/VAL证据决定；参数实验可以报告取舍，不要求每一项指标都改善才有研究价值。
 
 完整正式预算/VAL结果回传后才形成原版参数敏感性表。TEST已多次暴露，仅保留固定方案的后续报告身份，不用于挑σ/阈值/epoch；不将该数据集称为从未接触的独立TEST。深度接口保持不代表深度精度已验证；不恢复DINO/蒸馏/候选排序或完整审计。
+
+
+### 84.5 自定义指标的比较倾向与尺度含义（2026-10-04，事实／判断）
+
+用户要求综合自定义指标判断候选，并澄清原尺度/半尺度。本轮核对`preflight_port_geometry_g_v1.fixed_specs`和`PortIsotropicShrink`：1.0是正常RResize后的标准视图，不指直接使用原始文件像素尺寸；.5在同一标准视图上、Normalize/Pad前追加固定等比例缩小。图像与GT中心/宽高同时乘.5，角度保持，之后按原sx/sy还原预测到原图坐标评估。例：标准视图内80×32px目标在半尺度变为40×16px，长宽比保持而细节/特征格支持减少。两尺度来自相同身份，不是不同数据集或两个独立样本；完整正式VAL/TEST使用标准视图，当前半尺度表是额外TRAIN缩小核对。
+
+**仅按用户当前列出的主要自定义指标作研究候选比较：** 若更重RIoU和sim角度，倾向优先关注motion=.05；四组RIoU相对同配对point-only均提高，sim两尺度A-RMSE均降低，real两尺度DFR/ACI均改善。主要代价是sim半尺度DFR4.2757→4.5575（约+6.59%）、sim两尺度ACI略降。
+
+若更重DFR/ACI，motion=.025的取舍较温和：四组ACI均升、三组DFR下降，sim半尺度DFR增加约3.19%，低于.05的增幅；但sim两尺度A-RMSE上升、半尺度RIoU下降。不能因此断言它整体优于.05。size=.025对real两尺度三个主要指标均有收益，尺寸诊断有价值，但sim两尺度A-RMSE/DFR/ACI均退化、半尺度RIoU下降，在当前主要自定义指标上不足以优先于两项motion候选。size=.05有半尺度定位惩罚，不作为当前综合首选。
+
+此比较没有构造事后加权总分，没有用通过数量排名；“倾向”取决于用户关注的精度/时序取舍，不是原预置条件已通过或最终权重选择。所有配置probe覆盖/中心命中均100%、MCML均0，无法用它们区分候选；TDR_w10窗口不足，不能填造数值。本轮不放宽旧失败条件、不启动正式训练或TEST。当前下一项优先工作仍是第84.4节原版σ参数实验，不能被此次辅助项比较替代。
+
+## 85. 原版midpoint σ正式参数实验实现（2026-10-04；效果待服务器验证）
+
+### 85.1 授权、变量和预算（已实现事实）
+
+用户授权实施第84.4节的原版σ参数对照，并询问是否还有其他参数。新增文件：
+
+- [独立σ头](../crane_project/utils/port_geometry_midpoint_sigma_v1.py)：继承原17,696参数空间头。σ=1的forward直接调用旧实现，其他两值仅改变B-only四中点高斯先验及对应中性期望，不修改原SETTINGS或缓存ROI。
+- [参数实验入口](../crane_project/tools/train_port_geometry_midpoint_sigma_v1.py)：`check → smoke → train`，没有TEST入口或B构建／提特征路径。
+- [固定协议](../crane_project/tools/port_geometry_midpoint_sigma_v1_protocol.json)、[74项来源](../crane_project/tools/port_geometry_midpoint_sigma_v1_sources.json)、[CPU检查](../tests/test_port_geometry_midpoint_sigma_v1.py)。新来源覆盖原69项，加原来源清单及四项新协议／代码／测试；原清单和旧源码不更新。
+
+网格预先固定σ=.5/1/1.5 cell，**同一个σ用于该配置全部训练及评价**；不是在已训练σ=1权重上改推理σ。σ=1复用原正式完整TRAIN24轮、VAL选ep23的结果和实际权重；只对σ=.5和1.5各从同seed1703、零修正初始化训练24轮，不从ep23继续微调，不加载有限200步头。
+
+冻结SymEOOD+B ep24及缓存不变。缓存涵盖全部2558个TRAIN身份的标准／半尺度5116视图，仍按原中心匹配<15px和domain-balanced 4real+4sim批次规则决定优化支持；不存在把未输出帧当可回归样本。原记录支持共5103个可用视图（13个排除，其中4个无输出、9个中心不匹配），原每轮902步、总21,648步；两组新配置共43,296正式更新，σ=1代表的21,648次历史更新另报。原完整VAL375 real+512 sim=887帧、标准视图，不做半尺度VAL主表。
+
+原ROI9×9、context1.5、point SmoothL1 beta.1、Adam lr.001/weight_decay0、batch8、clip10、24轮预算、全部24轮原VAL选权规则均固定；size/motion辅助项不加入。保持raw宽高与角度关联、等比例增强、sx/sy原图还原、GT-free整框接受／回退、原输出分数和数量。不改变推理深度接口，深度精度仍未验证。
+
+### 85.2 复用核对、checkpoint及失败记录（已实现／已核对事实）
+
+`check`仅核对JSON／JSONL及文件SHA，不载入ROI张量或checkpoint、不调用CUDA、不更新参数：核对原cache_manifest/source/runtime、全部24轮VAL摘要及checkpoint索引、完整训练日志更新预算、原选权结果、被选887帧逐帧与汇总。实际所选权重也在服务器计算文件SHA；不会默默换权重或重训默认组。
+
+`smoke/train`进一步载入、验证原三片CPU缓存文件、内容／支持／来源及tensor预算；核对同初始化、逐轮批次数与原预算，按未改动的原批次生成器为两组复用相同调度（记录新调度SHA，原日志没有逐批索引SHA，**不宣称与不存在的历史SHA直接比对**）。runtime需与原正式记录一致。两阶段均先加载原ep23，以σ=1重放缓存全部VAL，要求逐帧及汇总精确一致；不一致即停止，不以新默认结果覆盖旧结果。
+
+每个新σ smoke进行2次更新，保存／重载head、optimizer、RNG及σ元数据，再各执行一次对照继续更新，实际4次/组、8次合计，全部丢弃。零修正逐位B、有效输出／stem梯度、重载推理及继续更新精确一致均须通过；正式入口验证成功smoke的来源、缓存、调度、产物SHA及状态，随后重新从零初始化。没有新增B在线调用，因为只改变头内先验，坐标／采样／解码完全沿用已有正式实现。
+
+新checkpoint采用独立协议，显式绑定σ、新来源、缓存与旧来源；错误σ／来源／缓存拒绝加载。原流式原子保存和重载核对保留。新目录使用exist_ok=False，失败目录也保留；失败时记录错误与已真正完成的optimizer更新，更新后的参数检查失败也不漏计已执行的一步。重复运行使用新目录后缀，不能覆盖旧结果。
+
+两新头顺序训练，每次只载局部ROI batch；不同时加载B或三组完整GPU模型。CPU缓存上限仍1GiB，每组另报CUDA allocated/reserved峰值；不把这一设计等同于进程显存绝不变化。
+
+### 85.3 主结果和其他参数的顺序（实现事实／建议）
+
+正式入口自动执行每组全部24轮完整VAL、原规则选权、选中权重保存重载再评价，不需额外运行VAL推理命令。根目录`val_sigma_compare.json/.csv`包含B参考与三个σ各real/sim共8行，列所选epoch、输出覆盖、输出帧中心命中、全帧中心正确覆盖、RIoU、sim A-RMSE、DFR、ACI、TDR_w10、MCML_max/mean/pass及可定义的MRF。主表是**标准视图单尺度完整VAL**；不将TRAIN半尺度检查当第二份独立VAL/TEST。
+
+A-RMSE沿用原定位惩罚，尺寸和纯角诊断在原摘要另存，分母明确区分；历史终端R_center字段仍为全帧中心正确，不冒充输出帧命中率。JSON另含各σ完整分组及全部72轮摘要（原24轮复用、两新配置48轮），各新分支保存全部权重、逐帧及摘要。不自动跨σ选赢家或更新现有正式性能，不放宽既有失败条件。单seed参数敏感性可报告取舍，不能称统计显著、稳定提升或全局最优。
+
+其他参数不是都要遍历。**本轮只做σ**，其作用最直接且可复用ROI。建议结果返回后再决定是否增加一个独立上下文范围对照（原context1.5；改变它须另建ROI缓存及来源，不能在现有ROI上改数值冒充实验）。点损失beta（原.1）是次优先候选，影响小误差梯度尺度，可另做单变量同预算对照。ROI分辨率（原9×9）涉及采样、计算及先验“cell”单位变化，不作为本轮同缓存σ网格的一部分；seed重复是稳定性验证，不是可按结果挑选的超参数。接受／回退阈值承担保护职责，本轮不扫描。
+
+σ能影响读出空间扩散及几何波动，但能否修复DFR、保持ACI／RIoU／覆盖仍是**待验证**，不能由数学机制推出已测收益。TEST已多次暴露：本轮不读取TEST、也不根据TEST挑σ、epoch、阈值或改规则。原正式及有限结果身份保留，可靠性另一对话不自动迁移到新σ。
+
+### 85.4 本地核验（事实；不等于服务器GPU通过）
+
+本地27项CPU检查通过：三σ×raw宽高交换／角度边界／非相同sx/sy／空框的零修正和有效梯度、σ=1与旧头forward／梯度／optimizer两步逐位一致、先验中性期望重算、显式σ与来源绑定／禁止覆盖、两组smoke保存重载和RNG继续更新、真实相对／绝对路径CLI静态流程及禁止tensor/CUDA访问、旧结果来源／预算／选权异常拒绝、原默认checkpoint逐帧复放及失配拒绝、更新失败计数、合成数据24轮选权／重载和主表三个中心分母。合成CPU小样本不作为几何性能证据。
+
+三项Python代码通过Python3.8语法解析；原69项与新74项SHA核对通过。对原正式full-review压缩包仅在内存读取TRAIN／VAL产物，30项文本SHA、24×902更新、ep23选择及887帧逐帧汇总通过；包中没有实际.pth／三片缓存，实际文件SHA、CUDA默认复放、smoke及新σ效果由服务器下一步核对。未读取包内TEST、未保存回传副本／临时review脚本、未连接服务器或执行真实训练。
+
+### 85.5 服务器指令（运行后回传再判断）
+
+上传上述五项新文件到项目对应位置，使用原mmrotljj环境及既有正式训练／缓存目录，保留旧文件。以下目录必须尚未使用；若已创建则统一换新后缀，同时改smoke-report。
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+
+CUDA_VISIBLE_DEVICES="" PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/train_port_geometry_midpoint_sigma_v1.py \
+  --stage check \
+  --out-dir work_dirs/port_geometry_midpoint_sigma_v1_static
+
+CUDA_VISIBLE_DEVICES=3 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/train_port_geometry_midpoint_sigma_v1.py \
+  --stage smoke --gpu 0 \
+  --out-dir work_dirs/port_geometry_midpoint_sigma_v1_smoke
+```
+
+静态状态须为`STATIC_SIGMA_CONTRACT_PASS_NO_TENSOR_LOAD_NO_GPU_NO_UPDATES`；CUDA smoke须为`SIGMA_SMOKE_SAVE_RELOAD_PASS_DISCARDED`。随后正式训练命令还会再次校验smoke证据，不会因只有一个已创建目录而放行：
+
+```bash
+CUDA_VISIBLE_DEVICES=3 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/train_port_geometry_midpoint_sigma_v1.py \
+  --stage train --gpu 0 \
+  --smoke-report work_dirs/port_geometry_midpoint_sigma_v1_smoke/completion.json \
+  --out-dir work_dirs/crane_symeood_k1_port_day2night_midpoint_sigma_v1
+```
+
+完成状态`SIGMA_FULL_GRID_TRAIN_VAL_COMPLETE_REVIEW_REQUIRED`。只需一张逻辑GPU；这是每组完整TRAIN24轮训练头，B保持冻结。不启动多卡DDP或重建缓存。两组新头每组21,648更新，共43,296；smoke8次和复用σ=1历史21,648次分开记录。
+
+可压缩本轮文本结果及原默认文本依据供回传，排除全部.pth，模型保留在服务器。新参数回传前没有最优σ结论：
+
+```bash
+tar --exclude='*.pth' \
+  -czf "work_dirs/port_geometry_midpoint_sigma_v1_review_$(date +%Y%m%d_%H%M%S).tar.gz" \
+  -C work_dirs \
+  port_geometry_midpoint_sigma_v1_static \
+  port_geometry_midpoint_sigma_v1_smoke \
+  crane_symeood_k1_port_day2night_midpoint_sigma_v1 \
+  crane_symeood_k1_port_day2night_midpoint_formal_v1
+```
+
+压缩包未包含权重，所以回传包只能核对其记录SHA及服务器已执行的保存重载证据，不能声称在本机重新检查权重字节。

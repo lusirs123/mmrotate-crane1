@@ -1,0 +1,91 @@
+{
+  "protocol": "port_geometry_midpoint_sigma_v1",
+  "sigmas": [
+    0.5,
+    1.0,
+    1.5
+  ],
+  "new_sigmas": [
+    0.5,
+    1.5
+  ],
+  "formal_settings": {
+    "epochs": 24,
+    "batch_size": 8,
+    "seed": 1703,
+    "lr": 0.001,
+    "weight_decay": 0.0,
+    "clip_norm": 10.0,
+    "train_scales": [
+      1.0,
+      0.5
+    ],
+    "val_scale": 1.0,
+    "max_cpu_tensor_bytes": 1073741824,
+    "train_center_match_px": 15.0,
+    "balanced_batch_real": 4,
+    "balanced_batch_sim": 4
+  },
+  "original_midpoint_settings": {
+    "seed": 1703,
+    "permutation_seed": 1704,
+    "in_channels": 256,
+    "hidden_channels": 32,
+    "roi_size": 9,
+    "context_multiplier": 1.5,
+    "stride": 8,
+    "min_context_cells": 2.0,
+    "prior_sigma_cells": 1.0,
+    "loss_beta": 0.1,
+    "steps_per_arm": 200,
+    "batch_size": 8,
+    "lr": 0.001,
+    "weight_decay": 0.0,
+    "clip_norm": 10.0,
+    "max_center_over_b_short": 0.3,
+    "max_log_edge_residual": 0.22314355131420976,
+    "max_angle_residual_rad": 0.17453292519943295,
+    "min_pair_length_px": 1e-06,
+    "roi_bound_tolerance": 1e-05
+  },
+  "parameter_count": 17696,
+  "selection_config": {
+    "r_center_delta": 0.005,
+    "mcml_limit": 5,
+    "weight_sim": 0.7,
+    "weight_real": 0.3,
+    "soft_w_tdr": 0.35,
+    "soft_w_r_center": 0.25,
+    "soft_w_aci": 0.2,
+    "soft_w_angle": 0.2
+  },
+  "variable": "Only B-only Gaussian prior sigma_cells .5/1/1.5, with matching neutral expectation. Sigma=1 forward delegates exactly to original. Never mutate old SETTINGS.",
+  "fairness": "Same seed1703 zero-output initialization, full5116 TRAIN views, eligible domain-balanced epoch schedule, Adam.001,24 epochs per condition. Reuse reviewed original sigma=1; train only .5/1.5 from scratch, never from selected ep23.",
+  "cache": "Original TRAIN1/.5 and VAL1 CPU ROI cache,3 shards. No B loading/inference/extraction or cache rebuilding. Training two scales; main full887-frame VAL one standard scale.",
+  "smoke": "Each new sigma:2 updates, save/reload exact head/optimizer/RNG/inference, one continuation on each copy;4 updates discarded. No detector online call; old coordinate/sampler/decoder unchanged.",
+  "selection": "All24 complete full-VAL checkpoints under unchanged original rule per sigma. Report all three selected results and all epoch tables. No automatic cross-sigma winner, no averaging/TEST/reselection.",
+  "reporting": "Primary real/sim coverage, output-frame R_center, full-frame center correctness, mean RIoU, sim penalty A-RMSE, DFR,ACI,TDR,MCML,defined MRF. Keep historical R_center key all-frame meaning. Standard-scale VAL only; residuals supplementary.",
+  "checkpoint": "Separate new sigma protocol, identity and explicit parameter metadata in every checkpoint. Refuse wrong sigma/proof/source/cache. Stream atomic no-overwrite IO and reload verification inherited.",
+  "reuse": "Require completed original24-epoch sources/cache/runtime/support, all24 VAL summaries, budget/log/source/selection consistency, indexed selected rows and checkpoint. Reproduce selected sigma=1 cached VAL before new optimization. Do not silently retrain on mismatch.",
+  "scope": {
+    "new_formal_conditions": 2,
+    "reused_conditions": 1,
+    "new_epochs": 48,
+    "reused_epochs": 24,
+    "smoke_updates_total": 8,
+    "detector_updates": 0,
+    "detector_forward_calls": 0,
+    "feature_extractions": 0,
+    "cache_rebuilt": false,
+    "test_access": false,
+    "selection_on_test": false,
+    "automatic_promotion": false
+  },
+  "limitations": [
+    "Single fixed seed sensitivity, not significance or global optimality.",
+    "Main VAL is standard-scale, training also uses half-scale. Not a TEST sweep.",
+    "Original failed finite gates and measured ep23 results retain their identity.",
+    "TEST repeatedly exposed; never select sigma/epoch/threshold on TEST.",
+    "Isotropic transforms, sx/sy restoration, raw w/h-angle/depth interface retained; depth accuracy unverified."
+  ]
+}
