@@ -1,0 +1,8 @@
+{
+  "protocol": "port_reliability_separability_v1",
+  "sources": {
+    "crane_project/tools/diagnose_port_reliability_separability_v1.py": "aaa32621f7252dddff653418608eed3454f8dfa8389b17324dac85a9a03456bf",
+    "crane_project/utils/port_reliability_separability_v1.py": "15507b41ac132248355cc62b9cd08f78bfb6e2b0970231f01cd0c08ddb2d9cdd",
+    "crane_project/tools/port_reliability_separability_v1_protocol.json": "93555a25cc6ebd80dca86a7f06a92a737391fa02198658fadf21b1c516058672"
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "protocol": "port_reliability_separability_v1",
+  "parent_protocol_sha256": "d9e91ea72ea1d0543206d73fedab2a957aa3d18dbb880e118b62bf18f2409b61",
+  "parent_manifest_sha256": "48d0155cb85babbc1ea960979e3d7a5eedd735a339a3b5f64e82d0d4b35449d3",
+  "reviewed_policy_files": {
+    "policy.json": "bbc3075fdb2f6a9f817cffa645b82aa43b4be9ca95ede4f929c23f02e784d7a8",
+    "fit_report.json": "3dddd830c051b3947cba8581ccce66bda0f2ae7efbdfa1580afba675d1b36458",
+    "val_decisions.jsonl": "15fcbb1cd558204cd1347c72134ffcb75f7d86ab2de5aaecbe8c63ee77c0cdf3",
+    "completion.json": "155d782225a3dd238b070de378340b8d316da8950831545faedd3edcb7512708"
+  },
+  "roles": [
+    "train",
+    "val"
+  ],
+  "methods": [
+    "simple",
+    "score_only"
+  ],
+  "components": [
+    "size",
+    "angle"
+  ],
+  "train_direction_supplement": "angle_training_qualification",
+  "primary_direction_evaluation": "saved_GT_aspect_ge_1.2",
+  "bad_positive_class": "size_max_relative_gt_0.1_or_pi_periodic_angle_deg_gt_3",
+  "center_evaluation": "original_center_error_lt_15px_on_outputs_plus_output_and_all_frame_correct_coverage",
+  "rank_integration": "exact_whole_score_ties_error_class_AP_step_integration_and_AUROC_trapezoids",
+  "curve_rule": "accept_risk_le_whole_ties_and_reject_all_endpoint_no_selected_threshold",
+  "same_count_score_rule": "ascending_1_minus_score_then_image_offline_only_with_boundary_tie_bad_bounds",
+  "risk_replay_abs_tolerance": 1e-12,
+  "risk_tolerance_scope": "float64_risk_only_original_boxes_and_all_flags_must_match_exactly",
+  "fit_or_select_cutoff": false,
+  "new_policy_created": false,
+  "test_read": false,
+  "test_repeatedly_exposed": true,
+  "GPU_used": false,
+  "parameter_updates": 0,
+  "detector_inferences": 0,
+  "evidence_role": "in_sample_TRAIN_and_reused_source_VAL_development_descriptive_not_independent_confirmation"
+}

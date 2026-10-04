@@ -1,6 +1,6 @@
 # SymEOOD＋尺度增强B：当前分量可靠性交接
 
-更新：2026-10-03；最新证据为服务器`port_simple_reliability_v1_test_review_20261003_205844.tar.gz`。
+更新：2026-10-04；TEST主结果仍为服务器`port_simple_reliability_v1_test_review_20261003_205844.tar.gz`。新增既有TRAIN/VAL冻结评分的本地CPU可分性检查，见第8节。
 
 本文只维护当前B＋simple v1模型、协议、服务器结果和下一步。用户要求旧流程/旧成绩从当前正文删除并替换为新结果，本次已重写；旧记录在[替换前归档](archive/20261003_reliability_replaced_by_simple_v1/README.md)保留，原始实验文件和模型未删除。检测几何优化继续维护[独立几何交接](geometry_precision_handoff_20261001.md)，本轮未改其内容。
 
@@ -93,13 +93,13 @@ real状态误判总数尺寸214+28=242/859、方向132+73=205/859，状态准确
 
 **推断，未证实根因：** 当前三特征没有直接图像范围/方向证据，TRAIN与新视频的错误分布可能不同，工作点也可能偏宽松；这些都需在TRAIN/VAL检查，不根据本TEST逐视频反推新规则。
 
-本版policy/门限/B及新TEST报告保留冻结，当前流程收尾完成。下一项先复用既有TRAIN/VAL原框、GT与冻结风险，在CPU上检查正确/错误分布、错误类PR/ROC、错误接受—正确误拒—覆盖关系，并按视频/real/sim对照score。该检查尚未执行，TRAIN拟合内与VAL开发/校准身份须披露。
+本版policy/门限/B及新TEST报告保留冻结，当前流程收尾完成。已新增入口并复用既有TRAIN/VAL原框、GT与冻结风险，在本地CPU检查正确/错误分布、错误类PR/ROC、错误接受—正确误拒—覆盖关系，并按视频/real/sim对照score，结果见第8节。TRAIN拟合内与VAL开发/校准身份保持，服务器新入口回传仍待运行。
 
 若评分能区分而工作点不合适，下一版本才预先固定正确性目标及两类误判代价，不再以“尺寸/方向必须95%接受”替代判断正确。若评分不能区分，改门限或校准概率不足以解决；再限制到尺寸的二维图像范围与原框显式一致性实验。方向需实际参考足够准再做低维周期一致性，不能直接重训已关闭的共享结构/高维拼接头。
 
 中心TRAIN只有1个真实错误，当前不把默认保留写成已解决中心正确性判别。不能通过全部拒绝或总准确率指标掩盖错误检出/正确误拒代价。新训练/门限/设计仅在TRAIN/VAL开发；当前TEST已多次暴露，只报告冻结方案，不重选权重、前端或规则，不称未接触独立确认。
 
-此处为下一步建议，未修改代码或启动新优化实验。
+新门限与新图像参考方案仍是建议，未拟合新模型或启动新训练；第8节只新增冻结缓存的诊断代码，不修改现有policy或在线三个标志接口。
 
 ## 5. 服务器回传核验与证据身份
 
@@ -145,6 +145,55 @@ python crane_project/tools/eval_port_simple_reliability_v1_test.py \
 已更新本文、[分量可靠性主文档](obb/OBB观测可靠性与连续输出.md)、[小论文完整流程](obb/base_v3_v51_focused_paper_complete_pipeline_20260915.md)及[文档入口](README.md)。旧模型链、旧数据结果及已关闭实验不再放入当前正文，未把历史数据改名成当前成绩。最新服务器结果为本页第3～5节唯一主结果；TRAIN/VAL仍保留其拟合/开发职责。
 
 原几何交接等文档的历史锚点仍可跳到此处的归档入口，详细事实/文献/负结果见归档对应原编号。原代码、权重及JSON/JSONL不删除；性能优化文献和既有失败机制也保留，避免后续重复已关闭的蒸馏、候选排序及完整审计路线。
+
+## 8. 冻结TRAIN/VAL评分可分性检查（2026-10-04）
+
+**授权与实现事实：** 用户要求按此前建议实现并检查普通三分量判别的评分可分性，大小论文暂不修改。本轮只新增CPU诊断入口/统计模块/协议/来源清单/必要测试，并更新本文。未连接服务器，未修改B、现simple源码/模型/policy/95%工作点，也未修改几何优化文档或重启ROI/structure训练。
+
+- [运行入口](../crane_project/tools/diagnose_port_reliability_separability_v1.py)
+- [独立统计模块](../crane_project/utils/port_reliability_separability_v1.py)
+- [固定诊断协议](../crane_project/tools/port_reliability_separability_v1_protocol.json)、[来源清单](../crane_project/tools/port_reliability_separability_v1_sources.json)
+- [CPU测试](../tests/test_port_reliability_separability_v1.py)
+- [本地最终报告](../work_dirs/port_reliability_separability_v1_run_local_final_20261004/report.json)、[78行汇总](../work_dirs/port_reliability_separability_v1_run_local_final_20261004/summary.csv)、[55,335个曲线点](../work_dirs/port_reliability_separability_v1_run_local_final_20261004/curve_points.csv)
+- [本地完成记录](../work_dirs/port_reliability_separability_v1_run_local_final_20261004/completion.json)、[独立数值复核](../work_dirs/port_reliability_separability_v1_independent_review_local_20261004.json)
+
+**输入/统计合同（事实）：** 精确绑定原父版本18个来源、原TRAIN身份/完成文件/2558行预测/输入snapshot、原887行VAL数字缓存以及已完成policy四文件SHA。复用原数值GT，不重新构建标注、不读图像/P3/权重、不使用旧ROI/结构质量。尺寸超限为规范长短边最大相对误差>10%，角度超限为长边π周期误差>3°；主角度评价只统计saved GT aspect≥1.2，TRAIN另报`angle_training_qualification`，主表220个TRAIN方向错误与训练标签299个方向错误不混用。sim继续是Webots OBB监督，不要求轴线标注。
+
+错误为正类、风险越高越倾向拒绝。按all/real/sim/视频报告错误类AUROC、按同分整组积分的非插值AP、错误占比、正确/错误风险分布（固定0～1直方图及分位数）、原冻结全局工作点混淆、错误检出/错误接受/正确误拒/正确保留、接受后正确率和覆盖。AP要与错误占比比较，单类AUROC为null，不能把无错误或高错误占比的AP视为有效辨识。尺寸/方向曲线只评可评输出，缺输出不算正确拒绝；不可评角度的实际在线标志另报。
+
+曲线遍历整组接受`risk≤阈值`，含拒绝全部端点，不输出最佳阈值或新policy。各组曲线只作离线描述，不产生按域/视频路由。相同接受数score以`1-score,image`无GT排序，仅作离线诊断；切开同分组时另报错误数上下界/随机同分期望，GT不用于挑选同分帧。原全局门限及盒/标志保持。风险数值重放允许1e-12的float64差异；原框与全部布尔标志必须精确相同，该容差不用于B框或覆盖放行。
+
+**本地新增结果（事实，未称独立确认）：** TRAIN2558、VAL887完整读取，检测/可靠性参数更新及新推理均0，无GPU/TEST读取。887帧VAL原框与三个方法共7983个标志重放精确一致；最大风险差1.110223e-16。中心VAL仍real374/375输出、360/374条件命中、360/375全帧正确覆盖，sim512/512三项100%。原B几何没有改变。
+
+| VAL范围/分量 | 错误/可评输出 | simple AUROC / AP | score AUROC / AP |
+|---|---:|---:|---:|
+| real / size | 181/374 | 0.589500 / 0.603345 | 0.686285 / 0.660353 |
+| real / angle | 67/374 | 0.669308 / 0.336561 | 0.725558 / 0.401279 |
+| sim / size | 23/512 | 0.740464 / 0.207551 | 0.711390 / 0.160515 |
+| sim / angle | 69/512 | 0.663591 / 0.251613 | 0.679524 / 0.244769 |
+
+VAL size pooled simple AUROC为0.831788（score0.694202），但real单域为0.589500；逐视频real_seq07为0.467620（score0.450076，错误171/225），real_seq14为0.517986（score0.576978，错误10/149）。seq07 AP0.781653需与错误占比0.76共同看，不能只因AP数值高称辨识强。real方向seq07 simple AUROC0.618839低于score0.673037，seq14为0.667626高于score0.622302，仍非各视频一致优势。sim尺寸有局部面积收益，方向AUROC略低、AP略高，不能称联合改善。
+
+**复核事实与限制：** 新版19项CPU unittest和Python3.8语法检查通过。独立逐对正负样本/同分半权公式复算78组AUROC，独立阈值积分复算78组AP及78组冻结混淆，遍历全部55,335个曲线点重算混淆、接受覆盖及score同分边界；全部通过。独立标量风险公式最大差5.551115e-16，原来源/输入及完成文件SHA通过。最终报告SHA为`804e17950922cad85a7c781998b6174cefba7488a0960dca772db443f1f24fe9`。未重跑已通过的旧版本测试；服务器环境新入口未运行，本地复用的是已核验服务器数字缓存，不能声称新图像在线验证。
+
+**推断与下一步建议（待验证）：** 现simple在real两个VAL视频的尺寸排序接近随机，方向也未形成相对score的一致优势；工作点宽松和评分不足同时存在，不能只改95%规则宣称成功。pooled尺寸面积与组内差异相符，提示分组间排序贡献明显，不证明具体特征或跨视频退化的唯一根因。新工作点可以改变误判取舍，但不增加现评分的排序信息。当前证据支持停止仅靠同三特征/单调校准反复优化；下一项方法设计仍优先限制到尺寸的独立二维图像范围与原框显式一致性，先检查参考精度和±短边辨识，再考虑更广TRAIN支持/VAL。方向参考和低维周期一致性另行设计，不直接续训旧structure v1；中心只有1个真实TRAIN错误，不宣称已独立判准。新分支/门限/预算尚未实现或选定，不能把本报告作为正式训练放行。TEST多次暴露，后续选择继续限定TRAIN/VAL，缺少未接触独立视频确认与深度精度证据。
+
+**服务器复现（仅CPU，不用GPU；保留原目录）：** 上传本节五个新代码/协议/来源/测试文件到对应位置，原simple父文件与原缓存/policy保持。不需要新权重或训练日志；默认目录与此前服务器fit的输入相同。若输入或来源SHA不同，先核对实际文件路径与版本，不重建缓存、不重拟合policy或放宽检查。
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/diagnose_port_reliability_separability_v1.py \
+  --mode check \
+  --out-dir work_dirs/port_reliability_separability_v1_check
+
+PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/diagnose_port_reliability_separability_v1.py \
+  --mode run \
+  --out-dir work_dirs/port_reliability_separability_v1_run
+```
+
+默认输入：`--train-cache work_dirs/port_reliability_train_support_v1_cache`、`--input-snapshot work_dirs/port_reliability_train_support_v1/train_input_snapshot.json`、`--val-dir work_dirs/port_reliability_branches_v1_val_cached_v1`、`--policy work_dirs/port_simple_reliability_v1_fit/policy.json`。若这些服务器目录已经换名，可用对应参数指定同SHA原文件；输出必须使用新目录。回传run的`report.json`、`summary.csv`、`curve_points.csv`、`completion.json`（`review.md`为便读说明，`input_check.json`为完整输入证明）。服务器数值末位可不同，但原框/标志与冻结VAL必须保持；未授权任何TEST调参、DINO、候选排序或大论文连续状态修改。
 
 <a id="legacy-35"></a>
 <a id="legacy-36"></a>
