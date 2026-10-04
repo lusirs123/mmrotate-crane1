@@ -1,0 +1,15 @@
+{
+  "protocol": "port_midpoint_simple_reliability_v1_fixed_test",
+  "sources": {
+    "crane_project/tools/eval_port_midpoint_simple_reliability_v1_test.py": "6fd8a32e902af72edf2260cafdfa4ac5d0395ced1cd4e47c50d860f12b8a3028",
+    "crane_project/tools/port_midpoint_simple_reliability_v1_test_protocol.json": "5c8c0dfc7627ac1c4c65253bdbc6a6083260cfb8ee22033de1f64493263f0dfb",
+    "tests/test_port_midpoint_simple_reliability_test_v1.py": "a54c39c51b8ddd2d53fc3046dd3765e8a2c152aba76930aa287c47d72363fa40",
+    "crane_project/utils/port_reliability_separability_v1.py": "15507b41ac132248355cc62b9cd08f78bfb6e2b0970231f01cd0c08ddb2d9cdd"
+  },
+  "protocol_sha256": "5c8c0dfc7627ac1c4c65253bdbc6a6083260cfb8ee22033de1f64493263f0dfb",
+  "parent_manifests_sha256": {
+    "old_simple_test": "555b2beb3a9c513d06dfd812fbde8e2ff343b57fab795dde948795dbe0b2d3fe",
+    "migration": "ec4ff3d468e0521a00b765ddf67655c8ffd6705dec34e81a52000bd85e02a4a8",
+    "formal_eval": "48d0eb24b0d1c2a69a2f5af2e0a52adcd7a58ff9fc4c7ce0a0232f22af65ecb4"
+  }
+}

@@ -1,6 +1,6 @@
 # SymEOOD 分量可靠性交接：固定B＋正式midpoint基线
 
-更新：2026-10-04；用户已固定B24＋正式midpoint23为后续可靠性基线。第14节是迁移及14图模板读取的服务器回传结论，第15节是固定模板全量验证入口，第16节是432参考留出TRAIN＋887 VAL的服务器结果：读取尺寸大幅改善，但real可靠性排序退化、sim有局部收益，未替换simple在线标志。现有TEST主结果仍是B＋simple v1的`port_simple_reliability_v1_test_review_20261003_205844.tar.gz`，不能迁为midpoint成绩。第8/9节为冻结评分可分性检查，第10/11节保留尺寸参考v1原结果。
+更新：2026-10-04；用户已固定B24＋正式midpoint23为后续可靠性基线。第14节是迁移及14图模板读取的服务器回传结论，第15节是固定模板全量验证入口，第16节是432参考留出TRAIN＋887 VAL的服务器结果：读取尺寸大幅改善，但real可靠性排序退化、sim有局部收益，未替换simple在线标志。第17节新增固定前端＋现有simple的CPU TEST三分量评价入口，复用已有正式midpoint TEST框，服务器评分结果待回传。现有已审可靠性TEST主结果仍是旧B＋simple v1的`port_simple_reliability_v1_test_review_20261003_205844.tar.gz`，不能迁为midpoint成绩。第8/9节为冻结评分可分性检查，第10/11节保留尺寸参考v1原结果。
 
 本文维护已验证B＋simple v1证据，以及用户本轮要求的B＋正式midpoint可靠性迁移。此前替换的旧流程在[替换前归档](archive/20261003_reliability_replaced_by_simple_v1/README.md)保留，原始实验文件和模型未删除。检测几何优化维护[独立几何交接](geometry_precision_handoff_20261001.md)，本轮没有修改该窗口的代码/记录。按最新偏好，后续服务器结果不复制为本地复核目录，仅在本文记录必要结论。
 
@@ -22,7 +22,7 @@ TRAIN2558帧（real1810、sim748）用于拟合/标准化；VAL887帧（real375�
 
 ## 2. 输入输出与评价协议
 
-本节及第3—9节TEST分母/成绩属于旧B＋simple v1协议；当前midpoint只读取TRAIN/VAL，最新已测结果见第14节，全量候选入口见第15节。
+本节及第3—9节TEST分母/成绩属于旧B＋simple v1协议；当前midpoint已审可靠性结果为TRAIN/VAL迁移（第14节），全量候选入口见第15节。第17节复用几何窗口已完成的正式TEST数值补齐新前端可靠性评分；该新入口的服务器结果尚未回传。
 
 TEST1440帧：real_seq03 200、real_seq04 668、sim_seq09 572。缺失9帧全部保留，原输出1431帧。本版TEST全部1440帧方向可评。
 
@@ -436,6 +436,44 @@ real模板比simple多接受4坏、多误拒4好，尺寸状态准确率51.6043%
 **可观察问题及推断边界：** real共同支持中的好检测框，其模板短边/GT中位1.14639，模板风险中位.78902；坏检测框预测长/短边比GT中位.88071/.87434，模板长/短边比GT中位.92814/.90371，风险反而中位.67509。已观察到参考与预测存在同向偏小、好框参考偏大的分组特征，符合“两个估计彼此相近却不接近GT”的失败机制；分组中位数不证明每帧的误差相关性、唯一根因或图像证据天然无效。sim坏框模板风险中位.85633高于好框.74457，符合该域较有效的排序。抗尾部读取修复了v1的大量尺寸高估，但参考核心的范围/跨视频尺度学习仍不足；错误含义从原矩统计偏差转向模板仍不够准及参考—检测的一致性与正确性不等价，不能靠统一风险反号/域特定阈值在VAL上挽救。
 
 **结论与下一步（建议，尚未实现）：** 工程与全量固定效果验证完成；继续固定midpoint前端和现有simple作为对照，模板不替换在线接口，不宣称可靠性优化成功。无需再重复同权重的全量诊断或先跑TEST寻找改善；当前TEST已反复暴露。下一项应限定为参考学习中的核心范围/长短边几何监督改进，保持B/midpoint、模板读取和评价协议固定，在TRAIN设计并按同预算对照VAL，目标是减少参考自身误差及与坏检测同时偏小的情形。不能只增加泛化训练轮数、继续三特征重拟合、继续搜读取系数或同时扩展方向结构。本节仅记录测量和建议，未修改代码/大小论文，亦未启动新训练。
+
+## 17. 固定midpoint＋普通三标志的TEST评价入口（2026-10-04）
+
+**授权与范围（事实）：** 用户授权按既定流程补齐TEST三分量评价。本轮新增[CPU入口](../crane_project/tools/eval_port_midpoint_simple_reliability_v1_test.py)、[冻结协议](../crane_project/tools/port_midpoint_simple_reliability_v1_test_protocol.json)、[来源清单](../crane_project/tools/port_midpoint_simple_reliability_v1_test_sources.json)及[必要回归](../tests/test_port_midpoint_simple_reliability_test_v1.py)，只更新本可靠性交接。没有修改原检测/midpoint/simple/参考代码、父来源清单、几何交接或大小论文，没有训练、连接服务器或新建本地复核结果目录。当前固定流程为`B epoch24＋正式midpoint epoch23 → 现有simple三个独立使用标志 → 分量质量与覆盖评价`；尺寸模板、ROI、结构分支均不参与，不把补齐入口称为可靠性优化成功。
+
+**复用输入与身份（事实）：** 新入口读取几何窗口已有`work_dirs/port_geometry_midpoint_formal_v1_test_eval`的五个正式TEST文件；锁定完整1440帧、原图坐标、B24和`head_epoch_23.pth`，并检查正式选权证明、训练/评价来源、模型状态前后相同、更新数零和完成清单SHA。普通三标志使用第14节已审`work_dirs/port_midpoint_reliability_v1_fit/policy.json`，SHA仍`1adac499369bade5ef1f79495260002697d2b698c80ebf5424d3d77438fae4af`，连同原fit四产物及completion精确字节验证。该fit发生在probe接口修复前，按原已审合同`7afc84669a0144c42de0c28a452aaf111fc54129b301614df862a5603500d20f`锁定，不重写旧completion或manifest、不重新fit。原TRAIN参数及VAL门限均冻结。
+
+正式TEST逐帧文件没有图像宽高，故从已有`work_dirs/port_reliability_branches_v1_test_cached_v1`补充图像尺寸、图像/标注身份及GT一致性；此缓存的ROI/结构质量和旧预测不进入新方法评分。旧B policy用于迁移对照。两侧预测均取同一次正式midpoint评价中的B框与最终框，避免用旧次B推理框代替同次对照。正式GT是本次几何数值的评价依据，和旧元数据GT以atol1e−4/rtol1e−6核对，保留原正式GT精度；不重新计算/重建标注。模型权重及图像字节不再加载，当前数据目录不重哈希，也不宣称本次重新验证全量在线推理一致性。
+
+**评价内容（实现事实，效果待服务器）：** 按all、real/sim及三个序列分别报告`raw`、冻结门限`score_only`、冻结`simple`的中心/尺寸/方向接受与拒绝。中心仍是“有效最终框即保留”，不是新增中心正确性预测器；无输出三个标志均false，尺寸/方向拒绝不删除中心或修正最终框。在线判断仅接收最终OBB/score和原图宽高，GT仅离线生成正确性标签；规则为中心<15px、规范长短边最大相对误差≤10%、π周期长边角误差≤3°，GT aspect≥1.2仅限定离线方向资格。中心命中率只以输出帧为分母，另报输出覆盖率和全帧中心正确覆盖。
+
+尺寸/方向明确给出`bad_accepted`（错误接受）、`good_false_rejected`（正确误拒）、`bad_correctly_rejected`（正确检出的坏框）、接受后正确率、输出帧状态准确率和全帧正确覆盖；状态误判=错误接受＋正确误拒，缺输出不混入状态准确率分母。另报全部帧标志覆盖、方向不可评接受、完整OBB和按真实帧号的连续可用性。匹配simple接受数的score只作离线诊断，边界并列分数报告错误接受上下界，不使用GT挑选同分框或产生TEST部署门限。配对B＋旧simple与midpoint＋新simple的比较同时包含几何与拟合参数迁移，不能独自证明方法创新。
+
+**本地验证与限制（事实）：** 16项新增CPU检查全部通过，覆盖Python3.8语法及新进程不导入Torch/MMCV/MMRotate/OpenCV、固定权重/来源身份、错误阶段/权重/数据拒绝、完整帧和漏检、GT不进入三个标志、独立分量拒绝、宽高交换/角度周期、同数score并列诊断，以及完整模拟输出的JSONL/CSV/报告保存重载与完成清单/禁止覆盖。几何等价的浮点误差用数值容差比较，接受决策和整数计数精确一致。另在内存直接读取已提供正式TEST及midpoint迁移压缩包，结合原已审尺寸元数据，通过真实1440帧/1431输出输入检查及全部字节pin；没有解包或计算新TEST成绩。本地尚未运行服务器入口，正式新可靠性结果待回传，不能用输入检查或模拟测试代替性能结果。
+
+**服务器指令：** 上传四个新增代码/协议/来源/测试文件；本交接可一并同步。保留现有父依赖和原fit/正式TEST/元数据目录。下列步骤都是CPU，无CUDA、训练或再次检测；每次使用新输出目录。
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+
+PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python -m unittest discover -s tests \
+  -p 'test_port_midpoint_simple_reliability_test_v1.py' -v
+
+PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/eval_port_midpoint_simple_reliability_v1_test.py \
+  --mode check \
+  --out-dir work_dirs/port_midpoint_simple_reliability_v1_test_check
+
+PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/eval_port_midpoint_simple_reliability_v1_test.py \
+  --mode run \
+  --out-dir work_dirs/port_midpoint_simple_reliability_v1_test_cached_v1
+```
+
+默认依赖：`--policy work_dirs/port_midpoint_reliability_v1_fit/policy.json`、`--old-policy work_dirs/port_simple_reliability_v1_fit/policy.json`、`--formal-test-dir work_dirs/port_geometry_midpoint_formal_v1_test_eval`、`--metadata-dir work_dirs/port_reliability_branches_v1_test_cached_v1`。目录若改名可显式传参，但必须是同SHA的完整原产物；身份失败时停止，不更改清单、跳帧、重拟合或重建检测缓存绕过。check成功终态为`FIXED_MIDPOINT_SIMPLE_TEST_INPUTS_PASS`，run为`FIXED_MIDPOINT_SIMPLE_TEST_COMPLETE_REVIEW_REQUIRED`；工程完成不代表性能通过。
+
+回传check/run整个小结果目录即可，run主要文件为`test_compare.json`、`test_decisions.jsonl`、`component_metrics.csv`、`test_summary.md`、`input_check.json`与`completion.json`，无需权重/图像。后续按错误接受、正确误拒、覆盖与逐视频一致性判断，不依据TEST修改规则、权重或选择候选。**TEST已经多次暴露**；本次是冻结流程的报告，不称未接触的独立确认。等比例变换/原图还原沿用原链，保持接口不等于深度精度保证。
 
 <a id="legacy-35"></a>
 <a id="legacy-36"></a>

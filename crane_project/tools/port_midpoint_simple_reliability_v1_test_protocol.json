@@ -1,0 +1,115 @@
+{
+  "protocol": "port_midpoint_simple_reliability_v1_fixed_test",
+  "front_end": {
+    "name": "SymEOOD_B_midpoint_formal_v1_ep23",
+    "frozen_b": {
+      "epoch": 24,
+      "checkpoint_sha256": "8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23",
+      "config_sha256": "9da972b7010540e12b2501d1c400db13c159381f495f539d6315e7adb498e345"
+    },
+    "midpoint_checkpoint": {
+      "path": "head_epoch_23.pth",
+      "sha256": "2c4c5ae9e071cbdb13fb722f4b2d3986861c62bd60c53568c72fb9b02d662f0b",
+      "epoch": 23,
+      "updates": 20746,
+      "head_digest": {
+        "parameters": "c76eeacadfa3dbefa781e73c8e36a76b5674da3b9a362a7df2e6f8cac4832bd8",
+        "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "parameter_count": 17696,
+        "buffer_count": 0
+      },
+      "save_reload_exact": true
+    },
+    "selection_sha256": "5e4b24eb15f8fcc925c95445d1f6ad3c7fa643b350267b3647710a0d14024ec6",
+    "formal_sources_sha256": "2d489e06b06ce390cd6dc3dfeee8a849134e37b103d11951e4830dda91c37804"
+  },
+  "reviewed_midpoint_policy": {
+    "completion_sha256": "e249bf2a2b64ce6a5d64925226cf5754613b22d12cb6541d042b52cb3c79ea3e",
+    "artifacts": {
+      "fit_report.json": "f98e9993312027b3e44cbd5a789d9cd1b2f45d18e2935da81cb56edae7b55fb7",
+      "input_check.json": "3428d0fad528a6f5edffe7ec57322cf8bdedf2b4aeebe709d7202aa12b581706",
+      "policy.json": "1adac499369bade5ef1f79495260002697d2b698c80ebf5424d3d77438fae4af",
+      "val_decisions.jsonl": "fb94720d411dec12436d7f6310b847048d9d1f3a585e930b34c9c65f56cc0812"
+    },
+    "contract_sha256": "7afc84669a0144c42de0c28a452aaf111fc54129b301614df862a5603500d20f"
+  },
+  "reviewed_formal_test_files": {
+    "artifacts.json": "acb53506e82c09a8961db42c4aa888ef15eba2d6a3ebf249e12c1b37c149f4c2",
+    "completion.json": "cca22ef018db73c559fb28d4e5b4e4e64939b04ba8f98e26a61ca747f6b8b87b",
+    "progress.jsonl": "ad36fe5550f80d82708cba27557db692766506435660a4519b259bb0861599dc",
+    "test_compare.json": "aa31098dadb4e2c101851e43a39a751590a1166c52264b1b54572fca084cf2fd",
+    "test_rows.jsonl": "9d187e0d0e5140c602fd7e2f534a267dc0af375e09e17e8ae93f8d28f4c6ba80"
+  },
+  "reviewed_formal_selection": {
+    "selection_sha256": "5e4b24eb15f8fcc925c95445d1f6ad3c7fa643b350267b3647710a0d14024ec6",
+    "completion_sha256": "7f39440def1a2c0cf839361d578d571bed315052b0b4467641212289765ab52f",
+    "selected_checkpoint": {
+      "path": "head_epoch_23.pth",
+      "sha256": "2c4c5ae9e071cbdb13fb722f4b2d3986861c62bd60c53568c72fb9b02d662f0b",
+      "epoch": 23,
+      "updates": 20746,
+      "head_digest": {
+        "parameters": "c76eeacadfa3dbefa781e73c8e36a76b5674da3b9a362a7df2e6f8cac4832bd8",
+        "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "parameter_count": 17696,
+        "buffer_count": 0
+      },
+      "save_reload_exact": true
+    },
+    "cache_manifest_sha256": "046c5998dee0ba3703f1ae4e08fc6a02e9804d216ea12241357f69f2a4afd1e3"
+  },
+  "formal_evaluation_protocol": "port_geometry_midpoint_formal_v1_frozen_evaluation",
+  "formal_training_sources_sha256": "2d489e06b06ce390cd6dc3dfeee8a849134e37b103d11951e4830dda91c37804",
+  "formal_evaluation_sources_sha256": "48d0eb24b0d1c2a69a2f5af2e0a52adcd7a58ff9fc4c7ce0a0232f22af65ecb4",
+  "test_counts": {
+    "real_seq03": 200,
+    "real_seq04": 668,
+    "sim_seq09": 572
+  },
+  "test_data_identity": {
+    "frames": 1440,
+    "manifest_sha256": "128bd9aac390ad878a46c005a22f44d322a5acf61a47ad128991eb7444a4886f",
+    "annotation_sha256": "e0dbb1bd8aea7209314d8ed60bc44e965550ed606135cc0016e1075d717de13e",
+    "image_identity_sha256": "6448e47b9a715f47f04eacaaabb54a32b522c72208bf6e82793284de2aad665d",
+    "sequence_counts": {
+      "real_seq03": 200,
+      "real_seq04": 668,
+      "sim_seq09": 572
+    }
+  },
+  "methods": [
+    "raw",
+    "score_only",
+    "simple"
+  ],
+  "center_policy": "retain_each_valid_final_midpoint_output_not_a_center_correctness_predictor",
+  "error_limits": {
+    "center_px": 15.0,
+    "size_max_relative": 0.1,
+    "angle_deg": 3.0
+  },
+  "evaluation_direction": "GT_aspect_ge_1.2_offline_only",
+  "online_inputs": [
+    "current_final_midpoint_box_and_score",
+    "original_image_width_height"
+  ],
+  "GT_online": false,
+  "reference_or_ROI_or_structure_scores_used": false,
+  "paired_B_baseline": "same_formal_evaluation_B_boxes_and_original_reviewed_B_simple_policy",
+  "metadata_only_source": "previous_reviewed_TEST_numeric_cache_image_size_byte_ids_and_GT_identity_not_its_predictions_or_qualities",
+  "current_dataset_bytes_rehashed": false,
+  "detector_inferences": 0,
+  "GPU_used": false,
+  "detector_updates": 0,
+  "midpoint_updates": 0,
+  "reliability_updates": 0,
+  "threshold_updates": 0,
+  "test_repeatedly_exposed": true,
+  "test_used_for_selection": false,
+  "evidence_role": "frozen_report_on_repeatedly_exposed_TEST_not_untouched_confirmation",
+  "source_manifests": {
+    "old_simple_test": "crane_project/tools/port_simple_reliability_v1_test_sources.json",
+    "migration": "crane_project/tools/port_midpoint_reliability_v1_sources.json",
+    "formal_eval": "crane_project/tools/port_geometry_midpoint_formal_v1_eval_sources.json"
+  }
+}
