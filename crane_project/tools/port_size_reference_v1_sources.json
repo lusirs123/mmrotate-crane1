@@ -1,11 +1,11 @@
 {
   "protocol": "port_size_reference_v1",
   "sources": {
-    "crane_project/tools/run_port_size_reference_v1.py": "a3531213deffa3de34cd92512280259f842a31f2c8e93b054df85d3aeaba50ff",
+    "crane_project/tools/run_port_size_reference_v1.py": "d9729bb5bacfd4e7761270cb1d9b5700d60971a0925c3c92dab2489faca6fcf6",
     "crane_project/utils/port_size_reference_v1.py": "204aa56610575b99fc0e879569b0fc7112a48b0ae0939c77b7d3602db6e3435c",
     "crane_project/utils/port_size_reference_v1_torch.py": "977a4dfc93a284b555bd5cc7a351efb792165c801826b00c47d02d5512713fa4",
     "crane_project/tools/port_size_reference_v1_protocol.json": "e33e11fae5404b9d0624dd0c23cd805792ded07ecd9cf317cccaff88d80d90c1",
-    "tests/test_port_size_reference_v1.py": "c41c972b785f7c7924e0896b12e7b9b987a4d5897ace8c7954b4ff0644254676"
+    "tests/test_port_size_reference_v1.py": "49300bad5441628b30a2a0ab0aa44bbecb0bae01b2c3871f3841ba6be467d56c"
   },
   "protocol_sha256": "e33e11fae5404b9d0624dd0c23cd805792ded07ecd9cf317cccaff88d80d90c1",
   "parent_manifest_sha256": "f6ecf2b1efe0f6b5545c870730ccb3dc9a87ae103fd9d7c45e19fe6d184060d1"

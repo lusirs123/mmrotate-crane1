@@ -221,6 +221,69 @@ real_seq07尺寸错误171/225、AUROC0.467620，real_seq14错误10/149、AUROC0.
 
 先固定TRAIN拟合与新支路留出视频/片段职责；新增参考学习与评分两阶段都遵守同一留出边界，不能让参考先读取留出标注再声称整个新增方法未见数据。检查理想参考下的尺寸响应，再检查真实预测参考下短边扩大/缩小两侧及真实B错误；理想标注仅作离线参照，不进入在线输入。保留score/simple/旧ROI对照，真实错误与合成探针分报；少量图训练内成功不直接放行正式训练。冻结B已见过检测TRAIN，支路留出不称全前端未见数据。新预算/门限/停止条件需在实施前确定，并在全部VAL看分域/逐视频改善；方向单独留待参考精度合格后推进，中心保持原覆盖并披露仅1个真实TRAIN错误。当前不自动启动新分支，所有新设计/选择继续限定TRAIN/VAL，既有TEST多次暴露仅作冻结报告。记录只维护本文，大小论文及几何优化交接未修改。
 
+## 10. PQA启发的二维尺寸参考：三阶段有限实验入口（2026-10-04）
+
+**授权与身份（事实）：** 用户授权实现第9节推荐的理想参考检查、独立参考学习、冻结参考真实错误检查，并要求代码复核与服务器指令。本次仅新增下列入口/协议/源码/测试并更新本文；原B、simple policy、旧ROI/structure权重与训练入口、几何优化代码/交接及大小论文不修改，未连接服务器或在本地启动真实训练。
+
+- [统一入口](../crane_project/tools/run_port_size_reference_v1.py)：`ideal`、`smoke`、`train`、`assess`。
+- [NumPy几何与解析读取](../crane_project/utils/port_size_reference_v1.py)、[服务器Torch参考分支](../crane_project/utils/port_size_reference_v1_torch.py)。
+- [固定协议](../crane_project/tools/port_size_reference_v1_protocol.json)、[源码身份清单](../crane_project/tools/port_size_reference_v1_sources.json)、[必要测试](../tests/test_port_size_reference_v1.py)。这六个文件上传到服务器对应位置，旧父版本文件保持已核验版本。
+
+**文献与旧实验边界（事实）：** [PQA原文](https://arxiv.org/html/2511.08186v1)预测OBB派生的二维位置热图并以像素一致性聚合整体框质量。此前R1.16/17已借鉴预测线响应与候选轴线模板的soft IoU及方向关系；没有完成二维长短边范围参考。本版借鉴其图像几何参考思想，但使用截断Gaussian热图主轴二阶矩恢复规范长短边，再读取当前B长短边log差；不是原PQA的整体min/max聚合、原论文LD损失或检测排序复现，也不是已验证的新三分量方法。
+
+**固定实现（事实，真实效果待服务器）：** B ep24冻结参数/BN；只训练一个16通道参考分支，输入detached P3（256通道、stride8），两层低分辨率卷积后双线性上采样4倍和单通道卷积，输出stride2二维热图。上采样网格使用`(j+.5)*2−4`，保持原P3的`i*8`坐标约定，不误写为`j*2`。目标由原GT OBB按既有等比例annotation尺度/反射链生成，框内Gaussian的长短轴sigma为L/4、S/4，框外/图像外为0。real和sim均用现有OBB，sim不需要原生轴线；此目标是标注几何代理，不是可见轮廓/真实分割，也不等于独立物理尺寸真值。
+
+参考学习使用预先固定的soft focal BCE：正位置0.25×绝对预测差、负位置0.75×预测概率平方，按目标软质量归一化；有效区域之外无损失。此损失的软目标最优值仍是目标本身，不沿用旧分别归一化正/负质量后改变目标最优响应的BCE；不是声明照抄PQA原式。没有分量质量MLP/辅助质量损失/教师，避免原结构—质量共享反传。
+
+在线读取只接触预测热图、原B框和变换metadata。每个真实B框先确定一个3×长边的原图正方形上下文（最小64px），去除局部背景中位数后估计主轴二阶矩，使用±2sigma截断Gaussian的解析方差系数校正，再还原原图长短边；原B输出不规范化重写。尺寸风险为`1−exp(−max(|log(L_B/L_ref)|,|log(S_B/S_ref)|)/0.1)`，不是校准概率或部署门限。GT不进入此函数。弱响应、短边模型尺度<16px、退化或上下文/图像边缘质量过高时返回不可用，不回填GT或默认可信。当前读取是解析方案，不保证预测热图达到所需精度。
+
+**固定数据职责与预算（事实）：** 在既有TRAIN2558中，real_seq01/05/06/12各按帧序均匀取64张、sim_seq08拟合段均匀取128张，合计384张。real_seq13整段304张留出；sim_seq08尾部128张留出，拟合可用段与尾段间32张guard排除，合计432张分支留出。剩余TRAIN帧本版不拟合，也不伪称已跑全量TRAIN。选图只由序列/帧序决定，不按错误标签选择。数值放行的14个原尺度视图也全部来自拟合角色：五个序列各首尾2张，加real_seq01与sim_seq08各1/3、2/3两张；不使用留出GT制定放行。
+
+384张×4轮=1536步，batch1、Adam lr0.001、weight_decay0、clip10、seed1701，使用B原单尺度干净推理预处理，不另做增强或选择中间权重；每轮排他保存/重载，固定epoch_04评价。新参考拟合/解析读取均不拟合留出标签；B检测器及旧ROI已见检测TRAIN，所以不是整个前端未见视频的独立确认。复用缓存得到的真实尺寸错误支持：拟合real8/256、sim0/128；留出real3/304、sim1/128。留出只有4个真实尺寸错误，不能据其高准确率或单次AUC称稳定提升；合成扰动仅作机制诊断。
+
+**阶段与放行（事实）：** `ideal`使用拟合GT数值热图检查长/短边±15%两侧、只改中心15px、只改方向±5°及宽高等价表示；要求14个干净视图的参考尺寸误差≤5%、四个尺寸风险差均>1e-6、其他控制差<1e-10。同图候选共享固定上下文；该控制验证尺寸读取，不证明更换真实B上下文时整条链完全解耦。0.5尺度+水平反射仅作分辨率诊断，不能用它反选新尺度/门限。理想GT仅离线使用。
+
+`smoke`做real/sim交替4个真实更新，检查参考stem/输出梯度、数值、B原始Nx6输出侧计算前后精确一致、B参数/缓冲与原TRAIN缓存身份、权重保存重载输出精确一致；smoke权重标记discarded，不能用于train/assess。`train`只接受完整且无failure的ideal/smoke报告，重新初始化参考；中断可从本版完整epoch边界用`--resume`恢复到新目录，不能续用smoke。`assess`只接受完成的固定epoch_04训练包，在432张留出和全部887张VAL读取真实图像，评分沿用SHA锁定原B框/score/漏检缓存，不声明本次在线B重现了旧缓存。
+
+评价报告分别保留原输出覆盖、输出帧中心正确率、全帧中心正确覆盖、参考可用/不可用及其正确/错误支持、参考尺寸误差、真实尺寸错误类AUROC/AP、同接受数混淆与score同分边界、合成长/短边双侧辨识。AUROC主比较限定共同参考可用输出，另报score/simple的全部输出结果及不可用正确/错误数，不能掩盖参考可用性筛选。旧ROI只复用已核验VAL缓存，属于历史对照，不能称与新分支相同留出训练职责。没有部署门限、新三个标志替换或自动收益PASS。训练的成功终态只代表工程完成。
+
+**本地核验（事实，服务器待运行）：** 21项必要unittest中19项CPU通过，2项实际Torch梯度/loss和保存重载检查因本地无Torch明确跳过，服务器环境应执行这两项。CPU包含独立截断Gaussian方差积分、尺度/反射还原、宽高/π等价、长短边双侧与中心/方向控制、不可用/漏检分母、同数score边界、阶段完成/失败保护、二进制流保存/角色校验，以及模拟完整assess文件输出的回归；模拟流程不是CUDA通过。Python3.8语法与来源合同已核验。当前版本[本地理想参考报告](../work_dirs/port_size_reference_v1_ideal_local_20261004_final_v3/ideal_report.json)的14个拟合角色原尺度视图全部通过，最大尺寸相对误差0.6941%，四类尺寸扰动的最小风险差0.668276；半尺度反射视图8/14通过，其余6图因短边模型分辨率不足不可用，不放宽16px保护门槛。对应[代码与证据复核记录](../work_dirs/port_size_reference_v1_code_review_local_20261004/review.json)保存源码/报告SHA、测试和真实错误支持。理想结果仅证明解析读取在标注派生热图上的数值机制成立；真实参考学习、实际显存/延迟和可靠性改善全部待服务器。TEST已多次暴露，本版没有TEST入口，不参与门限/权重/方法选择。
+
+**服务器顺序（所有输出均新建目录，不覆盖旧证据）：**
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python -m unittest discover -s tests -p 'test_port_size_reference_v1.py' -v
+
+PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/run_port_size_reference_v1.py \
+  --mode ideal --out-dir work_dirs/port_size_reference_v1_ideal
+
+CUDA_VISIBLE_DEVICES=3 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/run_port_size_reference_v1.py \
+  --mode smoke --gpu 0 \
+  --ideal-report work_dirs/port_size_reference_v1_ideal/ideal_report.json \
+  --out-dir work_dirs/port_size_reference_v1_smoke
+
+CUDA_VISIBLE_DEVICES=3 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/run_port_size_reference_v1.py \
+  --mode train --gpu 0 \
+  --ideal-report work_dirs/port_size_reference_v1_ideal/ideal_report.json \
+  --smoke-report work_dirs/port_size_reference_v1_smoke/train_report.json \
+  --out-dir work_dirs/port_size_reference_v1_train
+
+CUDA_VISIBLE_DEVICES=3 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/run_port_size_reference_v1.py \
+  --mode assess --gpu 0 \
+  --reference-checkpoint work_dirs/port_size_reference_v1_train/epoch_04.pth \
+  --out-dir work_dirs/port_size_reference_v1_assess
+```
+
+只有先得到`IDEAL_SIZE_READER_PASS`及`SIZE_REFERENCE_SMOKE_SAVE_RELOAD_PASS_DISCARDED`才能继续4轮有限训练。源码/原输入身份或数值门槛失败时先回传日志，不修改旧来源清单、重拟合simple、重建缓存、跳帧或放宽规则。默认复用`work_dirs/port_reliability_train_support_v1_cache`、`work_dirs/port_reliability_train_support_v1/train_input_snapshot.json`、`work_dirs/port_reliability_branches_v1_val_cached_v1`及`work_dirs/port_simple_reliability_v1_fit/policy.json`；目录若已改名，用对应参数指定同SHA文件。
+
+回传ideal/smoke/train各自`completion.json`与主报告、assess的`assessment.json`、`reference_rows.jsonl`、`probe_rows.jsonl`、`completion.json`，训练轨迹为`train_steps.jsonl`；不必回传四轮权重。达到这些工程终态后再判断真实参考精度、双侧辨识、分域/逐视频的同数质量与可用覆盖是否支持正式实验；本版1536步是有限可行性预算，不能称最终正式方案训练已获科学放行。
+
 <a id="legacy-35"></a>
 <a id="legacy-36"></a>
 <a id="legacy-37"></a>
