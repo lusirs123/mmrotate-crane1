@@ -1,0 +1,14 @@
+{
+  "protocol": "port_size_core_curvature_v2",
+  "sources": {
+    "crane_project/tools/run_port_size_core_curvature_v2.py": "c0bff8b47ff5074dd98b90388284fbf40901e3cc87443063bfb8cfa1905030fa",
+    "crane_project/tools/eval_port_size_core_curvature_v2.py": "722da5fe53d8d5fdc6d872132c6d6b734ee7797e355c4c6afb744513a98704a3",
+    "crane_project/utils/port_size_core_curvature_v2.py": "66094120b34d476a274f3cee664e519df389f1a72dc5c24501fe3cb4e4e6f3aa",
+    "crane_project/utils/port_size_core_curvature_v2_torch.py": "9c52b4ebebfcd899211e57d0a62f01c8ad64bf0f935d9f89659e9a4efcccb1a8",
+    "crane_project/utils/port_size_core_comparison_v2.py": "f9734ccdca8fc6a24a940e6051e2cefae0af56a5c0b9606bd5e738e559565d71",
+    "crane_project/tools/port_size_core_curvature_v2_protocol.json": "056e4a6732ead7f24d51f7f6c0486d04b381b35cb804698a7bdb206dd95249b6",
+    "tests/test_port_size_core_curvature_v2.py": "1221db79df9c10eab059cf421b3c1f4e3c30a734be44d9ab80537cdd7e3877cf"
+  },
+  "protocol_sha256": "056e4a6732ead7f24d51f7f6c0486d04b381b35cb804698a7bdb206dd95249b6",
+  "parent_template_sources_sha256": "894e12beaaf5478da7fa37421bfe2e91ebcc1cd141944d184e7c9f531358f16c"
+}
