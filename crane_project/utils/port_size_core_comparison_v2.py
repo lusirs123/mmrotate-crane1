@@ -16,6 +16,8 @@ def state(rows, kept, frames):
     def ratio(a,b): return a/b if b else None
     return dict(FA=fa,FR=fr,ED=ed,CR=cr,output_frames=len(rows),all_frames=frames,
         accepted=fa+cr,acceptance_coverage=ratio(fa+cr,frames),
+        minimum_FA_at_same_count=max(0,fa+cr-(cr+fr)),
+        maximum_FA_reduction_at_same_count=fa-max(0,fa+cr-(cr+fr)),
         full_frame_correct_coverage=ratio(cr,frames),state_accuracy_on_outputs=ratio(cr+ed,len(rows)),
         bad_detection_rate=ratio(ed,ed+fa),good_retention_rate=ratio(cr,cr+fr),
         correctness_on_accepted=ratio(cr,cr+fa))

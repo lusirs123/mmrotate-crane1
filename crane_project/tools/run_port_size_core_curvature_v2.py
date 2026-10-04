@@ -40,7 +40,18 @@ def checked_sources():
             or manifest['parent_template_sources_sha256'] != base.sha(parent.SOURCES)
             or protocol['coefficients'] != core.COEFFICIENTS or protocol['steps_per_arm'] != 1536
             or protocol['epochs'] != 4 or protocol['test_read']
-            or protocol['comparison_only'] is not True):
+            or protocol['comparison_only'] is not True
+            or (protocol['seed'],protocol['fit_frames'],protocol['holdout_frames'],protocol['guard_frames'],
+                protocol['initial_gradient_views'],protocol['smoke_updates_per_arm'],
+                protocol['component_gradient_every_train_slots']) != (1701,384,432,32,14,4,64)
+            or protocol['optimizer'] != {'type':'Adam','lr':.001,'weight_decay':0.,'clip_norm':10.}
+            or protocol.get('gradient_decomposition_check') != core.GRADIENT_CHECK
+            or protocol['gradient_guard'] != {
+                'median_new_to_original_min':.01,'median_new_to_original_max':10.,
+                'median_clip_retention_min':.1,
+                'role':'prespecified_broad_engineering_guard_not_optimality_no_coefficient_search'}
+            or any(protocol[k] for k in ('detector_updates','midpoint_updates','baseline_policy_updates',
+                                         'final_deployment_policy_created'))):
         raise ValueError('New source/protocol or frozen parent identity differs')
     return protocol, dict(manifest_sha256=base.sha(SOURCES), sources=actual)
 
@@ -197,6 +208,7 @@ def smoke(args, prepared):
     for row in reference.ideal_selection(split):
         features, meta, _ = reference.view(row, raw_sources, detector, pipeline, args.gpu)
         before = migration.midpoint_from_features(formal, torch, detector, head, features, meta)
+        parent.assessment.paired_prediction(final_fit[row['image']]['b_original'], before['b'], row['image'])
         parent.assessment.paired_prediction(final_fit[row['image']]['pred'], before['midpoint'], row['image'])
         constants = core.projection(row['gt'], meta)
         numerical = (verify_auxiliary_autograd(constants, features[0].device)
@@ -227,6 +239,8 @@ def smoke(args, prepared):
     for slot, row in enumerate((real,sim,real,sim), 1):
         features, meta, _ = reference.view(row, raw_sources, detector, pipeline, args.gpu)
         before = migration.midpoint_from_features(formal, torch, detector, head, features, meta)
+        parent.assessment.paired_prediction(final_fit[row['image']]['b_original'], before['b'], row['image'])
+        parent.assessment.paired_prediction(final_fit[row['image']]['pred'], before['midpoint'], row['image'])
         constants = core.projection(row['gt'], meta)
         target, valid = reference.size.target_map(row['gt'], meta)
         t = torch.as_tensor(target, device=features[0].device)[None,None]
@@ -255,7 +269,8 @@ def paired_train(args, prepared):
     checked = stage(args.smoke_report, STATUSES['smoke'], contract)
     formal, torch, detector, head, pipeline, arms, initial_sha = models(args,old)
     if checked['initial_sha256'] != initial_sha: raise ValueError('Fresh pair initialization differs from precheck')
-    from crane_project.utils.port_size_core_curvature_v2_torch import loss_terms, coefficients, update
+    from crane_project.utils.port_size_core_curvature_v2_torch import (
+        loss_terms, coefficients, update, reference_precision)
     frozen=dict(b=base.state_digest(detector),midpoint=base.state_digest(head))
     if frozen != checked['frozen']: raise ValueError('Precheck and training front end differ')
     optimizers={a:torch.optim.Adam(m.parameters(),lr=.001,weight_decay=0.) for a,m in arms.items()}
@@ -274,17 +289,28 @@ def paired_train(args, prepared):
                 for arm,model in arms.items():
                     terms=loss_terms(model(features[0]),t,v,constants)
                     if slot % 64 == 0:
-                        record=update(terms,model,optimizers[arm],arm)
+                        try:
+                            record=update(terms,model,optimizers[arm],arm)
+                        except ValueError as error:
+                            error.details=dict(getattr(error,'details',{}) or {},
+                                train_context=dict(epoch=epoch,slot=slot+1,image=row['image'],
+                                                   domain=row['domain'],arm=arm))
+                            error.args=(str(error)+' epoch=%d slot=%d image=%s' %
+                                        (epoch,slot+1,row['image']),)
+                            raise
                     else:
                         weights=coefficients(arm); total=sum(terms[k]*weights[k] for k in weights)
-                        optimizers[arm].zero_grad(); total.backward()
+                        optimizers[arm].zero_grad()
+                        with reference_precision():
+                            total.backward()
                         norm=float(torch.nn.utils.clip_grad_norm_(model.parameters(),10.))
                         post=math.sqrt(sum(float(p.grad.double().square().sum()) for p in model.parameters()))
                         if not math.isfinite(norm) or norm<=0 or not 0<post<=10.00001:
                             raise ValueError('Invalid TRAIN gradient/clip')
                         record=dict(losses={k:float(v.detach()) for k,v in terms.items()},
                             total_preclip_norm=norm,actual_postclip_norm=post,
-                            actual_clip_retention=post/norm,component_measurement=False)
+                            actual_clip_retention=post/norm,component_measurement=False,
+                            backward_precision=core.GRADIENT_CHECK['backward_precision'])
                         optimizers[arm].step()
                     event=dict(epoch=epoch,step=steps+1,slot=slot,image=row['image'],domain=row['domain'],
                         arm=arm,projection=core.public_projection(constants),gradient=record)
@@ -341,7 +367,8 @@ def main():
         status={'check':check,'smoke':smoke,'train':paired_train,'assess':assess}[args.mode](args,prepared)
         finish(args,prepared,status)
     except Exception as error:
-        base.write_new(args.out_dir/'failure.json',dict(type=type(error).__name__,error=str(error),mode=args.mode,test_read=False))
+        base.write_new(args.out_dir/'failure.json',dict(type=type(error).__name__,error=str(error),
+            details=getattr(error,'details',None),mode=args.mode,test_read=False))
         raise
 
 

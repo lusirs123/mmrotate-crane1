@@ -1,10 +1,36 @@
 """Server Torch losses and measured parameter gradients; no detector updates."""
 import math
+from contextlib import contextmanager
 import numpy as np
 import torch
 from torch.nn import functional as F
-from crane_project.utils.port_size_reference_v1_torch import SizeReference, reference_loss
+from crane_project.utils.port_size_reference_v1_torch import SizeReference as OriginalSizeReference, reference_loss
 from crane_project.utils import port_size_core_curvature_v2 as core
+
+
+@contextmanager
+def reference_precision():
+    """Full FP32 candidate reference; restore B/midpoint's precision settings.
+
+    TF32 operand rounding need not distribute across three separate VJPs and
+    one combined VJP. Convolution backward can save the forward's TF32 flag,
+    so the candidate forward must use the same local setting too.
+    """
+    matmul = torch.backends.cuda.matmul
+    previous = (matmul.allow_tf32, torch.backends.cudnn.allow_tf32)
+    try:
+        matmul.allow_tf32 = False
+        torch.backends.cudnn.allow_tf32 = False
+        yield
+    finally:
+        matmul.allow_tf32, torch.backends.cudnn.allow_tf32 = previous
+
+
+class SizeReference(OriginalSizeReference):
+    """Same architecture/parameters/initialization; explicit candidate precision."""
+    def forward(self, detached_p3):
+        with reference_precision():
+            return super().forward(detached_p3)
 
 
 def loss_terms(logits, target, valid, constants):
@@ -64,8 +90,9 @@ def gradient_measurement(terms, model, arm, clip=10.):
     """
     named = [(n, p) for n, p in model.named_parameters() if p.requires_grad]
     weights = coefficients(arm)
-    raw = {k: torch.autograd.grad(v, [p for _, p in named], retain_graph=True)
-           for k, v in terms.items()}
+    with reference_precision():
+        raw = {k: torch.autograd.grad(v, [p for _, p in named], retain_graph=True)
+               for k, v in terms.items()}
     if any(not bool(torch.isfinite(g).all()) for gs in raw.values() for g in gs):
         raise ValueError('Nonfinite component gradient')
     def norm(gs):
@@ -97,6 +124,12 @@ def gradient_measurement(terms, model, arm, clip=10.):
         total_preclip_norm=before, clip_norm=clip, common_clip_scale=scale,
         component_postclip_projected_norms={k:norm(v)*scale for k,v in weighted.items()},
         new_postclip_projected_norm=added*scale, groups=groups,
+        uncancelled_tensor_scales=[dict(name=name, dtype=str(p.dtype),
+            dtype_epsilon=float(torch.finfo(p.dtype).eps),
+            uncancelled_norm=sum(norm([gs[i]]) for gs in weighted.values()),
+            uncancelled_max=sum(float(gs[i].abs().max()) for gs in weighted.values()))
+            for i,(name,p) in enumerate(named)],
+        backward_precision=core.GRADIENT_CHECK['backward_precision'],
         strength_role='measured_effective_gradients_not_coefficient_optimality')
     return measurement, total
 
@@ -105,19 +138,40 @@ def update(terms, model, optimizer, arm):
     measured, expected = gradient_measurement(terms, model, arm)
     weights = coefficients(arm)
     total = sum(terms[k]*weights[k] for k in weights)
-    optimizer.zero_grad(); total.backward()
+    optimizer.zero_grad()
+    with reference_precision():
+        total.backward()
     actual = [p.grad for p in model.parameters() if p.requires_grad]
     if any(g is None or not bool(torch.isfinite(g).all()) for g in actual):
         raise ValueError('Missing/nonfinite total gradient')
-    error = max(float((g-e).abs().max()) for g,e in zip(actual, expected))
-    maximum = max(float(e.abs().max()) for e in expected)
-    if error > 1e-5*max(maximum, 1e-7)+1e-9:
-        raise ValueError('Component decomposition differs from actual backward')
+    if len(actual) != len(expected):
+        raise ValueError('Parameter gradient count differs')
+    comparisons = []
+    for g,e,scale in zip(actual, expected, measured['uncancelled_tensor_scales']):
+        if g.shape != e.shape or g.dtype != e.dtype:
+            raise ValueError('Parameter gradient shape/dtype differs')
+        difference = g.double()-e.double()
+        comparisons.append(dict(scale, error_norm=float(difference.square().sum().sqrt()),
+            error_max=float(difference.abs().max())))
+    consistency = core.gradient_consistency(comparisons)
+    error = max(row['error_max'] for row in comparisons)
+    if not consistency['passed']:
+        worst = max(consistency['tensors'], key=lambda r:max(r['norm_error_fraction'], r['max_error_fraction']))
+        failure = ValueError('Component decomposition differs from actual backward: arm=%s parameter=%s '
+            'max_error=%.9g allowed_max=%.9g norm_error=%.9g allowed_norm=%.9g' %
+            (arm,worst['name'],worst['error_max'],worst['allowed_max_error'],
+             worst['error_norm'],worst['allowed_norm_error']))
+        failure.details = dict(arm=arm, gradient_consistency=consistency, measurement=measured)
+        raise failure
+    actual_before = math.sqrt(sum(float(g.double().square().sum()) for g in actual))
+    if not math.isfinite(actual_before) or actual_before <= 0:
+        raise ValueError('Inactive/nonfinite actual total gradient')
     torch.nn.utils.clip_grad_norm_(model.parameters(), 10.)
     after = math.sqrt(sum(float(p.grad.double().square().sum()) for p in model.parameters()))
     if after > 10.00001 or after <= 0 or not math.isfinite(after):
         raise ValueError('Invalid clipped gradient')
-    measured.update(actual_postclip_norm=after, component_sum_backward_max_error=error,
-                    actual_clip_retention=after/measured['total_preclip_norm'])
+    measured.update(actual_preclip_norm=actual_before, actual_postclip_norm=after,
+                    component_sum_backward_max_error=error, gradient_consistency=consistency,
+                    actual_clip_retention=after/actual_before)
     optimizer.step()
     return measured

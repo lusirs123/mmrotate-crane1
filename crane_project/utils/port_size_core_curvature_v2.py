@@ -103,6 +103,40 @@ def numerical_probe(constants):
                 passed=error <= 1e-6 and all(c['passed'] for c in cases))
 
 
+GRADIENT_CHECK = dict(
+    version='uncancelled_component_scale_v1',
+    relative_dtype_epsilon_multiplier=128., absolute_tolerance=1e-12,
+    backward_precision='reference_only_forward_backward_TF32_off_restore_flags',
+    norm_checks='per_parameter_L2_and_max_uncancelled_weighted_components')
+
+
+def gradient_consistency(tensors):
+    """Roundoff check relative to operands, never the cancelled result.
+
+    Scalars come from float64 reductions of parameter gradients. Both L2 and
+    maximum errors are bounded for EACH tensor so another tensor cannot mask
+    a missing/wrong gradient. This is an engineering check, not a loss weight.
+    """
+    if not tensors:
+        raise ValueError('No parameter gradient comparisons')
+    records = []
+    for row in tensors:
+        keys = ('dtype_epsilon', 'error_norm', 'error_max',
+                'uncancelled_norm', 'uncancelled_max')
+        if any(not math.isfinite(row[k]) or row[k] < 0 for k in keys) or row['dtype_epsilon'] <= 0:
+            raise ValueError('Invalid/nonfinite gradient comparison')
+        relative = GRADIENT_CHECK['relative_dtype_epsilon_multiplier']*row['dtype_epsilon']
+        limits = {key: relative*row['uncancelled_'+key]+GRADIENT_CHECK['absolute_tolerance']
+                  for key in ('norm', 'max')}
+        records.append(dict(row, relative_tolerance=relative,
+            allowed_norm_error=limits['norm'], allowed_max_error=limits['max'],
+            norm_error_fraction=row['error_norm']/limits['norm'],
+            max_error_fraction=row['error_max']/limits['max'],
+            passed=row['error_norm'] <= limits['norm'] and row['error_max'] <= limits['max']))
+    return dict(version=GRADIENT_CHECK['version'], tensors=records,
+                passed=all(row['passed'] for row in records))
+
+
 def acceptance_bound(total_frames, outputs, good_outputs, count):
     if not 0 <= good_outputs <= outputs <= total_frames or not 0 <= count <= outputs:
         raise ValueError('Invalid support/acceptance count')

@@ -22,6 +22,13 @@
     "role": "prespecified_broad_engineering_guard_not_optimality_no_coefficient_search"
   },
   "component_gradient_every_train_slots": 64,
+  "gradient_decomposition_check": {
+    "version": "uncancelled_component_scale_v1",
+    "relative_dtype_epsilon_multiplier": 128.0,
+    "absolute_tolerance": 1e-12,
+    "backward_precision": "reference_only_forward_backward_TF32_off_restore_flags",
+    "norm_checks": "per_parameter_L2_and_max_uncancelled_weighted_components"
+  },
   "reference": "unchanged_SizeReference_detached_P3_16_channels_stride2",
   "reader": "unchanged_formal_midpoint_half_peak_logGaussian_IRLS",
   "risk": "unchanged_max_abs_canonical_edge_log_ratio_scale0.1",
