@@ -2,6 +2,8 @@
 
 > 用途：在新对话中继续几何精度优化。本文汇总本轮对话、现有代码及收到的实验结果；保留事实、推断和待验证内容的区别。几何优化后续优先更新本文，不再为每次改动创建交接文件；可靠性另在[独立可靠性交接](reliability_handoff_20261003.md)维护。
 >
+> **2026-10-04最新执行见第75节：已新增仅复用选中正式头VAL的短边/对角线静态与时序残差诊断入口，15项CPU检查通过，并已在收到的结果包中完成本地只读验证。没有新增训练、平滑或TEST分析。诊断区分GT变化与预测波动：real DFR升高但GT相对对角线变化残差略改善，sim短边/对角线变化残差增大；不能直接以压低DFR作为训练目标。**
+>
 > **2026-10-04最新核验见第74节：正式结果包已读取，原VAL规则选中head_epoch_23；24轮VAL逐帧汇总与独立在线VAL一致，TEST汇总/分母/纯角度已核对。sim定位/纯角度/RIoU改善，real定位改善，但尺寸多数退化、VAL real RIoU下降、两域DFR上升。第73节及此前“仅终端/待JSON核验”属于当时证据状态。B仍为冻结前端和配对参考，可靠性另一工作线不自动切换。**
 >
 > **最新执行授权以第70节为准（2026-10-03）：用户明确要求先开展正式训练。本轮已实现独立的midpoint-formal v1入口：复用并冻结SymEOOD＋B的VAL epoch24，从零修正初始化的新头出发，在全部TRAIN的1.0/.5视图上训练24轮，完整VAL按原规则选权。不是重新训练B或端到端联合微调，不加载短fit TEST头、不加入时序/C2/可靠性新机制。原第66节probe失败和第68节探索性TEST数值保持；新候选尚未在服务器训练，B仍是保留前端。下段“未放行正式训练”属于这次新授权之前的记录，不能据此否定第70节的新授权，也不能反过来把新授权写成已验证收益。**
@@ -4078,3 +4080,91 @@ sim在VAL/TEST均无缺输出或中心≥10px罚角，故协议A-RMSE与纯角RM
 ### 74.5 下一步范围
 
 **建议，尚未实施：** 优先复用已保存VAL逐帧框，核对短边/对角线的有符号残差、预测与GT的相邻帧变化、分序列与原B尺度；把静态尺寸偏差和时序尺寸变化一起检查。VAL两域回退均0，故其DFR退化不能归因于交付框在候选/B间切换；TEST real仅5个回退、sim为0，回退不是两域共同代价的充分解释。不能据此断言唯一根因，也不先通过平滑掩盖系统尺寸偏差。保持等比例变换、原图坐标还原、原深度估计接口；未测深度精度。后续新增监督/系数/选权只在TRAIN/VAL确定，已多次暴露TEST只用于冻结报告。本轮仅更新现有文本记录，无代码修改、训练、服务器连接或可靠性工作线改动。
+
+
+## 75. 用户授权的VAL短边/对角线残差核对入口与近年文献（2026-10-04）
+
+**授权与实现事实：** 用户要求按第74.5节核对短边和对角线残差，修改对应代码、复核后给服务器指令，并询问2024/2025/2026相关论文。本轮新增[只读诊断入口](../crane_project/tools/analyze_port_geometry_midpoint_size_temporal_v1.py)及[15项检查](../tests/test_port_geometry_midpoint_size_temporal_v1.py)。只使用标准库，兼容Python3.8；不加载模型/ROI缓存/图片，不导入torch/mmcv/CUDA，不训练、滤波、改框、调参或访问TEST。原formal训练/评价源码、69/73来源和协议不改；另一个可靠性工作线的既有修改保留。本轮未连接服务器。
+
+### 75.1 输入、指标及边界
+
+1. 固定读取正式目录的completion/selection/artifacts、选中epoch的VAL逐帧与汇总和24组VAL摘要；重新核对已保存原选权一致性，不根据新残差改选、不读取其他epoch逐帧框或权重。要求固定887帧VAL序列，禁止把TEST逐帧当输入。
+2. 核对原69项源码、协议和B身份、结果SHA、原选权、逐帧正尺寸/分数/输出/回退、中心/周期角/长短边派生指标及三个分母。可选独立在线VAL目录进一步要求同一selection、completion字节SHA和选中头state、前后状态不变、887/2661提取/调用、GT/框/回退/派生指标逐帧精确一致。
+3. 静态分别计算长边、短边、对角线的像素残差、带符号相对误差`P/G-1`、`log(P/G)`、偏差/MAE/RMSE/标准差/分位数和midpoint/B修正。负号表示框偏小；只在离线指标中规范化长短边和π周期，原交付框及坐标不变。
+4. 时序只配对同序列连续frame_id且前后两帧均有B/正式输出；缺输出或帧号缺口断开。两方法与GT共用相同配对支持。另报排除计数、GT对角线变化和原DFR/ACI复算；角度变化误差按π周期处理，ACI沿用35°合同。
+5. 核心GT相对残差为`delta log(P)-delta log(G)`，等于相邻帧静态log尺寸误差之差；midpoint与B的此残差之差又等于`delta log(midpoint/B)`。该分解用于区分新增修正变化与GT标注尺度变化，不能据单个均值断言根因。另报普通相对增长差、相关系数和角度增长误差，恒定序列相关系数为null。
+6. real/sim/每序列及overall报告；按原图GT/B短边16/24/32/48px分箱，只是描述分组，不是新的训练/接受阈值。另按既有15px中心合同报告B中心正确/错误和双方中心正确子集，保留全部输出主结果，避免错误中心框掩盖尺寸证据。
+7. 原DFR/ACI复算必须与保存协议四位显示值一致；不重算OpenCV RIoU或重新审计数据集。GT运动为OBB标注变化，未证明物理尺度/深度精度；残差差异/相关系数不等于统计显著或唯一因果。
+
+输出为`summary.json`、`static_frames.jsonl`、`temporal_pairs.jsonl`、`completion.json`、`artifacts.json`；静态检查仅写completion/artifacts。要求新输出目录，拒绝覆盖。正常状态为`VAL_SIZE_TEMPORAL_RESIDUALS_COMPLETE_REVIEW_REQUIRED`；静态为`STATIC_VAL_RESIDUAL_INPUTS_PASS_NO_GPU_NO_UPDATES`。头/检测器更新及推理调用均0，selection_on_test和automatic_promotion均false。
+
+### 75.2 本地必要验证与已有VAL诊断事实
+
+15项CPU检查全部通过，覆盖同等框宽高交换/角度等价及等比例缩放、DFR降低却GT跟随退化、恒定尺寸偏差与动态残差分离、缺输出/间隙/序列边界、角度周期、空支持与恒定相关、输入不变、SHA篡改、选权篡改、错误分母/score/尺度/TEST序列拒绝、独立在线VAL身份/重放、静态不执行分析及拒绝覆盖。两个新文件通过Python3.8语法及内存编译，未重新运行无关模型检查。
+
+复用第74节原压缩包、直接内存读取选中epoch23和独立在线VAL：新诊断输入合同、分析、JSON/JSONL序列化、行数和输出artifacts SHA均验证通过。测试输出只在自动清理的临时目录中，未保存在项目；没有重新推理或产生新模型性能。887帧形成884个连续身份对，排除2个缺输出邻接对，实际882对（real371、sim511），两个序列边界均断开。
+
+| 已保存VAL的派生指标：B→正式 | real | sim |
+|---|---|---|
+| 短边相对误差signed mean % | -5.0762→-5.3352 | -3.0513→-2.9849 |
+| 短边相对误差MAE % | 8.7580→9.2394 | 4.1388→4.3488 |
+| 短边log残差std | 0.102285→0.106378 | 0.038892→0.043526 |
+| 短边GT相对log变化残差RMSE | 0.094100→0.097720 | 0.027866→0.036599 |
+| 对角线GT相对log变化残差RMSE | 0.086179→0.082685 | 0.028971→0.031190 |
+| GT对角线DFR，同配对 %/frame | 2.524855 | 1.012393 |
+| 原预测DFR %/frame | 4.5430→4.6580 | 2.4130→2.5419 |
+| GT相对角度变化误差RMSE ° | 3.055144→2.854156 | 1.908536→1.415072 |
+
+两个real序列短边动态残差均略退化，对角线动态残差均略改善；real_seq07主要偏小（signed mean -9.1104%→-9.5906%），real_seq14略偏大（1.0156%→1.0908%），不是统一固定缩放偏差。仅双方中心<15px的real360帧中，短边MAE仍7.9064%→8.3784%；不是只有错误中心框产生尺寸代价。sim512帧短边均值偏差略改善但分散与帧间变化残差增大，不能把其退化全解释为恒定偏小。
+
+**机制推断与下一步：** 优先关注四点/矩形读出后的短边误差与sim逐帧尺寸修正变化；real不能仅以DFR上升认定GT跟随变差。不先引入统一尺度补偿或单纯压制变化的平滑，不将以上相关性宣称根因。新的尺寸/时序监督仍待本轮诊断审查后固定；不放行新训练，不改epoch23或接受阈值，TEST已多次暴露但本次入口不读TEST。保持原等比例坐标和深度接口；未验证深度误差。
+
+### 75.3 服务器复现与结果包
+
+只需按相对路径上传新入口；检查文件可一并上传，不更新旧manifest。CPU标准库执行，没有显卡数量/显存需求。首先执行静态合同：
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+
+CUDA_VISIBLE_DEVICES="" PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/analyze_port_geometry_midpoint_size_temporal_v1.py \
+  --check-only \
+  --training-dir work_dirs/crane_symeood_k1_port_day2night_midpoint_formal_v1 \
+  --val-eval-dir work_dirs/port_geometry_midpoint_formal_v1_val_eval \
+  --out-dir work_dirs/port_geometry_midpoint_size_temporal_v1_static
+```
+
+静态状态通过后运行同一已选头的完整VAL残差分析：
+
+```bash
+CUDA_VISIBLE_DEVICES="" PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/analyze_port_geometry_midpoint_size_temporal_v1.py \
+  --training-dir work_dirs/crane_symeood_k1_port_day2night_midpoint_formal_v1 \
+  --val-eval-dir work_dirs/port_geometry_midpoint_formal_v1_val_eval \
+  --out-dir work_dirs/port_geometry_midpoint_size_temporal_v1_val
+```
+
+如输出目录已存在，更换输出后缀；不删除已有结果。本次独立在线VAL已回传，命令使用它；未完成在线VAL的其他环境可省略`--val-eval-dir`，仍只分析正式保存VAL，报告会明确没有额外在线重放证据。
+
+```bash
+tar -czf "work_dirs/port_geometry_midpoint_size_temporal_v1_review_$(date +%Y%m%d_%H%M%S).tar.gz" \
+  -C work_dirs \
+  port_geometry_midpoint_size_temporal_v1_static \
+  port_geometry_midpoint_size_temporal_v1_val
+```
+
+仅压缩新诊断文本结果，无模型、ROI缓存或源码。若相同输入/源码，服务器应重现本地887帧/882对及上述派生数值；服务器此次运行尚待回传，不能写成已执行。
+
+### 75.4 2024—2026相关原始文献补充
+
+本轮按原出版社、会议论文或作者arXiv核对日期/摘要，并区分可借鉴方向与已验证机制。属于针对性检索，未证明当前组合全球首次，也未在本项目实现这些论文模块。
+
+| 文献与已核验年份 | 相关内容 | 对当前midpoint的借鉴与限制 |
+|---|---|---|
+| [Oriented R-CNN and Beyond，IJCV2024，2024-01-29出版](https://link.springer.com/article/10.1007/s11263-024-01989-w) | midpoint-offset旋转候选、ROI精修及实例分割扩展 | 可用于最新相关工作/编码对照；其外接水平框midpoint offset不是本项目四个OBB边中点，不将两者等同 |
+| [Rethinking Boundary Discontinuity Problem for Oriented Object Detection，CVPR2024](https://openaccess.thecvf.com/content/CVPR2024/html/Xu_Rethinking_Boundary_Discontinuity_Problem_for_Oriented_Object_Detection_CVPR_2024_paper.html) | 区分角度编码可逆性与联合优化，指出仅平滑IoU类损失不保证预测边界连续 | 支持同时检查编码/解码及纯角/角度连续性；不是本项目DFR问题根因证据 |
+| [D-FINE，ICLR2025](https://proceedings.iclr.cc/paper_files/paper/2025/hash/6cf58a87e3097e7d1f9be3e8693a93de-Abstract-Conference.html) | 以细粒度概率分布逐层精修定位，另含定位自蒸馏模块 | 可借鉴分布表示与最终定位质量的联系；不是四中点OBB或视频DFR方案，不引入其蒸馏/替换前端 |
+| [Strip R-CNN，2025-01-07作者预印本](https://arxiv.org/abs/2501.03775)，[AAAI2026正式论文](https://ojs.aaai.org/index.php/AAAI/article/view/38217) | 正交条带卷积与定位分支，处理细长目标的方向性空间信息 | 可借鉴长短轴方向信息不对称的诊断；现有9×9头换条带是否有益未验证，本轮不修改结构。避免把2025预印本误写为AAAI2025 |
+| [RiO-DETR，2026作者论文v2，2026-07-30；页面标注ECCV2026接收](https://arxiv.org/abs/2603.09411) | 内容驱动方向估计、周期性的有界粗到细精修 | 可借鉴周期更新/解耦精修的评价思路，不替换SymEOOD或引入新分配策略；论文未验证本项目四点校准或DFR收益 |
+
+四边中点最直接先例仍为[MidNet 2021](https://arxiv.org/abs/2111.10961)，不能用近年论文替代对它的讨论。当前期望差校准仅保证指定先验的零修正中性，不证明一般积分偏差消除。论文主张应围绕冻结高覆盖前端下的局部几何纠偏及其精度/连续性证据，公平消融先验校准与点读出，不能靠新引用或指标微调自动增加创新性。
