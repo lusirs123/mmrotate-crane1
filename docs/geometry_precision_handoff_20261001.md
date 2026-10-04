@@ -2,7 +2,9 @@
 
 > 用途：在新对话中继续几何精度优化。本文汇总本轮对话、现有代码及收到的实验结果；保留事实、推断和待验证内容的区别。几何优化后续优先更新本文，不再为每次改动创建交接文件；可靠性另在[独立可靠性交接](reliability_handoff_20261003.md)维护。
 >
-> **2026-10-04最新回传分析见第81节：midpoint-motion v1已完成服务器静态合同和两组各200步有限TRAIN对照。来源、配对、梯度及指标复核未发现改变结论的错误；相对本次配对point-only，probe三组RIoU/DFR/对角线动态残差改善，四组ACI略升，但sim半尺度联合退化，sim两尺度纯角变差，预置联合条件未通过。当前不推荐将该固定辅助项扩展正式训练或TEST，不改变原midpoint-formal v1 ep23。下一项只建议冻结正式ep23头、复用TRAIN缓存核对对边有符号误差模式，尚未实现或授权运行。**
+> **2026-10-04最新授权实现见第82节：用户要求继续参数实验并统一比较point-size/point-motion。已新增固定权重0.0125/0.025/0.05的有限TRAIN入口，共7配置；经严格来源/批次校验复用已有配对point-only和motion=0.025，其余5配置各200步，新增1000步。网络/先验/采样/预算不变，不组合两项损失；18项CPU检查、84项新来源及原69/75/80项SHA通过，真实回传包的400步文本复用校验通过。尚待服务器静态/真实CUDA效果；当前只是筛查，不能直接写成正式论文参数性能表，不自动放行正式训练或TEST。**
+>
+> **2026-10-04上一项motion回传分析见第81节：三组probe RIoU/DFR/对角线动态残差改善，四组ACI略升，但sim半尺度联合退化，预置联合条件未通过。其历史结论和原midpoint-formal v1 ep23不变；固定v1未通过不等于关闭全部尺寸监督路线，后续新授权的参数对照见第82节。**
 >
 > **2026-10-04上一项size回传核验见第79节：midpoint-size v1路径修复后的真实静态与CUDA有限对照均完成，12项产物SHA、75项源码及两组初始化/批次核对通过；尺寸梯度有效，400步没有裁剪。新增项仅在real原尺度、sim半尺度改善短边MAE，四组中三组短边GT相对动态RMSE退化，sim两尺度RIoU/纯角相对point-only退化，未通过预置联合条件。此size版本不推荐直接正式训练或TEST，原midpoint-formal v1 ep23及其已测结果保持原身份；当时提出的GT相对尺寸变化监督后续实现和回传见第80/81节。**
 >
@@ -4599,7 +4601,7 @@ fit四组长边、短边及对角线GT相对动态RMSE全部降低，RIoU全部�
 
 **本次有部分效果，但固定midpoint-motion v1尚不推荐直接进入正式训练或追加TEST。** 原midpoint-formal v1 ep23和B ep24的参数、身份及已测结果保持；本次没有导出新权重，不存在已确认的正式模型性能更新。第79节单帧尺寸项和本次变化项暂不叠加，也不通过观察结果搜索系数。
 
-**下一项只建议冻结正式ep23头，复用既有TRAIN缓存做对边有符号误差模式核对，零参数更新。** 原第65/66节已核对四点总体误差与正交重建残差，不重复证明“四点不是完美矩形”或更换解码搜索。新增缺口是当前正式模型中两对中点的共同位移、沿GT轴的间距误差和垂直GT轴的方向误差如何变化：
+**以下为当时的待验证建议；用户后续要求先补统一采样的size/motion参数实验，当前执行以第82节为准。** 当时建议冻结正式ep23头，复用既有TRAIN缓存做对边有符号误差模式核对，零参数更新。原第65/66节已核对四点总体误差与正交重建残差，不重复证明“四点不是完美矩形”或更换解码搜索。新增缺口是当前正式模型中两对中点的共同位移、沿GT轴的间距误差和垂直GT轴的方向误差如何变化：
 
 1. 固定原正式ep23及其SHA、原128 TRAIN身份/两尺度和相邻对，不按这次sim半尺度退化挑新样本。加载TRAIN ROI和正式小头；B仍无推理/更新，VAL/TEST不读；推理不接收GT。
 2. 离线以原GT四点匹配建立`e_i=p_i-p_i*`，分别记录共同位移`mean(e_i)`、两对中点平均误差以及对边差误差`e0-e2`/`e1-e3`在对应GT轴和垂直轴上的有符号分量。保留原始四点、连续投影、候选和交付框；中心、方向/尺寸的分解是几何描述，不作可加的RIoU因果贡献。
@@ -4608,3 +4610,100 @@ fit四组长边、短边及对角线GT相对动态RMSE全部降低，RIoU全部�
 此项用于判断下一项结构或监督候选应针对对边间距还是切向/共同位移耦合，不能预先把正交投影或共享头当已证根因。当前回传仅有矩形框和训练批次增量日志，没有新有限头最终原始四点/权重，不能由框唯一还原这些误差；而此次两臂又都是从B新初始化，不能把它们的失败直接当作正式ep23续训失败。对正式模型做一次零更新的针对性核对，比继续盲目追加辅助损失更有针对性；此建议尚未实现或运行，不自动扩展为新训练、完整审计或超参数搜索。
 
 后续开发仍只用TRAIN/VAL。TEST已多次暴露，不用它设计系数、门槛、权重或结构，不宣称独立确认。等比例变换、原图sx/sy还原、raw宽高—角度及深度接口保持；接口不变不认证深度精度。没有重启DINO、蒸馏或候选排序路线。
+
+## 82. 用户授权的统一配对size/motion权重参数实验（2026-10-04）
+
+### 82.1 授权、实验关系与论文定位
+
+用户指出第79节point-size已有局部收益，不应把一个固定版本未通过当作整条路线无效；随后明确要求开展参数实验，并同时比较point-size/point-motion。本轮实现新固定网格，未连接服务器或启动真实训练。第79/81节失败门槛及历史结果保持，不把新授权写成旧实验已通过。原正式midpoint ep23与B ep24不变；第81节对原正式头做零更新误差分解的建议暂后置，未同时引入该检查或新结构。
+
+令`e_t=log(pred_edge_t/GT_edge_t)`：size监督单帧`e_t`，motion监督配对`e_t-e_prev`。两者沿同一尺寸问题检查静态与动态约束，不是从size权重续训得到motion，也不能由两次不同采样的绝对值断言哪个更好。旧size-v1使用独立帧批次，不能直接作为本次配对采样对照；其局部收益与代价继续保留。
+
+本轮扫描的是**候选辅助损失的权重**，不是原midpoint的先验宽度/ROI/温度实验。只有候选最终被保留，并在同正式训练预算和完整VAL下获得支持，才能将其权重曲线用于最终方法的参数敏感性证据。若未保留，不能把该曲线包装成原始midpoint方法自身的参数实验；可作内部方法选择记录，必要的负面消融可如实报告。未成功的候选不列为最终创新或已证改进，不隐去保留的配置来制造单调/稳定收益。
+
+当前只是固定单seed、短TRAIN片段筛查，不是正式全TRAIN/全VAL的论文结果、显著性或独立泛化证明；不自动选最优系数。参数实验允许采用预先固定的新协议，原v1“不事后扫参数/放宽条件”并不是永久禁止后续受授权的独立参数研究。
+
+### 82.2 固定网格、预算与唯一变量
+
+| 配置 | 目标 | 本轮执行 |
+|---|---|---|
+| point-only | 原点损失 | 复用第81节配对采样200步结果，新增0步 |
+| size 0.0125 | 点损失＋0.0125×原单帧两轴log尺寸项 | 新200步 |
+| size 0.025 | 点损失＋0.025×原单帧两轴log尺寸项 | 新200步；不复用第79节独立帧头 |
+| size 0.05 | 点损失＋0.05×原单帧两轴log尺寸项 | 新200步 |
+| motion 0.0125 | 点损失＋0.0125×原GT相对两轴log变化项 | 新200步 |
+| motion 0.025 | 点损失＋0.025×原GT相对两轴log变化项 | 复用第81节配对采样200步结果，新增0步 |
+| motion 0.05 | 点损失＋0.05×原GT相对两轴log变化项 | 新200步 |
+
+合计7配置、同等有效预算1400步，其中已执行且核验复用400步、本轮新增1000步。两类损失不组合，不扩展权重/seed/步数网格。相同数值权重不代表梯度等强，分别记录梯度强度及方向。
+
+统一使用原128 TRAIN身份/256视图、fit96/probe32、原两尺度1.0/0.5及连续片段；seed1703新零输出头、seed1705配对批次、4相邻对=8帧（real2对/sim2对）、Adam lr.001、wd0、clip10、200步/配置。相同GT离线循环匹配及GT-only轴运输、缺输出/断帧/资格与重复端点规则；不由效果挑样本。只读原两份TRAIN ROI shard，不读VAL/TEST张量、图片/标注字节或权重，不实例化B、不重新提特征。
+
+原17,696参数头、9×9ROI、context1.5、prior sigma1、点与两辅助项beta0.1、等比例变换、原图sx/sy还原、raw宽高—角度、零修正逐位B、GT-free接受/整框回退和score/数量保持。深度接口不变不证明深度精度。五个新头顺序运行；每组同8帧局部ROI，不同时加载七个GPU模型，实际allocated/reserved峰值另报，不保证进程总显存绝不增加。
+
+### 82.3 实现与复用防错
+
+只新增四个文件，不修改旧训练/评价/辅助损失源码、69/75/80来源清单或另一可靠性工作线：
+
+- [入口](../crane_project/tools/preflight_port_geometry_midpoint_weights_v1.py)：统一网格、严格文本复用、五配置优化、全配置summary/reviews。
+- [固定协议](../crane_project/tools/port_geometry_midpoint_weights_v1_protocol.json)：只允许上述七配置、预算及论文证据边界。
+- [84项来源](../crane_project/tools/port_geometry_midpoint_weights_v1_sources.json)：原80项加父manifest及本轮入口/协议/检查，字节SHA固定。
+- [CPU检查](../tests/test_port_geometry_midpoint_weights_v1.py)：真正入口、防错复用、公式/预算/失败保留。
+
+静态模式只读源码/输入元数据及旧文本报告，核对原10项产物SHA、protocol/sources/proof/runtime、400条日志及optimizer事件、逐步pair调度/目标公式、初始结果及review；不导入torch/CUDA或加载tensor。旧独立帧size、文件损坏、额外更新、梯度标志不一致、环境/来源/批次不一致均停止，不静默重训。新输出不得写入不可变输入目录或覆盖已有结果目录。
+
+真实模式只反序列化train_s1.pt/train_s05.pt，重新生成样本/pair/CPU轴审计及初始头SHA，与旧报告一致后继续；每个新配置在第一步更新之前核对完整初始结果。只有新配置增加optimizer计数，执行step后先计数再检查参数有限，失败保留准确预算、progress、已完成配置和artifacts。
+
+全部新更新保存point/size/motion unit值、实际唯一辅助项权重和total公式、pair目录/轴信息、裁剪/stem；step1/2/25/100/200记录三项参数梯度norm和与点梯度夹角，非活动辅助项仅诊断、不进入total。合法零辅助梯度如实报告；无实测正信号的配置不满足数值继续条件。零输出首步stem0、第二步有效的合同保持。
+
+全7配置的fit/probe×real/sim×两尺度进入summary.json及summary.csv，均报两边/对角线静态MAE/有符号偏差、GT相对变化残差、中心mean/RMSE、纯角/角度变化误差、DFR/ACI及回退/切换。输出覆盖、仅输出条件中心正确和全帧中心正确分别给分母/计数；CSV另区分输出帧mean RIoU与缺失帧计0的全帧mean RIoU，不混淆。
+
+所有六个候选使用相同联合非退化保护（含长边动态残差），size额外要求每域至少一个尺度短边静态MAE严格改善，motion要求每域至少一个相同尺度短边与对角线GT相对动态RMSE严格改善，活跃辅助梯度须有效。沿用原数值容差，不视作显著性标准。完整保留旧motion review，新reviews不追认旧失败；不自动排名、重选权重、正式训练或TEST，即使某配置数值条件通过。
+
+### 82.4 已完成的本地复核（事实）
+
+Python3.8.20/torch1.8.0.post3下**18项CPU检查通过，约20.64s**：七配置/五新预算、相对与绝对CLI静态零加载及防覆盖、SHA/旧独立帧协议/公式/pair/来源/runtime/review/额外执行更新/梯度标志不一致拒绝、五个真实两步CPU配置同批次与单辅助公式、全56行汇总/三分母/无权重导出、初始不一致更新前失败、第二配置失败保留、已执行非有限更新预算准确、合法零辅助梯度完成但不通过、低DFR不能单独通过、旧损失及先验不改。
+
+首轮16项检查通过；代码复核后补充总progress与实测梯度标志一致性保护，并运行受影响的新版本检查，最终18项通过。新两份Python在实际3.8环境语法/内存编译通过；84项新来源及原69/75/80项SHA核对通过。通过内存文件适配用新audit_baseline校验第81节真实返回包，400步旧文本通过复用检查；未解压或保存本机服务器报告副本。
+
+本地没有真实TRAIN缓存/元数据；CLI静态采用合成metadata/schema夹具，优化采用合成ROI与两步预算。真实旧文本通过不替代服务器缓存加载、CUDA数值及参数收益。尚无本轮新真实结果，未生成论文性能曲线；同版旧27项motion检查未重复全跑。
+
+### 82.5 服务器运行与压缩指令
+
+按上述四个文件的相对位置上传。原正式/size/motion源码及清单保持，baseline-dir必须为第81节已完成的配对motion目录。源码SHA不符先核对checkout，不在服务器重建manifest。先静态执行：
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+
+CUDA_VISIBLE_DEVICES="" PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/preflight_port_geometry_midpoint_weights_v1.py \
+  --check-only \
+  --training-dir work_dirs/crane_symeood_k1_port_day2night_midpoint_formal_v1 \
+  --cache-dir work_dirs/port_geometry_midpoint_formal_v1_roi_cache \
+  --baseline-dir work_dirs/port_geometry_midpoint_motion_v1_train \
+  --out-dir work_dirs/port_geometry_midpoint_weights_v1_static
+```
+
+确认`STATIC_WEIGHTS_CONTRACT_PASS_NO_TENSOR_LOAD_NO_GPU_NO_UPDATES`后单GPU运行：
+
+```bash
+CUDA_VISIBLE_DEVICES=3 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/preflight_port_geometry_midpoint_weights_v1.py \
+  --gpu 0 \
+  --training-dir work_dirs/crane_symeood_k1_port_day2night_midpoint_formal_v1 \
+  --cache-dir work_dirs/port_geometry_midpoint_formal_v1_roi_cache \
+  --baseline-dir work_dirs/port_geometry_midpoint_motion_v1_train \
+  --out-dir work_dirs/port_geometry_midpoint_weights_v1_train
+```
+
+完成状态`TRAIN_WEIGHTS_GRID_COMPLETE_REVIEW_REQUIRED`，head_updates_total应为1000、reused_historical_updates=400、represented_updates=1400；completion/reviews/summary逐项审阅再决定正式阶段。失败保留`FAILED_WEIGHTS_PREFLIGHT_REVIEW_REQUIRED`和已完成配置；已有输出目录（含失败目录）必须换后缀，不覆盖删除。
+
+```bash
+tar -czf "work_dirs/port_geometry_midpoint_weights_v1_review_$(date +%Y%m%d_%H%M%S).tar.gz" \
+  -C work_dirs \
+  port_geometry_midpoint_weights_v1_static \
+  port_geometry_midpoint_weights_v1_train \
+  port_geometry_midpoint_motion_v1_train
+```
+
+压缩包含旧baseline文本，因为新结果仅保存复用指针而不复制旧两份完整报告；不得漏掉原baseline导致无法复算全部7配置。若实际目录后缀不同，运行与压缩参数同步调整。只打包文本结果，不打包权重/ROI缓存/源码提交包。本轮不提供新VAL/TEST推理指令：有限头无权重导出，正式完整VAL属于后续独立阶段；TEST已多次暴露，不参与参数网格、判断条件或权重选择。
