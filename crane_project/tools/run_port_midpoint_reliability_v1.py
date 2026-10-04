@@ -337,7 +337,7 @@ def probe(args,prepared):
         meta=reference.numeric_meta(row); target,_=reference.size.target_map(row['gt'],meta)
         fitted=new.template_reference(target,row['gt'],meta,protocol)
         g=simple.canonical(row['gt'])
-        error=max(abs(fitted['long_original_px']/g[2]-1),abs(fitted['short_original_px']/g[3]-1)) if fitted['defined'] else None
+        error=float(max(abs(fitted['long_original_px']/g[2]-1),abs(fitted['short_original_px']/g[3]-1))) if fitted['defined'] else None
         numerical.append(dict(image=row['image'],reference=fitted,error=error,
             passed=error is not None and error<=protocol['probe']['numerical_max_relative_error']))
     if not all(r['passed'] for r in numerical):
@@ -356,7 +356,7 @@ def probe(args,prepared):
             refs[method]=function(probability,pred[:5],meta,protocol) if pred is not None else dict(defined=False,reason='no_detector_output')
             diagnostic=reference.probe_record(row,refs[method],protocol); probes[method]=diagnostic
             g=simple.canonical(row['gt'])
-            errors[method]=max(abs(refs[method]['long_original_px']/g[2]-1),abs(refs[method]['short_original_px']/g[3]-1)) if refs[method]['defined'] else None
+            errors[method]=float(max(abs(refs[method]['long_original_px']/g[2]-1),abs(refs[method]['short_original_px']/g[3]-1))) if refs[method]['defined'] else None
         after=midpoint_from_features(formal,torch,detector,head,features,meta)
         if first!=after: raise ValueError('Reference/readers changed final midpoint prediction')
         target,valid=reference.size.target_map(row['gt'],meta)

@@ -1,5 +1,6 @@
 """Bounded NumPy geometry, final-box binding and migration stage contracts."""
 from argparse import Namespace
+from contextlib import nullcontext
 from copy import deepcopy
 import ast
 import importlib.util
@@ -71,6 +72,16 @@ class ReaderTests(unittest.TestCase):
         diagnostic=new.offline_map_evidence(probability,box(),box(),m,SETTINGS)
         self.assertGreater(diagnostic['gt_outside_short_moment_fraction'],.9)
         self.assertEqual(diagnostic['core_outside_gt_cells'],0)
+
+    def test_offline_map_diagnostic_accepts_actual_six_value_detection_without_mutation(self):
+        target,_=size.target_map(box(),meta())
+        expected=new.offline_map_evidence(target,box(),box(),meta(),SETTINGS)
+        for score in (.06,.8,1.):
+            detection=box()+[score]; before=deepcopy(detection)
+            actual=new.offline_map_evidence(target,box(),detection,meta(),SETTINGS)
+            self.assertEqual(actual,expected); self.assertEqual(detection,before)
+        for bad in (box()+[float('nan')],box()+[.01],box()+[1.1],box()+[.8,.1]):
+            with self.assertRaises(ValueError): new.offline_map_evidence(target,box(),bad,meta(),SETTINGS)
 
     def test_fixed_reference_detects_both_size_directions_not_center_or_angle(self):
         target,_=size.target_map(box(),meta()); r=new.template_reference(target,box(),meta(),SETTINGS)
@@ -305,6 +316,40 @@ class MigrationTests(unittest.TestCase):
         result=entry.probe_summary(records)
         self.assertEqual(result['all']['common_defined']['views'],1)
         self.assertEqual(result['holdout']['template']['defined'],0)
+
+    def test_full_probe_writes_14_diagnostics_with_six_value_final_boxes(self):
+        target,_=size.target_map(box(),meta())
+        class MapTensor:
+            def sigmoid(self): return self
+            def __getitem__(self,index): return self
+            def cpu(self): return self
+            def numpy(self): return target.copy()
+        parts={}
+        for role,sequences,start in (('fit',('real1','real2','real3','real4','sim1'),0),
+                                     ('holdout',('real5','sim1'),100)):
+            parts[role]=[dict(image=s+'_%03d'%i,sequence=s,frame_id=i,
+                domain='sim' if s.startswith('sim') else 'real',gt=box(),image_size=[256,256])
+                for s in sequences for i in range(start,start+3)]
+        old=(None,None,None,None,None,None,parts,{},None)
+        b=box()+[.8]; before=deepcopy(b)
+        modules=(None,SimpleNamespace(no_grad=nullcontext,cuda=SimpleNamespace(max_memory_allocated=lambda gpu:0)),
+                 object(),object(),object(),lambda feature:MapTensor())
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d); checkpoint=root/'epoch_04.pth'; checkpoint.write_bytes(b'fixture')
+            args=Namespace(out_dir=root,reference_checkpoint=checkpoint,gpu=0)
+            with patch.object(entry,'online_modules',return_value=modules),patch.object(entry.base,'state_digest',return_value='unchanged'),patch.object(entry.reference,'numeric_meta',return_value=meta()),patch.object(entry.reference,'view',return_value=([object()],meta(),[meta()])),patch.object(entry,'midpoint_from_features',return_value=dict(b=b,midpoint=b)):
+                status=entry.probe(args,(SETTINGS,old,None,None,None,{}))
+            self.assertEqual(status,'FIXED_MIDPOINT_TRAIN_READER_COMPARISON_COMPLETE_REVIEW_REQUIRED')
+            rows=[json.loads(line) for line in (root/'probe_rows.jsonl').read_text().splitlines()]
+            self.assertEqual(len(rows),14)
+            self.assertEqual(sum(r['reference_role']=='fit' for r in rows),10)
+            self.assertTrue(all(r['offline_map_evidence']['defined'] for r in rows))
+            self.assertTrue(all(r['final_box_original']==before for r in rows))
+            self.assertEqual(len(list(root.glob('*.npz'))),14)
+            self.assertEqual(len(list(root.glob('*.png'))),14)
+            report=json.loads((root/'probe_report.json').read_text())
+            self.assertEqual(report['state_before'],report['state_after'])
+        self.assertEqual(b,before)
 
 
 @unittest.skipIf(importlib.util.find_spec('torch') is None,'Actual Torch adapter test requires server Torch')

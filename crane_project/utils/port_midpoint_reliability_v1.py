@@ -160,9 +160,16 @@ def fixed_probe_rows(partition):
 
 
 def offline_map_evidence(probability, gt, final_box, meta, protocol):
-    """GT-only diagnostic of signal mass and moment leverage; never online input."""
+    """GT-only diagnostic; accepts a five-value OBB or genuine OBB+score.
+
+    The score is validated then excluded from geometry, never used in moments.
+    This diagnostic does not mutate the final detection or enter online input.
+    """
     p, valid = old.grid(meta); xy = old.points_original(p, meta)
-    context = simple.canonical(final_box)
+    value = np.asarray(final_box, dtype=float)
+    if value.shape == (6,):
+        value = simple.prediction(value)[:5]
+    context = simple.canonical(value)
     side = max(protocol['context_multiple']*context[2], protocol['context_min_original_px'])
     region = valid & (np.max(np.abs(xy-context[:2]),axis=-1) <= side/2)
     if not region.any(): return dict(defined=False,reason='empty_context')

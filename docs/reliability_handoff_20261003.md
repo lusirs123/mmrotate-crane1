@@ -325,6 +325,14 @@ python crane_project/tools/run_port_size_reference_v1.py \
 
 **服务器顺序：** 上传新增5文件，并确认依赖`analyze_port_geometry_midpoint_size_temporal_v1.py`与本地版本相同。项目根目录运行本版unittest，再依次`check → probe → collect → fit → smoke`；probe仅产生待审证据，其工程完成不自动批准参考部署。collect/fit迁移不依赖参考效果通过。每阶段使用新目录，来源不一致时停止，不能更新旧manifest绕过、重建B缓存或跳帧。只复用`work_dirs/crane_symeood_k1_port_day2night_midpoint_formal_v1/selection.json`、`work_dirs/port_geometry_midpoint_formal_v1_roi_cache`及原参考/简单policy输入。此次不训练检测/参考/ROI、不修改大小论文；TEST已多次暴露，本版没有TEST入口，也不以其选择权重/规则。服务器输出留在服务器，本地不新增回传结果副本或复核报告目录。
 
+## 13. midpoint迁移服务器运行与probe接口修复（2026-10-04）
+
+**终端事实，完整结果待回传：** 用户提供终端记录，原22项服务器单测全部通过（含本地跳过的实际Torch适配/空输出测试），`check`、2558 TRAIN＋887 VAL的`collect`、`fit`与6帧`smoke`均得到相应成功终态。real最终框中心正确362/374=96.7914%，全帧362/375=96.5333%，输出覆盖374/375=99.7333%；sim为512/512且中心全部正确。这是正式midpoint框的中心结果，不证明新尺寸/方向可靠性优于旧参数或score。尚未收到fit_report/policy/逐帧完整文件，不能补称已复核全部收益或源文件SHA。本轮没有TEST。
+
+**实现缺陷及修复（事实）：** `probe`首帧在`offline_map_evidence`把完整六维`[cx,cy,w,h,angle,score]`传给只接受五维的`canonical`，报`Expected a finite positive OBB`；此前两个读取器接收`pred[:5]`已正常执行，报错不表明预测框尺寸非法。离线诊断现明确接受5维几何或6维有效检测；6维先验证原score再仅提取5维几何，score不参与矩、输入不被修改。补齐实际probe调用回归后还定位到原数值检查的NumPy布尔/整数无法JSON序列化；已将两处相对误差转换为Python float，令门槛布尔与汇总计数为原生类型。未改变模板公式、参数、分母、模型权重或simple决策。
+
+**复核与续跑：** 新增六维/五维诊断等价、非法score拒绝，以及模拟完整14帧probe实际保存NPZ/PNG/逐帧/汇总报告的回归。24项检查中23项本地CPU通过，1项Torch因本地无依赖跳过；新完整probe是模拟调用证据，真实热图仍待服务器。更新本版sources中runner/helper/tests的SHA；没有改父协议/清单，也不重写旧成功completion。上传4个变化文件（runner、helper、tests、sources），执行新版单测，仅重跑`probe`到`work_dirs/port_midpoint_reliability_v1_probe_fix_v1`，保留失败目录。原check/collect/fit/smoke不因这个诊断修复要求重算；结果仍按原源码合同保存，新增probe按修复后的源码合同保存，后续复核明确两个版本并分别校验，不能混写或改旧合同来消除差异。
+
 <a id="legacy-35"></a>
 <a id="legacy-36"></a>
 <a id="legacy-37"></a>

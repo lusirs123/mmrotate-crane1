@@ -1,0 +1,118 @@
+{
+  "protocol": "port_geometry_midpoint_weights_v1_train_preflight",
+  "settings": {
+    "seed": 1703,
+    "schedule_seed": 1705,
+    "steps_per_arm": 200,
+    "batch_size": 8,
+    "pairs_per_batch": 4,
+    "real_pairs_per_batch": 2,
+    "sim_pairs_per_batch": 2,
+    "lr": 0.001,
+    "weight_decay": 0.0,
+    "clip_norm": 10.0,
+    "motion_beta": 0.1,
+    "axis_tie_tolerance": 1e-06,
+    "block_frames": 8,
+    "fit_blocks_per_domain": 6,
+    "probe_blocks_per_domain": 2,
+    "min_interblock_gap_frames": 16,
+    "scales": [
+      1.0,
+      0.5
+    ]
+  },
+  "weights": [
+    0.0125,
+    0.025,
+    0.05
+  ],
+  "conditions": [
+    {
+      "name": "point_only",
+      "family": "point",
+      "weight": 0.0,
+      "reused": "point_only"
+    },
+    {
+      "name": "size_w0p0125",
+      "family": "size",
+      "weight": 0.0125,
+      "reused": null
+    },
+    {
+      "name": "size_w0p025",
+      "family": "size",
+      "weight": 0.025,
+      "reused": null
+    },
+    {
+      "name": "size_w0p05",
+      "family": "size",
+      "weight": 0.05,
+      "reused": null
+    },
+    {
+      "name": "motion_w0p0125",
+      "family": "motion",
+      "weight": 0.0125,
+      "reused": null
+    },
+    {
+      "name": "motion_w0p025",
+      "family": "motion",
+      "weight": 0.025,
+      "reused": "point_motion"
+    },
+    {
+      "name": "motion_w0p05",
+      "family": "motion",
+      "weight": 0.05,
+      "reused": null
+    }
+  ],
+  "parameter_count": 17696,
+  "tolerances": {
+    "center_px": 1e-06,
+    "edge_fraction": 1e-06,
+    "angle_deg": 1e-05,
+    "riou": 1e-05,
+    "motion": 1e-08,
+    "aci": 1e-08
+  },
+  "objective": "Unchanged point loss + ONE size OR motion unit loss times .0125/.025/.05. Never combine the two auxiliaries. Unit formulas/beta/GT matching/transport remain v1.",
+  "fairness": "Same128 TRAIN identities/256 views,96fit/32probe; original paired4pairs/8frames,2real+2sim, seed1703 initialization and seed1705 schedule,200 updates per condition. No independent-frame size-v1 result reuse.",
+  "reuse": "Require SHA-indexed completed motion-v1 text evidence, exact proof/runtime/protocol/sources/initialization/sample/pair/schedule/log consistency. Reuse point-only and motion=.025; no silent retraining on mismatch. Current TRAIN tensors must reproduce original selection/catalog/initial results exactly.",
+  "diagnostics": "Report point/size/motion unit losses for every new update; component gradients at1/2/25/100/200. Valid zero auxiliary gradient is logged. Active auxiliary needs a measured positive signal for numerical gate. Finite gradients/parameters, step2 stem and clip10 checks retained.",
+  "review": "Same joint static geometry/GT-relative motion/center/sim angle/RIoU/ACI/coverage safeguards for all six variants, including long motion. Size goal: strict short static-MAE gain at>=one scale in each domain. Motion goal: strict short AND diagonal GT-relative motion gain at>=one same scale in each domain. Record every configuration; do not rank/select a winner or relax a failed v1 gate.",
+  "online": "Original sampler,9x9 ROI,context1.5,prior sigma1,point beta.1,raw w/h-angle association,zero identity,full-B fallback,score/count/missing and original sx/sy restoration unchanged. No inference history/smoothing.",
+  "output": "Five new full text results, reused source pointers, all-seven summary JSON/CSV, reviews, sampling/pair/axis audit, progress/completion/artifacts. No PTH, cache copy or fabricated paper curves.",
+  "scope": {
+    "train_identities": 128,
+    "train_views": 256,
+    "fit_identities": 96,
+    "probe_identities": 32,
+    "conditions_total": 7,
+    "new_conditions": 5,
+    "reused_conditions": 2,
+    "new_head_updates_total": 1000,
+    "reused_historical_updates": 400,
+    "represented_updates": 1400,
+    "detector_updates": 0,
+    "detector_forward_calls": 0,
+    "feature_extractions": 0,
+    "val_access": false,
+    "test_access": false,
+    "weight_bytes_read": false,
+    "checkpoint_exported": false,
+    "formal_training_approved": false,
+    "automatic_promotion": false
+  },
+  "limitations": [
+    "Fixed single-seed short TRAIN screen, not formal full-TRAIN/full-VAL parameter sensitivity or independent generalization/significance.",
+    "Same numeric weight does not imply equal size/motion gradient strength. Log gradients; lower DFR/higher ACI alone do not prove GT tracking.",
+    "Preserve old failed v1 results. New user-authorized fixed grid, not retrospective reinterpretation or unlimited coefficient/step/seed search.",
+    "Auxiliaries without confirmed joint gain are candidates, not final-method contributions. Negative ablations may be reported truthfully; paper main sensitivity needs formal budget/full VAL.",
+    "TEST repeatedly exposed; no TEST tuning/reselection. Unchanged depth interface does not certify depth accuracy."
+  ]
+}
