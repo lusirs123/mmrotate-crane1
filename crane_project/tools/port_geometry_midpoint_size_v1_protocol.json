@@ -1,0 +1,65 @@
+{
+  "protocol": "port_geometry_midpoint_size_v1_train_preflight",
+  "settings": {
+    "seed": 1703,
+    "schedule_seed": 1705,
+    "steps_per_arm": 200,
+    "batch_size": 8,
+    "lr": 0.001,
+    "weight_decay": 0.0,
+    "clip_norm": 10.0,
+    "size_weight": 0.025,
+    "size_beta": 0.1,
+    "block_frames": 8,
+    "fit_blocks_per_domain": 6,
+    "probe_blocks_per_domain": 2,
+    "min_interblock_gap_frames": 16,
+    "scales": [
+      1.0,
+      0.5
+    ]
+  },
+  "tolerances": {
+    "center_px": 1e-06,
+    "edge_fraction": 1e-06,
+    "angle_deg": 1e-05,
+    "riou": 1e-05,
+    "motion": 1e-08,
+    "aci": 1e-08
+  },
+  "conditions": [
+    "point_only",
+    "point_size"
+  ],
+  "parameter_count": 17696,
+  "objective": "Unchanged point SmoothL1 beta.1 + fixed .025 times mean two matched-axis SmoothL1(log(projected_edge/GT_edge), beta.1). Control uses point loss only.",
+  "projection": "Continuous original-coordinate v1 rectangle projection BEFORE zero-identity replacement/fallback. GT axes from existing fixed cyclic midpoint matching; no pred/GT edge sorting, clamping or dropping invalid edges.",
+  "online": "Use original SpatialMidpointHead, zero-output initialization, sampler, expectation calibration, raw w/h-angle restoration and full-B fallback unchanged. No temporal module, smoothing, teacher, extra outputs or classification objective.",
+  "cache": "Exact completed formal CPU cache identity/SHA. Load train_s1.pt and train_s05.pt only. Do not instantiate B, extract features, load weights, VAL or TEST tensors.",
+  "sampling": "Metadata only: sorted sequence round-robin, earliest consecutive8-frame block with>=16 intervening frame IDs from every selected block of that sequence. First6 blocks/domain fit, next2 probe. Same identity role at1.0/.5. No geometry/VAL/TEST-driven resampling.",
+  "eligibility": "Only inherited TRAIN B-present center<15px views enter fit updates. All selected probe views evaluated, including missing/wrong-center outputs. Failed eligibility never causes block reselection.",
+  "schedule": "Seed1705 per-domain shuffled cyclic fit-view queues,4real+4sim,200 steps/arm. Identical seed1703 initial head and minibatches. Both arms are newly initialized, not formal/short-fit checkpoint continuations.",
+  "review": "Probe size/static/GT-relative motion/center/angle/RIoU/coverage jointly checked versus point-only; center/RIoU/sim angle also checked versus B. DFR reported, not a substitute for GT-relative motion. Strict short-MAE gain in each domain across scales required. No step/coefficient/seed sweep.",
+  "scope": {
+    "train_identities": 128,
+    "train_views": 256,
+    "fit_identities": 96,
+    "probe_identities": 32,
+    "head_updates_total": 400,
+    "detector_updates": 0,
+    "detector_forward_calls": 0,
+    "feature_extractions": 0,
+    "val_access": false,
+    "test_access": false,
+    "weight_bytes_read": false,
+    "checkpoint_exported": false,
+    "formal_training_approved": false,
+    "automatic_promotion": false
+  },
+  "limitations": [
+    "TRAIN probe is excluded from these head updates, but B and earlier full-TRAIN head have seen TRAIN. Not independent VAL/generalization evidence.",
+    "Short disjoint segments give limited temporal support, not full-video performance or significance.",
+    "Size constraint does not directly supervise center, angle or time; shared head gradients can change them.",
+    "TEST repeatedly exposed. Do not tune/reselect using TEST. Unchanged depth interface does not certify depth accuracy."
+  ]
+}
