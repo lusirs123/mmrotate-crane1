@@ -3874,3 +3874,107 @@ tar --exclude='*.pth' --exclude='*.pt'   -czf "work_dirs/port_geometry_midpoint_
 ```
 
 训练结束并分析VAL后，再单独准备正式头的冻结TEST入口。旧`eval_port_geometry_midpoint_v1_test.py`会精确重放旧200步头，**不能拿它测试正式头**；普通`tools/test.py`也不能把head-only权重当SymEOOD整模型权重。完整部署路线有B和头两个参数文件，属于同一串联模型流程，不要求融合独立检测模型。可靠性仍由另一对话维护；采用新前端后需要针对新框另做标签/校准/评价，不能把B原框可靠性结果直接迁移为新系统收益。
+
+
+## 71. 截图所示服务器work_dirs的几何结果清理范围（2026-10-03）
+
+**用户授权与实际操作：** 用户要求给出删除无用几何文件夹的服务器指令，可靠性文件可能混在其中。本轮只核对截图完整名称、当前formal入口和旧诊断依赖，不连接服务器、不删除真实实验目录，也不改可靠性记录或运行代码。指令只处理下列12个已结束诊断的展开结果目录；先完整tar归档并校验gzip/tar可读，再以精确白名单删除展开副本，不用port前缀通配。
+
+| 已结束诊断 | 归档后可删除的展开目录 |
+|---|---|
+| ROI对应信息 | port_geometry_g_roi_ablation_v1_static、port_geometry_g_roi_ablation_v1_train |
+| FC16容量 | port_geometry_g_capacity_v1_static、port_geometry_g_capacity_v1_train |
+| 联合中心头 | port_geometry_g_center_v1_static、port_geometry_g_center_v1_train |
+| 独立中心头 | port_geometry_g_center_only_v1_static、port_geometry_g_center_only_v1_train |
+| TRAIN监督/像素证据 | port_train_geometry_evidence_v1_static、port_train_geometry_evidence_v1_train |
+| 冻结空间响应 | port_geometry_spatial_response_v1_static、port_geometry_spatial_response_v1_train |
+
+**依赖核对事实：** 这12个目录不作为第70节formal入口的运行输入；旧center-only/监督证据/空间核对入口仍引用其中报告，所以重放旧诊断需先恢复归档。不能把已结束的负结果称为无研究价值。当前Downloads中容量、joint、center-only、监督证据及空间响应5份原压缩包仍存在且分别包含对应两目录；ROI信息消融原包已不在该路径，故不依赖本机下载作为删除前备份保证。
+
+**保留范围：** 所有port_reliability_*、port_simple_reliability_*及port_direction_consistency_*属于另一个工作线；当前四个port_geometry_midpoint_v1_{static,train,test_static,test_diagnosis}及port_geometry_g_v1_roi_cache保留，原G baseline JSON和port_train_val_geometry_v1_cache也保留。所有crane_*训练目录（含B、EOOD公平对照、D/E-H/F-S/C）本轮不清理。新formal缓存/check/smoke/训练输出、tools/configs/tests及数据集全部不在删除名单。
+
+服务器指令将备份放在work_dirs/_geometry_archive/closed_geometry_时间戳.tar.gz；任一步归档/读取校验失败立即停止，不执行删除；仅处理存在的白名单真目录，拒绝同名符号链接。没有连接服务器，未知其当前磁盘占用、内容新变化或运行任务；实际执行前不要同时启动这些旧诊断。当前formal和可靠性工作无需停止。
+
+**指令验证事实：** 在临时合成目录执行相同归档/删除逻辑：归档中原内容可读、仅白名单展开副本被移除、模拟B/midpoint/ROI缓存/可靠性保留目录及其内容不变；同名符号链接在归档/删除之前被拒绝。临时测试自动清理，没有服务器/真实work_dirs删除。无需重复模型测试。是否已执行服务器清理仍待用户回传；不得把这份计划写成已经清理完成。
+
+
+## 72. 正式midpoint的VAL复核与固定TEST入口（2026-10-03）
+
+**用户授权与本轮事实：** 用户要求后续VAL/TEST指令。本轮新增独立评价入口，不修改第70节训练源码、训练协议/69项来源或原短fit v1。没有连接服务器、启动训练、读取实际VAL/TEST图片或生成新性能。正式训练已自动完成24轮VAL及选中头重载；额外VAL属于可选的真实在线复核，不是第二轮选权。
+
+新增四文件：[评价入口](../crane_project/tools/eval_port_geometry_midpoint_formal_v1.py)、[评价协议](../crane_project/tools/port_geometry_midpoint_formal_v1_eval_protocol.json)、[73项评价来源](../crane_project/tools/port_geometry_midpoint_formal_v1_eval_sources.json)、[CPU检查](../tests/test_port_geometry_midpoint_formal_v1_eval.py)。需要按项目相对路径上传；原正式训练来源保持，不刷新旧manifest放行。
+
+**入口逻辑：**
+
+1. 检查完整24epoch正式completion、selection、artifact及选中头SHA；从保存的24组VAL指标重算原选权，必须仍为相同头、相同selection_info。不能传任意epoch或短fit头。
+2. `--check-only`只读取源码/protocol、训练结果JSON和选中权重字节SHA；不torch.load、不加载缓存/图片/标注或初始化CUDA。此阶段不代表已完成真实数据/GPU验证。
+3. 正常运行加载冻结B ep24＋选中正式头，核对原head/B state、cache身份及原运行库/GPU型号。B/head更新0，禁止DDP，不做任何TRAIN重放。
+4. VAL读取固定887图，并与正式cache的VAL字节身份一致；重新在线提取，核对全部B/midpoint/candidate框、score、缺失/回退、GT、中心正确性/罚角与RIoU，以及完整汇总与所选epoch相符。
+5. TEST读取固定1440图/原TEST字节身份，一次推理。每帧一次特征提取、三次native头调用（raw/original/raw-after）用于核验；实际回调计数887/2661或1440/4320，头/B state前后不变。GT只进入离线评价，在线调用不读GT/domain/sequence。
+6. 指标沿用原完整视频protocol-v2，三个中心分母分别保存，纯周期角及90°罚角分开；GT转float32与正式缓存评价一致，不是改变原图坐标/尺度。VAL计算完整时序指标借用评价器test-mode，但console显式标VAL、JSON split为val，未访问TEST。
+7. 终端仅打印overall的B与正式midpoint两张表；real/sim/各序列和raw candidate都在`*_compare.json`，不是多次独立推理。全部逐帧保存`*_rows.jsonl`，无新阈值、权重或架构搜索。
+
+**本地检查事实：** 新增9项CPU检查与原正式12项检查均通过，覆盖完整formal selection重算、篡改/未完成拒绝、VAL/TEST静态隔离、无torch.load/CUDA/data、缺失/float32GT/分母以及VAL逐帧框/回退复核。原69项正式训练来源仍一致。真实GPU与完整887/1440在线评价待服务器运行；尚无正式midpoint性能可报告。
+
+### 72.1 训练结束后的VAL结果
+
+训练完成status必须是`FORMAL_MIDPOINT_TRAIN_VAL_COMPLETE_REVIEW_REQUIRED`，正式目录内已有：
+
+- `selection.json`：按原VAL规则选中的头及SHA；
+- `selected_val_compare.json`：所选头对B的完整VAL比较；
+- `val_epoch_XX.json`及`val_epoch_XX.rows.jsonl`：各epoch汇总及887帧证据。
+
+上述已经是VAL结果，无需重新训练或再次扫描。若要独立在线复核选中头，先静态后GPU：
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+
+CUDA_VISIBLE_DEVICES="" PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/eval_port_geometry_midpoint_formal_v1.py \
+  --check-only --split val \
+  --selection work_dirs/crane_symeood_k1_port_day2night_midpoint_formal_v1/selection.json \
+  --out-dir work_dirs/port_geometry_midpoint_formal_v1_val_static
+
+CUDA_VISIBLE_DEVICES=3 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/eval_port_geometry_midpoint_formal_v1.py \
+  --split val --gpu 0 \
+  --selection work_dirs/crane_symeood_k1_port_day2night_midpoint_formal_v1/selection.json \
+  --out-dir work_dirs/port_geometry_midpoint_formal_v1_val_eval
+```
+
+应输出`FROZEN_FORMAL_MIDPOINT_VAL_COMPLETE_REVIEW_REQUIRED`，保存`val_compare.json`、`val_rows.jsonl`、completion/progress/artifacts。若在线/缓存不一致，停止并回传failure，不忽略错误或重选epoch。
+
+### 72.2 冻结正式头的TEST
+
+用户已授权提供/执行该冻结TEST流程。头固定由原VAL选权，不要求把VAL所有诊断项都放宽为通过，也不据TEST修补系数或改选。TEST已多次暴露，本次仍只能称冻结方案在既有TEST的探索性报告，不称未接触确认。
+
+```bash
+CUDA_VISIBLE_DEVICES="" PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/eval_port_geometry_midpoint_formal_v1.py \
+  --check-only --split test \
+  --selection work_dirs/crane_symeood_k1_port_day2night_midpoint_formal_v1/selection.json \
+  --out-dir work_dirs/port_geometry_midpoint_formal_v1_test_static
+
+CUDA_VISIBLE_DEVICES=3 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/eval_port_geometry_midpoint_formal_v1.py \
+  --split test --gpu 0 \
+  --selection work_dirs/crane_symeood_k1_port_day2night_midpoint_formal_v1/selection.json \
+  --out-dir work_dirs/port_geometry_midpoint_formal_v1_test_eval
+```
+
+应输出`FROZEN_FORMAL_MIDPOINT_TEST_COMPLETE_REVIEW_REQUIRED`。回传`test_compare.json`、`test_rows.jsonl`、completion/progress/artifacts。旧`eval_port_geometry_midpoint_v1_test.py`仍属于原200步诊断头，普通`tools/test.py`不能加载head-only `.pth`，不用于本正式头。
+
+目录须新建；实际训练目录不同则统一修改selection路径，保留原文件。物理卡3映射逻辑0，运行环境及GPU型号需与正式缓存一致。结果压缩不包含源码、模型权重或大ROI缓存：
+
+```bash
+tar --exclude='*.pth' --exclude='*.pt' \
+  -czf "work_dirs/port_geometry_midpoint_formal_v1_eval_review_$(date +%Y%m%d_%H%M%S).tar.gz" \
+  -C work_dirs \
+  crane_symeood_k1_port_day2night_midpoint_formal_v1 \
+  port_geometry_midpoint_formal_v1_val_static \
+  port_geometry_midpoint_formal_v1_val_eval \
+  port_geometry_midpoint_formal_v1_test_static \
+  port_geometry_midpoint_formal_v1_test_eval
+```
+
+若未运行可选VAL复核，去掉对应两个val目录。此命令只生成服务器结果包，不在本地额外复制/解包结果，不改变可靠性另一对话的代码或记录。

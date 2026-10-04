@@ -1,0 +1,31 @@
+{
+  "protocol": "port_geometry_midpoint_formal_v1_frozen_evaluation",
+  "training_protocol": "port_geometry_midpoint_formal_v1",
+  "counts": {
+    "val": {
+      "real_seq07": 226,
+      "real_seq14": 149,
+      "sim_seq10": 512
+    },
+    "test": {
+      "real_seq03": 200,
+      "real_seq04": 668,
+      "sim_seq09": 572
+    }
+  },
+  "test_annotation_sha256": "e0dbb1bd8aea7209314d8ed60bc44e965550ed606135cc0016e1075d717de13e",
+  "test_image_identity_sha256": "6448e47b9a715f47f04eacaaabb54a32b522c72208bf6e82793284de2aad665d",
+  "selection": "Verify complete24-epoch formal training and recompute original full-VAL selection from saved metrics. Load only that formal head. No short-fit replay, new updates, averaging or TEST selection.",
+  "static": "Source/protocol, completion/selection artifacts and selected weight SHA only. No torch.load, dataset/image/annotation reads, cache load or CUDA.",
+  "inference": "One frozen B and one frozen formal midpoint head. One extraction and three native B head calls per frame for raw/original/raw-after auditing. No GT/domain/sequence online input. Original transform, score/count and fallback preserved.",
+  "val": "Optional fresh887-frame VAL inference; compare all delivered B/midpoint boxes, raw candidates, decisions and metrics with saved selected-epoch rows at original numerical tolerances. No reselection.",
+  "test": "All1440 fixed exposed TEST frames. Paired same-run B/midpoint. No new training, threshold, seed, checkpoint or method choice.",
+  "reporting": "Two overall console tables only; JSON retains real/sim/sequence/overall, candidates, pure and penalty angles, three center denominators, RIoU and temporal/failure intervals.",
+  "scope": {
+    "head_updates": 0,
+    "detector_updates": 0,
+    "selection_on_test": false,
+    "automatic_promotion": false,
+    "test_repeatedly_exposed": true
+  }
+}

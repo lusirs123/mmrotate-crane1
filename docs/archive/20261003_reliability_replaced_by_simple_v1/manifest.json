@@ -1,0 +1,167 @@
+{
+  "reason": "User-authorized replacement with current B plus simple v1 server TEST; historical bodies removed from active documents without relabeling or deleting raw experiments",
+  "files": [
+    {
+      "original_path": "docs/reliability_handoff_20261003.md",
+      "original_sha256": "24bb7c8d192cd8bd89c0a18879046e8ce1c3408fb1b58b8893b4fe9f0e3bd881",
+      "raw_path": "original/docs/reliability_handoff_20261003.md",
+      "readable_path": "readable/docs/reliability_handoff_20261003.md",
+      "readable_sha256": "0ec04ff978609999ef58b8ab680d1d98d7e39218a4aa82726cbc3580c3043de9",
+      "link_adjustments": [
+        {
+          "original": "[几何优化交接](geometry_precision_handoff_20261001.md)",
+          "replacement": "[几何优化交接](../../../../geometry_precision_handoff_20261001.md)"
+        },
+        {
+          "original": "[几何优化交接](geometry_precision_handoff_20261001.md)",
+          "replacement": "[几何优化交接](../../../../geometry_precision_handoff_20261001.md)"
+        },
+        {
+          "original": "[旧论文完整流程](obb/base_v3_v51_focused_paper_complete_pipeline_20260915.md)",
+          "replacement": "[旧论文完整流程](obb/base_v3_v51_focused_paper_complete_pipeline_20260915.md)"
+        },
+        {
+          "original": "[OBB观测可靠性与连续输出](obb/OBB观测可靠性与连续输出.md)",
+          "replacement": "[OBB观测可靠性与连续输出](obb/OBB观测可靠性与连续输出.md)"
+        },
+        {
+          "original": "[旧测量有效性审查](dino/measurement_validity_and_dino_roadmap_20260919.md)",
+          "replacement": "[旧测量有效性审查](../../../../dino/measurement_validity_and_dino_roadmap_20260919.md)"
+        },
+        {
+          "original": "[Webots单目深度估计](webots/Webots单目深度估计.md)",
+          "replacement": "[Webots单目深度估计](../../../../webots/Webots单目深度估计.md)"
+        },
+        {
+          "original": "[review.json](../work_dirs/port_simple_reliability_v1_server_review_20261003/review.json)",
+          "replacement": "[review.json](../../../../../work_dirs/port_simple_reliability_v1_server_review_20261003/review.json)"
+        },
+        {
+          "original": "[fit_report.json](../work_dirs/port_simple_reliability_v1_server_review_20261003/port_simple_reliability_v1_fit/fit_report.json)",
+          "replacement": "[fit_report.json](../../../../../work_dirs/port_simple_reliability_v1_server_review_20261003/port_simple_reliability_v1_fit/fit_report.json)"
+        }
+      ],
+      "anchors": [
+        "legacy-35",
+        "legacy-36",
+        "legacy-37",
+        "legacy-38",
+        "legacy-39",
+        "legacy-40",
+        "legacy-41-structure",
+        "legacy-43",
+        "legacy-46",
+        "legacy-47",
+        "legacy-r1",
+        "current-r123",
+        "simple-r124",
+        "simple-r125",
+        "simple-r126",
+        "shi-r127",
+        "scope-r128",
+        "closure-r129",
+        "closure-r130"
+      ]
+    },
+    {
+      "original_path": "docs/obb/base_v3_v51_focused_paper_complete_pipeline_20260915.md",
+      "original_sha256": "f4c77ff06733e883d100a78f6e904bb25624ecfb0ea84b6d6f82a552178efe3e",
+      "raw_path": "original/docs/obb/base_v3_v51_focused_paper_complete_pipeline_20260915.md",
+      "readable_path": "readable/docs/obb/base_v3_v51_focused_paper_complete_pipeline_20260915.md",
+      "readable_sha256": "f4c77ff06733e883d100a78f6e904bb25624ecfb0ea84b6d6f82a552178efe3e",
+      "link_adjustments": [],
+      "anchors": []
+    },
+    {
+      "original_path": "docs/obb/OBB观测可靠性与连续输出.md",
+      "original_sha256": "0a4a17032d6ffb91ae7abb17ab49b0085f042a5a3d3d36921f54a7e2a1c76369",
+      "raw_path": "original/docs/obb/OBB观测可靠性与连续输出.md",
+      "readable_path": "readable/docs/obb/OBB观测可靠性与连续输出.md",
+      "readable_sha256": "27cf5a631474d8d6b2154967aeb1098ad953fda2a116671a46957ad38d226cd3",
+      "link_adjustments": [
+        {
+          "original": "[冻结 DINOv2 与 SymEOOD 检测融合](../dino/冻结DINOv2与SymEOOD检测融合.md)",
+          "replacement": "[冻结 DINOv2 与 SymEOOD 检测融合](../../../../../dino/冻结DINOv2与SymEOOD检测融合.md)"
+        },
+        {
+          "original": "[冻结 DINOv2 与 SymEOOD 检测融合](../dino/冻结DINOv2与SymEOOD检测融合.md)",
+          "replacement": "[冻结 DINOv2 与 SymEOOD 检测融合](../../../../../dino/冻结DINOv2与SymEOOD检测融合.md)"
+        },
+        {
+          "original": "[冻结 DINOv2 与 SymEOOD 检测融合](../dino/冻结DINOv2与SymEOOD检测融合.md)",
+          "replacement": "[冻结 DINOv2 与 SymEOOD 检测融合](../../../../../dino/冻结DINOv2与SymEOOD检测融合.md)"
+        },
+        {
+          "original": "[Webots 单目深度估计](../webots/Webots单目深度估计.md)",
+          "replacement": "[Webots 单目深度估计](../../../../../webots/Webots单目深度估计.md)"
+        },
+        {
+          "original": "[整合前归档](../archive/20260915_pre_consolidation)",
+          "replacement": "[整合前归档](../../../../20260915_pre_consolidation)"
+        },
+        {
+          "original": "[manifest.json](../archive/20260915_pre_consolidation/manifest.json)",
+          "replacement": "[manifest.json](../../../../20260915_pre_consolidation/manifest.json)"
+        },
+        {
+          "original": "[融合核对表](../audit/融合核对表.md)",
+          "replacement": "[融合核对表](../../../../../audit/融合核对表.md)"
+        },
+        {
+          "original": "[冻结 DINOv2 与 SymEOOD 检测融合](../dino/冻结DINOv2与SymEOOD检测融合.md)",
+          "replacement": "[冻结 DINOv2 与 SymEOOD 检测融合](../../../../../dino/冻结DINOv2与SymEOOD检测融合.md)"
+        },
+        {
+          "original": "[Webots 单目深度估计](../webots/Webots单目深度估计.md)",
+          "replacement": "[Webots 单目深度估计](../../../../../webots/Webots单目深度估计.md)"
+        },
+        {
+          "original": "[研究文档入口](../README.md)",
+          "replacement": "[研究文档入口](../../../../../README.md)"
+        }
+      ],
+      "anchors": [
+        "sec-1",
+        "sec-1-1",
+        "sec-1-2",
+        "sec-1-2-1",
+        "sec-1-2-2",
+        "sec-1-3",
+        "sec-1-4",
+        "sec-2",
+        "sec-2-1",
+        "sec-2-1-1",
+        "sec-2-1-2",
+        "sec-2-1-3",
+        "sec-2-1-4",
+        "sec-2-1-5",
+        "sec-2-1-6",
+        "sec-2-1-7",
+        "sec-2-2",
+        "sec-2-3",
+        "sec-3",
+        "sec-3-1",
+        "sec-3-2",
+        "sec-3-3",
+        "sec-3-4",
+        "sec-3-5",
+        "sec-4",
+        "sec-4-1",
+        "sec-4-2",
+        "sec-4-3",
+        "sec-4-4",
+        "sec-4-5",
+        "sec-5",
+        "sec-5-1",
+        "sec-5-2",
+        "sec-5-3",
+        "sec-5-4",
+        "appendix-sources",
+        "source-h",
+        "source-a",
+        "source-p",
+        "source-r"
+      ]
+    }
+  ]
+}
