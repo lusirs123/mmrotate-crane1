@@ -1,0 +1,71 @@
+{
+  "protocol": "port_geometry_midpoint_motion_v1_train_preflight",
+  "settings": {
+    "seed": 1703,
+    "schedule_seed": 1705,
+    "steps_per_arm": 200,
+    "batch_size": 8,
+    "pairs_per_batch": 4,
+    "real_pairs_per_batch": 2,
+    "sim_pairs_per_batch": 2,
+    "lr": 0.001,
+    "weight_decay": 0.0,
+    "clip_norm": 10.0,
+    "motion_weight": 0.025,
+    "motion_beta": 0.1,
+    "axis_tie_tolerance": 1e-06,
+    "block_frames": 8,
+    "fit_blocks_per_domain": 6,
+    "probe_blocks_per_domain": 2,
+    "min_interblock_gap_frames": 16,
+    "scales": [
+      1.0,
+      0.5
+    ]
+  },
+  "tolerances": {
+    "center_px": 1e-06,
+    "edge_fraction": 1e-06,
+    "angle_deg": 1e-05,
+    "riou": 1e-05,
+    "motion": 1e-08,
+    "aci": 1e-08
+  },
+  "conditions": [
+    "point_only",
+    "point_motion"
+  ],
+  "parameter_count": 17696,
+  "objective": "Original mean per-frame four-point SmoothL1 beta.1; experimental arm adds fixed .025 times mean pair/two-axis SmoothL1(delta log projected edge - delta log GT edge,beta.1). No single-frame size auxiliary term.",
+  "axis_transport": "GT-only unsigned normalized matched-axis dot scores choose same/exchanged next-frame axes. Apply identical mapping to GT and predicted projected edges. Absolute score tie<=1e-6 keeps same order and is reported, never dropped. Existing per-frame cyclic point labels remain unchanged. No predicted-side sorting; not physical-side identity.",
+  "projection": "Continuous original-coordinate v1 projection BEFORE detached-B zero identity/full fallback, finite positive edges required. GT detached; no clamping/dropping invalid prediction or GT geometry.",
+  "gradients": "Finite point/motion/combined gradients; report component norms/ratio/cosine at1/2/25/100/200. Zero motion gradient at a valid minimum is logged, not an exception; diagnostic continuation also requires positive measured motion gradient signal in each arm. Stem step1 zero is expected; step2 combined gradient must be effective.",
+  "sampling": "Reuse fixed size-v1 metadata-only 128 TRAIN identities/256 views and96fit/32probe roles,6fit+2probe consecutive8-frame blocks per domain,>=16 intervening frames. Same two scales. No reselection by eligibility, GT motion, angle, aspect, VAL/TEST or observed effect.",
+  "pairing": "Same TRAIN fit role/sequence/scale and adjacent frame IDs only, both inherited B-present center<15px for gradient eligibility. Retain excluded pair counts; gaps/missing frames/role boundaries break support. Probe never enters gradients.",
+  "schedule": "Seed1705 shuffled cyclic eligible pair queues,2real+2sim pairs =>8 frames/update; duplicate shared endpoints retained and disclosed. Same newly initialized seed1703 head and200 pair minibatches per arm. Point-only uses identical pair batches; previous independent-frame point-only results are not this control.",
+  "cache": "Unchanged completed formal cache/source/runtime identity. Deserialize train_s1.pt and train_s05.pt only; no B, feature extraction, weight, VAL/TEST tensor or image/annotation-byte access.",
+  "online": "Original stateless SpatialMidpointHead, sampler, prior calibration, isotropic transforms/original sx/sy restoration, raw w/h-angle association, zero identity, full-B fallback and score/count/missing outputs unchanged.",
+  "review": "Keep original probe joint nonregression conditions versus paired point-only (static edges,short/diagonal GT-relative motion,center,sim pure angle,RIoU,ACI) and B center/RIoU/sim angle/coverage; also protect long-edge GT-relative motion. Replace old strict static-short gain requirement with strict short AND diagonal GT-relative motion gain at>=one same scale per domain. Numerical tolerances only; no coefficient/step/seed sweep or automatic promotion.",
+  "scope": {
+    "train_identities": 128,
+    "train_views": 256,
+    "fit_identities": 96,
+    "probe_identities": 32,
+    "head_updates_total": 400,
+    "detector_updates": 0,
+    "detector_forward_calls": 0,
+    "feature_extractions": 0,
+    "val_access": false,
+    "test_access": false,
+    "weight_bytes_read": false,
+    "checkpoint_exported": false,
+    "formal_training_approved": false,
+    "automatic_promotion": false
+  },
+  "limitations": [
+    "Only paired TRAIN probe; B and prior formal head have seen TRAIN. Not independent VAL/generalization or full-video/significance evidence.",
+    "Relative-change loss cannot correct constant multiplicative size bias; original point loss supplies static supervision. Shared head can still change center/angle/static dimensions.",
+    "GT axis transport is unoriented geometric correspondence, ambiguous at45deg and not guaranteed physical-side identity. GT motion is annotation-derived, not depth/physical truth.",
+    "DFR/ACI are proxies; lower DFR does not certify GT tracking. TEST repeatedly exposed; no TEST tuning/reselection. Unchanged depth interface does not certify depth accuracy."
+  ]
+}
