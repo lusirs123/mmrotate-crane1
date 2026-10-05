@@ -80,7 +80,7 @@
     "mmrotate/models/losses/sym_kld_loss.py": "e4466cda533d665e28e0f88c404b320051a3d0c747275e769e5d92441d0f7880",
     "mmrotate/models/losses/sym_nfl_loss.py": "a6c39094f6b5eb10fd98da4aee828c4561dff15e6fdc2cf0946942cb73ce4f1b",
     "tests/test_port_geometry_midpoint_edge_feasibility_v1.py": "c5c308e591dc9d104a42f19dfc2bc7e8469db64cfb6c1c46ad830ca6dc3397c6",
-    "tests/test_port_geometry_midpoint_edge_residual_v1.py": "cd8fcc40e51f94ead85313fa47e22ffa9fca64b8c5c3dd510e48a2039c543249",
+    "tests/test_port_geometry_midpoint_edge_residual_v1.py": "3255cd954f05e36ff1686381b647fc575e030f72c7b733df5c28a5b3cead07e1",
     "tests/test_port_geometry_midpoint_formal_v1.py": "1aebc1624dda46c7f23c17495cb359496c94624968ff3f292b5ca496e370162a",
     "tests/test_port_geometry_midpoint_sigma_v1.py": "51ae4719245fb1e0afe9b17825de5d7b94d0b4c947ed7875f4a049080683ee44",
     "tests/test_port_geometry_midpoint_v1.py": "9f06049d6f9a1b865022d71ec10fd8ea691e29e32f017340105aa0f67dfbc041",

@@ -404,7 +404,7 @@ class NativeTorchTests(unittest.TestCase):
         frozen = self.frozen.SigmaMidpointHead(1.5).eval()
         frozen.requires_grad_(False)
         before = tool.sealed.state_digest(frozen)
-        inputs = self.tensors(n=8)
+        inputs = list(self.tensors(n=8))
         inputs[0] = t.randn(8,256,9,9)
         # Intentionally marked grad inputs still must be detached by the head.
         for value in inputs:
