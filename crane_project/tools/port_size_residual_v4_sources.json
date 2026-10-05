@@ -1,0 +1,17 @@
+{
+  "protocol": "port_size_residual_v4",
+  "sources": {
+    "crane_project/tools/run_port_size_residual_v4.py": "3a06375d1948c0126d2b7ab069f3efb67e0911afe29a8639b27939c46dc22d73",
+    "crane_project/utils/port_size_residual_v4.py": "7580ba3f09079ec921b4ab6af60836bc97dbf4e23e67b41275d2a4d364fbd465",
+    "crane_project/utils/port_size_residual_v4_torch.py": "2ff41993a6dd187c98802abe3c4c7f9191499b6feea17e211180eb45509a7628",
+    "crane_project/utils/port_size_residual_comparison_v4.py": "153af39111ec49b79ed510fedf6859f4c51ee8cee339c37229868f6f8904cd47",
+    "crane_project/tools/port_size_residual_v4_protocol.json": "51e19badae905f084933ac5be776ed78d143cab7a3c2ded06df486b245ff8268",
+    "tests/test_port_size_residual_v4.py": "a9631f851b67051155ec8daf6995aaebb4cffb7320cee5bcb22bd3b7c45cded7",
+    "crane_project/utils/port_geometry_refine_g_v1.py": "2545e32ef953d22ef359a56bfc1cadd38d28e69f22b30de6c7fa60f27092c51b",
+    "crane_project/utils/port_structure_reliability_v1.py": "84e32d062f491070dcd6575cc4e50b231a0ff20cb835e70bec7e255c95181aa8",
+    "crane_project/utils/port_reliability_separability_v1.py": "15507b41ac132248355cc62b9cd08f78bfb6e2b0970231f01cd0c08ddb2d9cdd"
+  },
+  "protocol_sha256": "51e19badae905f084933ac5be776ed78d143cab7a3c2ded06df486b245ff8268",
+  "parent_midpoint_sources_sha256": "ec4ff3d468e0521a00b765ddf67655c8ffd6705dec34e81a52000bd85e02a4a8",
+  "reviewed_collection_helper_sources_sha256": "894e12beaaf5478da7fa37421bfe2e91ebcc1cd141944d184e7c9f531358f16c"
+}

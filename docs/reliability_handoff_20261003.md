@@ -4,7 +4,7 @@
 
 本文是当前可靠性基线与后续实验的唯一执行交接；[OBB机制说明](obb/OBB观测可靠性与连续输出.md)、[流程记录](obb/base_v3_v51_focused_paper_complete_pipeline_20260915.md)及[文档入口](README.md)同步当前身份与主表。此前替换的旧流程在[替换前归档](archive/20261003_reliability_replaced_by_simple_v1/README.md)保留，原始实验文件和模型未删除。检测几何优化维护[独立几何交接](geometry_precision_handoff_20261001.md)，本轮没有修改该窗口的代码/记录或实际大小论文稿。后续服务器结果不复制为本地复核目录。
 
-**更换窗口入口：先读第20节接续摘要，再按需读第1/14/16/18/19节及其关键代码。新窗口唯一目标为提高可靠性判断准确性，B24＋正式midpoint23＋现有simple仍是冻结比较基线，不重复完整审计。第21节记录核心曲率监督设计；21.8为初版实现，21.9为gradfix1历史修复，21.10为其epoch2首帧再次失败后的gradfix2同上游梯度核对及失败帧预检。第21.11节已核验gradfix2服务器回传：预检/两臂训练/全量VAL全部完成，E通过，R与Q1未通过，曲率版本收束并保留simple。第22节为半峰范围v3设计/实现；22.6已核验服务器回传：E通过，R与Q1仍未通过，保留simple、不拟合最终工作点。下一步仅建议固定模型的TRAIN读出能力对照，尚未实施。后续一个实验的各阶段、日志和分析包集中于同一父目录。**
+**更换窗口入口：先读第20节接续摘要和第23节当前实验，再按需读第1/14/16/18/19节及其关键代码。新窗口唯一目标为提高可靠性判断准确性，B24＋正式midpoint23＋现有simple仍是冻结比较基线，不重复完整审计。第21节记录核心曲率监督设计；21.8为初版实现，21.9为gradfix1历史修复，21.10为其epoch2首帧再次失败后的gradfix2同上游梯度核对及失败帧预检。第21.11节已核验gradfix2服务器回传：预检/两臂训练/全量VAL全部完成，E通过，R与Q1未通过，曲率版本收束并保留simple。第22节为半峰范围v3设计/实现；22.6已核验服务器回传：E通过，R与Q1仍未通过，保留simple、不拟合最终工作点。第23节按用户授权实现冻结框尺寸残差v4：本地工程检查通过，真实TRAIN预检与性能尚待服务器运行。22.6的读取能力对照保留为未实施的历史建议。后续一个实验的各阶段、日志和分析包集中于同一父目录。**
 
 ## 1. 当前决定与模型
 
@@ -1097,3 +1097,95 @@ real共同支持±15%双侧探针：VAL长边 .3646→.4558、短边 .2627→.20
 **结论及下一步建议（尚未实施）：** 收束固定v3为“E通过，局部参考收益，R/Q1未成立”，保留基线simple和全部候选来源/负结果。当前不延长训练、搜系数/epoch、改最终工作点、反号、按视频回退或重启旧方向结构。两次辅助监督均未使真实判断超过冻结控制，下一步优先一项**不训练、固定epoch04的TRAIN读出能力对照**：在既有拟合/参考留出角色上，用同一热图比较原在线读取与离线GT中心/方向辅助的轴向半峰读取，GT长短边只用于最后评价，不作为待求边长输入；同时记录固定末态的GT范围代理，避免用动态训练loss代替拟合精度。它只用于定位当前热图可读范围与在线定位/模板求解之间的差距，不是部署候选，GT不得进入在线API。若留出下即使GT辅助也读不准，优先收束当前特征＋热图配置并另议输入/训练覆盖；若辅助读取有稳定收益而原读取没有，才有依据另立读取机制实验；这两个分支均待验证，不称已确定根因或保证以后成功。不重复完整审计、不新增实际TRAIN/VAL训练或TEST评价；具体控制与准入规则须在后续实现前冻结。
 
 **新目录约定（用户本轮明确要求）：** 后续同一实验的所有阶段、日志、分析回传包集中于一个`work_dirs/<experiment>/`父目录，例如`check/`、`smoke/`、`train/`、`assess/`、`unittest.log`、`analysis_YYYYMMDD.tar.gz`；每阶段命令仍分别复制，必要的环境设置可合并一条。已有v2/v3目录、文件路径和来源身份保持，不在本次分析中移动或覆盖旧产物。Git同步源码，不压缩本地源码，服务器只产生该实验父目录内的一个分析包；回传仍在内存核验，不另存本地结果副本。
+
+## 23. 冻结框尺寸残差v4：文献适配、固定对照及实现（2026-10-05）
+
+### 23.1 问题与文献边界
+
+**既有事实：** 22.6已表明参考精度改善不等于实际尺寸判断改善，且范围代理在VAL也未一致改善；不能把失败全部归因于读取器，也未确定特征、样本覆盖或相关误差中的唯一原因。当前midpoint TRAIN仅46个尺寸错误、sim为0；已有432帧参考留出的real仅4个错误、sim为0。连续帧数量不是独立错误类型数量。正式midpoint的定位、sim角度和两域RIoU收益保留，可靠性实验不会更换前端。
+
+**本轮依据与推断：** 用户要求先检索论文，再明确授权按推荐实施。优先借鉴[From Keypoints to Predictive Distributions: Post-Hoc Uncertainty for YOLO-Pose Models](https://arxiv.org/html/2607.26921v1)的冻结预测、真实残差NLL监督，以及排序与分布校准分开评价的机制。它是2026预印本，原任务为关键点；原文的雾天案例也说明其分布内协方差不能稳定捕获分布偏移失败。下述OBB规范长短边、对角log尺度和小侧分支是项目适配，不能写成原论文OBB方法、PQA复现、已校准概率或已解决泛化。共享P3不保证与检测错误独立。
+
+本版直接建模现有框的尺寸残差，取消“先准确重建第二个尺寸框”作为判断链条的前置要求。固定零均值和对角分布只是有限假设；未引入误差均值修正、Student-t、密度模型、类别平衡重采样或新辅助loss。偏大/偏小在标签与报告中保留，但NLL对同幅正负残差相同，不学习误差方向，不修正任何框。是否能提高判断准确性仍待TRAIN/VAL实测。
+
+### 23.2 监督、可微实现与在线读取
+
+只对冻结前端的真实输出进行离线监督，GT和预测都在**原图坐标**规范为长短边。令边长为`d_j`，`j∈{L,S}`：
+
+\[
+e_j=\log(\hat d_j/d_j^{GT}),\qquad
+\sigma_j=\operatorname{softplus}(z_j)+0.001,
+\]
+\[
+\mathcal L=\frac12\sum_{j\in\{L,S\}}
+\left[\frac{e_j^2}{2\sigma_j^2}+\log\sigma_j+\frac12\log(2\pi)\right].
+\]
+
+唯一目标是此NLL，系数固定1，两轴均权；没有待调辅助系数。预测log边长的均值固定在原框，不训练均值或写回边长。两标量likelihood用Torch float64计算，侧分支float32；softplus、加法、平方、除法和log保留梯度，GT残差为无梯度常数。NLL可以为负，不能据负值判错。固定sigma下界是log尺度中的数值保护，不是由VAL选择的最优值。
+
+尺寸正确事件仍为两轴`abs(pred/GT−1)≤.1`，对应**非对称**区间`log(.9)≤e_j≤log(1.1)`。在线仅接收两个预测`z_j`，据零均值对角Gaussian计算两轴区间质量的乘积`q_model`，风险为`1−q_model`。它是模型假设下的未校准评分，不是已验证的错误概率。报告分开记录NLL、均值偏差、两轴残差相关性、平方残差/预测方差、固定置信椭圆覆盖和10个固定`q_model`分箱；这些不会进入在线判断或拟合新门限。
+
+在线输入为detached P3、最终midpoint框、图像变换信息和原图尺寸；不接收GT、domain、sequence或历史。固定使用已有`map_boxes/sample_local`的stride8、9×9、1.5倍上下文及padding support，不修改几何代码。对最终midpoint框采样，不用GT或更早的B框确定ROI。256通道经1×1卷积压缩到8通道后取support加权均值/标准差，共16个图像统计量，与既有3个框描述量一起进入19→2线性输出；总参数2096，无高维ROI展开、结构/方向分类器或候选重排。
+
+### 23.3 两臂、TRAIN职责与固定预算
+
+- **A0：** 同一小网络，16个图像统计量置零，只使用既有3个框描述量估计残差尺度。其stem梯度为0是预期控制行为。
+- **A1：** 同网络、同初始state，使用16个图像统计量及同样3个框描述量。A1必须有真实图像路径梯度。
+- 描述量标准化只用384个拟合TRAIN中的现有输出，不使用残差标签、留出或VAL拟合。seed1701；输出weight初始标准差`.001`、bias对应sigma约`.05`；同state不代表不同输入的初始输出必须一致。
+- 沿用既有384拟合、432留出、32 guard身份：real_seq01/05/06/12各64、sim_seq08前部128用于拟合；real_seq13 304＋sim_seq08尾部128留出，中间32帧隔离。只重新命名评价角色为`residual_holdout_train`，原参考证据保留身份。此留出不隔离检测器、midpoint或simple，不能称完整系统独立确认。
+- 固定4轮，epoch内顺序`RandomState(1701+epoch)`，两臂共享同一帧/同一冻结特征。Adam `lr=.001, weight_decay=0`，clip norm10，无增强、错误标签重采样、续训或epoch选择。每臂1536个计划slot；无输出或无可用图像support时两臂共同跳过，明确报slot和实际update数，禁止填GT框。每轮保存并精确重载，最后只评价epoch04。
+- `check`只在拟合TRAIN做残差支持/标准化和独立NumPy有限差分。`smoke`在同一未更新初始化的固定14视图测实际Torch梯度，再做real/sim交替4次更新/臂并保存重载，全部丢弃。`train`从新初始化开始；`assess`才读取432留出和完整887 VAL图像，评估固定末态，不拟合概率校准或最终门限。TEST入口不存在；TEST已多次暴露，后续选择只用TRAIN/VAL。
+
+### 23.4 预先固定的继续条件与工程保护
+
+**E工程：** 新/父来源与冻结输入合同相符；NumPy公式/有限差分和真实Torch梯度相符；初始化两域A1 stem/output有非零有限梯度；记录NLL两部分的raw梯度范数、实际参数组范数及裁剪前后变化，smoke两域各臂裁剪保留中位≥.1。每步核对raw NLL解析导数与实际autograd，不再对多个参数backward种子做严格加和判断。候选forward/backward局部关闭TF32、固定cuDNN确定性并恢复基线backend标志。smoke、每轮权重保存重载精确；训练/评价检查冻结B/midpoint状态与输出，policy来源不变。失败保留`failure.json`，训练失败带epoch/slot/image/arm上下文，下一阶段拒绝消费失败产物。
+
+**D分布拟合：** 在共同可用支持上，A1在留出TRAIN和VAL的real/sim平均log残差NLL均不高于A0。D独立报告，NLL改善不能代替正确/错误排序改善，也不能证明概率校准或分布外可靠性。
+
+**Q1判断：** 主点仍为现有simple接受数，real333、sim510。按同接受数比较score/simple/A0/A1，报告FA/FR/ED/CR、接受覆盖、正确保留和条件正确率，边界同分同时给最优/最坏FA/FR，实际排序只按risk和image。A1保守FA比三个控制中的最好者在real至少减少5；sim及每个视频不得增加保守FA或FR，至少一个real视频有严格收益；real共同支持AUROC至少比三控制最大值高`.02`；各组A1风险可用输出必须覆盖全部原输出。标准按当前协议在训练前固定，属于实用继续条件，不是统计显著性或部署保证。
+
+**工作点：** 90%/95%仅固定比较，报告843−642=201这一类接受数下界，以及候选实际接受数的score/simple/A0同数对照，防止跨域分配变化冒充收益。只有D/Q1都通过才可另立受正确保留/误拒约束的工作点版本；本版始终不创建最终policy，不自动部署或评价TEST。中心/方向继续使用原simple输出；尺寸评分不可用也不删除中心。中心命中仅输出分母，另报输出覆盖和全帧中心正确覆盖。宽高交换、π周期、等比例/原图恢复与现有深度接口约束保持。
+
+### 23.5 本地实现和验证（事实）
+
+新增7个文件：`run_port_size_residual_v4.py`、协议/来源JSON、NumPy残差/读出、Torch侧分支/梯度、比较模块及`test_port_size_residual_v4.py`；本记录为唯一文档更新。新清单pin9个直接文件及midpoint/已核验collection辅助清单；复用原collect/fit来源和冻结policy，不要求加载旧参考epoch04权重，不调用v2/v3训练或修改其文件/清单。新协议SHA `51e19badae905f084933ac5be776ed78d143cab7a3c2ded06df486b245ff8268`，来源清单SHA `ff0175c72214459be2329256e2752c95ce6a59cb88a53887a15490b1bd36d4af`。
+
+本地Python3.8.20、NumPy1.21.3、Torch1.8.0.post3 CPU的26项测试最终全部通过（1.984秒，无跳过）。包括实际float64 autograd/有限差分，负NLL，尺度/OBB等价性，padding与GT-free输入，A0图像不变/A1图像梯度，实际裁剪、故意损坏导数必须在optimizer前停止，backend标志恢复，真实checkpoint/marker重载和禁止覆盖，来源/阶段失败保护，完整smoke＋评价序列化重放，以及实际两臂3072次**合成**更新的初始化/顺序/预算/末态检查。新/父清单检查和Python3.8 AST通过，CLI帮助参数核对通过。此为工程与逻辑证据；未在本地加载完整服务器冻结权重/缓存或执行真实图像GPU阶段，不能写成E真实TRAIN预检通过或性能改善。未连接服务器，未读取TEST、压缩本地源码或新增回传结果副本；保留并未修改几何窗口已有改动、旧实验产物和论文。
+
+### 23.6 服务器逐条命令与一个分析包
+
+先用Git同步本次7个新增文件和本交接。在`mmrotljj`环境逐条复制；上一条成功再执行下一条。物理GPU默认2，程序内`--gpu 0`；按实际空闲卡调整环境变量。各阶段目录不存在时才可运行，失败保留产物，不能覆盖续跑。
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+```
+
+```bash
+export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" CUDA_VISIBLE_DEVICES=2; set -o pipefail; mkdir -p work_dirs/port_size_residual_v4
+```
+
+```bash
+python -m unittest discover -s tests -p 'test_port_size_residual_v4.py' -v 2>&1 | tee work_dirs/port_size_residual_v4/unittest.log
+```
+
+```bash
+python crane_project/tools/run_port_size_residual_v4.py --mode check --out-dir work_dirs/port_size_residual_v4/check
+```
+
+```bash
+python crane_project/tools/run_port_size_residual_v4.py --mode smoke --gpu 0 --check-report work_dirs/port_size_residual_v4/check/check_report.json --out-dir work_dirs/port_size_residual_v4/smoke
+```
+
+```bash
+python crane_project/tools/run_port_size_residual_v4.py --mode train --gpu 0 --check-report work_dirs/port_size_residual_v4/check/check_report.json --smoke-report work_dirs/port_size_residual_v4/smoke/smoke_report.json --out-dir work_dirs/port_size_residual_v4/train
+```
+
+```bash
+python crane_project/tools/run_port_size_residual_v4.py --mode assess --gpu 0 --train-report work_dirs/port_size_residual_v4/train/train_report.json --out-dir work_dirs/port_size_residual_v4/assess
+```
+
+四阶段完成后，只在实验父目录内生成一个分析包，含测试日志、全部阶段数值证据/来源/完成报告、训练日志和权重SHA标记，不含权重或源码：
+
+```bash
+tar --exclude='*.pth' --exclude='*.pt' --exclude='*.pkl' -czf work_dirs/port_size_residual_v4/analysis_20261005.tar.gz -C work_dirs/port_size_residual_v4 check smoke train assess unittest.log
+```

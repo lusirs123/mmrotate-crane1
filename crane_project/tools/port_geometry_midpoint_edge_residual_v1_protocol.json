@@ -1,0 +1,83 @@
+{
+  "architecture": "Conv1x1(259,8,bias),ReLU,Conv3x3(8,8,pad1,bias),ReLU. Mean over y/x gives separate8x9 u/v profiles; each concat4 geometry ->Linear76to1. Two output weights/biases zero.2818 parameters.",
+  "cache_manifest_sha256": "046c5998dee0ba3703f1ae4e08fc6a02e9804d216ea12241357f69f2a4afd1e3",
+  "finite": "New seed1703 initialization,200 updates only. Evaluate neutral and final200 on TRAIN128 views and full standard VAL887. Indexed fixed M VAL reproduction precedes any new update. No intermediate weight selection, repeats or tuning. Save experimental independent weights on server only.",
+  "fixed_checkpoint": {
+    "epoch": 3,
+    "head_digest": {
+      "buffer_count": 0,
+      "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "parameter_count": 17696,
+      "parameters": "f84d99dac7cb0f2dcb86b5eaf33c21c1d360bdca5d0193b7b3da6c98f92bdc63"
+    },
+    "path": "head_epoch_03.pth",
+    "save_reload_exact": true,
+    "sha256": "16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7",
+    "sigma_cells": 1.5,
+    "updates": 2706
+  },
+  "gates": "A003: preserve frozen state/center/raw+canonical angle/score/output. VAL both-domain joint-size counts strictly increase, each sequence does not decline; center+size coverage and TRAIN probe per-domain/scale do not decline. Every-domain/sequence two-edge MAE/P95/max nonincrease. All-frame meanRIoU nondecrease, no newRIoU<.5 or longer failure run. DFR/MCML max+mean/MRF nonincrease; ACI/A-RMSE and adjacent-pair/penalty counts identical. TDR_w10 denominator identical and hits nondecrease, MCML_limit5 nondecrease; MRF undefined pattern retained. Require engineering proof. Failure keeps M, never auto extends budget.",
+  "geometry_inputs": "log(M_roi_u/B_original_roi_u),log(M_roi_v/B_original_roi_v),log(B_model_u/context_u),log(B_model_v/context_v). Original and model B swaps stay separate; model B alone defines ROI axes.",
+  "limitations": [
+    "Finite candidate is not measured improvement or a root-cause conclusion.",
+    "TRAIN probe was used previously and is not independent generalization.",
+    "Size loss does not guarantee RIoU/continuity/depth precision.",
+    "Live detector/online image pipeline is not rerun; use sealed cache and GT-free head contract.",
+    "GPU/weights/effect cannot be certified by local static tests."
+  ],
+  "metrics": "Same strict RIoU and contiguous sequence formulas in eval_crane_offline.py, canonical offline view only. Unrounded sequence values/event counts gate ACI/A-RMSE/DFR/MCML/MRF; original rounded output also retained. Three center denominators, conditional/full joint sizes, paired recovery/new failures, MAE/P95/max and signed errors.",
+  "model_settings": {
+    "direction_atol_rad": 1e-06,
+    "edge_ratio_max": 1.25,
+    "edge_ratio_min": 0.8,
+    "hidden_channels": 8,
+    "in_channels": 256,
+    "loss_beta": 0.1,
+    "roi_size": 9,
+    "seed": 1703
+  },
+  "objective": "Mean two-axis SmoothL1(delta_roi-log(GT_roi/M_roi),beta.1), before zero/fallback delivery. GT canonical long/short follow frozen M raw order, then model-B swap. Old fixed-B cyclic matched target diagnostic only. No target clipping, size-error filtering or joint/temporal objective.",
+  "online": "GT-free frozen ROI/support/B raw/B model/actual sx-sy/frozen M -> independent residuals. Copy M center/raw theta/score/output count. Exact zero and exact-square M bypass. Nominal original-B raw edge ratio[.8,1.25], frozen M raw order/canonical angle, original center/angle guards and native-dtype four-midpoint ROI bound. Any failure falls back whole pair to M.",
+  "parameter_count": 2818,
+  "parent_sources_sha256": "3909ad63d284afc3511bae8810b42d824cd6127ff8ba9675d292ba0f7e7fc1af",
+  "protocol": "port_geometry_midpoint_edge_residual_v1_finite_train_val",
+  "sampling": "Existing sealed64 TRAIN identities and roles: per-domain24 fit+8 probe, paired1.0/.5. Only inherited B-present center<15px fit views enter gradients, no replacements. Deterministic shuffled cyclic queue in each domain/scale,2 slots per queue per step; 1600 slots, not1600 unique images.",
+  "scope": {
+    "automatic_promotion": false,
+    "cache_rebuilt": false,
+    "detector_constructed": false,
+    "detector_updates": 0,
+    "feature_extractions": 0,
+    "formal_training_approved": false,
+    "frozen_midpoint_updates": 0,
+    "paper_modified": false,
+    "reliability_migrated": false,
+    "selection_on_test": false,
+    "test_access": false
+  },
+  "settings": {
+    "batch_size": 8,
+    "clip_norm": 10.0,
+    "lr": 0.001,
+    "max_cpu_tensor_bytes": 1073741824,
+    "per_domain_scale": 2,
+    "scales": [
+      1.0,
+      0.5
+    ],
+    "seed": 1703,
+    "smoke_steps": 2,
+    "steps": 200,
+    "weight_decay": 0.0
+  },
+  "smoke": "GPU2 updates, native parameter/optimizer/Python+torch CPU/CUDA RNG save/reload, exact prediction replay and gradient-path checks. TRAIN128 views only, no VAL tensor/evaluation. Existing selected VAL text is read for source binding only. Smoke weights/updates never initialize finite training.",
+  "stages": [
+    "check",
+    "smoke",
+    "finite"
+  ],
+  "tolerances": {
+    "continuous": 1e-06,
+    "riou": 1e-05
+  }
+}

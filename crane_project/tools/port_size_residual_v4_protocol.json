@@ -1,0 +1,76 @@
+{
+  "protocol": "port_size_residual_v4",
+  "settings": {
+    "seed": 1701,
+    "epochs": 4,
+    "fit_frames": 384,
+    "holdout_frames": 432,
+    "guard_frames": 32,
+    "slots_per_arm": 1536,
+    "initial_views": 14,
+    "smoke_updates": 4,
+    "lr": 0.001,
+    "weight_decay": 0.0,
+    "clip_norm": 10.0,
+    "hidden_channels": 8,
+    "sigma_floor": 0.001,
+    "initial_sigma": 0.05,
+    "output_weight_std": 0.001,
+    "moment_epsilon": 1e-06,
+    "descriptor_scale_floor": 1e-06,
+    "size_relative_limit": 0.1,
+    "center_limit_px": 15.0,
+    "coverage_fractions": [
+      0.9,
+      0.95
+    ]
+  },
+  "arms": {
+    "a0": "box_descriptor_only_image_code_zero",
+    "a1": "same_head_plus_8_channel_image_mean_std"
+  },
+  "initialization": "identical_state_seed1701_random_output_weights_std0.001",
+  "sampling": "same384_fit_identities_same_epoch_shuffle_no_error_resampling_no_augmentation",
+  "missing_fit_output": "skip_for_both_arms_no_GT_fill_report_slots_and_actual_updates",
+  "objective": "equal_axes_zero_mean_diagonal_Gaussian_NLL_coefficient1_no_auxiliary_loss",
+  "target": "signed_log(pred_canonical_long_short/GT_canonical_long_short)",
+  "distribution": "zero_mean_independent_axes_assumption_not_proven_error_independence",
+  "predicted_mean": "frozen_log_box_edges_not_trainable_no_box_correction",
+  "sigma": "softplus(raw)+0.001_no_upper_clamp",
+  "reader": "1-product(P(log0.9<=residual<=log1.1))_model_assumption_score",
+  "feature": "frozen_P3_final_midpoint_aligned9x9_context1.5_then_256_to8_1x1_weighted_mean_std",
+  "descriptor": "existing3_descriptor_standardized_on_fit_outputs_only",
+  "checkpoint": "fixed_epoch04_fresh_after_discarded_smoke_no_resume_no_selection",
+  "calibration": "none_this_version_ranking_and_distribution_diagnostics_separate",
+  "evaluation_roles": {
+    "residual_holdout_train": 432,
+    "val": 887
+  },
+  "continuation": {
+    "real_FA_gain": 5,
+    "real_AUROC_gain": 0.02,
+    "primary_accept_counts": {
+      "real": 333,
+      "sim": 510
+    },
+    "tolerance": 1e-10,
+    "per_video_no_FA_FR_regression": true,
+    "final_workpoint_created": false
+  },
+  "literature": {
+    "url": "https://arxiv.org/html/2607.26921v1",
+    "status": "2026_preprint",
+    "borrowed": "frozen_predictions_residual_NLL_and_separate_ranking_calibration",
+    "adapted": "OBB_log_edge_diagonal_dispersion_compact_image_side_head"
+  },
+  "GT_online": false,
+  "domain_sequence_history_online": false,
+  "detector_updates": 0,
+  "midpoint_updates": 0,
+  "baseline_policy_updates": 0,
+  "test_read": false,
+  "test_repeatedly_exposed": true,
+  "comparison_only": true,
+  "final_deployment_policy_created": false,
+  "residual_holdout_is_not_detector_or_simple_holdout": true
+}
