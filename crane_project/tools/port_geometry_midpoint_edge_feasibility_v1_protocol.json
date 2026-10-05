@@ -1,0 +1,71 @@
+{
+  "bypass": "Exact-square M is frozen. Zero-residual/full-M fallback retains an already-correct M even if reconstructed M midpoints fail a new ROI constraint. No-output frames remain absent.",
+  "cache_manifest_sha256": "046c5998dee0ba3703f1ae4e08fc6a02e9804d216ea12241357f69f2a4afd1e3",
+  "constraints": "Intersect nominal original-B raw edge ratios [0.8,1.25], 10% GT intervals and four-midpoint ROI upper bounds; keep M raw order (strict when w<h). Actual sx/sy, original/model swaps and minimum16px context remain separate.",
+  "fixed_checkpoint": {
+    "epoch": 3,
+    "head_digest": {
+      "buffer_count": 0,
+      "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "parameter_count": 17696,
+      "parameters": "f84d99dac7cb0f2dcb86b5eaf33c21c1d360bdca5d0193b7b3da6c98f92bdc63"
+    },
+    "path": "head_epoch_03.pth",
+    "save_reload_exact": true,
+    "sha256": "16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7",
+    "sigma_cells": 1.5,
+    "updates": 2706
+  },
+  "inputs": "Only sealed checkpoint/selected epoch03 indexed VAL rows and three existing CPU TRAIN/VAL shards. No historical selection, sigma1 replay, image/dataset reads, detector construction or cache rebuild. Verify source, byte SHA, checkpoint/context and head digest.",
+  "limitations": [
+    "Feasible size does not prove ROI information or learning sufficiency.",
+    "No RIoU/continuity or depth-precision guarantee from size certificates.",
+    "Previously used TRAIN probe is diagnostic, not independent generalization.",
+    "No smoke/probe/formal training, paper edit or reliability-front-end migration."
+  ],
+  "numeric": "Float64 analytic inequalities do not widen the 10% target. Validate native M against original float32/device B guards, record differences from float64 guard arithmetic. Up to3 fixed certificate attempts are reconstructed through log/exp in original float32/device, checked with the original torch ROI map and existing B guards. Boundaries without a verified witness remain numeric_unresolved.",
+  "objective": "OFFLINE existence of both canonical edge errors <=10%, with fixed M center/raw angle/long-axis identity/score/output frames.",
+  "parent_hashes": {
+    "crane_project/tools/port_geometry_g_v1_train_samples.json": "616ac890b9a60689c7fb52c08bf58b4fe85e2542090b158d79ce0d429902209c",
+    "crane_project/tools/port_geometry_midpoint_formal_v1_protocol.json": "359bc1e3128ff472c568197860d0c911de204699f1b3cf14a4e3e9ff40568ff3",
+    "crane_project/tools/port_geometry_midpoint_formal_v1_sources.json": "2d489e06b06ce390cd6dc3dfeee8a849134e37b103d11951e4830dda91c37804",
+    "crane_project/tools/port_geometry_midpoint_sigma_v1_protocol.json": "48e7f1144ea442ae45218a754013521b0de50ba27b399204c23b77f74776c65d",
+    "crane_project/tools/port_geometry_midpoint_sigma_v1_sources.json": "b3e2ab222a8c16930cf483d4870373b522abb04b3a5f793ff0ea92072aae18e3"
+  },
+  "protocol": "port_geometry_midpoint_edge_feasibility_v1",
+  "record_counts": {
+    "train_s05": 2558,
+    "train_s1": 2558,
+    "val_s1": 887
+  },
+  "reporting": "All TRAIN1/TRAIN0.5 and full VAL1; real/sim/sequences and existing64-image fit/probe roles with eligible subsets separately. Output coverage, conditional center correctness, full-frame center correctness and joint-size coverage use explicit denominators. GT certificates are not candidate predictions or measured improvements.",
+  "scope": {
+    "automatic_promotion": false,
+    "cache_rebuilt": false,
+    "detector_updates": 0,
+    "feature_extractions": 0,
+    "head_updates": 0,
+    "independent_size_head_implemented": false,
+    "selection_on_test": false,
+    "test_access": false
+  },
+  "settings": {
+    "boundary_atol_px": 0.0001,
+    "boundary_rtol": 1e-06,
+    "context_multiplier": 1.5,
+    "edge_ratio_max": 1.25,
+    "edge_ratio_min": 0.8,
+    "legacy_guard_tolerance": 1e-06,
+    "max_angle_residual_rad": 0.17453292519943295,
+    "max_center_over_b_short": 0.3,
+    "min_context_pixels": 16.0,
+    "relative_error_limit": 0.1,
+    "roi_bound": 0.5,
+    "roi_bound_tolerance": 1e-05
+  },
+  "stages": [
+    "check",
+    "diagnose"
+  ],
+  "targets": "Metric target sorted GT edges follow M raw order; fixed-B cyclic matched point-pair distances follow original-B raw order then model-B ROI order. Report disagreements, never relabel the training target."
+}
