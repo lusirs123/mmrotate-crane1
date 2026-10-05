@@ -25,6 +25,27 @@ def meta(scale=1., flip=False):
 def box(): return [128.,128.,80.,40.,.37]
 
 
+def replay_contract_fixture():
+    protocol=json.loads(entry.PROTOCOL.read_text())
+    prior=deepcopy(protocol);prior.pop('failure_frame_replay')
+    prior['gradient_decomposition_check']=dict(version='uncancelled_component_scale_v1',
+        relative_dtype_epsilon_multiplier=128.,absolute_tolerance=1e-12,
+        backward_precision='reference_only_forward_backward_TF32_off_restore_flags',
+        norm_checks='per_parameter_L2_and_max_uncancelled_weighted_components')
+    sources={
+        'crane_project/tools/run_port_size_core_curvature_v2.py':'542b47f66de7943134f633324ff3340716a38da268ea5a0491f504a657446bb7',
+        'crane_project/tools/eval_port_size_core_curvature_v2.py':'722da5fe53d8d5fdc6d872132c6d6b734ee7797e355c4c6afb744513a98704a3',
+        'crane_project/utils/port_size_core_curvature_v2.py':'75613038b074c03b82e828910d1e8926cf4871a759060c01434622b7c984b28b',
+        'crane_project/utils/port_size_core_curvature_v2_torch.py':'17f0959e91cbafbe52cbebde9239aba0aa44c2b10ebc247578f41b3ce7362702',
+        'crane_project/utils/port_size_core_comparison_v2.py':'614af84ac44cf540cc58c9f48bab9e8b8169402e6ee973674eb7946f4450216e',
+        'crane_project/tools/port_size_core_curvature_v2_protocol.json':'2c4afebefc9bc6f6e1affd9bcc59d8079585883b6a7b3f30acdd40f927810557',
+        'tests/test_port_size_core_curvature_v2.py':'48cb6f25d5d507497816368bb4533252721b517ad973d59bbcfe4110a162ff84'}
+    old=dict(protocol=prior,sources=dict(manifest_sha256=core.FAILURE_REPLAY['prior_manifest_sha256'],sources=sources),
+        frozen_parent={'fixture':True},fit_images_sha256='fixture_train_role',test_read=False,GT_online=False)
+    current=deepcopy(old);current['protocol']=protocol;current['sources']={'fixture_new_sources':True}
+    return old,current
+
+
 def evidence(defined=True,risk=.2,bad=False):
     ref=dict(defined=defined,reason='defined' if defined else 'weak_evidence',long_original_px=80.,short_original_px=40.)
     frozen=dict(final_box_original=None,center_accepted=True,size_accepted=True,angle_accepted=True,risks={'size':.3,'angle':.2})
@@ -182,6 +203,19 @@ class CoreGeometryTests(unittest.TestCase):
             (root/'failure.json').write_text('{}')
             with self.assertRaises(ValueError):entry.stage(p,'PASS',contract)
 
+    def test_replay_requires_exact_prior_sources_protocol_and_same_frozen_inputs(self):
+        previous,current=replay_contract_fixture()
+        entry.checked_replay_contract(previous,current)
+        for key in ('frozen_parent','fit_images_sha256','test_read'):
+            changed=deepcopy(previous);changed[key]='different'
+            with self.assertRaises(ValueError):entry.checked_replay_contract(changed,current)
+        changed=deepcopy(previous);changed['sources']['manifest_sha256']='other'
+        with self.assertRaises(ValueError):entry.checked_replay_contract(changed,current)
+        changed=deepcopy(previous);changed['sources']['sources']['tests/test_port_size_core_curvature_v2.py']='other'
+        with self.assertRaises(ValueError):entry.checked_replay_contract(changed,current)
+        changed=deepcopy(previous);changed['protocol']['coefficients']['curv']=.5
+        with self.assertRaises(ValueError):entry.checked_replay_contract(changed,current)
+
     def test_paired_numeric_records_JSON_replay_and_theoretical_bounds_are_identical(self):
         rows=rows_fixture()
         # Add a second domain/video so pooled and per-domain ranking allocation differ.
@@ -240,7 +274,7 @@ class CoreGeometryTests(unittest.TestCase):
             optim=SimpleNamespace(Adam=lambda *a,**k:next(optimizer_iter)),
             nn=SimpleNamespace(utils=SimpleNamespace(clip_grad_norm_=lambda *a:1.)),
             cuda=SimpleNamespace(max_memory_allocated=lambda *a:0,max_memory_reserved=lambda *a:0))
-        def update(terms,model,optimizer,arm):optimizer.step();return {'fixture':True}
+        def update(terms,model,optimizer,arm,logits):optimizer.step();return {'fixture':True}
         backend=SimpleNamespace(loss_terms=lambda *a:{'v1':Scalar(1),'curv':Scalar(2),'quad':Scalar(3)},
             coefficients=lambda arm:{'v1':1,'curv':.25 if arm=='a1' else 0,'quad':.05 if arm=='a1' else 0},
             update=update,reference_precision=nullcontext)
@@ -248,15 +282,16 @@ class CoreGeometryTests(unittest.TestCase):
         original=[None]*10;original[6]=split;original[7]={}
         previous=[None]*6;previous[1]=original
         old=[None,previous];frozen={'b':'b_sha','midpoint':'h_sha'}
-        checked={'initial_sha256':'init','frozen':frozen}
+        checked={'initial_sha256':'init','frozen':frozen,'optimizer_updates':0}
         def digest(module):
             if module is detector:return 'b_sha'
             if module is head:return 'h_sha'
             return 'ref_'+str(module.updates)
         with tempfile.TemporaryDirectory() as directory:
             args=SimpleNamespace(check_report=Path('check'),smoke_report=Path(directory)/'smoke',
-                                 out_dir=Path(directory),gpu=0)
+                                 replay_report=Path(directory)/'replay',out_dir=Path(directory),gpu=0)
             args.smoke_report.write_text('{}')
+            args.replay_report.write_text('{}')
             def saved(*a):return dict(path='epoch04',sha256='sha',marker_sha256='marker')
             with patch.dict('sys.modules',{'crane_project.utils.port_size_core_curvature_v2_torch':backend}), \
                     patch.object(entry,'stage',return_value=checked), \
@@ -287,6 +322,50 @@ class CoreGeometryTests(unittest.TestCase):
 
 @unittest.skipUnless(importlib.util.find_spec('torch'),'Actual Torch autograd/save-reload must run before server training')
 class ActualTorchTests(unittest.TestCase):
+    def test_failure_replay_runs_real_gradients_without_updating_checkpoint_or_parameters(self):
+        import torch
+        from crane_project.utils.port_size_core_curvature_v2_torch import SizeReference
+        prior,current=replay_contract_fixture();settings=core.FAILURE_REPLAY
+        torch.manual_seed(1701);model=SizeReference();initial=entry.base.state_digest(model)
+        detector=object();head=object();frozen={'b':'b_sha','midpoint':'h_sha'}
+        with torch.no_grad():model.output.bias.add_(.1)
+        before_state=entry.base.state_digest(model)
+        rows=[dict(image='fixture_%d'%i,domain='real',gt=[32.,32.,32.,16.,.3],image_size=[64,64]) for i in range(384)]
+        first=int(np.random.RandomState(1703).permutation(384)[0]);rows[first]['image']=settings['image']
+        rows[first].update(b_original=[32.,32.,32.,16.,.3,.8],pred=[32.,32.,32.,16.,.3,.8])
+        previous=[None]*6;inputs=[None]*10;inputs[6]={'fit':rows};inputs[7]={};previous[1]=inputs;previous[5]={}
+        old=[{'reviewed_migration_stages':{}},previous]
+        features=torch.randn(1,256,8,8)
+        transform=dict(img_shape=[64,64,3],ori_shape=[64,64,3],pad_shape=[64,64,3],scale_factor=[1.]*4,flip=False)
+        digest=entry.base.state_digest
+        def state(module):return frozen['b'] if module is detector else frozen['midpoint'] if module is head else digest(module)
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);failed=root/'failed';(failed/'a1').mkdir(parents=True);out=root/'replay';out.mkdir()
+            (failed/'input_check.json').write_text(json.dumps(dict(mode='train',contract=prior)))
+            context={k:settings[k] for k in ('epoch','slot','image','domain','arm')}
+            (failed/'failure.json').write_text(json.dumps(dict(details={'train_context':context})))
+            checkpoint=failed/'a1'/'epoch_01.pth'
+            entry.reference.save_checkpoint(checkpoint,dict(protocol=core.VERSION,contract=prior,
+                role='paired_reference_train',arm='a1',epoch=1,steps=384,initial_sha256=initial,
+                frozen=frozen,state=model.state_dict()))
+            checkpoint_sha=entry.base.sha(checkpoint)
+            args=SimpleNamespace(check_report=Path('check'),smoke_report=Path('smoke'),
+                failed_train_dir=failed,out_dir=out,collection_dir=Path('fixture'),gpu=0)
+            with patch.object(entry,'stage',return_value={'initial_sha256':initial,'frozen':frozen}), \
+                    patch.object(entry,'models',return_value=(None,torch,detector,head,None,{'a1':model},initial)), \
+                    patch.object(entry.reference,'view',return_value=([features],transform,None)), \
+                    patch.object(entry.migration,'midpoint_from_features',return_value=dict(b=rows[first]['b_original'],midpoint=rows[first]['pred'])), \
+                    patch.object(entry.parent,'reviewed_stage',return_value={}), \
+                    patch.object(entry.migration,'read_collection',return_value=([rows[first]],[])), \
+                    patch.object(entry.base,'state_digest',side_effect=state):
+                self.assertEqual(entry.replay(args,(old,current)),entry.STATUSES['replay'])
+            report=json.loads((out/'replay_report.json').read_text())
+            self.assertEqual(report['optimizer_updates'],0)
+            self.assertTrue(report['gradient']['gradient_consistency']['passed'])
+            self.assertFalse(report['performance_PASS']);self.assertFalse(report['test_read'])
+            self.assertEqual(before_state,digest(model));self.assertEqual(checkpoint_sha,entry.base.sha(checkpoint))
+            self.assertEqual(report['frame']['image'],'real_seq05_00142')
+
     def test_cancellation_roundoff_passes_but_wrong_decomposition_stops_update(self):
         import torch
         from crane_project.utils import port_size_core_curvature_v2_torch as backend
@@ -301,7 +380,7 @@ class ActualTorchTests(unittest.TestCase):
                 curv=(z*(-4*direction+1e-5*torch.randn_like(z))).sum(),quad=z.sum()*0)
             _,expected=backend.gradient_measurement(terms,model,'a1')
             optimizer=torch.optim.Adam(model.parameters(),lr=.001)
-            measured=backend.update(terms,model,optimizer,'a1')
+            measured=backend.update(terms,model,optimizer,'a1',z)
             maximum=max(float(g.abs().max()) for g in expected)
             if device == 'cpu':
                 self.assertGreater(measured['component_sum_backward_max_error'],
@@ -313,32 +392,57 @@ class ActualTorchTests(unittest.TestCase):
             # stopping the optimizer is essential, not just reporting failure.
             z=model(torch.randn(64,16,device=device))
             terms=dict(v1=z.square().mean(),curv=z.sum()*0,quad=z.sum()*0)
-            measurement,expected=backend.gradient_measurement(terms,model,'a1')
-            corrupted=list(expected);corrupted[0]=expected[0]+.01*measurement['uncancelled_tensor_scales'][0]['uncancelled_max']
-            with patch.object(backend,'gradient_measurement',return_value=(measurement,corrupted)), \
+            original_grad=torch.autograd.grad
+            def corrupt_vjp(*args,**kwargs):
+                gradients=original_grad(*args,**kwargs)
+                if args[0] is z and 'grad_outputs' in kwargs:
+                    gradients=list(gradients);gradients[0]=gradients[0]+.01*gradients[0].abs().max()
+                return tuple(gradients)
+            with patch.object(torch.autograd,'grad',side_effect=corrupt_vjp), \
                     patch.object(optimizer,'step') as step:
                 with self.assertRaisesRegex(ValueError,'arm=a1 parameter=') as failure:
-                    backend.update(terms,model,optimizer,'a1')
+                    backend.update(terms,model,optimizer,'a1',z)
                 self.assertFalse(failure.exception.details['gradient_consistency']['passed'])
+                step.assert_not_called()
+
+            # A corrupted individual loss seed must be rejected at logits,
+            # independently of convolution parameter reduction differences.
+            z=model(torch.randn(64,16,device=device))
+            terms=dict(v1=z.square().mean(),curv=z.sum(),quad=z.sum()*0)
+            def corrupt_loss_seed(*args,**kwargs):
+                gradients=original_grad(*args,**kwargs)
+                if args[0] is terms['curv'] and args[1] is z:
+                    gradients=(-gradients[0],)
+                return gradients
+            with patch.object(torch.autograd,'grad',side_effect=corrupt_loss_seed),patch.object(optimizer,'step') as step:
+                with self.assertRaisesRegex(ValueError,'parameter=shared_logits'):
+                    backend.update(terms,model,optimizer,'a1',z)
                 step.assert_not_called()
 
     def test_reference_precision_restores_flags_even_on_failure(self):
         import torch
         from crane_project.utils.port_size_core_curvature_v2_torch import reference_precision
-        original=(torch.backends.cuda.matmul.allow_tf32,torch.backends.cudnn.allow_tf32)
+        original=(torch.backends.cuda.matmul.allow_tf32,torch.backends.cudnn.allow_tf32,
+                  torch.backends.cudnn.deterministic,torch.backends.cudnn.benchmark)
         try:
             torch.backends.cuda.matmul.allow_tf32=True;torch.backends.cudnn.allow_tf32=True
+            torch.backends.cudnn.deterministic=False;torch.backends.cudnn.benchmark=True
             with self.assertRaisesRegex(ValueError,'fixture'):
                 with reference_precision():
                     self.assertFalse(torch.backends.cuda.matmul.allow_tf32)
                     self.assertFalse(torch.backends.cudnn.allow_tf32)
+                    self.assertTrue(torch.backends.cudnn.deterministic)
+                    self.assertFalse(torch.backends.cudnn.benchmark)
                     with reference_precision():
                         self.assertFalse(torch.backends.cudnn.allow_tf32)
                     raise ValueError('fixture')
             self.assertTrue(torch.backends.cuda.matmul.allow_tf32)
             self.assertTrue(torch.backends.cudnn.allow_tf32)
+            self.assertFalse(torch.backends.cudnn.deterministic)
+            self.assertTrue(torch.backends.cudnn.benchmark)
         finally:
-            torch.backends.cuda.matmul.allow_tf32,torch.backends.cudnn.allow_tf32=original
+            (torch.backends.cuda.matmul.allow_tf32,torch.backends.cudnn.allow_tf32,
+             torch.backends.cudnn.deterministic,torch.backends.cudnn.benchmark)=original
 
     def test_reference_forward_precision_preserves_architecture_and_initial_state(self):
         import torch
@@ -367,7 +471,7 @@ class ActualTorchTests(unittest.TestCase):
                 # present. Forward hooks catch saved TF32-flag regressions.
                 measured=backend.update(dict(v1=logits.square().mean(),
                     curv=logits.sum()*0,quad=logits.sum()*0),model,
-                    torch.optim.Adam(model.parameters(),lr=.001),'a0')
+                    torch.optim.Adam(model.parameters(),lr=.001),'a0',logits)
                 self.assertTrue(measured['gradient_consistency']['passed'])
                 self.assertTrue(torch.backends.cuda.matmul.allow_tf32)
                 self.assertTrue(torch.backends.cudnn.allow_tf32)
@@ -398,9 +502,10 @@ class ActualTorchTests(unittest.TestCase):
         gt=[32.,32.,32.,16.,.3];constants=core.projection(gt,transform)
         features=torch.randn(1,256,8,8)
         target,valid=core.geometry.target_map(gt,transform)
-        terms=loss_terms(model(features),torch.tensor(target)[None,None],torch.tensor(valid,dtype=torch.float32)[None,None],constants)
+        logits=model(features)
+        terms=loss_terms(logits,torch.tensor(target)[None,None],torch.tensor(valid,dtype=torch.float32)[None,None],constants)
         optimizer=torch.optim.Adam(model.parameters(),lr=.001)
-        measured=update(terms,model,optimizer,'a1')
+        measured=update(terms,model,optimizer,'a1',logits)
         self.assertGreater(measured['new_gradient_norm'],0.)
         self.assertGreater(measured['groups']['stem']['new_norm'],0.)
         self.assertGreater(measured['groups']['output']['new_norm'],0.)

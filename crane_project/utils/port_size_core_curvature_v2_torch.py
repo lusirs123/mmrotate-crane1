@@ -17,13 +17,17 @@ def reference_precision():
     so the candidate forward must use the same local setting too.
     """
     matmul = torch.backends.cuda.matmul
-    previous = (matmul.allow_tf32, torch.backends.cudnn.allow_tf32)
+    previous = (matmul.allow_tf32, torch.backends.cudnn.allow_tf32,
+                torch.backends.cudnn.deterministic, torch.backends.cudnn.benchmark)
     try:
         matmul.allow_tf32 = False
         torch.backends.cudnn.allow_tf32 = False
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
         yield
     finally:
-        matmul.allow_tf32, torch.backends.cudnn.allow_tf32 = previous
+        (matmul.allow_tf32, torch.backends.cudnn.allow_tf32,
+         torch.backends.cudnn.deterministic, torch.backends.cudnn.benchmark) = previous
 
 
 class SizeReference(OriginalSizeReference):
@@ -134,44 +138,105 @@ def gradient_measurement(terms, model, arm, clip=10.):
     return measurement, total
 
 
-def update(terms, model, optimizer, arm):
-    measured, expected = gradient_measurement(terms, model, arm)
+def tensor_comparison(name, actual, expected, operands):
+    if actual.shape != expected.shape or actual.dtype != expected.dtype:
+        raise ValueError('Gradient comparison shape/dtype differs')
+    if any(not bool(torch.isfinite(g).all()) for g in [actual,expected]+list(operands)):
+        raise ValueError('Nonfinite gradient comparison')
+    delta = actual.double()-expected.double()
+    return dict(name=name, dtype=str(actual.dtype), dtype_epsilon=float(torch.finfo(actual.dtype).eps),
+        error_norm=float(delta.square().sum().sqrt()), error_max=float(delta.abs().max()),
+        uncancelled_norm=sum(float(g.double().square().sum().sqrt()) for g in operands),
+        uncancelled_max=sum(float(g.abs().max()) for g in operands))
+
+
+def consistency_failure(arm, consistency, measured):
+    worst = max(consistency['tensors'], key=lambda r:max(r['norm_error_fraction'], r['max_error_fraction']))
+    failure = ValueError('Gradient verification failed: arm=%s parameter=%s '
+        'max_error=%.9g allowed_max=%.9g norm_error=%.9g allowed_norm=%.9g' %
+        (arm,worst['name'],worst['error_max'],worst['allowed_max_error'],
+         worst['error_norm'],worst['allowed_norm_error']))
+    failure.details = dict(arm=arm, gradient_consistency=consistency, measurement=measured)
+    return failure
+
+
+def update(terms, model, optimizer, arm, logits):
+    """Keep native total.backward; verify at logits and with one same-seed VJP.
+
+    Three separately seeded convolution backwards do not give a robust
+    equality oracle for a single combined backward. Their difference remains
+    recorded, while the strict checks below use identical upstream seeds.
+    """
+    measured, component_sum = gradient_measurement(terms, model, arm)
     weights = coefficients(arm)
     total = sum(terms[k]*weights[k] for k in weights)
-    optimizer.zero_grad()
     with reference_precision():
-        total.backward()
+        seed_terms = [torch.autograd.grad(terms[k],logits,retain_graph=True)[0]*weights[k]
+                      for k in weights]
+    seed_expected = sum(seed_terms)
+    observed = []
+    hook = logits.register_hook(lambda g: observed.append(g.detach().clone()))
+    optimizer.zero_grad()
+    try:
+        with reference_precision():
+            total.backward(retain_graph=True)
+    finally:
+        hook.remove()
+    if len(observed) != 1:
+        raise ValueError('Missing/repeated shared-logit backward seed')
+    seed_check = core.gradient_consistency([
+        tensor_comparison('shared_logits', observed[0],seed_expected,seed_terms)])
+    if not seed_check['passed']:
+        raise consistency_failure(arm,seed_check,measured)
+    named = [(n,p) for n,p in model.named_parameters() if p.requires_grad]
+    with reference_precision():
+        expected = torch.autograd.grad(logits,[p for _,p in named],
+                                       grad_outputs=observed[0],retain_graph=True)
     actual = [p.grad for p in model.parameters() if p.requires_grad]
     if any(g is None or not bool(torch.isfinite(g).all()) for g in actual):
         raise ValueError('Missing/nonfinite total gradient')
     if len(actual) != len(expected):
         raise ValueError('Parameter gradient count differs')
-    comparisons = []
-    for g,e,scale in zip(actual, expected, measured['uncancelled_tensor_scales']):
+    comparisons = [tensor_comparison(name,g,e,[e])
+                   for (name,_),g,e in zip(named,actual,expected)]
+    consistency = core.gradient_consistency(seed_check['tensors']+comparisons)
+    if not consistency['passed']:
+        raise consistency_failure(arm,consistency,measured)
+    component_comparisons = []
+    for g,e,scale in zip(actual, component_sum, measured['uncancelled_tensor_scales']):
         if g.shape != e.shape or g.dtype != e.dtype:
             raise ValueError('Parameter gradient shape/dtype differs')
         difference = g.double()-e.double()
-        comparisons.append(dict(scale, error_norm=float(difference.square().sum().sqrt()),
+        component_comparisons.append(dict(scale, error_norm=float(difference.square().sum().sqrt()),
             error_max=float(difference.abs().max())))
-    consistency = core.gradient_consistency(comparisons)
-    error = max(row['error_max'] for row in comparisons)
-    if not consistency['passed']:
-        worst = max(consistency['tensors'], key=lambda r:max(r['norm_error_fraction'], r['max_error_fraction']))
-        failure = ValueError('Component decomposition differs from actual backward: arm=%s parameter=%s '
-            'max_error=%.9g allowed_max=%.9g norm_error=%.9g allowed_norm=%.9g' %
-            (arm,worst['name'],worst['error_max'],worst['allowed_max_error'],
-             worst['error_norm'],worst['allowed_norm_error']))
-        failure.details = dict(arm=arm, gradient_consistency=consistency, measurement=measured)
-        raise failure
+    component_diagnostic = core.gradient_consistency(component_comparisons)
+    component_diagnostic['role'] = 'diagnostic_only_different_convolution_backward_seeds'
+    error = max(row['error_max'] for row in component_comparisons)
     actual_before = math.sqrt(sum(float(g.double().square().sum()) for g in actual))
     if not math.isfinite(actual_before) or actual_before <= 0:
         raise ValueError('Inactive/nonfinite actual total gradient')
+    group_before={group:math.sqrt(sum(float(g.double().square().sum())
+        for (name,_),g in zip(named,actual) if name.startswith(group+'.')))
+        for group in measured['groups']}
     torch.nn.utils.clip_grad_norm_(model.parameters(), 10.)
     after = math.sqrt(sum(float(p.grad.double().square().sum()) for p in model.parameters()))
     if after > 10.00001 or after <= 0 or not math.isfinite(after):
         raise ValueError('Invalid clipped gradient')
+    retention=after/actual_before
+    measured['component_sum_preclip_norm']=measured['total_preclip_norm']
+    measured['component_sum_projected_clip_scale']=measured['common_clip_scale']
+    measured['total_preclip_norm']=actual_before
+    measured['common_clip_scale']=retention
+    measured['component_postclip_projected_norms']={k:v*retention for k,v in measured['weighted_gradient_norms'].items()}
+    measured['new_postclip_projected_norm']=measured['new_gradient_norm']*retention
+    for group,report in measured['groups'].items():
+        report.update(actual_preclip_norm=group_before[group],
+            actual_postclip_norm=math.sqrt(sum(float(g.double().square().sum())
+                for (name,_),g in zip(named,actual) if name.startswith(group+'.'))),
+            total_after_projected=report['total_before']*retention)
     measured.update(actual_preclip_norm=actual_before, actual_postclip_norm=after,
                     component_sum_backward_max_error=error, gradient_consistency=consistency,
-                    actual_clip_retention=after/actual_before)
+                    parameter_component_sum_diagnostic=component_diagnostic,
+                    actual_clip_retention=retention)
     optimizer.step()
     return measured

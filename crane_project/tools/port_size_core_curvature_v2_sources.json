@@ -1,14 +1,14 @@
 {
   "protocol": "port_size_core_curvature_v2",
   "sources": {
-    "crane_project/tools/run_port_size_core_curvature_v2.py": "542b47f66de7943134f633324ff3340716a38da268ea5a0491f504a657446bb7",
+    "crane_project/tools/run_port_size_core_curvature_v2.py": "69b44d090c8f9fdab8c4ad7005c9ec1c9c090546db20a602730975b26a95abd0",
     "crane_project/tools/eval_port_size_core_curvature_v2.py": "722da5fe53d8d5fdc6d872132c6d6b734ee7797e355c4c6afb744513a98704a3",
-    "crane_project/utils/port_size_core_curvature_v2.py": "75613038b074c03b82e828910d1e8926cf4871a759060c01434622b7c984b28b",
-    "crane_project/utils/port_size_core_curvature_v2_torch.py": "17f0959e91cbafbe52cbebde9239aba0aa44c2b10ebc247578f41b3ce7362702",
+    "crane_project/utils/port_size_core_curvature_v2.py": "24e07e8fed0971a92070805213e6d3c02870cb309dbd20481987a821b547415d",
+    "crane_project/utils/port_size_core_curvature_v2_torch.py": "1ce300a00ca10ab80bd603023d856bc3b5298db4cb0cf0b8f1c43341a68ab7c2",
     "crane_project/utils/port_size_core_comparison_v2.py": "614af84ac44cf540cc58c9f48bab9e8b8169402e6ee973674eb7946f4450216e",
-    "crane_project/tools/port_size_core_curvature_v2_protocol.json": "2c4afebefc9bc6f6e1affd9bcc59d8079585883b6a7b3f30acdd40f927810557",
-    "tests/test_port_size_core_curvature_v2.py": "48cb6f25d5d507497816368bb4533252721b517ad973d59bbcfe4110a162ff84"
+    "crane_project/tools/port_size_core_curvature_v2_protocol.json": "af843af0e0d9219028886541ea2f0ff21dd6e01ffcbf788cd3ee9da12b62bb26",
+    "tests/test_port_size_core_curvature_v2.py": "72da37f1eea4202894546f54b3185cd553ecd68aee16bab798c064a65193f401"
   },
-  "protocol_sha256": "2c4afebefc9bc6f6e1affd9bcc59d8079585883b6a7b3f30acdd40f927810557",
+  "protocol_sha256": "af843af0e0d9219028886541ea2f0ff21dd6e01ffcbf788cd3ee9da12b62bb26",
   "parent_template_sources_sha256": "894e12beaaf5478da7fa37421bfe2e91ebcc1cd141944d184e7c9f531358f16c"
 }

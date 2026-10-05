@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""check -> finite TRAIN smoke -> fixed paired epoch04 -> paired assessment.
+"""check -> TRAIN smoke -> exact failed-frame replay -> paired epoch04 -> assess.
 
 Only new reference heads learn. Existing B/midpoint/policy/readers stay pinned.
 95% is a comparison point, never a final deployment-accuracy objective. No TEST.
@@ -27,6 +27,7 @@ PROTOCOL = ROOT/'crane_project/tools/port_size_core_curvature_v2_protocol.json'
 SOURCES = ROOT/'crane_project/tools/port_size_core_curvature_v2_sources.json'
 STATUSES = dict(check='CORE_CURVATURE_NUMERICAL_CHECK_PASS',
     smoke='CORE_CURVATURE_TRAIN_PRECHECK_SAVE_RELOAD_PASS_DISCARDED',
+    replay='CORE_CURVATURE_FAILURE_FRAME_REPLAY_PASS_NO_OPTIMIZER_UPDATE',
     train='CORE_CURVATURE_PAIRED_EPOCH04_COMPLETE_REVIEW_REQUIRED',
     assess='CORE_CURVATURE_PAIRED_ASSESSMENT_COMPLETE_REVIEW_REQUIRED')
 
@@ -46,6 +47,7 @@ def checked_sources():
                 protocol['component_gradient_every_train_slots']) != (1701,384,432,32,14,4,64)
             or protocol['optimizer'] != {'type':'Adam','lr':.001,'weight_decay':0.,'clip_norm':10.}
             or protocol.get('gradient_decomposition_check') != core.GRADIENT_CHECK
+            or protocol.get('failure_frame_replay') != core.FAILURE_REPLAY
             or protocol['gradient_guard'] != {
                 'median_new_to_original_min':.01,'median_new_to_original_max':10.,
                 'median_clip_retention_min':.1,
@@ -246,7 +248,8 @@ def smoke(args, prepared):
         t = torch.as_tensor(target, device=features[0].device)[None,None]
         v = torch.as_tensor(valid, device=features[0].device, dtype=t.dtype)[None,None]
         for arm, model in arms.items():
-            measured = update(loss_terms(model(features[0]), t, v, constants), model, opts[arm], arm)
+            logits = model(features[0])
+            measured = update(loss_terms(logits, t, v, constants), model, opts[arm], arm, logits)
             updated.append(dict(step=slot, image=row['image'], domain=row['domain'], arm=arm, gradient=measured))
         after = migration.midpoint_from_features(formal, torch, detector, head, features, meta)
         if before != after: raise ValueError('Smoke update changed B/midpoint output')
@@ -263,12 +266,84 @@ def smoke(args, prepared):
     return STATUSES['smoke']
 
 
+def checked_replay_contract(previous, current):
+    pins = core.FAILURE_REPLAY
+    if (previous['sources']['manifest_sha256'] != pins['prior_manifest_sha256']
+            or simple.fingerprint(previous['sources']['sources']) != pins['prior_sources_fingerprint']
+            or simple.fingerprint(previous['protocol']) != pins['prior_protocol_fingerprint']
+            or {k:v for k,v in previous.items() if k not in ('sources','protocol')} !=
+               {k:v for k,v in current.items() if k not in ('sources','protocol')}):
+        raise ValueError('Failure replay requires exact gradfix1 source and identical frozen inputs')
+
+
+def replay(args, prepared):
+    """Read pinned epoch1, inspect exact TRAIN failure frame, never resume."""
+    old,contract=prepared
+    stage(args.check_report,STATUSES['check'],contract)
+    checked=stage(args.smoke_report,STATUSES['smoke'],contract)
+    if args.failed_train_dir is None:raise ValueError('Missing failed gradfix1 TRAIN directory')
+    directory=args.failed_train_dir;settings=core.FAILURE_REPLAY
+    previous=json.loads((directory/'input_check.json').read_text())
+    failure=json.loads((directory/'failure.json').read_text())
+    prior=previous['contract'];checked_replay_contract(prior,contract)
+    context={k:settings[k] for k in ('epoch','slot','image','domain','arm')}
+    if previous['mode'] != 'train' or (failure.get('details') or {}).get('train_context') != context:
+        raise ValueError('Failure frame/arm/epoch identity differs')
+    formal,torch,detector,head,pipeline,arms,initial=models(args,old)
+    frozen=dict(b=base.state_digest(detector),midpoint=base.state_digest(head))
+    if initial != checked['initial_sha256'] or frozen != checked['frozen']:
+        raise ValueError('Replay initialization/front end differs')
+    checkpoint=directory/settings['arm']/'epoch_01.pth'
+    payload=load(checkpoint,prior,'paired_reference_train',settings['arm'],torch)
+    if (payload['epoch']!=settings['checkpoint_epoch'] or payload['steps']!=settings['checkpoint_steps']
+            or payload['initial_sha256']!=initial or payload['frozen']!=frozen):
+        raise ValueError('Replay checkpoint is not pinned epoch1 pair')
+    rows=old[1][1][6]['fit']
+    order=np.random.RandomState(1701+settings['epoch']).permutation(384)
+    row=rows[int(order[settings['slot']-1])]
+    if row['image']!=settings['image'] or row['domain']!=settings['domain']:
+        raise ValueError('Replay frame is outside exact original TRAIN schedule')
+    from crane_project.utils.port_size_core_curvature_v2_torch import loss_terms,update
+    model=arms[settings['arm']];model.load_state_dict(payload['state'],strict=True);model.train()
+    before_state=base.state_digest(model)
+    features,meta,_=reference.view(row,old[1][1][7],detector,pipeline,args.gpu)
+    before=migration.midpoint_from_features(formal,torch,detector,head,features,meta)
+    collected=parent.reviewed_stage(args.collection_dir,'collect',old[1][5],old[0]['reviewed_migration_stages'])
+    final_fit={r['image']:r for r in migration.read_collection(args.collection_dir,collected,old[1][1])[0]}
+    for key,field in (('b','b_original'),('midpoint','pred')):
+        parent.assessment.paired_prediction(final_fit[row['image']][field],before[key],row['image'])
+    constants=core.projection(row['gt'],meta);target,valid=reference.size.target_map(row['gt'],meta)
+    t=torch.as_tensor(target,device=features[0].device)[None,None]
+    v=torch.as_tensor(valid,device=features[0].device,dtype=t.dtype)[None,None]
+    class InspectOnly:
+        calls=0
+        def zero_grad(self):model.zero_grad()
+        def step(self):self.calls+=1  # deliberately no parameter/optimizer update
+    inspector=InspectOnly();logits=model(features[0])
+    measurement=update(loss_terms(logits,t,v,constants),model,inspector,settings['arm'],logits)
+    after=migration.midpoint_from_features(formal,torch,detector,head,features,meta)
+    if (inspector.calls!=1 or before_state!=base.state_digest(model) or before!=after
+            or frozen!=dict(b=base.state_digest(detector),midpoint=base.state_digest(head))):
+        raise ValueError('Inspect-only replay changed parameters or frozen output')
+    base.write_new(args.out_dir/'replay_report.json',dict(status=STATUSES['replay'],contract=contract,
+        initial_sha256=initial,frozen=frozen,frame=context,gradient=measurement,optimizer_updates=0,
+        old_failure_sha256=base.sha(directory/'failure.json'),
+        old_input_check_sha256=base.sha(directory/'input_check.json'),
+        replay_checkpoint_sha256=base.sha(checkpoint),
+        replay_checkpoint_marker_sha256=base.sha(str(checkpoint)+'.sha.json'),
+        parameters_unchanged=True,trained_VAL=False,test_read=False,performance_PASS=False))
+    return STATUSES['replay']
+
+
 def paired_train(args, prepared):
     old, contract = prepared
     stage(args.check_report, STATUSES['check'], contract)
     checked = stage(args.smoke_report, STATUSES['smoke'], contract)
+    replayed = stage(args.replay_report, STATUSES['replay'], contract)
     formal, torch, detector, head, pipeline, arms, initial_sha = models(args,old)
     if checked['initial_sha256'] != initial_sha: raise ValueError('Fresh pair initialization differs from precheck')
+    if replayed['initial_sha256'] != initial_sha or replayed['optimizer_updates'] != 0:
+        raise ValueError('Exact failure replay did not release fresh initialization')
     from crane_project.utils.port_size_core_curvature_v2_torch import (
         loss_terms, coefficients, update, reference_precision)
     frozen=dict(b=base.state_digest(detector),midpoint=base.state_digest(head))
@@ -287,10 +362,10 @@ def paired_train(args, prepared):
                 t=torch.as_tensor(target,device=features[0].device)[None,None]
                 v=torch.as_tensor(valid,device=features[0].device,dtype=t.dtype)[None,None]
                 for arm,model in arms.items():
-                    terms=loss_terms(model(features[0]),t,v,constants)
+                    logits=model(features[0]);terms=loss_terms(logits,t,v,constants)
                     if slot % 64 == 0:
                         try:
-                            record=update(terms,model,optimizers[arm],arm)
+                            record=update(terms,model,optimizers[arm],arm,logits)
                         except ValueError as error:
                             error.details=dict(getattr(error,'details',{}) or {},
                                 train_context=dict(epoch=epoch,slot=slot+1,image=row['image'],
@@ -332,6 +407,7 @@ def paired_train(args, prepared):
     report=dict(status=STATUSES['train'],contract=contract,initial_sha256=initial_sha,
         steps_per_arm=steps,total_optimizer_updates=2*steps,checkpoints=checkpoints,
         frozen=frozen,smoke_sha256=base.sha(args.smoke_report),
+        replay_sha256=base.sha(args.replay_report),
         elapsed_seconds=time.monotonic()-start,peak_allocated_mib=torch.cuda.max_memory_allocated(args.gpu)/2**20,
         peak_reserved_mib=torch.cuda.max_memory_reserved(args.gpu)/2**20,
         trained_holdout=False,trained_VAL=False,test_read=False,
@@ -351,7 +427,7 @@ def main():
     parser.add_argument('--mode',choices=tuple(STATUSES),required=True)
     parser.add_argument('--out-dir',type=Path,required=True)
     parser.add_argument('--gpu',type=int,default=0)
-    for name in ('check_report','smoke_report','train_report'):
+    for name in ('check_report','smoke_report','replay_report','train_report','failed_train_dir'):
         parser.add_argument('--'+name.replace('_','-'),type=Path)
     defaults=dict(selection='crane_symeood_k1_port_day2night_midpoint_formal_v1/selection.json',
         formal_cache='port_geometry_midpoint_formal_v1_roi_cache',collection_dir='port_midpoint_reliability_v1_collect',
@@ -364,7 +440,7 @@ def main():
     args.out_dir.mkdir(parents=True,exist_ok=False)
     base.write_new(args.out_dir/'input_check.json',dict(contract=prepared[1],mode=args.mode))
     try:
-        status={'check':check,'smoke':smoke,'train':paired_train,'assess':assess}[args.mode](args,prepared)
+        status={'check':check,'smoke':smoke,'replay':replay,'train':paired_train,'assess':assess}[args.mode](args,prepared)
         finish(args,prepared,status)
     except Exception as error:
         base.write_new(args.out_dir/'failure.json',dict(type=type(error).__name__,error=str(error),

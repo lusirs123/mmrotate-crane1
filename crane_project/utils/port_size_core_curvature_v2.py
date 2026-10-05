@@ -104,10 +104,18 @@ def numerical_probe(constants):
 
 
 GRADIENT_CHECK = dict(
-    version='uncancelled_component_scale_v1',
+    version='shared_logit_seed_VJP_v2',
     relative_dtype_epsilon_multiplier=128., absolute_tolerance=1e-12,
-    backward_precision='reference_only_forward_backward_TF32_off_restore_flags',
-    norm_checks='per_parameter_L2_and_max_uncancelled_weighted_components')
+    backward_precision='reference_only_TF32_off_cudnn_deterministic_restore_flags',
+    norm_checks='shared_logits_components_and_per_parameter_same_seed_VJP')
+
+FAILURE_REPLAY = dict(
+    prior_manifest_sha256='1bd91bd6b4696b1932915750a961c721567becc575143d327387003a7efe9f28',
+    prior_sources_fingerprint='de0359c76d50c2680587f0ebaf0e3a5b9c36bfb157477b45f06cda72779ae276',
+    prior_protocol_fingerprint='e99467c8ac340bad602f200aaeea13c2b7fa9777ff535af8f401a05a44b36e4c',
+    epoch=2, slot=1, image='real_seq05_00142', domain='real', arm='a1',
+    checkpoint_epoch=1, checkpoint_steps=384, optimizer_updates=0,
+    role='TRAIN_failure_frame_engineering_replay_not_resume_or_performance_selection')
 
 
 def gradient_consistency(tensors):
