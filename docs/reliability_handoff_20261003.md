@@ -4,7 +4,7 @@
 
 本文是当前可靠性基线与后续实验的唯一执行交接；[OBB机制说明](obb/OBB观测可靠性与连续输出.md)、[流程记录](obb/base_v3_v51_focused_paper_complete_pipeline_20260915.md)及[文档入口](README.md)同步当前身份与主表。此前替换的旧流程在[替换前归档](archive/20261003_reliability_replaced_by_simple_v1/README.md)保留，原始实验文件和模型未删除。检测几何优化维护[独立几何交接](geometry_precision_handoff_20261001.md)，本轮没有修改该窗口的代码/记录或实际大小论文稿。后续服务器结果不复制为本地复核目录。
 
-**更换窗口入口：先读第20节接续摘要，再按需读第1/14/16/18/19节及其关键代码。新窗口唯一目标为提高可靠性判断准确性，B24＋正式midpoint23＋现有simple仍是冻结比较基线，不重复完整审计。第21节记录核心曲率监督设计；21.8为初版实现，21.9为gradfix1历史修复，21.10为其epoch2首帧再次失败后的gradfix2同上游梯度核对及失败帧预检。第21.11节已核验gradfix2服务器回传：预检/两臂训练/全量VAL全部完成，E通过，R与Q1未通过；保留simple，不启动新训练或最终工作点拟合。**
+**更换窗口入口：先读第20节接续摘要，再按需读第1/14/16/18/19节及其关键代码。新窗口唯一目标为提高可靠性判断准确性，B24＋正式midpoint23＋现有simple仍是冻结比较基线，不重复完整审计。第21节记录核心曲率监督设计；21.8为初版实现，21.9为gradfix1历史修复，21.10为其epoch2首帧再次失败后的gradfix2同上游梯度核对及失败帧预检。第21.11节已核验gradfix2服务器回传：预检/两臂训练/全量VAL全部完成，E通过，R与Q1未通过，曲率版本收束并保留simple。第22节为用户随后授权的新半峰范围v3设计/实现及服务器运行入口；新GPU预检和性能尚待验证，不拟合最终工作点。**
 
 ## 1. 当前决定与模型
 
@@ -959,3 +959,83 @@ real主点A1较A0少6FA/6FR，但较simple多2FA/2FR；预设要求不多于153F
 **新增有限行级观察（事实，不是完整诊断）：** 从本包既有参考/GT边长比，在共同支持上读出中位数。real_seq07长/短比A0 .9447/.9001→A1 .8532/.8866，原已偏小进一步偏小；seq14为1.0856/1.1783→.9693/1.1092，减小缓解原偏大。TRAIN real_seq13为1.0538/1.1871→.9253/1.0917；TRAIN sim_seq08长边比P90 1.6338→2.0619，虽中位数1.0420→1.0116，尾部仍恶化。参考自身准确不保证错误排序：seq14参考正确数增加41，但该视频A1 AUROC .430584低于A0 .490946和simple .753521。
 
 **下一步建议（推断/尚未实施）：** 收束本次固定曲率版本为“工程可行、局部参考改善，但R/Q1未成立”，保留A0/A1身份、固定epoch04、原门槛与全部负结果。当前不延长训练、调`.25/.05`、反转风险、挑epoch或修改最终工作点，也不转向方向结构。下一项优先设计与固定半峰模板读取更一致的**长短轴内/外范围监督**：用GT固定采样位置的幅值/范围约束，直接检验同一机制能否拉回偏大与偏小，而不只要求GT核心拟合曲率接近I；图像分支、在线读取器、前端和判别对照保持。现有结果支持“普遍收缩对不同原始偏差产生不同收益”及“曲率代理与在线读出对齐不足”作为待验证机制，但尚未证明读出不一致或梯度冲突为唯一根因。若开展，先另立一项有限设计并固定公式、系数、同初始化预算、TRAIN拟合/留出职责、双侧探针及R/Q1继续条件，再获授权实现，不在本次模型上补调。即使参考更准，仍必须独立证明真实排序收益与原simple正确观测保护；R/Q1成立后才研究受正确保留/误拒约束的最终工作点。所有后续选择继续只用TRAIN/VAL，TEST已多次暴露、不用于调参或重选。
+
+
+## 22. 固定半峰读取的长短轴内／外范围监督v3（2026-10-05）
+
+### 22.1 授权、已知问题和有限新设计
+
+用户授权收束第21节曲率v2、按21.11建议设计并实现下一项有限监督、必要本地验证、提供服务器运行及结果压缩指令。曲率v2固定epoch04和全部负结果原样保留；不覆盖任何旧源码/清单/模型/结果，不沿用旧头继续训练。Git负责源码同步，不再打包本地源码。范围仍仅为尺寸参考监督，前端固定B24＋正式midpoint23＋现有simple，不修改框/score/输出数、中心或方向，不修改几何窗口或实际论文稿、不读取TEST或连接服务器。TEST已经多次暴露。
+
+**依据（事实）：** v2使real_seq14参考10%内17→58，却使seq07为48→23；两视频参考边长中位均缩小。sim参考留出长边比P90 1.6338→2.0619。real主同数A1 FA160仍高于simple158，R/Q1未成立。局部参考精度改善不代表真实判断成功，现证据未证明唯一根因。
+
+**机制假设（待验证）：** 用与半峰范围直接对应的内侧、边界、外侧响应约束，替代仅要求GT核心二阶曲率接近I；同一机制必须能纠正偏大和偏小。继续保持图像分支、在线读出、风险和评价不变，仅改训练辅助项，不扩充质量分类器。
+
+### 22.2 固定公式与可微实现（先于新训练冻结）
+
+规范GT长短边L/S与角θ经原等比例/反射坐标链变换到模型空间，σ_L=L/4、σ_S=S/4。每条轴取两个正负方向、横向sigma偏移t∈{−.25,0,.25}，半峰半径h(t)=sqrt(2 ln2−t²)，沿轴位置为q h(t)，q∈{.85,1,1.15}。故理想同轴Gaussian在q=1处相对中心响应为.5；q=.85为内侧，q=1.15为外侧。外侧指半峰边界外，仍位于GT OBB内；GT OBB外的背景另由背景集合约束。长短轴分别18点，共36点；另固定GT中心一点。所有位置由GT和变换几何决定，不依预测响应或错误标签选点。
+
+采用现有stride2网格(j+.5)×2−4，即原点−3，固定4邻点双线性采样B_i。训练背景集合是GT上下文内、有效且原GT target=0的网格：上下文边长仍max(3L,64px原图)，背景取当前预测p的Torch lower median b；中心p_c=B_c(p)。预测相对响应 r_i=(B_i(p)−b)/max(p_c−b,.05)，GT目标 r_i*=B_i(T_GT)/B_c(T_GT)。目标使用同一双线性算子抵消网格相位偏差，所以边界目标仅近似.5，数值门槛为最大偏差≤.03，而非声称离散地图有精确半峰。GT target是OBB派生Gaussian，不是可见轮廓标注。
+
+L_inner=mean_{两轴×正负×横偏×q∈{.85,1}} SmoothL1_.1(r_i−r_i*)；L_outer相同但q∈{1,1.15}，各24项。长短轴、正负方向和横偏数量相等；边界q=1在两项中各占一半。A0只有原L_v1；A1固定L=L_v1＋.125 L_inner＋.125 L_outer，等价总范围权重.25下平均两项。原soft focal BCE像素项、Adam lr.001/wd0/clip10不变。系数不由新VAL成绩或测量梯度回搜；若工程强度门槛失败先停止，不自动缩放权重。
+
+预测p=sigmoid(logits)、双线性采样、背景median、中心和强度分母均保留Torch梯度；GT采样索引/权重/目标为固定NumPy常数。不截断r_i为[0,1]，低于背景的样本也能收到梯度；只有低对比分母使用预先固定.05保护，其上下分支均做实际有限差分核对。median/floor分段可微；有限差分用唯一中位数且远离排序/保护拐点的受控图，避免大背景集合跨排序边界造成伪失败，不修改实际图像loss。梯度核对继续使用v2已通过的共享logit及同上游种子VJP，候选参考局部关闭TF32并使用确定性卷积，随后恢复原标志。旧v2文件不改。
+
+**实现边界（必须披露）：** 训练用GT中心、GT背景区域，在线模板用检测框上下文、预测峰值、硬半峰连通核心和IRLS。新监督仅对背景扣除、相对强度和半峰内/外范围更直接，并非将在线模板变为可微、也不保证两者相同；GT不进入在线API。该项目适配并非PQA原方法，共享冻结P3不证明误差独立。短边模型尺寸<16px、背景不足16格、任何采样邻点越过有效图像或中心GT响应不可解析时，仅跳过新增项并保留原像素项；不依据真实正确性选帧。原因/数量随check、TRAIN及离线评价报告，不剔除全输出帧。
+
+### 22.3 对照、角色和继续条件
+
+两臂重新同seed1701初始化、同384拟合张、同每轮seed1701+epoch顺序，4轮各1536步，固定epoch04，不选epoch、不续训v2；smoke各4步后丢弃。沿用432参考留出（real304/sim128）、32 guard；拟合角色决定TRAIN数值检查和14视图梯度预检，留出/VAL只用于固定epoch04离线精度和判断检验，不拟合loss/权重或风险模型。检测器/simple已见检测TRAIN，留出仅对参考分支成立，不称全系统未见。
+
+E：理想离散GT图范围项近零、±15%长短边各两侧梯度方向正确；真实Torch每项有限、stem和output三项梯度非零；两域初始化新增/原项范数中位在[.01,10]、裁剪保留中位≥.1。完整记录三项raw/weighted范数、新增比率/夹角、裁剪前后及shared-logit/VJP核对。原检测/midpoint状态和输出不变、保存重载精确一致。此为宽工程门槛，不证明系数最优。数值check通过不替代服务器GPU smoke。
+
+R/Q1/Q2沿用第21.6节全部原预设门槛，不因本次结果改变：real共同支持均值至少相对降低20%、P90不升、共同/全输出参考正确覆盖均至少+10个百分点；sim VAL和参考留出两域均值/P90不升、全输出正确覆盖不降，各域可用数不降，逐VAL视频覆盖不降；real VAL/留出长短边±15%双侧探针各≥60%且不低于A0。Q1主接受数real333/sim510及原每视频simple接受数；real A1较score/simple/A0最好者FA至少少5、sim不劣，每视频不劣score/simple较好者且至少一real视频严格改善；共同real AUROC至少较score/simple更好者+.02。同分边界按候选最坏、控制最好判断。计数精确、浮点容差1e−10，非统计显著性标准。
+
+95%全帧比较仍只按无GT风险分位取843个，全输出642好导致FA下界201，不能作为最终判断准确目标。报告90/95%固定次级点、候选实际接受数的score/simple/A0对照、共同/自身可用支持及不可用好坏。逐域/逐视频FA/FR/ED/CR、接受覆盖、正确保留/检出、全帧正确覆盖全部保留；中心仅输出帧命中率＋输出覆盖＋全帧正确中心覆盖。R与Q1均成立后才另立正确保留/误拒约束的最终工作点版本。R或Q1失败收束该版本并保留simple，不延长轮数/搜系数/反号/按视频回退或用TEST选候选。
+
+### 22.4 本地验证及服务器运行状态
+
+**本地完成（事实）：** 新增8个配套文件：`port_size_halfpeak_range_v3`的run/eval入口、协议/来源、NumPy监督几何、Torch监督/梯度、比较模块及21项必要测试。未修改旧v2或其清单；新清单精确pin7个直接文件、原模板清单及旧曲率清单，且调用旧来源检查，防止复用依赖悄然漂移。新老来源检查均通过。
+
+21项测试在本地Python3.8/Torch1.8.0.post3和另一套Torch2.9.1 CPU全部通过、无跳过，包括幅值/背景不变性、GT短边/边界/padding保护、宽高交换/π/反射/等比例、两保护分支实际Torch有限差分、GT中心/背景均有梯度、低于背景仍有梯度、长短边±15%梯度方向、A0/跳过辅助时原像素梯度逐值不变、真实侧分支三项梯度与一步合成更新、实际保存重载、故意损坏共享seed/VJP必须在optimizer前停止，以及3072次更新的模拟配对调度、阶段来源/失败保护、同分界/覆盖/留出/GT接口约束和预设R/Q1判断。合成Gaussian在原未改半峰读取器恢复对应两条边，误差满足atol1e−6/rtol1e−7；这是受控解析/工程例，不是新图像精度收益。
+
+新比较模块直接复用旧汇总语义，额外记录各域/视频参考长短边有符号P10/中位/P90、不可用原因、离线GT范围代理损失和强度保护触发帧数；这些GT代理在在线读取之后附加，不影响风险或标志。用用户原回传1319行在内存重放，既有混淆/参考/排序/工作点汇总精确一致，新增预设审核正确保留v2的R/Q1失败，没有新结果副本。Python3.8语法、CLI `--help`及`git diff --check`通过。
+
+**未验证部分：** 本地没有原服务器冻结权重/全部运行产物，未启动实际TRAIN/VAL、服务器check、GPU smoke或新模型推理；本地真实autograd用合成图/特征，不能替代真实14视图的强度门槛、GPU保存重载或性能结果。全部新阶段终态仍需服务器确认，训练/评价的`REVIEW_REQUIRED`不表示R/Q1通过。没有连接服务器、源码打包或Git提交；通过Git同步全部新增文件后运行。其他窗口现有修改保留。
+
+
+### 22.5 服务器逐条指令与单一分析回传文件
+
+在`mmrotljj`环境，通过Git同步新增8文件并保留原父依赖、旧权重/策略/结果。环境设置合并一条；每个阶段命令单独复制执行，前一步成功后再下一步。GPU物理卡沿用3，对进程内部`--gpu 0`。新输出目录不得已存在；不删除或覆盖旧目录。v3从新初始化开始，不需旧失败帧replay、不续训旧候选。
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD && export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" CUDA_VISIBLE_DEVICES=3 && set -o pipefail
+```
+
+```bash
+python -m unittest discover -s tests -p 'test_port_size_halfpeak_range_v3.py' -v 2>&1 | tee work_dirs/port_size_halfpeak_range_v3_unittest.log
+```
+
+```bash
+python crane_project/tools/run_port_size_halfpeak_range_v3.py --mode check --out-dir work_dirs/port_size_halfpeak_range_v3_check
+```
+
+```bash
+python crane_project/tools/run_port_size_halfpeak_range_v3.py --mode smoke --gpu 0 --check-report work_dirs/port_size_halfpeak_range_v3_check/check_report.json --out-dir work_dirs/port_size_halfpeak_range_v3_smoke
+```
+
+```bash
+python crane_project/tools/run_port_size_halfpeak_range_v3.py --mode train --gpu 0 --check-report work_dirs/port_size_halfpeak_range_v3_check/check_report.json --smoke-report work_dirs/port_size_halfpeak_range_v3_smoke/smoke_report.json --out-dir work_dirs/port_size_halfpeak_range_v3_train
+```
+
+```bash
+python crane_project/tools/run_port_size_halfpeak_range_v3.py --mode assess --gpu 0 --train-report work_dirs/port_size_halfpeak_range_v3_train/train_report.json --out-dir work_dirs/port_size_halfpeak_range_v3_assess
+```
+
+工程放行：21项unittest无跳过；`HALFPEAK_RANGE_NUMERICAL_CHECK_PASS`；`HALFPEAK_RANGE_TRAIN_PRECHECK_SAVE_RELOAD_PASS_DISCARDED`。固定训练及评价完成为`HALFPEAK_RANGE_PAIRED_EPOCH04_COMPLETE_REVIEW_REQUIRED`、`HALFPEAK_RANGE_PAIRED_ASSESSMENT_COMPLETE_REVIEW_REQUIRED`，后续依据R/Q1与分域/视频完整结果判断。若check/smoke失败不继续train；保持原输出，不能改系数/清单/跳帧来放行。
+
+四阶段完成后，以下一条命令在项目`work_dirs`下产生一个分析包，包含单测日志、四阶段JSON/JSONL/失败记录（若有）/checkpoint SHA标记；排除`.pth`，不需要原图或新本地结果副本。后续分析优先`initial_gradient_report.json`、`smoke_report.json`、`train_report.json/train_steps.jsonl`、`assessment.json/paired_assessment_rows.jsonl`及各completion/source合同。
+
+```bash
+tar -czf work_dirs/port_size_halfpeak_range_v3_analysis_20261005.tar.gz --exclude='*.pth' work_dirs/port_size_halfpeak_range_v3_unittest.log work_dirs/port_size_halfpeak_range_v3_check work_dirs/port_size_halfpeak_range_v3_smoke work_dirs/port_size_halfpeak_range_v3_train work_dirs/port_size_halfpeak_range_v3_assess
+```

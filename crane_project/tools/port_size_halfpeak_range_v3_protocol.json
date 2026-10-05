@@ -1,0 +1,88 @@
+{
+  "protocol": "port_size_halfpeak_range_v3",
+  "coefficients": {
+    "v1": 1.0,
+    "inner": 0.125,
+    "outer": 0.125
+  },
+  "smooth_l1_beta": 0.1,
+  "seed": 1701,
+  "fit_frames": 384,
+  "holdout_frames": 432,
+  "guard_frames": 32,
+  "epochs": 4,
+  "steps_per_arm": 1536,
+  "optimizer": {
+    "type": "Adam",
+    "lr": 0.001,
+    "weight_decay": 0.0,
+    "clip_norm": 10.0
+  },
+  "initial_gradient_views": 14,
+  "smoke_updates_per_arm": 4,
+  "gradient_guard": {
+    "median_new_to_original_min": 0.01,
+    "median_new_to_original_max": 10.0,
+    "median_clip_retention_min": 0.1,
+    "role": "prespecified_broad_engineering_guard_not_optimality_no_coefficient_search"
+  },
+  "component_gradient_every_train_slots": 64,
+  "gradient_decomposition_check": {
+    "version": "shared_logit_seed_VJP_v2",
+    "relative_dtype_epsilon_multiplier": 128.0,
+    "absolute_tolerance": 1e-12,
+    "backward_precision": "reference_only_TF32_off_cudnn_deterministic_restore_flags",
+    "norm_checks": "shared_logits_components_and_per_parameter_same_seed_VJP"
+  },
+  "reference": "unchanged_SizeReference_detached_P3_16_channels_stride2",
+  "reader": "unchanged_formal_midpoint_half_peak_logGaussian_IRLS",
+  "risk": "unchanged_max_abs_canonical_edge_log_ratio_scale0.1",
+  "comparison_full_frame_coverage": 0.95,
+  "comparison_only": true,
+  "final_deployment_policy_created": false,
+  "final_workpoint": "deferred_separate_TRAIN_VAL_version_after_ranking_gain_under_prespecified_good_retention_or_false_rejection_constraint",
+  "detector_updates": 0,
+  "midpoint_updates": 0,
+  "baseline_policy_updates": 0,
+  "test_read": false,
+  "test_repeatedly_exposed": true,
+  "reference_holdout_is_not_detector_or_simple_holdout": true,
+  "literature_role": "PQA_inspired_project_adaptation_not_original_PQA_halfpeak_range_loss",
+  "shared_features_do_not_prove_error_independence": true,
+  "performance_gate_role": "handoff_22_inherits_21.6_R_Q1_Q2_fixed_before_new_TRAIN",
+  "range_supervision": {
+    "radial_factors": [
+      0.85,
+      1.0,
+      1.15
+    ],
+    "transverse_sigma_offsets": [
+      -0.25,
+      0.0,
+      0.25
+    ],
+    "half_peak_fraction": 0.5,
+    "contrast_floor": 0.05,
+    "smooth_l1_beta": 0.1,
+    "GT_min_short_model_px": 16.0,
+    "min_background_cells": 16,
+    "context_multiple": 3.0,
+    "context_min_original_px": 64.0
+  },
+  "continuation": {
+    "real_mean_relative_reduction": 0.2,
+    "real_correct_fraction_gain": 0.1,
+    "real_FA_gain": 5,
+    "real_AUROC_gain": 0.02,
+    "real_probe_both_min": 0.6,
+    "primary_accept_counts": {
+      "real": 333,
+      "sim": 510
+    },
+    "tolerance": 1e-10,
+    "roles": "R_reference_Q1_ranking_Q2_95pct_comparison_only"
+  },
+  "prior_curvature_version": "closed_epoch04_R_Q1_failed_preserved_no_resume",
+  "training_reader_proxy": "GT_fixed_bilinear_center_and_axis_bands_GT_background_median_live_Torch_contrast_floor0.05",
+  "proxy_is_not_online_IRLS": true
+}

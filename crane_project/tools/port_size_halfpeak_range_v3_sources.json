@@ -1,0 +1,15 @@
+{
+  "protocol": "port_size_halfpeak_range_v3",
+  "sources": {
+    "crane_project/tools/run_port_size_halfpeak_range_v3.py": "86a3b4a913f2f151c2cbdda38dc72a980d7135b41016ad32c55ded396e0114eb",
+    "crane_project/tools/eval_port_size_halfpeak_range_v3.py": "b652186e3ff5e4cb97ccc032cd50df64d8b8b4449c0c472adf65fe1ee76b8449",
+    "crane_project/utils/port_size_halfpeak_range_v3.py": "d3f02ebe2e2dec0f558bc962c2cb37faeadd6d146ba215e30b74e01691388f3d",
+    "crane_project/utils/port_size_halfpeak_range_v3_torch.py": "b38acb329426c76a9b242e308caf8c0b804636ab8ca3cb7340194ee9f521076c",
+    "crane_project/utils/port_size_halfpeak_comparison_v3.py": "c8f21f02e6b0f3dcacc4702c7312a57a200fc33ec2070271e05e946d7ac59c01",
+    "crane_project/tools/port_size_halfpeak_range_v3_protocol.json": "95982055602992798461fe6f4fd473164bd5b8eab47efbdbc2b3be905e938727",
+    "tests/test_port_size_halfpeak_range_v3.py": "0862a9c53e1aa7747b9a3b2df2361cc889e1c5ef3308e40306d727582d7940fe"
+  },
+  "protocol_sha256": "95982055602992798461fe6f4fd473164bd5b8eab47efbdbc2b3be905e938727",
+  "parent_template_sources_sha256": "894e12beaaf5478da7fa37421bfe2e91ebcc1cd141944d184e7c9f531358f16c",
+  "closed_curvature_sources_sha256": "667fe159489dfdaf9855f020122cda8da7fd362e356e10633cdccc1ea8c3500d"
+}
