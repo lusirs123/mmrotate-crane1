@@ -8,6 +8,7 @@ import pickle
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -91,6 +92,27 @@ class ContractTests(unittest.TestCase):
             with self.subTest(key=key), self.assertRaises(ValueError):
                 c.check_selection(other, 'cfg', 'weight')
 
+    def test_selection_error_identifies_real_mismatch_without_claiming_epoch_is_wrong(self):
+        s = dict(evidence_role='source_val_checkpoint_selection', selected_checkpoint='epoch_24',
+            config_sha256='old_cfg', selected_path='/server/epoch_24.pth',
+            all_checkpoints={'epoch_24':dict(checkpoint_sha256='weight')})
+        checks = c.selection_checks(s, 'current_cfg', 'weight')
+        self.assertEqual([key for key, value in checks.items() if not value['passed']], ['config_sha256'])
+        self.assertTrue(checks['selected_checkpoint']['passed'])
+        with self.assertRaisesRegex(ValueError, 'config_sha256.*current_cfg'):
+            c.check_selection(s, 'current_cfg', 'weight')
+
+    def test_missing_legacy_provenance_is_reported_and_not_silently_accepted(self):
+        s = dict(selected_checkpoint='epoch_24', selected_path='/server/epoch_24.pth',
+                 all_checkpoints={'epoch_24':{}})
+        checks = c.selection_checks(s, 'cfg', 'weight')
+        self.assertFalse(checks['evidence_role']['passed'])
+        self.assertFalse(checks['config_sha256']['passed'])
+        self.assertFalse(checks['checkpoint_record_sha256']['passed'])
+        with self.assertRaises(ValueError): c.check_selection(s, 'cfg', 'weight')
+        # Unknown current weight plus absent metadata must also remain a failure.
+        self.assertFalse(c.selection_checks({}, 'cfg', None)['checkpoint_record_sha256']['passed'])
+
     def test_checkpoint_config_is_parsed_without_execution(self):
         keys = ('model', 'data', 'optimizer', 'optimizer_config', 'lr_config',
                 'runner', 'load_from', 'resume_from')
@@ -166,6 +188,35 @@ class ContractTests(unittest.TestCase):
             self.assertFalse(result['gt_scoring'])
             with self.assertRaises(FileExistsError):
                 b.run(b.parser().parse_args(['--stage', 'check', '--out-dir', str(out)]))
+
+    def test_input_diagnosis_reports_legacy_fields_without_unpickling_or_modifying_sources(self):
+        with tempfile.TemporaryDirectory(dir=str(ROOT/'work_dirs')) as tmp:
+            root = Path(tmp); model = root/'model'; sweep = model/'ckpt_sweep'
+            sweep.mkdir(parents=True)
+            weight = model/'epoch_24.pth'; weight.write_bytes(b'test fixture')
+            selection = sweep/'sweep_results.json'
+            c.write_new(selection, dict(selected_checkpoint='epoch_24', selected_path=str(weight),
+                all_checkpoints={'epoch_24':dict(checkpoint=str(weight))}))
+            final = sweep/'final_test/epoch_24'; (final/'preds').mkdir(parents=True)
+            # This cannot be unpickled; diagnostic must only hash raw bytes.
+            (final/'preds/results.pkl').write_bytes(b'not a pickle; hash only')
+            before = c.sha(selection)
+            with patch.object(b.pickle, 'load', side_effect=AssertionError('Unpickle forbidden')):
+                with patch.multiple(b, EOOD_DIR=model, SYM_DIR=root/'absent_sym',
+                                    B_WEIGHT=root/'absent_b.pth', M_WEIGHT=root/'absent_m.pth'):
+                    args = b.parser().parse_args(['--stage','inputs','--out-dir',str(root/'diagnosis')])
+                    b.run(args)
+            report = c.read(root/'diagnosis/input_diagnosis.json')
+            self.assertEqual(report['status'], 'INPUT_METADATA_DIAGNOSIS_COMPLETE_REVIEW_REQUIRED')
+            result = report['input_diagnosis']
+            for field in ('cuda_calls','model_loads','tensor_loads','prediction_unpickles','image_reads','annotation_reads'):
+                self.assertEqual(result[field], 0)
+            candidate = next(x for x in result['eood']['candidates'] if x['selection_exists'])
+            self.assertEqual(set(candidate['failed_fields']),
+                {'evidence_role','config_sha256','checkpoint_record_sha256'})
+            self.assertTrue(candidate['selection_checks']['selected_checkpoint']['passed'])
+            self.assertFalse(candidate['prediction_file']['unpickled'])
+            self.assertEqual(c.sha(selection), before)
 
     def test_no_training_or_precision_parameter_sweep_cli(self):
         options = b.parser()._option_string_actions

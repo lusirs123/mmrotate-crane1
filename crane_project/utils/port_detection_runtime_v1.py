@@ -65,6 +65,7 @@ def protocol_document():
         comparisons=['EOOD -> SymEOOD: whole model/inference route change.',
             'SymEOOD -> SymEOOD+B: same deployed structure; B is training-only, not an inference transform.',
             'SymEOOD+B -> SymEOOD+B+midpoint: frozen detector plus the fixed geometry head.'],
+        input_diagnosis='Optional inputs stage reads existing metadata and streams file SHA only. No pickle/torch load, GPU, images, annotations, prediction generation or reselection. Missing or inconsistent provenance is reported, never repaired automatically.',
         validation='All1440 outputs of every repeat must match sealed predictions. A single backbone and native detector-head call per production frame. Extra audit forwards are not timed.',
         scope=dict(training_updates=0, gt_online=False, ground_truth_scoring=False,
             selection_on_test=False, test_repeatedly_exposed=True,
@@ -146,14 +147,33 @@ def check_checkpoint_meta(meta, cfg, epoch=24):
     return dict(epoch=epoch, seed=0, saved_config_sha256=hashlib.sha256(meta['config'].encode()).hexdigest())
 
 
-def check_selection(selection, config_sha, checkpoint_sha, epoch=24):
+def selection_checks(selection, config_sha, checkpoint_sha, epoch=24):
+    """Report each original strict field; missing legacy fields remain failures."""
     key = 'epoch_%d' % epoch
-    if (selection.get('evidence_role') != 'source_val_checkpoint_selection' or
-            selection.get('selected_checkpoint') != key or
-            selection.get('config_sha256') != config_sha or
-            selection['all_checkpoints'][key]['checkpoint_sha256'] != checkpoint_sha or
-            Path(selection['selected_path']).name != key+'.pth'):
-        raise ValueError('Requires the existing VAL-selected '+key+'; no new selection')
+    selection = selection if isinstance(selection, dict) else {}
+    records = selection.get('all_checkpoints')
+    record = records.get(key) if isinstance(records, dict) else None
+    record = record if isinstance(record, dict) else {}
+    path = selection.get('selected_path')
+    actual = dict(evidence_role=selection.get('evidence_role'),
+        selected_checkpoint=selection.get('selected_checkpoint'),
+        config_sha256=selection.get('config_sha256'),
+        checkpoint_record_sha256=record.get('checkpoint_sha256'),
+        selected_path_name=Path(path).name if isinstance(path, str) and path else None)
+    expected = dict(evidence_role='source_val_checkpoint_selection', selected_checkpoint=key,
+        config_sha256=config_sha, checkpoint_record_sha256=checkpoint_sha,
+        selected_path_name=key+'.pth')
+    return {name:dict(expected=expected[name], actual=actual[name],
+        passed=actual[name] is not None and expected[name] is not None and
+               actual[name] == expected[name]) for name in expected}
+
+
+def check_selection(selection, config_sha, checkpoint_sha, epoch=24):
+    checks = selection_checks(selection, config_sha, checkpoint_sha, epoch)
+    failed = {name:value for name, value in checks.items() if not value['passed']}
+    if failed:
+        raise ValueError('Existing VAL selection mismatch for epoch_%d; no reselection: '%epoch+
+            json.dumps(failed, ensure_ascii=False, sort_keys=True))
 
 
 def unique_directory(candidates, required):

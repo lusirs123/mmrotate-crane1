@@ -58,6 +58,7 @@
     "SymEOOD -> SymEOOD+B: same deployed structure; B is training-only, not an inference transform.",
     "SymEOOD+B -> SymEOOD+B+midpoint: frozen detector plus the fixed geometry head."
   ],
+  "input_diagnosis": "Optional inputs stage reads existing metadata and streams file SHA only. No pickle/torch load, GPU, images, annotations, prediction generation or reselection. Missing or inconsistent provenance is reported, never repaired automatically.",
   "validation": "All1440 outputs of every repeat must match sealed predictions. A single backbone and native detector-head call per production frame. Extra audit forwards are not timed.",
   "scope": {
     "training_updates": 0,

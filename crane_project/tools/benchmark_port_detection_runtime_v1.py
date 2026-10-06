@@ -3,6 +3,7 @@
 
 CPU --stage check loads only sources/protocol. Actual timing is single-GPU,
 batch1 FP32. Frozen outputs are checked outside timers, no GT scoring/selection.
+CPU --stage inputs diagnoses existing file metadata/SHA without tensor loading.
 """
 import argparse
 from collections import Counter
@@ -71,6 +72,95 @@ def source_contract():
     return dict(protocol_sha256=c.sha(PROTOCOL), sources_sha256=c.sha(SOURCES), sources=actual)
 
 
+def inspect_detector_inputs(arm, model_dir, sweep_dir=None, test_dir=None):
+    """Bounded existing-source diagnosis, including inconsistent legacy files.
+
+    Reports candidates independently; never picks a different epoch/config,
+    executes saved configs or unpickles outputs. Source failures stay failures.
+    """
+    spec = c.detector_identity(arm)
+    key = 'epoch_%d' % spec['selected_epoch']
+    weight = model_dir/(key+'.pth')
+    config = ROOT/spec['config']
+    weight_sha = c.sha(weight) if weight.is_file() else None
+    config_sha = c.sha(config)
+    result = dict(arm=arm, fixed_identity=spec, model_dir=str(model_dir.resolve()),
+        checkpoint=str(weight.resolve()), checkpoint_exists=weight.is_file(),
+        checkpoint_sha256=weight_sha, config=str(config.resolve()), config_sha256=config_sha,
+        candidates=[], tensor_loads=0, prediction_unpickles=0, gpu_calls=0)
+    directories = [Path(sweep_dir)] if sweep_dir else [model_dir/'val_sweep_port_v1', model_dir/'ckpt_sweep']
+    seen = set()
+    for directory in directories:
+        directory = directory.resolve()
+        if directory in seen:
+            continue
+        seen.add(directory)
+        path = directory/'sweep_results.json'
+        item = dict(sweep=str(directory), selection_exists=path.is_file())
+        if not path.is_file():
+            result['candidates'].append(item)
+            continue
+        try:
+            selection = c.read(path)
+            checks = c.selection_checks(selection, config_sha, weight_sha, spec['selected_epoch'])
+            records = selection.get('all_checkpoints', {})
+            record = records.get(key, {}) if isinstance(records, dict) else {}
+            record = record if isinstance(record, dict) else {}
+            item.update(selection_sha256=c.sha(path), selection_checks=checks,
+                failed_fields=[name for name, value in checks.items() if not value['passed']],
+                recorded_selection=dict(selected_path=selection.get('selected_path'),
+                    checkpoint_path=record.get('checkpoint'), selection_config=selection.get('selection_config'),
+                    candidate_epochs=selection.get('candidate_epochs'),
+                    metric_protocol_version=selection.get('metric_protocol_version')))
+            for field, value in (('selected_path', selection.get('selected_path')), ('checkpoint_path', record.get('checkpoint'))):
+                target = Path(value).resolve() if isinstance(value, str) and value else None
+                item[field+'_matches_fixed_path'] = target == weight.resolve()
+                item[field+'_resolved'] = str(target) if target is not None else None
+            marker = directory/'selected_checkpoint.txt'
+            if marker.is_file():
+                item['selected_checkpoint_txt'] = marker.read_text()[:4096].strip()
+            final = Path(test_dir).resolve() if test_dir else directory/'final_test'/key
+            item['expected_test_dir'] = str(final)
+            receipts = {}
+            # Legacy reports are identified, not accepted instead of the v2 receipt.
+            for name in ('final_test_metrics_v2.json', 'final_test_metrics.json'):
+                receipt_path = final/name
+                if not receipt_path.is_file():
+                    receipts[name] = dict(exists=False)
+                    continue
+                receipt = c.read(receipt_path)
+                fields = ('protocol', 'evidence_role', 'config', 'config_sha256', 'checkpoint',
+                    'checkpoint_sha256', 'results_pkl', 'results_pkl_sha256', 'frame_count',
+                    'metric_protocol_version')
+                receipts[name] = dict(exists=True, sha256=c.sha(receipt_path),
+                    fields={field:receipt.get(field) for field in fields})
+            item['test_receipts'] = receipts
+            predictions = final/'preds/results.pkl'
+            item['prediction_file'] = dict(path=str(predictions), exists=predictions.is_file(),
+                sha256=c.sha(predictions) if predictions.is_file() else None, unpickled=False)
+        except (ValueError, TypeError, OSError, AttributeError) as error:
+            item['read_error'] = dict(type=type(error).__name__, error=str(error))
+        result['candidates'].append(item)
+    return result
+
+
+def input_diagnosis(args):
+    result = dict(eood=inspect_detector_inputs('eood', EOOD_DIR, args.eood_sweep_dir, args.eood_test_dir),
+        symeood=inspect_detector_inputs('symeood', SYM_DIR, args.symeood_sweep_dir, args.symeood_test_dir),
+        fixed_weights={name:dict(path=str(path.resolve()), exists=path.is_file(),
+            expected_sha256=expected, actual_sha256=c.sha(path) if path.is_file() else None)
+            for name, path, expected in (('b', B_WEIGHT, c.B_SHA), ('midpoint', M_WEIGHT, c.M_SHA))},
+        selection_on_test=False, source_files_modified=False, cuda_calls=0,
+        model_loads=0, tensor_loads=0, prediction_unpickles=0, image_reads=0, annotation_reads=0)
+    for arm in ('eood', 'symeood'):
+        for candidate in result[arm]['candidates']:
+            print('INPUT', arm, candidate['sweep'], 'failed selection fields:',
+                  candidate.get('failed_fields', 'missing/unreadable selection'), flush=True)
+            for name in candidate.get('failed_fields', []):
+                print(' ', name, candidate['selection_checks'][name], flush=True)
+    return result
+
+
 def checked_detector_inputs(arm, model_dir, sweep_dir=None, test_dir=None):
     spec = c.detector_identity(arm)
     key = 'epoch_%d' % spec['selected_epoch']
@@ -80,7 +170,10 @@ def checked_detector_inputs(arm, model_dir, sweep_dir=None, test_dir=None):
     weight_sha = c.sha(weight)
     config_sha = c.sha(ROOT/spec['config'])
     selection = c.read(sweep/'sweep_results.json')
-    c.check_selection(selection, config_sha, weight_sha, spec['selected_epoch'])
+    try:
+        c.check_selection(selection, config_sha, weight_sha, spec['selected_epoch'])
+    except ValueError as error:
+        raise ValueError(arm+' '+str(sweep/'sweep_results.json')+': '+str(error)) from error
     for path in (selection['selected_path'], selection['all_checkpoints'][key]['checkpoint']):
         if Path(path).resolve() != weight.resolve():
             raise ValueError(arm+' selection points to a different checkpoint')
@@ -294,6 +387,10 @@ def run(args):
     try:
         if args.stage == 'check':
             report['status'] = 'STATIC_RUNTIME_CONTRACT_PASS_NO_MODEL_DATA_GPU'
+        elif args.stage == 'inputs':
+            report['input_diagnosis'] = input_diagnosis(args)
+            report['status'] = 'INPUT_METADATA_DIAGNOSIS_COMPLETE_REVIEW_REQUIRED'
+            c.write_new(out/'input_diagnosis.json', report)
         else:
             import cv2
             import numpy as np
@@ -432,7 +529,7 @@ def run(args):
 
 def parser():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--stage', choices=('check', 'benchmark'), required=True)
+    p.add_argument('--stage', choices=('check', 'inputs', 'benchmark'), required=True)
     p.add_argument('--gpu', type=int, default=0, help='Logical CUDA device after CUDA_VISIBLE_DEVICES')
     p.add_argument('--out-dir', required=True)
     p.add_argument('--eood-sweep-dir', help='Existing source-VAL sweep directory; no reselection')

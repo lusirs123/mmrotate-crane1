@@ -29,7 +29,7 @@
 - **当前后续任务（A017）：** 用户明确先跳过可靠性、停止继续几何／双边正确率优化，转向固定B24与B24＋σ1.5／ep03的Webots深度影响对照。旧Raw-opt标定与GT组件结果已定位／复核；先做Train-03同帧诊断，不训练、重选权或拟合新参数，不使用可靠性标志过滤输出。其它窗口可靠性身份／policy保持，不将本窗口任务变更当作其迁移授权。
 - **写作目标：** 根据各自封存文件写小论文。当前正文已纳入midpoint；几何结果与可靠性结果保留各自前端身份，不能拼成同一已验证链路。本窗口不修改可靠性文字、方法、policy或成绩。
 - **可靠性另一个窗口：** 固定B24＋默认σ1／head_epoch23＋simple三标志作为比较基线，不自动迁移至σ1.5。可靠性判断不写回框；检查揭示尺寸误差，不是检查把框改坏。
-- 可达性已在A007核验；A009尺寸支路／有限工具及A013测试修复已由用户在服务器运行，A014完成回传核验。当前没有该实验的运行待办，不重复测试／smoke／训练／评价；不连接服务器，不进行正式训练、旧选权或TEST开发。用户另行授权固定前端的TEST实时性补测，A015三组初稿已由A018四组替代（EOOD→SymEOOD→SymEOOD+B→固定midpoint），已本地交付、等待服务器回传；它不重启几何优化或改变上述结论。
+- 可达性已在A007核验；A009尺寸支路／有限工具及A013测试修复已由用户在服务器运行，A014完成回传核验。当前没有该实验的运行待办，不重复测试／smoke／训练／评价；不连接服务器，不进行正式训练、旧选权或TEST开发。用户另行授权固定前端的TEST实时性补测，A015三组初稿已由A018四组替代（EOOD→SymEOOD→SymEOOD+B→固定midpoint），A019修正交互式shell指令，A020收到服务器静态成功终端；A021实际测速在EOOD选权来源核对失败、尚未开始模型推理。已交付逐字段错误与CPU输入诊断，等待其回传，暂不重试GPU测速或更改权重。它不重启几何优化或改变上述结论。
 
 ### 1.2 已完成并固定的版本、训练及选权
 
@@ -617,7 +617,7 @@ sha256sum work_dirs/port_detection_runtime_v1_review_20261006.tar.gz
 
 旧Webots入口只运行配置中的检测器，不会自动加载独立midpoint头；已有port σ1.5入口绑定检测VAL／TEST，也不能直接冒充Webots对照。当前`work_dirs/`未发现所需`head_epoch_03.pth`，不能本机执行当前M推理；后续须按已授权深度验证范围准备专用同帧入口、恢复原标定字节并绑定B／M权重SHA，由用户在服务器运行，结果tar仍放`work_dirs/`根目录。第一轮不进入Fixed-dev候选深度评价、不引入可靠性、训练或标定更新；当前M的深度影响尚无实测结论。
 
-### A018. 2026-10-06：实时性改为四组逐步对照，复用无B的SymEOOD epoch20（待服务器运行）
+### A018. 2026-10-06：实时性改为四组逐步对照，复用无B的SymEOOD epoch20（A020静态成功，A021来源核对失败待诊断）
 
 **用户任务与决定：** EOOD直接对比SymEOOD+B同时包含模型和训练增强两个变化；三组初稿能比较最终系统与基线，但不能分开呈现这两步。按用户建议增设SymEOOD无B，形成四组逐步对照；不加入EOOD+B、不训练新模型、不修改选权或现有精度成绩。此任务仅补充固定TEST运行效率，A014收束、A016／A017深度核对及另一个窗口可靠性任务保持独立。
 
@@ -637,8 +637,11 @@ sha256sum work_dirs/port_detection_runtime_v1_review_20261006.tar.gz
 **四组服务器指令（替代A015旧指令，先Git同步5份改动；示例空闲物理GPU3）：**
 
 ```bash
-cd /media/omnisky/personal_files/ljj/symEOOD
+set +e
+(
 set -e
+conda activate mmrotljj
+cd /media/omnisky/personal_files/ljj/symEOOD
 python -c 'import torch, numpy, cv2'
 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
 python -m unittest discover -s tests -p test_port_detection_runtime_v1.py -v
@@ -658,6 +661,93 @@ tar -czf work_dirs/port_detection_runtime_v1_four_arm_review_20261006.tar.gz \
   port_detection_runtime_v1_four_arm_static_20261006 \
   port_detection_runtime_v1_four_arm_test_20261006
 sha256sum work_dirs/port_detection_runtime_v1_four_arm_review_20261006.tar.gz
+)
 ```
 
+交互式SSH中先`set +e`撤销父shell的错误退出选项，再用括号子shell内的`set -e`保留阶段失败即停；失败会返回父终端、留下报错，不继续测速／打包。不要省略括号或直接在登录shell顶层启用`set -e`。首次执行须在`mmrotljj`环境和项目目录，截图中的`(base) …:~$`不是指定项目入口；此指令修正见A019。
+
 **待办／结果入口：** 服务器20项应全部执行通过，再运行check／benchmark；四组1440帧×3＝17,280个正式计时样本，不含各50预热。成功状态仍为`FROZEN_TEST_RUNTIME_COMPLETE_REVIEW_REQUIRED`，同时protocol必须为four_arm，arms含四个指定角色；回传`runtime_compare.json`／逐帧时间与来源、冻结一致性报告所在根目录tar。原SymEOOD默认查其`val_sweep_port_v1`或`ckpt_sweep`及`final_test/epoch_20`；路径变化时显式传上述定位参数，不重建预测、训练或重选。若新输出目录已存在，整组使用新后缀，不覆盖旧三组／四组结果。TEST多次暴露仍披露，仅测效率、不据此选模型。
+
+### A019. 2026-10-06：更正交互式SSH错误退出指令，定位截图的目录／环境问题
+
+**事实与推断：** 用户截图显示服务器提示符为`(base) …:~$`，输入的是相对脚本路径及`--stage check`，没有显示Python报错或退出状态。可确定当时位于用户home目录而非指定项目、环境未激活mmrotljj；从home运行相对路径会在home下寻找脚本，若不存在即返回非零。此前A018把`set -e`放在交互式shell顶层，可能使这类错误结束SSH登录shell；这是高可能解释，尚非实际错误栈已确认的结论。`--stage check`本身仅用标准库、不加载torch或CUDA，不能把base环境直接认定为这次静态命令失败的原因。
+
+**更正与范围：** A018指令改为父shell`set +e`、括号子shell内`set -e`，子shell先激活mmrotljj、进入实际服务器项目，再执行检查／测速；保持失败即停且不结束交互父shell。此轮只改运行文档，不改benchmark源码／protocol／sources、模型、深度／可靠性、预算或选择；未连接服务器。A015三组指令仍为明确不执行的历史存档，四组实际运行状态尚无回传。
+
+**定位步骤：** 重连后先`set +e`、`conda activate mmrotljj`、`cd /media/omnisky/personal_files/ljj/symEOOD`并检查`pwd`／`python --version`，然后只重试静态check，使用全新`work_dirs/port_detection_runtime_v1_four_arm_static_retry1_20261006`保留旧目录，不删除／覆盖。若仍失败，父终端保留完整报错，依据实际报错再修复；静态成功前不继续benchmark。是否退出来自其他终端／SSH设置仍待实际报错证据，不推断OOM或GPU训练故障。
+
+**本地验证：** 更正后的A018 bash语法、A001～A019编号和代码围栏通过；合成bash检查确认子shell命令失败时停止后续阶段，父shell仍可执行命令。源码未变，不重复20项模型／合同测试；不把此合成shell检查称为真实服务器测速通过。
+
+### A020. 2026-10-06：收到服务器静态成功终端，交付后续四组测速及打包指令（A021来源失败、暂不重跑）
+
+**后续状态：** 用户随后返回单测`OK`及benchmark在EOOD source-VAL来源核对处的错误；尚无任何正式测速样本。原run1失败目录保持，不执行本条旧benchmark／打包步骤；按A021同步诊断扩展并先定位具体字段，不能为绕过错误重选epoch或改写旧记录。此处静态成功仅属于当时源码快照，A021新诊断的来源快照独立保存。
+
+**运行事实与验证边界：** 用户终端确认已进入`/media/omnisky/personal_files/ljj/symEOOD`、mmrotljj／Python3.8.20；静态输出为`work_dirs/port_detection_runtime_v1_four_arm_static_retry1_20261006/completion.json`，状态`STATIC_RUNTIME_CONTRACT_PASS_NO_MODEL_DATA_GPU`，运行后保留交互终端。仅据终端确认此次静态命令成功，尚未收到JSON／artifact、服务器20项测试或实际CUDA测速；不能据此宣称四组权重已加载、预测复现或实时性达标。
+
+**下一步与范围：** 不重复静态阶段，先在服务器跑已有20项测试，再使用同一空闲物理GPU依次测EOOD ep24／SymEOOD ep20／SymEOOD+B ep24／B＋σ1.5-head03。预算、协议、身份及输出保护不变，不训练／调参、修改原模型、深度／可靠性或论文。此轮仅维护本记录的静态完成状态／新指令，不改源码、不连接服务器、不重跑本机已完成测试。
+
+**后续服务器指令（完整复制，示例空闲物理GPU3；全新run1输出，复用已成功静态目录）：**
+
+```bash
+set +e
+(
+set -e
+conda activate mmrotljj
+cd /media/omnisky/personal_files/ljj/symEOOD
+
+python -c 'import torch, numpy, cv2'
+PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python -m unittest discover -s tests -p test_port_detection_runtime_v1.py -v
+
+CUDA_VISIBLE_DEVICES=3 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/benchmark_port_detection_runtime_v1.py \
+  --stage benchmark --gpu 0 \
+  --out-dir work_dirs/port_detection_runtime_v1_four_arm_test_run1_20261006
+
+tar -czf work_dirs/port_detection_runtime_v1_four_arm_review_run1_20261006.tar.gz \
+  -C work_dirs \
+  port_detection_runtime_v1_four_arm_static_retry1_20261006 \
+  port_detection_runtime_v1_four_arm_test_run1_20261006
+sha256sum work_dirs/port_detection_runtime_v1_four_arm_review_run1_20261006.tar.gz
+)
+```
+
+任一检查失败只停止子shell，不退出父终端，也不继续测速／打包。20项应全部通过；所需torch／NumPy已显式导入，不能把本机4项跳过迁作服务器通过。若run1输出已存在，benchmark及tar统一改用新run2等后缀，不删除／覆盖；静态retry1目录保持。成功须显示`FROZEN_TEST_RUNTIME_COMPLETE_REVIEW_REQUIRED`，回传完整终端及根目录tar，核对four_arm protocol、四组各4320预测／冻结状态及各组平均／P95／FPS／峰值显存。默认寻找各原VAL选择／最终TEST参考；找不到时先依据报错确认路径，不重新训练或生成另一份选权结果。TEST多次暴露继续披露，仅增加运行效率证据。
+
+**文档检查：** A001～A020编号、围栏及新bash命令语法通过；静态入口／CLI和四组固定身份已复核。真实四组运行仍待用户执行及回传，未将静态成功升级为工程／速度结果。
+
+### A021. 2026-10-06：EOOD选权来源核对失败，修复笼统错误并交付有限CPU输入诊断
+
+**服务器事实：** 用户粘贴`OK`、MMCV版本迁移提示及`ValueError: Requires the existing VAL-selected epoch_24; no new selection`。错误路径为`run → inputs → checked_detector_inputs(eood) → check_selection`，发生在已有EOOD选权记录的核对阶段、任何`build`或帧推理／计时循环之前。MMCV warning不是本次异常。按源码可知已成功读取原EOOD目标权重的字节SHA及找到一份sweep，但还不能证明它们彼此匹配；没有完整测试清单／结果JSON或有效FPS报告，`OK`不等于benchmark成功。
+
+**问题与限定：** 原`check_selection`把role、epoch名称、配置SHA、权重记录SHA及选中路径basename五项合在一句epoch24提示中；配置或历史字段缺失也会出现同一错误。这是诊断信息不足，不是已有证据表明EOOD选错epoch。实际失败项尚待服务器字段回传，不能先断言只是schema旧、配置只有注释变更、服务器权重错误，亦不能补写旧SHA／role或改变候选权重来使其通过。
+
+**有限修复：** 更新A018同5份工具文件／protocol／sources／测试；原四组、epoch24／20／24／head03、timing、图像身份、输出一致性和来源接受条件不变。新增`selection_checks`逐字段expected／actual／passed，真实benchmark报错加arm及sweep路径。新增`--stage inputs`只诊断固定EOOD／SymEOOD各原默认sweep候选、选择文字／selected txt、对应旧／v2 TEST receipt限定身份字段、权重及预测文件的流式SHA；两份不同sweep独立呈现，不挑选其成绩。B／midpoint只报告固定权重字节是否存在／SHA。不会`torch.load`／unpickle预测、执行保存config、加载图像／标注、调CUDA、生成预测、计算GT指标、修改原文件或重选。缺失legacy provenance仍是失败，诊断完成状态只是已生成报告，不是来源合格或可以测速。
+
+**本地验证：** 新23项中19通过、4项torch合成检查因本机环境缺失跳过。新增三项验证：仅配置SHA错误会准确定位而非误报epoch；旧字段缺失与未知权重仍失败；不可unpickle的合成预测文件仅被hash、诊断不改原selection。30份来源SHA、3份Python3.8语法／编译／空白、CLI及原无GPUcheck通过。真实模型代码未改，不重复完整审计或GPU训练；没有服务器连接。保留另一个窗口深度标定JSON及其文档工作。
+
+**下一步服务器指令（先Git同步上述5份修改，只跑更新检查与CPU诊断，不重试测速）：**
+
+```bash
+set +e
+(
+set -e
+conda activate mmrotljj
+cd /media/omnisky/personal_files/ljj/symEOOD
+
+python -c 'import torch, numpy, cv2'
+CUDA_VISIBLE_DEVICES="" PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python -m unittest discover -s tests -p test_port_detection_runtime_v1.py -v
+
+CUDA_VISIBLE_DEVICES="" PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/benchmark_port_detection_runtime_v1.py \
+  --stage inputs \
+  --out-dir work_dirs/port_detection_runtime_v1_four_arm_inputs_fix1_20261006
+
+tar -czf work_dirs/port_detection_runtime_v1_four_arm_inputs_fix1_review_20261006.tar.gz \
+  -C work_dirs port_detection_runtime_v1_four_arm_inputs_fix1_20261006
+sha256sum work_dirs/port_detection_runtime_v1_four_arm_inputs_fix1_review_20261006.tar.gz
+)
+```
+
+**待办与停止点：** 回传完整终端及根目录tar（或诊断`input_diagnosis.json`），预期完成状态`INPUT_METADATA_DIAGNOSIS_COMPLETE_REVIEW_REQUIRED`。先依据实际失败字段／路径及原receipt确定下一步必要证据；若legacy来源字段缺失，后续只有在原checkpoint／配置／历史选择身份可独立核验后才能设计兼容，不能自动豁免。原失败run1、旧静态retry1和所有历史JSON保留；新诊断目录若已有则统一新后缀，不覆盖。当前四组实际FPS仍未测，不训练、选参、切换基线、访问GT或影响可靠性／深度任务。
