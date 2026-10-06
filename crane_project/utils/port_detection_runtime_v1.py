@@ -161,6 +161,7 @@ def protocol_document():
             'SymEOOD+B -> SymEOOD+B+midpoint: frozen detector plus the fixed geometry head.'],
         input_diagnosis='Optional inputs stage reads existing metadata and streams file SHA only. No pickle/torch load, GPU, images, annotations, prediction generation or reselection. Missing or inconsistent provenance is reported, never repaired automatically.',
         historical_migration='Only the two reviewed seq06 config/weight/selection/TEST/prediction byte identities are accepted. Archived override AST must equal current config apart from work_dir and inheritance flattening; full resolved checkpoint config is still required. Old records remain unchanged; recorded paths are limited to the original named seq06 directories.',
+        artifact_layout='Unified shell runner writes tests/logs/check/inputs/benchmark below one new work_dirs/port_detection_runtime_v1 task directory and packages it once on success or failure. Old task directories are retained.',
         validation='All1440 outputs of every repeat must match sealed predictions. A single backbone and native detector-head call per production frame. Extra audit forwards are not timed.',
         scope=dict(training_updates=0, gt_online=False, ground_truth_scoring=False,
             selection_on_test=False, test_repeatedly_exposed=True,

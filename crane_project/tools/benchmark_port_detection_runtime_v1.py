@@ -173,10 +173,13 @@ def input_diagnosis(args):
         model_loads=0, tensor_loads=0, prediction_unpickles=0, image_reads=0, annotation_reads=0)
     for arm in ('eood', 'symeood'):
         for candidate in result[arm]['candidates']:
-            print('INPUT', arm, candidate['sweep'], 'failed selection fields:',
+            print('INPUT', arm, candidate['sweep'], 'raw legacy/current selection differences:',
                   candidate.get('failed_fields', 'missing/unreadable selection'), flush=True)
             if 'reviewed_input_contract' in candidate:
-                print('  reviewed input contract:', candidate['reviewed_input_contract'], flush=True)
+                reviewed = candidate['reviewed_input_contract']
+                print('  reviewed input contract passed:', reviewed['passed'],
+                      '; migration:', (reviewed.get('migration') or {}).get('mode', 'none'),
+                      '; error:', reviewed.get('error', 'none'), flush=True)
             for name in candidate.get('failed_fields', []):
                 print(' ', name, candidate['selection_checks'][name], flush=True)
     return result

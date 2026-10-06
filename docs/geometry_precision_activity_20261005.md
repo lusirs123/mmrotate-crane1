@@ -1,6 +1,6 @@
 # SymEOOD 几何精度优化：新阶段活动记录（2026-10-05起）
 
-> **本文件是新阶段几何优化的唯一活动记录入口。** 原[长交接](geometry_precision_handoff_20261001.md)第97节已迁入第1节，后续先读接续摘要，再读最新活动；旧交接保留历史证据，不再追加。**截至A014（2026-10-06）：服务器33项测试、2步smoke及固定200步TRAIN／完整VAL已完成并核验，工程通过、联合性能门槛未通过。real双边≤10%正确覆盖199/375→190/375，sim464/512→471/512；real尺寸、RIoU及DFR退化，不采用新支路。固定B24／midpoint σ1.5-ep03并收束本次几何实验，无补跑／追加训练待办。** 原协议、结果及各前端身份保持。**深度任务（A017→A022）：跳过可靠性；已实现固定B24／σ1.5-ep03同帧Raw-opt诊断、恢复原标定，完成本机22项检查及981帧GT公式复现。3项原生桥接检查与当前B／midpoint检测深度对照待服务器运行，收益未知。指令见[深度运行说明](webots/固定B24与midpoint深度诊断_v1_运行说明_20261006.md)，无需继续几何训练。**
+> **本文件是新阶段几何优化的唯一活动记录入口。** 原[长交接](geometry_precision_handoff_20261001.md)第97节已迁入第1节，后续先读接续摘要，再读最新活动；旧交接保留历史证据，不再追加。**截至A014（2026-10-06）：服务器33项测试、2步smoke及固定200步TRAIN／完整VAL已完成并核验，工程通过、联合性能门槛未通过。real双边≤10%正确覆盖199/375→190/375，sim464/512→471/512；real尺寸、RIoU及DFR退化，不采用新支路。固定B24／midpoint σ1.5-ep03并收束本次几何实验，无补跑／追加训练待办。** 原协议、结果及各前端身份保持。**深度任务（A017→A022）：跳过可靠性；已实现固定B24／σ1.5-ep03同帧Raw-opt诊断、恢复原标定，完成本机22项检查及981帧GT公式复现。3项原生桥接检查与当前B／midpoint检测深度对照待服务器运行，收益未知。服务器数据复用`crane_project/data/webots_depth`（A023，字节待运行核验）；指令见[深度运行说明](webots/固定B24与midpoint深度诊断_v1_运行说明_20261006.md)，无需继续几何训练。**
 
 **本机项目：** /Users/mac/Documents/paper/symEOOD
 
@@ -29,7 +29,7 @@
 - **当前后续任务（A017→A022）：** 停止继续几何／双边正确率优化，跳过可靠性；Train-03固定B24与B24＋σ1.5／ep03深度诊断代码已实现，本机标量／源码检查及981帧GT公式复现完成，待服务器真实权重推理及回传。原标定不变，不训练、重选权、过滤q支持域外输出或使用可靠性标志；其它窗口身份／policy保持。
 - **写作目标：** 根据各自封存文件写小论文。当前正文已纳入midpoint；几何结果与可靠性结果保留各自前端身份，不能拼成同一已验证链路。本窗口不修改可靠性文字、方法、policy或成绩。
 - **可靠性另一个窗口：** 固定B24＋默认σ1／head_epoch23＋simple三标志作为比较基线，不自动迁移至σ1.5。可靠性判断不写回框；检查揭示尺寸误差，不是检查把框改坏。
-- 可达性已在A007核验；A009尺寸支路／有限工具及A013测试修复已由用户在服务器运行，A014完成回传核验。当前没有该实验的运行待办，不重复测试／smoke／训练／评价；不连接服务器，不进行正式训练、旧选权或TEST开发。用户另行授权固定前端的TEST实时性补测，A015三组初稿已由A018四组替代（EOOD→SymEOOD→SymEOOD+B→固定midpoint），A019修正交互式shell指令，A020收到服务器静态成功终端；A021实际测速在EOOD选权来源核对失败、尚未开始模型推理。已交付逐字段错误与CPU输入诊断，等待其回传，暂不重试GPU测速或更改权重。它不重启几何优化或改变上述结论。
+- 可达性已在A007核验；A009尺寸支路／有限工具及A013测试修复已由用户在服务器运行，A014完成回传核验。当前没有该实验的运行待办，不重复测试／smoke／训练／评价；不连接服务器，不进行正式训练、旧选权或TEST开发。用户另行授权固定前端的TEST实时性补测，A015三组初稿已由A018四组替代（EOOD→SymEOOD→SymEOOD+B→固定midpoint），A019修正交互式shell指令，A020收到服务器静态成功终端；A021实际测速在EOOD选权来源核对失败、尚未开始模型推理；A024已核验服务器23项测试及CPU诊断压缩包，确认seq06配置／目录迁移，完成限定来源兼容和统一运行入口。新版本本地22项通过、4项待服务器Torch环境，已交付26项测试→静态→输入核对→四组测速的一次运行指令；实际FPS仍待回传。它不重启几何优化或改变上述结论。
 
 ### 1.2 已完成并固定的版本、训练及选权
 
@@ -617,7 +617,7 @@ sha256sum work_dirs/port_detection_runtime_v1_review_20261006.tar.gz
 
 旧Webots入口只运行配置中的检测器，不会自动加载独立midpoint头；已有port σ1.5入口绑定检测VAL／TEST，也不能直接冒充Webots对照。当前`work_dirs/`未发现所需`head_epoch_03.pth`，不能本机执行当前M推理；专用同帧入口、原标定字节恢复及B／M权重SHA绑定已由A022完成，不再列为实现待办；用户按新运行说明在服务器运行，结果tar放`work_dirs/`根目录。第一轮不进入Fixed-dev候选深度评价、不引入可靠性、训练或标定更新；当前M的深度影响尚无实测结论。
 
-### A018. 2026-10-06：实时性改为四组逐步对照，复用无B的SymEOOD epoch20（A020静态成功，A021来源核对失败待诊断）
+### A018. 2026-10-06：实时性改为四组逐步对照，复用无B的SymEOOD epoch20（A024来源兼容／统一入口完成，实际测速待回传）
 
 **用户任务与决定：** EOOD直接对比SymEOOD+B同时包含模型和训练增强两个变化；三组初稿能比较最终系统与基线，但不能分开呈现这两步。按用户建议增设SymEOOD无B，形成四组逐步对照；不加入EOOD+B、不训练新模型、不修改选权或现有精度成绩。此任务仅补充固定TEST运行效率，A014收束、A016／A017深度核对及另一个窗口可靠性任务保持独立。
 
@@ -750,7 +750,7 @@ sha256sum work_dirs/port_detection_runtime_v1_four_arm_inputs_fix1_review_202610
 )
 ```
 
-**待办与停止点：** 回传完整终端及根目录tar（或诊断`input_diagnosis.json`），预期完成状态`INPUT_METADATA_DIAGNOSIS_COMPLETE_REVIEW_REQUIRED`。先依据实际失败字段／路径及原receipt确定下一步必要证据；若legacy来源字段缺失，后续只有在原checkpoint／配置／历史选择身份可独立核验后才能设计兼容，不能自动豁免。原失败run1、旧静态retry1和所有历史JSON保留；新诊断目录若已有则统一新后缀，不覆盖。当前四组实际FPS仍未测，不训练、选参、切换基线、访问GT或影响可靠性／深度任务。
+**历史待办已由A024解决：** 已收到并核验CPU诊断tar；以下为当时停止点，不再执行旧fix1指令。回传完整终端及根目录tar（或诊断`input_diagnosis.json`），预期完成状态`INPUT_METADATA_DIAGNOSIS_COMPLETE_REVIEW_REQUIRED`。先依据实际失败字段／路径及原receipt确定下一步必要证据；若legacy来源字段缺失，后续只有在原checkpoint／配置／历史选择身份可独立核验后才能设计兼容，不能自动豁免。原失败run1、旧静态retry1和所有历史JSON保留；新诊断目录若已有则统一新后缀，不覆盖。当前四组实际FPS仍未测，不训练、选参、切换基线、访问GT或影响可靠性／深度任务。
 
 ### A022. 2026-10-06：实现固定B24／σ1.5-ep03深度诊断，本机核验完成，待服务器推理
 
@@ -766,4 +766,38 @@ sha256sum work_dirs/port_detection_runtime_v1_four_arm_inputs_fix1_review_202610
 
 本机原数据oracle为981/981输出、981/981数值可计算、981/981 q在支持域；MAE=0.04089905427732898m、RMSE=0.053426706032900846m、AbsRel=0.0024735957010812884（0.24735957%）、P95=0.11329915424724213m，六项原指标差值<1e-10。临时结果清理，不新增本机review副本。该事实是旧GT框／公式复现，不是当前B／midpoint性能；真实权重加载、GPU推理及当前深度变化未验证。
 
-**决定／待办：** 本地实现与原标定恢复完成；Git同步上述6份实现文件及运行说明，必要时只打包Train-03/images与两份metadata，tar位于项目work_dirs根目录。用户运行25项测试、静态check、GT oracle及单GPU完整981帧audit，回传完整终端和根目录tar。audit完成状态FROZEN_TRAIN03_DEPTH_DIAGNOSTIC_COMPLETE_REVIEW_REQUIRED仅表示完成待审，不等于性能通过；先比较覆盖／配对误差／尾部／q及连续性，不自动训练、调参或推进Fixed-dev。此轮calibration-train诊断不证明独立泛化、真实港口米制深度、完整3D或控制精度。
+**决定／待办：** 本地实现与原标定恢复完成；Git同步上述6份实现文件及运行说明；A023用户已确认服务器Train-03目录可见，数据打包／上传待办取消，复用`crane_project/data/webots_depth`，运行时继续核对全部字节。用户运行25项测试、静态check、GT oracle及单GPU完整981帧audit，回传完整终端和根目录tar。audit完成状态FROZEN_TRAIN03_DEPTH_DIAGNOSTIC_COMPLETE_REVIEW_REQUIRED仅表示完成待审，不等于性能通过；先比较覆盖／配对误差／尾部／q及连续性，不自动训练、调参或推进Fixed-dev。此轮calibration-train诊断不证明独立泛化、真实港口米制深度、完整3D或控制精度。
+
+### A023. 2026-10-06：据服务器截图更正深度数据根目录，取消数据上传待办
+
+**事实／范围：** 用户截图显示`crane_project/data/webots_depth`下直接包含Train-03、Fixed-dev及Unknown目录。结合既定服务器项目，本轮指令改用`/media/omnisky/personal_files/ljj/symEOOD/crane_project/data/webots_depth`作为数据根，避免沿用A022示例的`data/webots_depth/yolo_obb_depth_dataset`。截图未证明图像数量／metadata／SHA匹配，此项仍待代码运行核验；不连接服务器。
+
+**完成／改动：** 仅更新[深度运行说明](webots/固定B24与midpoint深度诊断_v1_运行说明_20261006.md)第3～4节及本记录顶部／A022待办；取消本机数据压缩／上传／服务器解压，新增Train-03/images与两份metadata存在检查。模型、代码、protocol／sources及原标定未变，无需因路径参数更正重复22项已通过检查。新bash语法、活动编号／围栏核验通过。
+
+**待办：** Git同步源码后使用更正指令运行服务器25项检查、check／oracle／audit并回传work_dirs根目录结果tar。只访问Train-03，Fixed-dev／Unknown不纳入本轮；当前B／midpoint深度影响仍未实测。
+
+
+### A024. 2026-10-06：核验seq06历史来源、限定迁移兼容及统一四组运行目录
+
+**收到的事实：** 输入诊断包`/Users/mac/Downloads/port_detection_runtime_v1_four_arm_inputs_fix1_review_20261006.tar.gz`的SHA为`0ba5353ebc1d89a558528b210a63893c4fe0c3a98bd3efe98c9d18a56512a1d5`，与服务器终端一致；包内artifact各文件SHA均核验。此前服务器23项单测全部通过（1.127s），但没有模型推理、计时或FPS结果。临时`tmp...`报错是单测构造，不是真实模型失败。真实EOOD/SymEOOD selection五项仅配置SHA不匹配；此外选中路径及record路径仍指向原seq06目录、与新目录不相等，不能只跳过配置SHA后继续。
+
+**历史身份已确认：** 记录的两个配置SHA分别对应provenance存档`crane_eood_k1_port_day2night_seq06_v1.py.txt`（4265a936…）及`crane_symeood_k1_port_day2night_seq06_v1.py.txt`（ca8b950c…），不是B增强配置。原seq06子配置仅继承原port配置并指定work_dir；原port覆盖的AST与当前配置（除docstring、work_dir及继承展开方式）一致。原EOOD权重SHA为`ee277d72cdf27d76e3216da4d17256b453b539d69d692cdd71960fadf7ebd2bf`，选epoch24；SymEOOD权重SHA为`780a5de1a17b32041175bdf408a209872100f776de811075c55204bf333a92fe`，选epoch20。新路径中的权重与各自selection和原TEST receipt记录一致，预测PKL字节与receipt一致；B24／midpoint σ1.5-head03也匹配固定SHA。仅证明这些字节／覆盖结构，不宣称展开后的checkpoint meta已服务器核验；后者由实际build继续检查。
+
+**有限修复：** 在原工具／utility／protocol／sources／tests中增加两个明确的迁移身份，绑定历史配置、父存档、权重、完整选权JSON、TEST receipt和预测PKL全部SHA。兼容必须先通过存档SHA及覆盖AST等价检查；不执行历史config，不把任意旧SHA加入白名单。不改变`check_selection`原严格条件，只在独立核验后用已证明的历史配置身份验证原记录。原路径只能是本项目下对应旧seq06目录及指定epoch／prediction路径，不能只按basename匹配或迁移另一arm。原选权JSON／TEST报告不改写，旧目录不移动、不删除。实际加载时仍强制checkpoint meta中model/data/optimizer/clip/lr/runner/init等展开配置、epoch和seed与当前配置一致；真实四组输出仍须逐帧匹配原封存预测。若任一步失败，不能发布速度结果、重选权或放宽容差。
+
+**统一文件安排：** 新增`crane_project/tools/run_port_detection_runtime_v1.sh`。每次在`work_dirs/port_detection_runtime_v1/four_arm_fix2_<时间>_<PID>/`创建一个任务根，内部集中tests.log／run.log、check、inputs、benchmark及阶段日志。按26项测试→静态→CPU来源核对→四组GPU测速顺序运行；诊断完成不等于合格，入口明确检查各现有selection的`reviewed_input_contract.passed`和B/M权重SHA。首次运行不覆盖旧失败目录。EXIT trap在成功或失败时都把该根目录打包到项目`work_dirs/`根；`run_exit_code.txt`保留退出码，失败包只用于排错。仅一个入口／一个回传包，不再在work_dirs根散落本轮多个阶段目录。
+
+**本地证据保存：** 仅保留诊断JSON与压缩包核验receipt于`work_dirs/port_detection_runtime_v1_review/received_inputs_fix1_20261006/`，不复制服务器已有脚本或重复completion。实现源与36份来源manifest通过；新增3项测试覆盖存档覆盖差异拒绝、迁移的四种字节变化在unpickle之前拒绝、限制原路径，原单测继续保护缺失legacy来源。新版26项本地22通过、4项Torch合成检查因环境缺失跳过；Python3.8 AST、bash语法及git diff空白检查通过。统一入口另用替代命令核验成功、单测失败、输入失败、benchmark失败4种shell路径：早停、一个根目录／一个包、退出码／日志保留均通过。这只是合成控制流验证，不是真实GPU测速。未连接服务器；深度窗口的代码／测试／标定JSON不改动。
+
+**服务器新指令（先同步本条6份运行文件及manifest列出的5份历史存档；GPU3需空闲）：**
+
+```bash
+set +e
+conda activate mmrotljj
+cd /media/omnisky/personal_files/ljj/symEOOD
+CUDA_VISIBLE_DEVICES=3 bash crane_project/tools/run_port_detection_runtime_v1.sh
+```
+
+脚本使用子bash内的`set -euo pipefail`，失败返回交互终端并自动打包，不在父SSH shell启用set-e。不再复制A020／A021旧指令，也无需手动单独压缩每个阶段。26项服务器测试应全部执行通过；四组各50预热＋1440×3计时，协议身份EOOD24／Sym20／B24／B+σ1.5-head03不变。完成必须是`benchmark/completion.json`状态`FROZEN_TEST_RUNTIME_COMPLETE_REVIEW_REQUIRED`且四arm各4320预测一致；inputs的诊断状态不是测速完成。压缩包路径／SHA由脚本末尾打印，成功失败都只回传这一个包和终端。
+
+**当前结论与待办：** 来源迁移兼容与合并运行入口已完成、本地验证通过；服务器展开meta、实际四组推理／速度／显存仍待运行核验。不训练、调参、重算精度、重选模型或影响深度／可靠性；TEST已多次暴露，只补充固定模型的效率证据。历史精度与收益／代价不改写。

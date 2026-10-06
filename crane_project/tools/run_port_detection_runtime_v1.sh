@@ -42,7 +42,7 @@ CUDA_VISIBLE_DEVICES="" python crane_project/tools/benchmark_port_detection_runt
 CUDA_VISIBLE_DEVICES="" python crane_project/tools/benchmark_port_detection_runtime_v1.py \
     --stage inputs --out-dir "$task_dir/inputs" 2>&1 | tee "$task_dir/inputs.log"
 # The diagnosis-complete status alone is not an input-pass condition.
-python - "$task_dir/inputs/input_diagnosis.json" <<'PY'
+python - "$task_dir/inputs/input_diagnosis.json" <<'PY' 2>&1 | tee -a "$task_dir/run.log"
 import json, sys
 with open(sys.argv[1]) as stream:
     diagnosis = json.load(stream)['input_diagnosis']
