@@ -1,5 +1,6 @@
 """CPU contract checks; optional real-Torch pipeline checks use synthetic boxes."""
 from copy import deepcopy
+from contextlib import nullcontext
 import importlib.util
 import json
 import math
@@ -90,6 +91,59 @@ class ContractTests(unittest.TestCase):
             self.assertEqual(report['score_policy'],'Exact; unchanged')
             self.assertGreater(report['component_absolute_errors'][0][5],0.)
             self.assertIn('tolerance=0', report['error'])
+
+    def test_historical_fp32_compatibility_does_not_relax_same_run_scores_or_geometry(self):
+        ref = [[50.,40.,20.,10.,.2,.992497980594635]]
+        actual = deepcopy(ref); actual[0][5] = .9924980998039246
+        c.check_boxes(actual,ref,historical_scores=True)
+        with self.assertRaises(ValueError): c.check_boxes(actual,ref)
+        actual[0][5] = ref[0][5]+2e-6
+        with self.assertRaises(ValueError): c.check_boxes(actual,ref,historical_scores=True)
+        actual = deepcopy(ref); actual[0][0] += .01
+        with self.assertRaises(ValueError): c.check_boxes(actual,ref,historical_scores=True)
+        actual = deepcopy(ref); actual[0][5] = 1.0000001
+        with self.assertRaises(ValueError): c.check_boxes(actual,ref,historical_scores=True)
+        with self.assertRaises(ValueError): c.check_boxes([],ref,historical_scores=True)
+        with self.assertRaises(ValueError):
+            c.check_boxes([[50.,40.,20.,10.,.2,.0500001]],
+                          [[50.,40.,20.,10.,.2,.0499999]],historical_scores=True)
+
+    def test_midpoint_preserves_native_scores_exactly_even_when_history_is_close(self):
+        box = [[50.,40.,20.,10.,.2,.8]]
+        c.check_midpoint_scores(box,[.8])
+        c.check_midpoint_scores([],[])
+        with self.assertRaises(ValueError): c.check_midpoint_scores(box,[.80000001])
+        with self.assertRaises(ValueError): c.check_midpoint_scores(box,[])
+
+    def test_full_output_preflight_checks_all_arms_and_all_frames_without_publishing_speed(self):
+        rows = [dict(image='frame_%02d'%i,sequence='real_seq03') for i in range(31)]
+        weights = {arm:None for arm in c.ARMS}
+        torch = SimpleNamespace(no_grad=nullcontext,cuda=SimpleNamespace(empty_cache=lambda:None))
+        cv2 = SimpleNamespace(imread=lambda path:object())
+        current_arm = []; calls = {arm:0 for arm in c.ARMS}
+        score = .9924980998039246; oldscore = .992497980594635
+        class FakePipeline:
+            def __init__(self,*args):
+                self.arm = current_arm[-1]; self.native_scores = [score]
+            def __call__(self,*args):
+                calls[self.arm] += 1
+                return SimpleNamespace(dtype='float32',tolist=lambda:[[50.,40.,20.,10.,.2,score]])
+        def fakebuild(arm,*args):
+            current_arm.append(arm); return object(),None,None,None,{}
+        with tempfile.TemporaryDirectory() as tmp, patch.multiple(b,
+                build=fakebuild,Pipeline=FakePipeline,transform=lambda cfg:None,
+                prepare=lambda *args:(object(),[]),state_sha=lambda model:'unchanged',
+                expected_boxes=lambda *args:[[50.,40.,20.,10.,.2,oldscore]]):
+            out = Path(tmp)
+            proof,values = b.preflight_outputs(rows,{},weights,{},0,torch,None,cv2,None,out,{})
+            self.assertEqual(set(proof['arms']),set(c.ARMS))
+            for arm in c.ARMS:
+                self.assertEqual(proof['arms'][arm]['verified_predictions'],31)
+                self.assertEqual(calls[arm],62)  # all31 fixture warmup + all31 checks
+                self.assertEqual(len(values[arm]),31)
+                self.assertEqual(proof['arms'][arm]['historical_score_drift']['nonidentical_score_outputs'],31)
+            self.assertFalse((out/'runtime_compare.json').exists())
+            self.assertFalse((out/'timings.jsonl').exists())
 
     def test_equivalent_axis_swap_cannot_silently_replace_raw_contract(self):
         with self.assertRaises(ValueError):

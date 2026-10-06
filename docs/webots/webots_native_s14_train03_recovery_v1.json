@@ -1,0 +1,88 @@
+{
+  "current_reference": {
+    "archive": "port_midpoint_depth_v1_20261006_095629.tar.gz",
+    "reuse_frozen_981_predictions": true,
+    "sha256": "ec24e38ad9c9efc1ca07887e1efd53897766fae358ea17fabc6620513811e07f"
+  },
+  "dataset": {
+    "depth_range_m": [
+      11.888473310918114,
+      24.57480853808907
+    ],
+    "detector_or_midpoint_training_used": false,
+    "image_size_hw": [
+      1024,
+      1024
+    ],
+    "manifest_sha256": "4dbc6c8dcb039c73cca0311da1a648fa08ad807d6b29a1e23124d6c659a4c0d6",
+    "nominal_fps": 10.416666666666666,
+    "role": "Webots_scale_calibration_and_frozen_detector_diagnostic",
+    "scenario": "tilt_stratified_obb_scale",
+    "truth_sha256": "3441b0e1dad135ee7d49b0ee2c243fc603c5193284aa69a8ab67d71b52db7aad"
+  },
+  "date": "2026-10-06",
+  "old_frontend": {
+    "S7_enabled": false,
+    "alpha": 0.5,
+    "component": "frozen_dino_native_s14_alpha05",
+    "config": "crane_project/configs/crane_symeood_formal_dino_native_s14_v1.py",
+    "git_snapshot": "4a09ba4",
+    "static_files_identical_to_git": true,
+    "symeood_fusion_enabled": false,
+    "type": "FrozenDinoNativeS14Detector"
+  },
+  "prediction_contract": {
+    "frame_count": 981,
+    "head_sha256": "6a4e112f89f92744dbb8f7a0725af185afd110b3aa18414d28340f31d7854c2a",
+    "local_original_predictions_found": false,
+    "local_original_report_found": false,
+    "sequence_id": "calibration_train_03_tilt_obb"
+  },
+  "protocol": "webots_native_s14_train03_recovery_v1",
+  "scope": {
+    "inference_performed": false,
+    "next": "Recover existing old Train-03 results first; conditional edge optimization only after fixed frontend comparison, with original port TRAIN/VAL safeguards.",
+    "paper_changes": false,
+    "parameter_refit": false,
+    "server_connection": false,
+    "training_performed": false
+  },
+  "selection": {
+    "full_mcml": 3,
+    "path": "work_dirs/dino_teacher_fc_cls_interpolation_v1/source_interpolation_result.json",
+    "selected_alpha": 0.5,
+    "sha256": "19e8e4b97fa1cc2c873fb1ba7bcdb7efe17f28ae4ac2d008d3828ec52977055c",
+    "small_mcml": 3,
+    "source_full_hits": 677,
+    "source_gate_passed": true,
+    "source_only": true,
+    "source_small_hits": 303,
+    "target_data_read": false,
+    "weights_unpickled_this_recovery": false
+  },
+  "sources": {
+    "configs/_base_/default_runtime.py": "046fc7f2d6a8dd3891b2ad90f1c5c5ea3e45345a1f44163318a6b8e8e33ceb77",
+    "configs/_base_/schedules/schedule_1x.py": "eef4b63abefd4e51bce476a012013d63ec27e06c87516a2352ff57b5f46f80e9",
+    "crane_project/configs/crane_symeood_formal_dino_native_s14_v1.py": "00175d07197679d09414d614985a041fe6d59f59bcd8e0e0ebbffc2b8db069d5",
+    "crane_project/configs/crane_symeood_k1.py": "008335f315ed356fab606b95f5095cf1112a63720b7ad1a10c5ac4756d50b759",
+    "mmrotate/models/detectors/scoped_dino_lowlight_detector.py": "9d93fbc07d52a38f953c5d4bfd0aa5179830237554d2a991a56abe18f0ccd063",
+    "tools/depth/evaluate_detector_obb_depth.py": "4a7524df06bfac89253e49b55aab4c97afb1d2391c6c14e79956a43537c9e369",
+    "tools/depth/infer_webots_obb_sequence.py": "be63d1ad5f57817f7b57af1727c035869c64d2fdd5ff262d30f893bd55bc7092"
+  },
+  "weights": {
+    "backbone": {
+      "bytes": 1217586395,
+      "filename": "dinov2_vitl14_pretrain.pth",
+      "local_byte_sha_verified": true,
+      "local_path": "pretrained/dinov2_vitl14_pretrain.pth",
+      "sha256": "d5383ea8f4877b2472eb973e0fd72d557c7da5d3611bd527ceeb1d7162cbf428"
+    },
+    "head": {
+      "bytes": 219306331,
+      "filename": "source_safe_interpolated_head.pth",
+      "local_byte_sha_verified": true,
+      "local_path": "work_dirs/dino_teacher_fc_cls_interpolation_v1/source_safe_interpolated_head.pth",
+      "sha256": "6a4e112f89f92744dbb8f7a0725af185afd110b3aa18414d28340f31d7854c2a"
+    }
+  }
+}

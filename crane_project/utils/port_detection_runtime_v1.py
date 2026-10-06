@@ -15,6 +15,7 @@ M_ROWS_SHA = '13c4cfa7f1f67a7bc2cad36da1ec067adbeae74080b387d39efe39fdc41a788d'
 EOOD_CONFIG = 'crane_project/configs/crane_eood_k1_port_day2night_v1.py'
 SYM_CONFIG = 'crane_project/configs/crane_symeood_k1_port_day2night_v1.py'
 B_CONFIG = 'crane_project/configs/crane_symeood_k1_port_day2night_aug_b_v1.py'
+HISTORICAL_SCORE_ATOL = 1e-6
 ARCHIVE = 'crane_project/data/crane_grab_port_day2night_v1/provenance/config_retirement_20260929'
 # Exact immutable identities reviewed from the 20261006 server input receipt.
 # Only these two migrations are accepted; unknown historical SHA stays an error.
@@ -154,7 +155,12 @@ def protocol_document():
         numerical_settings=dict(cudnn_deterministic=True, cuda_matmul_allow_tf32=False,
             cudnn_allow_tf32=True,
             reason='Restore seed_all cuDNN determinism and unchanged torch1.13 convolution default from sealed sigma15 evaluation; same flags for all four arms. No autocast/half.'),
-        output_preflight='Before any timed arm, replay fixed first four frames of each sequence for B and midpoint under the restored settings after 50 warmup frames. Exact scores and original geometric tolerances remain required; no metrics, timing publication or parameter selection.',
+        output_preflight='Before any timed arm, replay all1440 frozen frames for all four arms under one common numerical setting, after 50 warmup frames each. Check immutable historical references with score absolute tolerance1e-6, unchanged raw geometry tolerance, exact counts/order and threshold side. Save same-setting runtime outputs for strict score checks during all timed repeats. No GT metrics or parameter selection.',
+        score_validation=dict(historical_atol=HISTORICAL_SCORE_ATOL, historical_rtol=0.,
+            historical_reason='Different cuDNN arithmetic modes need not reproduce old FP32 scores bitwise. A bounded compatibility check is not a new precision result.',
+            same_setting_repeats='Exact score equality against the full current-run preflight outputs.',
+            midpoint='Exact equality to the native B scores from the same extraction/forward.',
+            output_count_order_threshold='Unchanged count, ordered raw boxes and side of fixed score threshold0.05; no threshold tuning.'),
         timing=dict(decoded_frame_to_obb='Decoded BGR CPU frame -> preprocessing, H2D, native detector, optional reused-P3 ROI/midpoint, original-coordinate CPU OBB; serial CUDA-synchronized wall time.',
             model_and_postprocess='Prepared CUDA image -> original-coordinate CPU OBB; includes native postprocessing/D2H and Python, not GPU-kernel-only time.',
             file_to_obb='JPEG read/decode plus decoded-frame-to-OBB (filesystem cache may be warm).',
@@ -190,7 +196,7 @@ def timing_summary(seconds):
         p95_ms=1000*percentile(seconds, .95), max_ms=1000*max(seconds))
 
 
-def check_boxes(actual, expected):
+def check_boxes(actual, expected, historical_scores=False):
     """Raw w/h-angle and score; no GT, canonical reordering or best-candidate pick."""
     if len(actual) != len(expected):
         raise ValueError('Output presence/candidate count differs from sealed result')
@@ -202,15 +208,24 @@ def check_boxes(actual, expected):
             raise ValueError('Nonfinite output/reference')
         if a[2] <= 0 or a[3] <= 0:
             raise ValueError('Nonpositive output size')
+        if historical_scores and (not 0 <= a[5] <= 1 or not 0 <= b[5] <= 1 or
+                                  (a[5] > .05) != (b[5] > .05)):
+            raise ValueError('Score range or fixed threshold side differs')
         for index, (x, y) in enumerate(zip(a, b)):
             error = abs(float(x)-float(y))
-            tolerance = 0. if index == 5 else 1e-4+1e-6*abs(float(y))
+            tolerance = (HISTORICAL_SCORE_ATOL if historical_scores else 0.) if index == 5 else 1e-4+1e-6*abs(float(y))
             if error > tolerance:
                 raise ValueError('Output component %d differs from sealed result: actual=%.17g, '
                     'expected=%.17g, abs_error=%.17g, tolerance=%.17g' %
                     (index, float(x), float(y), error, tolerance))
             worst = max(worst, error)
     return worst
+
+
+def check_midpoint_scores(actual, native_scores):
+    if len(actual) != len(native_scores) or any(float(box[5]) != float(score)
+                                              for box,score in zip(actual,native_scores)):
+        raise ValueError('Midpoint changed the same-forward native B score/count')
 
 
 def literal(node):

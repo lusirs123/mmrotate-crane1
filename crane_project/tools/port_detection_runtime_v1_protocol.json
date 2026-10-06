@@ -52,7 +52,15 @@
     "cudnn_allow_tf32": true,
     "reason": "Restore seed_all cuDNN determinism and unchanged torch1.13 convolution default from sealed sigma15 evaluation; same flags for all four arms. No autocast/half."
   },
-  "output_preflight": "Before any timed arm, replay fixed first four frames of each sequence for B and midpoint under the restored settings after 50 warmup frames. Exact scores and original geometric tolerances remain required; no metrics, timing publication or parameter selection.",
+  "output_preflight": "Before any timed arm, replay all1440 frozen frames for all four arms under one common numerical setting, after 50 warmup frames each. Check immutable historical references with score absolute tolerance1e-6, unchanged raw geometry tolerance, exact counts/order and threshold side. Save same-setting runtime outputs for strict score checks during all timed repeats. No GT metrics or parameter selection.",
+  "score_validation": {
+    "historical_atol": 1e-06,
+    "historical_rtol": 0.0,
+    "historical_reason": "Different cuDNN arithmetic modes need not reproduce old FP32 scores bitwise. A bounded compatibility check is not a new precision result.",
+    "same_setting_repeats": "Exact score equality against the full current-run preflight outputs.",
+    "midpoint": "Exact equality to the native B scores from the same extraction/forward.",
+    "output_count_order_threshold": "Unchanged count, ordered raw boxes and side of fixed score threshold0.05; no threshold tuning."
+  },
   "timing": {
     "decoded_frame_to_obb": "Decoded BGR CPU frame -> preprocessing, H2D, native detector, optional reused-P3 ROI/midpoint, original-coordinate CPU OBB; serial CUDA-synchronized wall time.",
     "model_and_postprocess": "Prepared CUDA image -> original-coordinate CPU OBB; includes native postprocessing/D2H and Python, not GPU-kernel-only time.",
