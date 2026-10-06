@@ -90,12 +90,19 @@ class IndependentLabelsTests(unittest.TestCase):
 
     def test_paths_cannot_overwrite_dataset_or_escape_packet(self):
         with self.assertRaises(ValueError): m.new_output(ROOT/'crane_project/data/new')
+        with self.assertRaises(ValueError): m.new_output(ROOT/'work_dirs'/(m.VERSION+'_new'))
         with self.assertRaises(ValueError): m.owned(ROOT/'tests/example.json', ROOT/'work_dirs')
-        with tempfile.TemporaryDirectory(prefix=m.VERSION+'_test_', dir=ROOT/'work_dirs') as tmp:
+        with tempfile.TemporaryDirectory(prefix=m.VERSION+'_test_', dir=m.PACKET_ROOT) as tmp:
             with self.assertRaises(FileExistsError): m.new_output(tmp)
 
+    def test_missing_packet_explains_git_sync_instead_of_generating_labels(self):
+        with tempfile.TemporaryDirectory(prefix=m.VERSION+'_test_', dir=m.PACKET_ROOT) as tmp:
+            with self.assertRaisesRegex(FileNotFoundError, 'Commit/push the complete annotation_materials'):
+                m.check(tmp)
+            self.assertFalse((Path(tmp)/'packet.json').exists())
+
     def test_packet_check_image_and_manifest_tamper_no_promotion(self):
-        with tempfile.TemporaryDirectory(prefix=m.VERSION+'_test_', dir=ROOT/'work_dirs') as tmp:
+        with tempfile.TemporaryDirectory(prefix=m.VERSION+'_test_', dir=m.PACKET_ROOT) as tmp:
             out = Path(tmp); (out/'images').mkdir(); (out/'annotations').mkdir()
             image = out/'images/f.png'; image.write_bytes(b'immutable test image')
             frame = dict(self.frame, annotation='annotations/f.json', image_sha256=m.sha(image))

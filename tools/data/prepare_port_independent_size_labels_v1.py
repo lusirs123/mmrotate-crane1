@@ -21,6 +21,7 @@ spec = importlib.util.spec_from_file_location(
 reference = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(reference)
 VERSION = 'port_independent_size_labels_v1'
+PACKET_ROOT = ROOT/'annotation_materials'
 GROUPS = {'real_seq01': (339, 2.7), 'real_seq05': (560, 1.2),
           'real_seq06': (466, 1.5), 'real_seq12': (141, 2.1),
           'real_seq13': (304, 2.1)}
@@ -50,8 +51,8 @@ def owned(path, parent):
 
 def new_output(path):
     out = Path(path).resolve()
-    if out.parent != ROOT/'work_dirs' or not out.name.startswith(VERSION+'_'):
-        raise ValueError('Use a new work_dirs/'+VERSION+'_... directory')
+    if out.parent != PACKET_ROOT or not out.name.startswith(VERSION+'_'):
+        raise ValueError('Use a new annotation_materials/'+VERSION+'_... directory')
     if out.exists():
         raise FileExistsError(out)
     return out
@@ -264,6 +265,7 @@ def prepare(video_root, out):
             frame_indices=select_frames(expected_count, budget),
             role='UNASSIGNED_ANNOTATION_CANDIDATE', event_independence='UNCONFIRMED',
             time_basis='decode_index_not_wall_clock_or_physical_sampling_rate'))
+    out.parent.mkdir(exist_ok=True)
     out.mkdir(); (out/'images').mkdir(); (out/'annotations').mkdir()
     write_json(out/'train_axis_audit.json', audit)
     frames = []
@@ -331,8 +333,12 @@ def prepare(video_root, out):
 
 def check(packet_dir):
     packet_dir = Path(packet_dir).resolve()
-    if packet_dir.parent != ROOT/'work_dirs' or not packet_dir.name.startswith(VERSION+'_'):
-        raise ValueError('Only owned annotation packet under work_dirs is allowed')
+    if packet_dir.parent != PACKET_ROOT or not packet_dir.name.startswith(VERSION+'_'):
+        raise ValueError('Only owned annotation packet under annotation_materials is allowed')
+    if not (packet_dir/'packet.json').is_file():
+        raise FileNotFoundError('Missing annotation packet: '+str(packet_dir/'packet.json')+
+            '. Commit/push the complete annotation_materials packet on the source machine, '
+            'then git pull on the server; check does not generate images or labels.')
     receipt = json.loads((packet_dir/'packet.json').read_text())
     artifacts = json.loads((packet_dir/'artifacts.json').read_text())
     if sha(packet_dir/'packet.json') != artifacts['packet.json'] or receipt['protocol'] != VERSION:
@@ -368,10 +374,13 @@ def main():
     p.add_argument('--out-dir', required=True)
     p = subs.add_parser('check'); p.add_argument('--packet-dir', type=Path, required=True)
     args = parser.parse_args()
-    if args.command == 'prepare':
-        prepare(args.video_root, new_output(args.out_dir))
-    else:
-        print(json.dumps(check(args.packet_dir), ensure_ascii=False, indent=2, allow_nan=False))
+    try:
+        if args.command == 'prepare':
+            prepare(args.video_root, new_output(args.out_dir))
+        else:
+            print(json.dumps(check(args.packet_dir), ensure_ascii=False, indent=2, allow_nan=False))
+    except (ValueError, FileNotFoundError, FileExistsError) as error:
+        parser.exit(2, 'ERROR: '+str(error)+'\n')
 
 
 if __name__ == '__main__':
