@@ -84,7 +84,7 @@ class ContractTests(unittest.TestCase):
                 geo['long_edge_mean_m'], geo['short_edge_mean_m'], params)
             new = c.depth(box, intr, geo, params)
             self.assertTrue(math.isclose(new['z_m'], old_z, rel_tol=2e-12))
-            self.assertAlmostEqual(new['q_signed'], comp['q_signed'], places=12)
+            self.assertEqual(new['q_signed'], comp['q_signed'])
 
     def test_raw_axis_swap_and_angle_period_are_equivalent(self):
         intr, geo = dict(fx=900., fy=1000.), dict(long_edge_mean_m=1.775, short_edge_mean_m=.61004)
@@ -160,6 +160,9 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(s['numeric_failure_count'], 1)
         self.assertEqual(s['numeric_depth_coverage'], .5)
         self.assertEqual(summary['paired_numeric_depth_count'], 1)
+        self.assertEqual(summary['groups']['b']['depth_metrics']['count'], 2)
+        for arm in ('b', 'midpoint'):
+            self.assertEqual(summary['paired_depth_metrics'][arm]['count'], 1)
         self.assertFalse(s['deployment_validity_gate_frozen'])
 
     def test_presence_scores_and_frame_order_are_protected(self):

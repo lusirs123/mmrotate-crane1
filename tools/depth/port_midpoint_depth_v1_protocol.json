@@ -1,0 +1,59 @@
+{
+  "calibration": {
+    "contract": "raw_opt_v1",
+    "fit_offset": false,
+    "path": "crane_project/configs/depth_scale_calibration_obb_raw_opt_short_q2_train03_v1.json",
+    "sha256": "c9c14fc1b09ba8223996121425e302888ac7d44213192225acd5365fb2f1ffe2"
+  },
+  "comparison": "Same-run B24 vs B24+sigma1.5/epoch03, with GT-OBB Raw-opt reference; optional validated historical report is labelled unpaired, never substituted for fresh B.",
+  "detector": {
+    "config": "crane_project/configs/crane_symeood_k1_port_day2night_aug_b_v1.py",
+    "epoch": 24,
+    "sha256": "8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23"
+  },
+  "frame_count": 981,
+  "image_identity_sha256": "4eda8c70f634023fd607fec1db8ed1b5c5e959c84a742ed9a6ab305cd171f97b",
+  "inference": "Unchanged frozen B native pipeline, one P3 extraction and three native head calls/frame; reuse original capture and sigma head. Actual sx/sy, raw w/h-angle and whole-box fallback preserved. No metric truth loaded until prediction JSONL is closed.",
+  "manifest_sha256": "4dbc6c8dcb039c73cca0311da1a648fa08ad807d6b29a1e23124d6c659a4c0d6",
+  "metrics": "All 981 frames retained. All numerically computable outputs, including q outside GT-fit support, enter the main depth metrics. Numeric failures and missing outputs reported with full-frame denominators. q support is diagnostic, never a rejection gate or a depth_valid claim.",
+  "midpoint": {
+    "digest": {
+      "buffer_count": 0,
+      "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "parameter_count": 17696,
+      "parameters": "f84d99dac7cb0f2dcb86b5eaf33c21c1d360bdca5d0193b7b3da6c98f92bdc63"
+    },
+    "epoch": 3,
+    "sha256": "16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7",
+    "sigma_cells": 1.5,
+    "updates": 2706
+  },
+  "protocol": "port_midpoint_depth_v1_train03_frozen_diagnostic",
+  "reference_oracle": {
+    "abs_rel": 0.002473595701081284,
+    "bias_m": -0.01135319901640459,
+    "count": 981,
+    "mae_m": 0.040899054277329,
+    "max_abs_error_m": 0.15337788871866742,
+    "p95_abs_error_m": 0.11329915424724213,
+    "rmse_m": 0.0534267060329009
+  },
+  "scope": {
+    "deployment_validity_gate_frozen": false,
+    "detection_test_access": false,
+    "detector_updates": 0,
+    "fixed_dev_access": false,
+    "midpoint_updates": 0,
+    "parameter_refit": false,
+    "reliability_filter": false,
+    "unknown_access": false
+  },
+  "sequence": "calibration_train_03_tilt_obb",
+  "split": "calibration_train",
+  "stages": [
+    "check",
+    "oracle",
+    "audit"
+  ],
+  "truth_sha256": "3441b0e1dad135ee7d49b0ee2c243fc603c5193284aa69a8ab67d71b52db7aad"
+}

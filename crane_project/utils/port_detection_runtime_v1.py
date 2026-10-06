@@ -15,6 +15,100 @@ M_ROWS_SHA = '13c4cfa7f1f67a7bc2cad36da1ec067adbeae74080b387d39efe39fdc41a788d'
 EOOD_CONFIG = 'crane_project/configs/crane_eood_k1_port_day2night_v1.py'
 SYM_CONFIG = 'crane_project/configs/crane_symeood_k1_port_day2night_v1.py'
 B_CONFIG = 'crane_project/configs/crane_symeood_k1_port_day2night_aug_b_v1.py'
+ARCHIVE = 'crane_project/data/crane_grab_port_day2night_v1/provenance/config_retirement_20260929'
+# Exact immutable identities reviewed from the 20261006 server input receipt.
+# Only these two migrations are accepted; unknown historical SHA stays an error.
+MIGRATIONS = {
+    'eood': dict(stem='crane_eood_k1',
+        config_sha256='4265a9362b5e2dc99f273591a98342c9ba8deba3bbca8ae1059bf4a209a1a3c0',
+        parent_sha256='dd71d89a26c47d25c129ec861b5f341b811c1f06069bb265259b838759bbdbfc',
+        checkpoint_sha256='ee277d72cdf27d76e3216da4d17256b453b539d69d692cdd71960fadf7ebd2bf',
+        selection_sha256='a0bf581181890dc65cc381812cff44e93dd5c6e5658857443c08bfebba39dc8a',
+        test_report_sha256='5698fec53d161a8a2c6013322e851a1d84aa26a3a92b33798bfc0f6dbf2d6a3e',
+        reference_sha256='4a1812c2207876c67a1c1d94c97311a6db8edfe5f43a40ca7a3b248223a35408'),
+    'symeood': dict(stem='crane_symeood_k1',
+        config_sha256='ca8b950c8bba2775b20a075e619a24915bcee443c1a1e0bd1858a908d966ea45',
+        parent_sha256='6e096c1e273b681583b029954eb617636adb801620651f5df21b35698b177e08',
+        checkpoint_sha256='780a5de1a17b32041175bdf408a209872100f776de811075c55204bf333a92fe',
+        selection_sha256='7f1439a451442572c9e35131a3b29312f0c37900a5414a59f8e98c3769ff502d',
+        test_report_sha256='5b04937224cac601c9c1a2d5fcd50cccf9a473c6632e362a834b6a27bc58de64',
+        reference_sha256='c31827aff1e80f9276e87a61b6af15f22963567abc309b7a0e014923ae892454'),
+}
+
+
+def config_assignments(path):
+    """Compare archived MMCV override syntax without executing any config."""
+    tree = ast.parse(Path(path).read_text())
+    result = {}
+    for node in tree.body:
+        if isinstance(node, ast.Expr) and isinstance(node.value, (ast.Str, ast.Constant)):
+            if isinstance(ast.literal_eval(node.value), str):
+                continue
+        if (not isinstance(node, ast.Assign) or len(node.targets) != 1 or
+                not isinstance(node.targets[0], ast.Name) or node.targets[0].id in result):
+            raise ValueError('Unexpected archived config statement')
+        result[node.targets[0].id] = node.value
+    return result
+
+
+def archived_config_proof(root, arm):
+    """Prove the old child/parent overrides equal current config except work_dir.
+
+    This does not replace full resolved checkpoint-config validation at build.
+    The inherited model/training config is still checked there against meta.
+    """
+    root = Path(root); migration = MIGRATIONS[arm]; stem = migration['stem']
+    old = root/ARCHIVE/(stem+'_port_day2night_seq06_v1.py.txt')
+    parent = root/ARCHIVE/(stem+'_port_day2night_v1.py.txt')
+    if sha(old) != migration['config_sha256'] or sha(parent) != migration['parent_sha256']:
+        raise ValueError('Archived migration config SHA differs')
+    child = config_assignments(old)
+    if (set(child) != {'_base_', 'work_dir'} or
+            literal(child['_base_']) != ['./'+stem+'_port_day2night_v1.py'] or
+            literal(child['work_dir']) != 'work_dirs/'+stem+'_port_day2night_seq06_v1'):
+        raise ValueError('Archived child has an unreviewed override')
+    current = config_assignments(root/detector_identity(arm)['config'])
+    previous = config_assignments(parent)
+    expected_keys = {'_base_', 'data_root', 'data'}
+    if (set(previous) != expected_keys or set(current) != expected_keys | {'work_dir'} or
+            literal(current['work_dir']) != 'work_dirs/'+stem+'_port_day2night_v1' or
+            any(ast.dump(previous[k]) != ast.dump(current[k]) for k in expected_keys)):
+        raise ValueError('Archived/current config overrides are not equivalent')
+    return dict(archived_config_sha256=sha(old), archived_parent_sha256=sha(parent),
+        current_config_sha256=sha(root/detector_identity(arm)['config']),
+        override_equivalence=True, ignored_changes=['docstrings', 'work_dir', 'inheritance_flattening'],
+        resolved_checkpoint_config_check='Required separately before timing each arm')
+
+
+def migration_proof(root, arm, recorded_config_sha, weight_sha, selection_path,
+                    receipt_path, predictions):
+    """Accept only the reviewed byte-identical history, with a proven config chain."""
+    if recorded_config_sha == sha(Path(root)/detector_identity(arm)['config']):
+        return None
+    expected = MIGRATIONS[arm]
+    actual = dict(config_sha256=recorded_config_sha, checkpoint_sha256=weight_sha,
+        selection_sha256=sha(selection_path), test_report_sha256=sha(receipt_path),
+        reference_sha256=sha(predictions))
+    if any(actual[k] != expected[k] for k in actual):
+        raise ValueError('Unreviewed historical config/weight/selection/TEST identity: '+
+                         json.dumps(actual, sort_keys=True))
+    proof = archived_config_proof(root, arm)
+    proof.update(actual, mode='reviewed_seq06_directory_migration')
+    return proof
+
+
+def check_recorded_path(value, actual, root, arm, migration, suffix):
+    """An old missing pathname is accepted only under the pinned migration proof."""
+    if not isinstance(value, str) or not value:
+        raise ValueError('Missing recorded artifact path')
+    if migration is None:
+        if Path(value).resolve() != Path(actual).resolve():
+            raise ValueError('Recorded artifact points to a different path')
+    else:
+        old = Path(root)/('work_dirs/'+MIGRATIONS[arm]['stem']+'_port_day2night_seq06_v1')/suffix
+        # No basename-only, arbitrary-prefix or another-arm relocation.
+        if Path(value) != old:
+            raise ValueError('Recorded artifact is outside the reviewed old directory')
 
 
 def detector_identity(arm):
@@ -66,6 +160,7 @@ def protocol_document():
             'SymEOOD -> SymEOOD+B: same deployed structure; B is training-only, not an inference transform.',
             'SymEOOD+B -> SymEOOD+B+midpoint: frozen detector plus the fixed geometry head.'],
         input_diagnosis='Optional inputs stage reads existing metadata and streams file SHA only. No pickle/torch load, GPU, images, annotations, prediction generation or reselection. Missing or inconsistent provenance is reported, never repaired automatically.',
+        historical_migration='Only the two reviewed seq06 config/weight/selection/TEST/prediction byte identities are accepted. Archived override AST must equal current config apart from work_dir and inheritance flattening; full resolved checkpoint config is still required. Old records remain unchanged; recorded paths are limited to the original named seq06 directories.',
         validation='All1440 outputs of every repeat must match sealed predictions. A single backbone and native detector-head call per production frame. Extra audit forwards are not timed.',
         scope=dict(training_updates=0, gt_online=False, ground_truth_scoring=False,
             selection_on_test=False, test_repeatedly_exposed=True,

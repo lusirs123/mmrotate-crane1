@@ -30,6 +30,7 @@ B_WEIGHT = ROOT/'work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/epoch_24.pth
 M_WEIGHT = ROOT/'work_dirs/crane_symeood_k1_port_day2night_midpoint_sigma_v1/sigma_1p5/head_epoch_03.pth'
 DATA = ROOT/'crane_project/data/crane_grab_port_day2night_v1'
 SOURCE_PATHS = (
+    'crane_project/tools/run_port_detection_runtime_v1.sh',
     'crane_project/tools/benchmark_port_detection_runtime_v1.py',
     'crane_project/tools/port_detection_runtime_v1_protocol.json',
     'crane_project/utils/port_detection_runtime_v1.py',
@@ -58,6 +59,11 @@ SOURCE_PATHS = (
     'crane_project/utils/port_structure_reliability_v1.py',
     'crane_project/utils/port_geometry_midpoint_v1.py',
     'crane_project/utils/port_geometry_midpoint_sigma_v1.py',
+    c.ARCHIVE+'/manifest.json',
+    c.ARCHIVE+'/crane_eood_k1_port_day2night_seq06_v1.py.txt',
+    c.ARCHIVE+'/crane_eood_k1_port_day2night_v1.py.txt',
+    c.ARCHIVE+'/crane_symeood_k1_port_day2night_seq06_v1.py.txt',
+    c.ARCHIVE+'/crane_symeood_k1_port_day2night_v1.py.txt',
 )
 
 
@@ -138,6 +144,19 @@ def inspect_detector_inputs(arm, model_dir, sweep_dir=None, test_dir=None):
             predictions = final/'preds/results.pkl'
             item['prediction_file'] = dict(path=str(predictions), exists=predictions.is_file(),
                 sha256=c.sha(predictions) if predictions.is_file() else None, unpickled=False)
+            # Preserve raw legacy mismatches while reporting the reviewed relocation.
+            try:
+                migration = c.migration_proof(ROOT, arm, selection.get('config_sha256'),
+                    weight_sha, path, final/'final_test_metrics_v2.json', predictions)
+                accepted_sha = migration['config_sha256'] if migration else config_sha
+                c.check_selection(selection, accepted_sha, weight_sha, spec['selected_epoch'])
+                for value in (selection['selected_path'], record['checkpoint']):
+                    c.check_recorded_path(value, weight, ROOT, arm, migration, key+'.pth')
+                check_receipt(arm, receipts['final_test_metrics_v2.json']['fields'],
+                    accepted_sha, weight_sha, predictions, weight, migration)
+                item['reviewed_input_contract'] = dict(passed=True, migration=migration)
+            except (ValueError, TypeError, OSError, KeyError) as error:
+                item['reviewed_input_contract'] = dict(passed=False, error=str(error))
         except (ValueError, TypeError, OSError, AttributeError) as error:
             item['read_error'] = dict(type=type(error).__name__, error=str(error))
         result['candidates'].append(item)
@@ -156,9 +175,29 @@ def input_diagnosis(args):
         for candidate in result[arm]['candidates']:
             print('INPUT', arm, candidate['sweep'], 'failed selection fields:',
                   candidate.get('failed_fields', 'missing/unreadable selection'), flush=True)
+            if 'reviewed_input_contract' in candidate:
+                print('  reviewed input contract:', candidate['reviewed_input_contract'], flush=True)
             for name in candidate.get('failed_fields', []):
                 print(' ', name, candidate['selection_checks'][name], flush=True)
     return result
+
+
+def check_receipt(arm, receipt, config_sha, weight_sha, predictions, weight, migration):
+    if (receipt.get('protocol') != 'crane_ckpt_sweep_final_test_v2' or
+            receipt.get('evidence_role') != 'fixed_test_after_source_val_selection' or
+            receipt.get('metric_protocol_version') != 2 or
+            receipt.get('config_sha256') != config_sha or
+            receipt.get('checkpoint_sha256') != weight_sha or receipt.get('frame_count') != 1440 or
+            receipt.get('results_pkl_sha256') != c.sha(predictions)):
+        raise ValueError(arm+' sealed TEST reference identity differs')
+    spec = c.detector_identity(arm); key = 'epoch_%d' % spec['selected_epoch']
+    c.check_recorded_path(receipt.get('checkpoint'), weight, ROOT, arm, migration, key+'.pth')
+    c.check_recorded_path(receipt.get('results_pkl'), predictions, ROOT, arm, migration,
+                          'val_sweep_port_v1/final_test/'+key+'/preds/results.pkl')
+    expected_config = ROOT/spec['config'] if migration is None else (
+        ROOT/'crane_project/configs'/(c.MIGRATIONS[arm]['stem']+'_port_day2night_seq06_v1.py'))
+    if not isinstance(receipt.get('config'), str) or Path(receipt['config']) != expected_config:
+        raise ValueError(arm+' TEST receipt config path differs')
 
 
 def checked_detector_inputs(arm, model_dir, sweep_dir=None, test_dir=None):
@@ -170,28 +209,27 @@ def checked_detector_inputs(arm, model_dir, sweep_dir=None, test_dir=None):
     weight_sha = c.sha(weight)
     config_sha = c.sha(ROOT/spec['config'])
     selection = c.read(sweep/'sweep_results.json')
+    final = c.unique_directory([test_dir] if test_dir else
+        [sweep/'final_test'/key], ['final_test_metrics_v2.json', 'preds/results.pkl'])
+    predictions = final/'preds/results.pkl'
+    migration = c.migration_proof(ROOT, arm, selection.get('config_sha256'), weight_sha,
+        sweep/'sweep_results.json', final/'final_test_metrics_v2.json', predictions)
+    accepted_sha = migration['config_sha256'] if migration else config_sha
     try:
-        c.check_selection(selection, config_sha, weight_sha, spec['selected_epoch'])
+        c.check_selection(selection, accepted_sha, weight_sha, spec['selected_epoch'])
     except ValueError as error:
         raise ValueError(arm+' '+str(sweep/'sweep_results.json')+': '+str(error)) from error
     for path in (selection['selected_path'], selection['all_checkpoints'][key]['checkpoint']):
-        if Path(path).resolve() != weight.resolve():
-            raise ValueError(arm+' selection points to a different checkpoint')
-    final = c.unique_directory([test_dir] if test_dir else
-        [sweep/'final_test'/key], ['final_test_metrics_v2.json', 'preds/results.pkl'])
+        c.check_recorded_path(path, weight, ROOT, arm, migration, key+'.pth')
     receipt = c.read(final/'final_test_metrics_v2.json')
-    predictions = final/'preds/results.pkl'
-    if (receipt['evidence_role'] != 'fixed_test_after_source_val_selection' or
-            receipt['config_sha256'] != config_sha or
-            receipt['checkpoint_sha256'] != weight_sha or receipt['frame_count'] != 1440 or
-            receipt['results_pkl_sha256'] != c.sha(predictions)):
-        raise ValueError(arm+' sealed TEST reference identity differs')
+    check_receipt(arm, receipt, accepted_sha, weight_sha, predictions, weight, migration)
     # Read references only, never recompute their GT metrics or selection.
     with predictions.open('rb') as stream:
         references = pickle.load(stream)
     if len(references) != 1440:
         raise ValueError(arm+' reference frame count differs')
     proof = dict(arm=arm, selected_epoch=spec['selected_epoch'], config_sha256=config_sha,
+        recorded_config_sha256=accepted_sha, migration=migration,
         checkpoint_sha256=weight_sha, selection_sha256=c.sha(sweep/'sweep_results.json'),
         test_report_sha256=c.sha(final/'final_test_metrics_v2.json'),
         reference_sha256=c.sha(predictions), sweep=str(sweep), test=str(final))

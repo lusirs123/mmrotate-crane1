@@ -73,12 +73,16 @@ def depth(box, intrinsics, geometry, parameters):
     long_m, short_m = float(geometry['long_edge_mean_m']), float(geometry['short_edge_mean_m'])
     if not all(math.isfinite(v) and v > 0 for v in (fx, fy, long_m, short_m)):
         raise ValueError('Invalid camera or physical geometry')
-    sl = w*math.hypot(math.cos(angle)/fx, math.sin(angle)/fy)
-    ss = h*math.hypot(math.sin(angle)/fx, math.cos(angle)/fy)
+    # Keep the exact historical arithmetic at the fitted q endpoints. Using
+    # hypot/log differences throughout can move an endpoint by one ULP.
+    sl = w*math.sqrt((math.cos(angle)/fx)**2+(math.sin(angle)/fy)**2)
+    ss = h*math.sqrt((math.sin(angle)/fx)**2+(math.cos(angle)/fy)**2)
     if min(sl, ss) <= 0 or not all(math.isfinite(v) for v in (sl, ss)):
         return dict(z_m=None, q_signed=None, status='nonfinite_scale')
     log_long, log_short = math.log(long_m)-math.log(sl), math.log(short_m)-math.log(ss)
-    q = log_long-log_short
+    zl, zs = long_m/sl, short_m/ss
+    ratio = zl/zs if math.isfinite(zl) and math.isfinite(zs) and zs > 0 else None
+    q = math.log(ratio) if ratio is not None and math.isfinite(ratio) and ratio > 0 else log_long-log_short
     if not all(math.isfinite(v) for v in (q, log_short)):
         return dict(z_m=None, q_signed=None, status='nonfinite_scale')
     if parameters.get('b_m', 0.0) != 0.0:
@@ -89,7 +93,12 @@ def depth(box, intrinsics, geometry, parameters):
     log_z = math.log(c)+log_short+beta*q*q
     if not math.isfinite(log_z) or log_z > math.log(sys.float_info.max):
         return dict(z_m=None, q_signed=q, status='formula_overflow')
-    z = math.exp(log_z)
+    try:
+        z = c*zs*math.exp(beta*q**2)
+    except OverflowError:
+        z = math.exp(log_z)
+    if not math.isfinite(z) or z <= 0:
+        z = math.exp(log_z)
     if not math.isfinite(z) or z <= 0:
         return dict(z_m=None, q_signed=q, status='formula_nonpositive')
     return dict(z_m=z, q_signed=q, status='finite_formula')
@@ -291,6 +300,8 @@ def evaluate(predictions, truths, manifest, calibration):
         actual = groups['gt_obb']['depth_metrics'][key]
         if actual is None or abs(actual-expected) > 1e-10:
             raise ValueError('Existing frozen Train-03 GT oracle differs: '+key)
+    if groups['gt_obb']['q_in_fit_support_count'] != len(truths):
+        raise ValueError('Original Train-03 GT q endpoint arithmetic differs')
     paired = [r for r in rows if r['b']['depth']['z_m'] is not None and r['midpoint']['depth']['z_m'] is not None]
     changes = []
     for r in paired:
@@ -299,6 +310,9 @@ def evaluate(predictions, truths, manifest, calibration):
         changes.append(after-before)
     summary = dict(protocol=VERSION, sequence_id=SEQUENCE, coordinate_contract='raw_opt_v1',
         groups=groups, paired_numeric_depth_count=len(paired),
+        paired_depth_metrics={method:error_metrics(
+            [r[method]['depth']['z_m'] for r in paired], [r['truth_z_m'] for r in paired])
+            for method in ('b', 'midpoint')},
         paired_absolute_error_delta_m=describe(changes),
         paired_improved=sum(v < -1e-12 for v in changes), paired_worsened=sum(v > 1e-12 for v in changes),
         paired_tied=sum(abs(v) <= 1e-12 for v in changes),

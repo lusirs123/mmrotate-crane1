@@ -8,9 +8,14 @@
     "crane_project/configs/crane_symeood_k1.py": "008335f315ed356fab606b95f5095cf1112a63720b7ad1a10c5ac4756d50b759",
     "crane_project/configs/crane_symeood_k1_port_day2night_aug_b_v1.py": "9da972b7010540e12b2501d1c400db13c159381f495f539d6315e7adb498e345",
     "crane_project/configs/crane_symeood_k1_port_day2night_v1.py": "1ff8e362448809dae597f829434e3f72a74142a015659b50d296c779261cd6c0",
-    "crane_project/tools/benchmark_port_detection_runtime_v1.py": "8ec1ff1c012499d58256f594304c644101136e73b97ab5862bd4535827f9bd86",
-    "crane_project/tools/port_detection_runtime_v1_protocol.json": "c1d7f775276c3f584ae30e550d72c0461957f83db306bdf739e4cfca21a2c5a2",
-    "crane_project/utils/port_detection_runtime_v1.py": "87bc98a5e0547dd659354e784a7683ea0e0ce223d32b09b7bce5a4bd3cea76de",
+    "crane_project/data/crane_grab_port_day2night_v1/provenance/config_retirement_20260929/crane_eood_k1_port_day2night_seq06_v1.py.txt": "4265a9362b5e2dc99f273591a98342c9ba8deba3bbca8ae1059bf4a209a1a3c0",
+    "crane_project/data/crane_grab_port_day2night_v1/provenance/config_retirement_20260929/crane_eood_k1_port_day2night_v1.py.txt": "dd71d89a26c47d25c129ec861b5f341b811c1f06069bb265259b838759bbdbfc",
+    "crane_project/data/crane_grab_port_day2night_v1/provenance/config_retirement_20260929/crane_symeood_k1_port_day2night_seq06_v1.py.txt": "ca8b950c8bba2775b20a075e619a24915bcee443c1a1e0bd1858a908d966ea45",
+    "crane_project/data/crane_grab_port_day2night_v1/provenance/config_retirement_20260929/crane_symeood_k1_port_day2night_v1.py.txt": "6e096c1e273b681583b029954eb617636adb801620651f5df21b35698b177e08",
+    "crane_project/data/crane_grab_port_day2night_v1/provenance/config_retirement_20260929/manifest.json": "d682815f20003313b995d4bf2887a4fb7057dbf3fa67c9a5f909f4c86893e5f3",
+    "crane_project/tools/benchmark_port_detection_runtime_v1.py": "b91d4453119d5c97feedf49df3e98201e0b93b54eefb5aa68ace08df0f036e2b",
+    "crane_project/tools/port_detection_runtime_v1_protocol.json": "2bf9aa1e968198ce9affc647ab7593c845d39f0cf7dcf602fc41a2a69a89d1d5",
+    "crane_project/utils/port_detection_runtime_v1.py": "a17d4bfaa10eb3ad9236059cf4175f8285676febef4473b52327474e0e036b2d",
     "crane_project/utils/port_geometry_midpoint_sigma_v1.py": "e634d5cfdab0547c038c0bba48518c2494f526aed624e2b6a96affe7a31cfd85",
     "crane_project/utils/port_geometry_midpoint_v1.py": "cfb90a032d7c74b0e911f5f89b6f23a422baf2b2824813fc92d7a832b049bad3",
     "crane_project/utils/port_geometry_refine_g_v1.py": "2545e32ef953d22ef359a56bfc1cadd38d28e69f22b30de6c7fa60f27092c51b",
@@ -30,6 +35,6 @@
     "mmrotate/models/detectors/eood.py": "4c1497000c7798b4cf703e88204620e13101943f68bbddd31ef10a9649e72f1f",
     "mmrotate/models/detectors/single_stage.py": "76b2cc533f77f316b84de0afb7a437e7aaaf0a7c03eed8d09314f375a6ee8456",
     "mmrotate/models/detectors/sym_eood_detector.py": "f473edbca4c926b7d54e722bbde35e360ce0189bec17f9248f8da18bcac6883a",
-    "tests/test_port_detection_runtime_v1.py": "5e8d199bfb6c6480311eb9981e34030f32b24f5b4df5c79172a1826e5b282528"
+    "tests/test_port_detection_runtime_v1.py": "ee1f56ce26c18408a6bc7e88d6dc58fb40367fe3b689a3d5a526bfc47e533392"
   }
 }

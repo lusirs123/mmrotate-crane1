@@ -150,6 +150,8 @@ class ContractTests(unittest.TestCase):
                 config_sha256=config_sha, selected_path=str(weight),
                 all_checkpoints={'epoch_20':dict(checkpoint=str(weight), checkpoint_sha256=c.sha(weight))}))
             receipt = dict(evidence_role='fixed_test_after_source_val_selection',
+                protocol='crane_ckpt_sweep_final_test_v2', metric_protocol_version=2,
+                config=str(ROOT/c.SYM_CONFIG), checkpoint=str(weight), results_pkl=str(predictions),
                 config_sha256=config_sha, checkpoint_sha256=c.sha(weight), frame_count=1440,
                 results_pkl_sha256=c.sha(predictions))
             c.write_new(final/'final_test_metrics_v2.json', receipt)
@@ -159,6 +161,68 @@ class ContractTests(unittest.TestCase):
             receipt['config_sha256'] = c.sha(ROOT/c.B_CONFIG)
             (final/'final_test_metrics_v2.json').write_text(json.dumps(receipt))
             with self.assertRaises(ValueError): b.checked_detector_inputs('symeood', model)
+
+    def test_reviewed_archive_chain_matches_current_overrides(self):
+        for arm in ('eood', 'symeood'):
+            proof = c.archived_config_proof(ROOT, arm)
+            self.assertTrue(proof['override_equivalence'])
+            self.assertEqual(proof['archived_config_sha256'], c.MIGRATIONS[arm]['config_sha256'])
+        # Even a small unreviewed dataset override must block compatibility.
+        original = c.config_assignments
+        with patch.object(c, 'config_assignments', wraps=original) as reader:
+            def changed(path):
+                values = original(path)
+                if Path(path) == ROOT/c.SYM_CONFIG:
+                    import ast
+                    values['data_root'] = ast.parse("'other_dataset/'", mode='eval').body
+                return values
+            reader.side_effect = changed
+            with self.assertRaisesRegex(ValueError, 'not equivalent'):
+                c.archived_config_proof(ROOT, 'symeood')
+
+    def test_migrated_reference_is_pinned_before_unpickling_and_keeps_old_paths(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            model = Path(tmp); sweep = model/'val_sweep_port_v1'
+            final = sweep/'final_test/epoch_20'; (final/'preds').mkdir(parents=True)
+            weight = model/'epoch_20.pth'; weight.write_bytes(b'migration fixture only')
+            predictions = final/'preds/results.pkl'
+            with predictions.open('wb') as stream: pickle.dump([[] for _ in range(1440)], stream)
+            old = ROOT/'work_dirs/crane_symeood_k1_port_day2night_seq06_v1'
+            selection = dict(evidence_role='source_val_checkpoint_selection', selected_checkpoint='epoch_20',
+                config_sha256=c.MIGRATIONS['symeood']['config_sha256'], selected_path=str(old/'epoch_20.pth'),
+                all_checkpoints={'epoch_20':dict(checkpoint=str(old/'epoch_20.pth'), checkpoint_sha256=c.sha(weight))})
+            c.write_new(sweep/'sweep_results.json', selection)
+            receipt = dict(protocol='crane_ckpt_sweep_final_test_v2', metric_protocol_version=2,
+                evidence_role='fixed_test_after_source_val_selection', frame_count=1440,
+                config=str(ROOT/'crane_project/configs/crane_symeood_k1_port_day2night_seq06_v1.py'),
+                config_sha256=selection['config_sha256'], checkpoint=str(old/'epoch_20.pth'),
+                checkpoint_sha256=c.sha(weight), results_pkl=str(old/'val_sweep_port_v1/final_test/epoch_20/preds/results.pkl'),
+                results_pkl_sha256=c.sha(predictions))
+            receipt_path = final/'final_test_metrics_v2.json'; c.write_new(receipt_path, receipt)
+            migration = dict(c.MIGRATIONS['symeood'], checkpoint_sha256=c.sha(weight),
+                selection_sha256=c.sha(sweep/'sweep_results.json'), test_report_sha256=c.sha(receipt_path),
+                reference_sha256=c.sha(predictions))
+            with patch.dict(c.MIGRATIONS, symeood=migration):
+                refs, actual_weight, proof = b.checked_detector_inputs('symeood', model)
+                self.assertEqual((len(refs), actual_weight), (1440, weight))
+                self.assertEqual(proof['migration']['mode'], 'reviewed_seq06_directory_migration')
+                self.assertNotEqual(proof['recorded_config_sha256'], proof['config_sha256'])
+                self.assertEqual(c.read(sweep/'sweep_results.json')['selected_path'], str(old/'epoch_20.pth'))
+                for field in ('checkpoint_sha256', 'selection_sha256', 'test_report_sha256', 'reference_sha256'):
+                    with patch.dict(migration, {field:'0'*64}), patch.object(b.pickle, 'load',
+                            side_effect=AssertionError('Unpickle before validation')):
+                        with self.assertRaisesRegex(ValueError, 'Unreviewed historical'):
+                            b.checked_detector_inputs('symeood', model)
+                with self.assertRaisesRegex(ValueError, 'Unreviewed historical'):
+                    c.migration_proof(ROOT, 'symeood', c.MIGRATIONS['eood']['config_sha256'],
+                        c.sha(weight), sweep/'sweep_results.json', receipt_path, predictions)
+
+    def test_migration_paths_do_not_accept_basename_only_or_other_directories(self):
+        old = ROOT/'work_dirs/crane_eood_k1_port_day2night_seq06_v1/epoch_24.pth'
+        c.check_recorded_path(str(old), ROOT/'work_dirs/new/epoch_24.pth', ROOT, 'eood', {}, 'epoch_24.pth')
+        for path in ('epoch_24.pth', '/elsewhere/epoch_24.pth', str(old).replace('eood_k1', 'symeood_k1')):
+            with self.subTest(path=path), self.assertRaises(ValueError):
+                c.check_recorded_path(path, old, ROOT, 'eood', {}, 'epoch_24.pth')
 
     def test_directory_copies_must_be_identical(self):
         with tempfile.TemporaryDirectory() as tmp:
