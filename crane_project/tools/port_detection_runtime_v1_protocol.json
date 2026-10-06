@@ -1,0 +1,63 @@
+{
+  "protocol": "port_detection_runtime_v1",
+  "arms": [
+    "eood",
+    "symeood_b",
+    "symeood_b_midpoint"
+  ],
+  "split": "test",
+  "frames": 1440,
+  "sequence_counts": {
+    "real_seq03": 200,
+    "real_seq04": 668,
+    "sim_seq09": 572
+  },
+  "image_identity_sha256": "6448e47b9a715f47f04eacaaabb54a32b522c72208bf6e82793284de2aad665d",
+  "eood": {
+    "config": "crane_project/configs/crane_eood_k1_port_day2night_v1.py",
+    "selected_epoch": 24,
+    "augmentation_b": false,
+    "role": "Existing project EOOD K=1 baseline; preserve native multi-candidate/NMS."
+  },
+  "symeood_b": {
+    "config": "crane_project/configs/crane_symeood_k1_port_day2night_aug_b_v1.py",
+    "selected_epoch": 24,
+    "checkpoint_sha256": "8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23"
+  },
+  "midpoint": {
+    "sigma_cells": 1.5,
+    "epoch": 3,
+    "updates": 2706,
+    "checkpoint_sha256": "16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7",
+    "test_rows_sha256": "13c4cfa7f1f67a7bc2cad36da1ec067adbeae74080b387d39efe39fdc41a788d",
+    "parameters": 17696
+  },
+  "batch_size": 1,
+  "precision": "FP32",
+  "warmup_frames": 50,
+  "repeats": 3,
+  "cpu_threads": 1,
+  "gpu_devices": 1,
+  "cudnn_benchmark": false,
+  "timing": {
+    "decoded_frame_to_obb": "Decoded BGR CPU frame -> preprocessing, H2D, native detector, optional reused-P3 ROI/midpoint, original-coordinate CPU OBB; serial CUDA-synchronized wall time.",
+    "model_and_postprocess": "Prepared CUDA image -> original-coordinate CPU OBB; includes native postprocessing/D2H and Python, not GPU-kernel-only time.",
+    "file_to_obb": "JPEG read/decode plus decoded-frame-to-OBB (filesystem cache may be warm).",
+    "excluded": "Model/source/reference loading, GT/metric evaluation, consistency checks, logging, drawing and result-file writes.",
+    "fps": "n / sum(per-frame seconds); never mean(1 / per-frame seconds)."
+  },
+  "validation": "All1440 outputs of every repeat must match sealed predictions. A single backbone and native detector-head call per production frame. Extra audit forwards are not timed.",
+  "scope": {
+    "training_updates": 0,
+    "gt_online": false,
+    "ground_truth_scoring": false,
+    "selection_on_test": false,
+    "test_repeatedly_exposed": true,
+    "reliability_included": false,
+    "size_residual_candidate_included": false,
+    "fp16": false,
+    "fusion": false,
+    "export": false,
+    "automatic_promotion": false
+  }
+}
