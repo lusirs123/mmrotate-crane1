@@ -1,0 +1,75 @@
+{
+  "arms": [
+    "dual_log",
+    "dual_log_ratio"
+  ],
+  "cache_manifest_sha256": "046c5998dee0ba3703f1ae4e08fc6a02e9804d216ea12241357f69f2a4afd1e3",
+  "collection_artifacts": {
+    "collect/collect_report.json": "3c39308d481e6154e9f23ba6055c52e8d7ed707994b262d0d8546c3cdf762922",
+    "collect/completion.json": "9af0d982326b20fef2a49b13b5e973ba1ba6e17101207f3abafdfda25981c9ac",
+    "collect/final_rows.jsonl": "0d971bb608761ecd9df180f3e6c0dffb46ca71974431cc97375b9cc9b14c88c6",
+    "collect/independent_B_cache_comparisons.json": "254525cd0a2530cfd738d342b0952fb33fc135519ad542ba96414af1e35e04c3",
+    "collect/input_check.json": "b9679c4b2ec586e89992c411922acc9afa250a2e66ba969bb9c96daa14615318"
+  },
+  "comparison": "Identical source/roles/schedule/initial weights/Adam/budget across two arms. Discard separate2-step smoke weights. Finite200 final only, no epoch sweep or retries. Full fixed M VAL replay precedes every update. Inherited geometry gates, plus probe edge MAE/P95 protection; results need human review; no winner automatically promoted.",
+  "fixed_checkpoint": {
+    "epoch": 3,
+    "head_digest": {
+      "buffer_count": 0,
+      "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "parameter_count": 17696,
+      "parameters": "f84d99dac7cb0f2dcb86b5eaf33c21c1d360bdca5d0193b7b3da6c98f92bdc63"
+    },
+    "path": "head_epoch_03.pth",
+    "save_reload_exact": true,
+    "sha256": "16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7",
+    "sigma_cells": 1.5,
+    "updates": 2706
+  },
+  "limitations": [
+    "TRAIN probe is exposed to original detector/M training, not independent generalization.",
+    "Existing common-underscale support is scarce; no new images or labels are created.",
+    "Physical reference remains unconfirmed; no real metric-depth guarantee.",
+    "This tests supervision on the new sampler; does not isolate sampling-only causality.",
+    "Reliability/depth benefits require separate matched downstream verification."
+  ],
+  "objective": "dual_log: existing unclipped mean two-edge SmoothL1 beta.1. dual_log_ratio: same plus .25 SmoothL1 of predicted vs GT-projected log-ratio residual, beta.1. Coefficient fixed before new VAL; no physical-ratio target or q=0.",
+  "parameter_count": 2818,
+  "protocol": "port_geometry_size_contrast_v1",
+  "sampling": "TRAIN only. Per-video last floor(n/5) diagnostic probe, preceding10 indices purged; all legacy64 excluded from gradients and reported separately. Roles use identity order, never GT errors. Equal real/sim and standard/half slots; round-robin videos; alternate-step first slot prioritizes error strata within same video, global per-view error repeat cap4; others prefer correct frames.",
+  "scope": {
+    "automatic_promotion": false,
+    "dataset_splits_modified": false,
+    "depth_formula_modified": false,
+    "detector_updates": 0,
+    "feature_extractions": 0,
+    "formal_training": false,
+    "frozen_midpoint_updates": 0,
+    "labels_modified": false,
+    "policy_modified": false,
+    "test_access": false
+  },
+  "settings": {
+    "batch_size": 8,
+    "clip_norm": 10.0,
+    "error_repeat_cap": 4,
+    "holdout_divisor": 5,
+    "loss_beta": 0.1,
+    "lr": 0.001,
+    "purge_frames": 10,
+    "ratio_weight": 0.25,
+    "scales": [
+      1.0,
+      0.5
+    ],
+    "seed": 1703,
+    "smoke_steps": 2,
+    "steps": 200,
+    "weight_decay": 0.0
+  },
+  "stages": [
+    "prepare",
+    "smoke",
+    "finite"
+  ]
+}
