@@ -7,6 +7,7 @@ from pathlib import Path
 import pickle
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -62,6 +63,33 @@ class ContractTests(unittest.TestCase):
         changed = deepcopy(box); changed[0][5] += 1e-8
         with self.assertRaises(ValueError):
             c.check_boxes(changed, box)
+
+    def test_numerical_settings_restore_sealed_determinism_for_all_arms(self):
+        fake = SimpleNamespace(backends=SimpleNamespace(
+            cudnn=SimpleNamespace(benchmark=True, deterministic=False, allow_tf32=False),
+            cuda=SimpleNamespace(matmul=SimpleNamespace(allow_tf32=True))))
+        flags = b.numerical_settings(fake)
+        self.assertEqual(flags, dict(cudnn_benchmark=False,cudnn_deterministic=True,
+            cuda_matmul_allow_tf32=False,cudnn_allow_tf32=True))
+        documented = {k:v for k,v in c.protocol_document()['numerical_settings'].items() if k != 'reason'}
+        documented['cudnn_benchmark'] = c.protocol_document()['cudnn_benchmark']
+        self.assertEqual(flags, documented)
+
+    def test_score_mismatch_records_frame_exact_values_and_keeps_strict_gate(self):
+        actual = [[50.,40.,20.,10.,.2,.80000001]]
+        expected = [[50.,40.,20.,10.,.2,.8]]
+        fake = SimpleNamespace(dtype='float32', tolist=lambda:actual)
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            with self.assertRaisesRegex(ValueError, 'symeood_b image=frame.*actual='):
+                b.verify_output(fake,expected,out,'symeood_b',dict(image='frame'),0,
+                                'output_preflight',dict(cudnn_deterministic=True))
+            report = c.read(out/'output_mismatch.json')
+            self.assertEqual(report['actual'],actual)
+            self.assertEqual(report['expected'],expected)
+            self.assertEqual(report['score_policy'],'Exact; unchanged')
+            self.assertGreater(report['component_absolute_errors'][0][5],0.)
+            self.assertIn('tolerance=0', report['error'])
 
     def test_equivalent_axis_swap_cannot_silently_replace_raw_contract(self):
         with self.assertRaises(ValueError):

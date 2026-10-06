@@ -59,6 +59,9 @@ SOURCE_PATHS = (
     'crane_project/utils/port_structure_reliability_v1.py',
     'crane_project/utils/port_geometry_midpoint_v1.py',
     'crane_project/utils/port_geometry_midpoint_sigma_v1.py',
+    # Evidence for the restored seed_all settings, not called by timed inference.
+    'crane_project/tools/train_port_geometry_midpoint_formal_v1.py',
+    'crane_project/tools/eval_port_geometry_midpoint_sigma15_v1.py',
     c.ARCHIVE+'/manifest.json',
     c.ARCHIVE+'/crane_eood_k1_port_day2night_seq06_v1.py.txt',
     c.ARCHIVE+'/crane_eood_k1_port_day2night_v1.py.txt',
@@ -415,6 +418,79 @@ def prepare(compose, frame, gpu):
     return image, metas
 
 
+def numerical_settings(torch):
+    """Match the original sigma15 eval's seed_all and torch1.13 defaults.
+
+    Deterministic cuDNN changes convolution algorithm selection, not weights.
+    Apply the same settings to all arms; preserve exact output gates.
+    """
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cuda.matmul.allow_tf32 = False
+    torch.backends.cudnn.allow_tf32 = True
+    return dict(cudnn_benchmark=bool(torch.backends.cudnn.benchmark),
+        cudnn_deterministic=bool(torch.backends.cudnn.deterministic),
+        cuda_matmul_allow_tf32=bool(torch.backends.cuda.matmul.allow_tf32),
+        cudnn_allow_tf32=bool(torch.backends.cudnn.allow_tf32))
+
+
+def expected_boxes(arm, index, row, references, np):
+    if arm in references:
+        return flatten(references[arm][index], np).tolist()
+    value = row['b' if arm == 'symeood_b' else 'midpoint']
+    return [] if value is None else [value]
+
+
+def verify_output(result, expected, out, arm, row, repeat, stage, flags):
+    actual = result.tolist()
+    try:
+        return c.check_boxes(actual, expected)
+    except ValueError as error:
+        details = dict(arm=arm, image=row['image'], repeat=repeat, stage=stage,
+            numerical_settings=flags, actual_dtype=str(result.dtype),
+            actual=actual, expected=expected, error=str(error),
+            score_policy='Exact; unchanged', geometry_policy='atol1e-4 + rtol1e-6; unchanged')
+        if len(actual) == len(expected):
+            details['component_absolute_errors'] = [[abs(float(a)-float(b))
+                for a,b in zip(x,y)] for x,y in zip(actual,expected)]
+        c.write_new(out/'output_mismatch.json', details)
+        raise ValueError('%s image=%s stage=%s repeat=%s: %s' %
+                         (arm, row['image'], stage, repeat, error)) from error
+
+
+def preflight_outputs(rows, references, weights, sealed, gpu, torch, np, cv2, Config, out, flags):
+    """A bounded reproduction gate, not a numerical-mode sweep or speed result."""
+    selected = [index for seq in c.COUNTS for index in
+                [i for i,row in enumerate(rows) if row['sequence'] == seq][:4]]
+    proof = dict(numerical_settings=flags, images=[rows[i]['image'] for i in selected], arms={})
+    with torch.no_grad():
+        for arm in ('symeood_b', 'symeood_b_midpoint'):
+            detector, head, cfg, geometry, meta = build(arm,gpu,weights,sealed,torch,Config)
+            pipe = Pipeline(detector,head,torch,np,geometry); compose = transform(cfg)
+            before = dict(detector=state_sha(detector), head=state_sha(head) if head is not None else None)
+            for row in rows[:50]:
+                frame = cv2.imread(str(DATA/'test/images'/(row['image']+'.jpg')))
+                if frame is None: raise ValueError('Cannot decode output preflight warmup image')
+                image, metas = prepare(compose,frame,gpu); pipe(image,metas)
+            worst = 0.
+            for index in selected:
+                row = rows[index]
+                frame = cv2.imread(str(DATA/'test/images'/(row['image']+'.jpg')))
+                if frame is None: raise ValueError('Cannot decode output preflight image')
+                image, metas = prepare(compose,frame,gpu); result = pipe(image,metas)
+                expected = expected_boxes(arm,index,row,references,np)
+                worst = max(worst,verify_output(result,expected,out,arm,row,0,'output_preflight',flags))
+            after = dict(detector=state_sha(detector), head=state_sha(head) if head is not None else None)
+            if before != after: raise ValueError('Output preflight changed frozen state')
+            proof['arms'][arm] = dict(verified_predictions=len(selected), state_before=before,
+                state_after=after, max_box_component_difference=worst, detector_checkpoint_meta=meta)
+            print('Output preflight',arm,len(selected),'frames exact scores/geometric checks pass',flush=True)
+            del pipe,compose,detector,head,image,result
+            gc.collect(); torch.cuda.empty_cache()
+    c.write_new(out/'output_preflight.json',proof)
+    return proof
+
+
 def run(args):
     identity = source_contract()
     out = Path(args.out_dir).resolve()
@@ -446,9 +522,9 @@ def run(args):
                 raise ValueError('Invalid logical CUDA device')
             torch.cuda.set_device(args.gpu)
             torch.set_num_threads(1); cv2.setNumThreads(1)
-            torch.backends.cudnn.benchmark = False
-            torch.backends.cuda.matmul.allow_tf32 = False
-            torch.backends.cudnn.allow_tf32 = False
+            flags = numerical_settings(torch)
+            report['numerical_settings'] = flags
+            c.write_new(out/'numerical_settings.json', flags)
             rows, references, weights, sealed, proof = inputs(args)
             report['inputs'] = proof
             props = torch.cuda.get_device_properties(args.gpu)
@@ -463,6 +539,8 @@ def run(args):
             for key in ('torch', 'cuda', 'cudnn', 'mmcv', 'mmdet', 'mmrotate', 'opencv'):
                 if report['runtime'][key] != sealed['runtime'][key]:
                     raise ValueError('Runtime differs from sealed inference: '+key)
+            report['output_preflight'] = preflight_outputs(rows,references,weights,sealed,
+                args.gpu,torch,np,cv2,Config,out,flags)
             arms = {}
             with (out/'timings.jsonl').open('x', encoding='utf-8') as log:
                 for arm in c.ARMS:
@@ -508,12 +586,9 @@ def run(args):
                                 torch.cuda.synchronize(args.gpu)
                                 finish = time.perf_counter()
                                 # All source/ref matching is outside every timer.
-                                if arm in references:
-                                    expected = flatten(references[arm][index], np).tolist()
-                                else:
-                                    value = row['b' if arm == 'symeood_b' else 'midpoint']
-                                    expected = [] if value is None else [value]
-                                worst = max(worst, c.check_boxes(result.tolist(), expected))
+                                expected = expected_boxes(arm,index,row,references,np)
+                                worst = max(worst,verify_output(result,expected,out,arm,row,
+                                    repeat+1,'timed_output_check',flags))
                                 record = dict(arm=arm, repeat=repeat+1, image=row['image'], sequence=row['sequence'],
                                     native_candidates=len(result), decoded_frame_to_obb=finish-app_start,
                                     model_and_postprocess=finish-model_start, file_to_obb=finish-file_start,
@@ -537,6 +612,7 @@ def run(args):
                         midpoint_parameters=17696 if head is not None else 0,
                         gpu_peak_mib=dict(allocated=torch.cuda.max_memory_allocated(args.gpu)/2**20,
                             reserved=torch.cuda.max_memory_reserved(args.gpu)/2**20))
+                    c.write_new(out/(arm+'.completed.json'),arms[arm])
                     print(arm, groups['overall']['decoded_frame_to_obb'], flush=True)
                     del pipe, compose, detector, head, image, result, records
                     gc.collect(); torch.cuda.empty_cache()
@@ -564,7 +640,7 @@ def run(args):
         print('Saved', out/'completion.json', 'status', report['status'], flush=True)
     except Exception as error:
         c.write_new(out/'failure.json', dict(protocol=c.VERSION, status='FAILED_NOT_A_VALID_SPEED_RESULT',
-            error_type=type(error).__name__, error=str(error)))
+            error_type=type(error).__name__, error=str(error), partial_report=report))
         raise
 
 

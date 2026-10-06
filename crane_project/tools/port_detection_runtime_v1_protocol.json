@@ -46,6 +46,13 @@
   "cpu_threads": 1,
   "gpu_devices": 1,
   "cudnn_benchmark": false,
+  "numerical_settings": {
+    "cudnn_deterministic": true,
+    "cuda_matmul_allow_tf32": false,
+    "cudnn_allow_tf32": true,
+    "reason": "Restore seed_all cuDNN determinism and unchanged torch1.13 convolution default from sealed sigma15 evaluation; same flags for all four arms. No autocast/half."
+  },
+  "output_preflight": "Before any timed arm, replay fixed first four frames of each sequence for B and midpoint under the restored settings after 50 warmup frames. Exact scores and original geometric tolerances remain required; no metrics, timing publication or parameter selection.",
   "timing": {
     "decoded_frame_to_obb": "Decoded BGR CPU frame -> preprocessing, H2D, native detector, optional reused-P3 ROI/midpoint, original-coordinate CPU OBB; serial CUDA-synchronized wall time.",
     "model_and_postprocess": "Prepared CUDA image -> original-coordinate CPU OBB; includes native postprocessing/D2H and Python, not GPU-kernel-only time.",

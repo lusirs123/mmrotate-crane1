@@ -151,6 +151,10 @@ def protocol_document():
             checkpoint_sha256=M_SHA, test_rows_sha256=M_ROWS_SHA, parameters=17696),
         batch_size=1, precision='FP32', warmup_frames=50, repeats=3,
         cpu_threads=1, gpu_devices=1, cudnn_benchmark=False,
+        numerical_settings=dict(cudnn_deterministic=True, cuda_matmul_allow_tf32=False,
+            cudnn_allow_tf32=True,
+            reason='Restore seed_all cuDNN determinism and unchanged torch1.13 convolution default from sealed sigma15 evaluation; same flags for all four arms. No autocast/half.'),
+        output_preflight='Before any timed arm, replay fixed first four frames of each sequence for B and midpoint under the restored settings after 50 warmup frames. Exact scores and original geometric tolerances remain required; no metrics, timing publication or parameter selection.',
         timing=dict(decoded_frame_to_obb='Decoded BGR CPU frame -> preprocessing, H2D, native detector, optional reused-P3 ROI/midpoint, original-coordinate CPU OBB; serial CUDA-synchronized wall time.',
             model_and_postprocess='Prepared CUDA image -> original-coordinate CPU OBB; includes native postprocessing/D2H and Python, not GPU-kernel-only time.',
             file_to_obb='JPEG read/decode plus decoded-frame-to-OBB (filesystem cache may be warm).',
@@ -202,7 +206,9 @@ def check_boxes(actual, expected):
             error = abs(float(x)-float(y))
             tolerance = 0. if index == 5 else 1e-4+1e-6*abs(float(y))
             if error > tolerance:
-                raise ValueError('Output component %d differs from sealed result' % index)
+                raise ValueError('Output component %d differs from sealed result: actual=%.17g, '
+                    'expected=%.17g, abs_error=%.17g, tolerance=%.17g' %
+                    (index, float(x), float(y), error, tolerance))
             worst = max(worst, error)
     return worst
 
