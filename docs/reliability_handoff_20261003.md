@@ -1,10 +1,12 @@
-# SymEOOD 分量可靠性交接：固定B24＋正式midpoint23＋simple三标志基线
+# SymEOOD 分量可靠性交接：保留midpoint23比较基线；σ1.5／epoch03三标志迁移
+
+**2026-10-06执行入口：用户已授权将可靠性前端迁移至B24＋midpoint σ1.5／head_epoch03，继续simple三分量判断。先读第24节。新入口已实现且本地17项测试通过，服务器TRAIN/VAL迁移尚待运行；σ1／epoch23及下述已完成TEST成绩仍保留原比较基线身份，不能写成新前端成绩。本次不启动检测器、midpoint或图像参考训练，也不运行TEST。**
 
 更新：2026-10-05；用户明确将**B epoch24＋正式midpoint epoch23＋现有simple三标志**的已完成固定TEST流程作为后续可靠性优化的比较基线（第19节）。基线身份已固定，不以性能最好或先优于score作为采用前提；现有取舍是比较起点。第17节为CPU TEST入口，第18节为已核验结果，第19节区分几何变化与可靠性判别改进。第14节保留迁移事实，第15/16节保留模板候选验证，模板未进入基线。旧B＋simple TEST保留第3节历史身份，不能替代当前主基线成绩。
 
 本文是当前可靠性基线与后续实验的唯一执行交接；[OBB机制说明](obb/OBB观测可靠性与连续输出.md)、[流程记录](obb/base_v3_v51_focused_paper_complete_pipeline_20260915.md)及[文档入口](README.md)同步当前身份与主表。此前替换的旧流程在[替换前归档](archive/20261003_reliability_replaced_by_simple_v1/README.md)保留，原始实验文件和模型未删除。检测几何优化维护[独立几何交接](geometry_precision_handoff_20261001.md)，本轮没有修改该窗口的代码/记录或实际大小论文稿。后续服务器结果不复制为本地复核目录。
 
-**更换窗口入口：先读第20节接续摘要和第23节当前实验，再按需读第1/14/16/18/19节及其关键代码。新窗口唯一目标为提高可靠性判断准确性，B24＋正式midpoint23＋现有simple仍是冻结比较基线，不重复完整审计。第21节记录核心曲率监督设计；21.8为初版实现，21.9为gradfix1历史修复，21.10为其epoch2首帧再次失败后的gradfix2同上游梯度核对及失败帧预检。第21.11节已核验gradfix2服务器回传：预检/两臂训练/全量VAL全部完成，E通过，R与Q1未通过，曲率版本收束并保留simple。第22节为半峰范围v3设计/实现；22.6已核验服务器回传：E通过，R与Q1仍未通过，保留simple、不拟合最终工作点。第23节按用户授权实现冻结框尺寸残差v4；23.7已核验服务器回传：E通过，D/Q1未通过，A1在real判断及两域分布拟合均未优于控制，收束v4并保留simple。下一步建议有限TRAIN错误支持覆盖检查，尚未实现或运行。22.6的读取能力对照保留为未实施的历史建议。后续一个实验的各阶段、日志和分析包集中于同一父目录。**
+**更换窗口入口：先读第24节当前迁移，再按需读第20节接续摘要、第23节收束结果与第1/14/16/18/19节。B24＋正式midpoint23＋现有simple仍是冻结比较基线，不重复完整审计。第21节核心曲率v2与第22节半峰范围v3已完成服务器预检/两臂对照/全量VAL，E通过但R/Q1未通过；第23.7节尺寸残差v4已核验E通过、D/Q1未通过，均收束且没有替换simple。此前有限TRAIN错误支持覆盖检查及22.6读取能力对照仍是未实施建议；用户最新授权先迁移σ1.5／epoch03三标志。本次迁移是更换检测前端并按原simple规则重拟合，不是新的可靠性机制收益。后续一个实验的各阶段、日志和分析包集中于同一父目录。**
 
 ## 1. 当前决定与模型
 
@@ -1252,3 +1254,62 @@ A1 VAL real平均sigma长/短轴`.02856/.02367`，sim`.01968/.01552`，比A0更�
 **天气观察与因果边界（事实/推断）：** 本机查看现存VAL原图`real_seq07_00001.jpg`及`real_seq07_00113.jpg`，二者字节SHA均与v4评价行的`image_sha256`相符。可见降雪、白色覆盖和近镜头模糊雪花，支持用户指出的雪天场景；本轮未读取TEST或生成图片/结果副本。雪花干扰边缘、外观变化和图像分布偏移是合理候选解释。[检测鲁棒性基准](https://arxiv.org/abs/1907.07484)支持天气/图像退化可影响检测性能，但不能证明本项目seq07偏小由雪唯一造成。当前没有保持视角、姿态、背景等因素一致的天气对照；也未核对TRAIN是否覆盖同类降雪及尺寸偏小错误，不把seq07与seq14的差异当成雪天的因果实验。
 
 **对后续建议的细化（待验证）：** 23.7的有限TRAIN支持覆盖检查应特别关注与seq07相似的持续偏小、双轴共同错误，以及对应图像条件是否有独立TRAIN片段覆盖。天气/外观条件的补充应保持TRAIN职责，不能直接将seq07并入TRAIN或按该视频调整门限。当前仅补充解释和现有数值，不改变阈值、模型、框、标志或后续实验状态。
+
+## 24. 用户授权迁移至σ1.5／epoch03：simple三标志检查（2026-10-06）
+
+### 24.1 身份与范围（事实）
+
+用户确认最新检测版本为σ1.5／epoch03，并授权将本窗口可靠性检测前端切换到该版本，只做中心、尺寸、方向三分量判别。执行身份为**B epoch24＋冻结SigmaMidpointHead(1.5)／head_epoch_03**；头SHA为`16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7`，完整24轮TRAIN/VAL选择所得，累计2706次更新。B保持第1节原SHA。复用原冻结ROI cache manifest SHA `046c5998dee0ba3703f1ae4e08fc6a02e9804d216ea12241357f69f2a4afd1e3`；实际加载显式σ1.5头，不能使用默认σ1头加载器、短拟合头或文件名“latest”。
+
+第1/18/19节B24＋σ1／epoch23＋旧simple仍是**历史冻结比较基线**，其原权重、policy、门限、TEST结果及来源不变；第21—23节负结果保持该前端身份。新版本只把原simple规则移到已确认的新框上，重新拟合两个线性风险模型与覆盖门限。几何头更换与可靠性参数重拟合不能合称单因素可靠性创新；服务器实际结果尚未产生。
+
+中心继续保留每个有效最终框，缺失时三个标志均false；尺寸或方向拒绝不删中心。simple只能给使用建议，不能把“中心保留”写成已经学会中心正确性判断。可靠性层不修改六个框值、score或输出数量。GT、域/视频身份、历史/未来帧均不进入在线`decide`。等比例变换、实际sx/sy还原、raw宽高/角度关联、π周期、全框fallback与深度接口沿用既有原生推理；不据此承诺深度精度改善。
+
+### 24.2 新增代码与阶段（已实现）
+
+- `crane_project/tools/run_port_midpoint_sigma15_reliability_v1.py`：独立入口，`check → collect → fit → verify`，无TEST、probe、参考训练或新检测训练入口。
+- `crane_project/utils/port_midpoint_sigma15_reliability_v1.py`：`Sigma15Reliability(policy, front_end).decide(final_box_original, image_size, method='simple')`；三标志字段与原simple一致，交付框字段为`final_box_original`。拒绝旧前端policy与错误B/σ/epoch/更新数/头SHA。
+- 同名`_protocol.json`、`_sources.json`及`tests/test_port_midpoint_sigma15_reliability_v1.py`：固定规则、97文件来源闭包和迁移测试。旧runner/util/protocol/manifest未修改。
+
+`check`只核对源文件、既有选择记录、selected头及B字节SHA、TRAIN/VAL数值来源、缓存metadata和旧policy SHA，不反序列化张量、不读图、不调用GPU或重建缓存。复用σ1.5入口的已审查选择核对函数；只核对已有选择，不重新选择或重复完整审计。旧policy只作离线对照，固定SHA为第1节值。
+
+`collect`只加载`train_s1.pt`与`val_s1.pt`，冻结头读取2558个标准尺度TRAIN和887个VAL框；不加载B、不提特征、不加载半尺度TRAIN。不改原缓存。确认TRAIN/VAL B与既有simple数值来源一致，VAL重现锁定epoch03框和fallback；VAL后续用锁定文件中的原值，避免数值重放被误作新预测来源。
+
+`fit`在新前端标准尺度TRAIN2558上标准化并拟合size/angle，规则保持三特征、两组四系数、正负各总权重0.5、L2=0.1、float64 Newton最多100次、梯度容差1e-8。方向TRAIN资格仍使用已核对real轴线／Webots OBB资格；VAL GT只离线评价，不进入参数或覆盖门限。沿用单一pooled VAL95%全帧覆盖工作点（887帧至少843个接受，边界ties整体保留），这是**固定比较工作点，不是最终准确性目标或保证**。不做门限搜索、分视频/分域路由、v2/v3/v4续训。
+
+`verify`以冻结B24＋显式σ1.5头进行全887帧原生VAL推理，复用原GT-free `capture(detector, head, image, metas)`；既有函数/审计事件名称包含`test`不代表访问TEST，实际dataset明确仅VAL。每帧一次特征提取、三次原生B头调用，累计887／2661；核对锁定几何框、score、输出数、fallback、三个标志、正确性与四类判断计数，以及模型状态不变。框的原数值公差不改；标志或计数不同则失败并保留现场，不自动扩大容差、重拟合或调门限。
+
+### 24.3 报告与解释边界（已实现／待测）
+
+`fit/fit_report.json`记录TRAIN拟合内描述、VAL覆盖校准描述；`verify/verify_report.json`记录全量原生VAL检查及同一评价。均按overall、real/sim、逐视频报告：错误接受FA、正确误拒FR、错误检出ED、正确保留CR、输出条件状态准确率、接受后正确率、接受覆盖和缺失。中心另报输出覆盖、仅输出帧命中率和全帧中心正确覆盖；方向可评价GT范围与全部在线标志覆盖分别记录。
+
+同一组**新σ1.5框**上比较raw、固定score和新simple；另外报告固定旧σ1simple直接迁移（仅离线）、匹配新simple接受数的score和旧simple排序。匹配数在各域/视频及方向资格集合内分别计算，离线按image打破ties；不当作在线门限。四状态与接受数下界一并给出，防止把95%覆盖造成的FA下界误判为纯模型问题。这些控制评价新前端内的判别差异，不替代旧基线的原TEST成绩。
+
+继续条件：先通过来源、冻结状态与原生全量VAL一致性检查，再读取分域/逐视频FA/FR/ED/CR及同接受数对照；未形成排序/正确保留收益时不称可靠性改进。若需要最终尺寸工作点，应另外预先规定正确保留／误拒约束，在TRAIN/VAL另立版本；本轮不同时优化门限。TEST已多次暴露，本轮完全不读TEST，也不重选检测器或用TEST解释来选择参数。
+
+### 24.4 本地验证与服务器命令
+
+**事实：** Python3.8／Torch1.8 CPU本地17项测试通过，包含σ1.5真实头中性与空输出前向、前端/旧policy身份拒绝、原图框无损保留、width-height交换/π周期/等比例特征不变、GT-free签名、VAL GT不影响拟合门限、同数控制与方向分母、嵌套训练proof到cache身份、合成3445行的collect读取／拟合／保存重载和产物篡改拒绝。CLI帮助和`git diff --check`通过。合成数据不是项目性能证据；本机未运行服务器真实缓存、实际检测权重或GPU全VAL检查。
+
+服务器通过Git同步新源文件。各条独立执行，每条一行；某一步失败就保留该目录和日志，不运行后续阶段。首次目录统一为`work_dirs/port_midpoint_sigma15_reliability_v1`；重跑已存在阶段时使用新的`--run-dir`，不要覆盖旧产物。所有需要的原输入沿用既有路径，若服务器归档改变路径，用对应显式参数指向原文件，不重建证据。
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"; export CUDA_VISIBLE_DEVICES=3; set -o pipefail
+mkdir -p work_dirs/port_midpoint_sigma15_reliability_v1
+python -m unittest discover -s tests -p 'test_port_midpoint_sigma15_reliability_v1.py' -v 2>&1 | tee work_dirs/port_midpoint_sigma15_reliability_v1/unittest.log
+python crane_project/tools/run_port_midpoint_sigma15_reliability_v1.py --mode check 2>&1 | tee work_dirs/port_midpoint_sigma15_reliability_v1/check.log
+python crane_project/tools/run_port_midpoint_sigma15_reliability_v1.py --mode collect --gpu 0 2>&1 | tee work_dirs/port_midpoint_sigma15_reliability_v1/collect.log
+python crane_project/tools/run_port_midpoint_sigma15_reliability_v1.py --mode fit 2>&1 | tee work_dirs/port_midpoint_sigma15_reliability_v1/fit.log
+python crane_project/tools/run_port_midpoint_sigma15_reliability_v1.py --mode verify --gpu 0 2>&1 | tee work_dirs/port_midpoint_sigma15_reliability_v1/verify.log
+```
+
+GPU3通过`CUDA_VISIBLE_DEVICES=3`映射为程序`--gpu 0`；沿用原运行设备与native库身份约束。流程只重拟合两个simple线性模型，不训练B／midpoint／尺寸参考。
+
+全部通过后，只需回传下面一个分析包；包在该实验父目录内部，包含阶段JSON/JSONL、policy、来源/身份和日志，不包含pth/pt缓存或权重，也不压缩本地Git代码：
+
+```bash
+tar -czf work_dirs/port_midpoint_sigma15_reliability_v1/analysis_20261006.tar.gz -C work_dirs/port_midpoint_sigma15_reliability_v1 check collect fit verify unittest.log check.log collect.log fit.log verify.log
+```
+
+新policy目标路径为`work_dirs/port_midpoint_sigma15_reliability_v1/fit/policy.json`，尚待服务器生成与检查；第1节旧policy保持不变。没有改动几何窗口、深度窗口、实际大小论文或新增本地服务器结果副本。

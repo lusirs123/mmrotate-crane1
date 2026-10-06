@@ -1,0 +1,281 @@
+{
+  "calibration_sha256": "c9c14fc1b09ba8223996121425e302888ac7d44213192225acd5365fb2f1ffe2",
+  "date": "2026-10-06",
+  "depth_rows_sha256": "660695dcf8c40b4cb0a05f250b64955bda0b9db24852a7de63f5f36f86485bc5",
+  "frame_count": 981,
+  "gt_obb_reference": {
+    "max_original_exp_multiplier": 1.0089042815510791,
+    "no_exponential": {
+      "abs_rel": 0.0031339600958689147,
+      "bias_m": -0.029484629424501335,
+      "count": 981,
+      "mae_m": 0.05367101564127964,
+      "max_abs_error_m": 0.16429079315148876,
+      "p95_abs_error_m": 0.13926639296742138,
+      "rmse_m": 0.06681281167883653
+    },
+    "original": {
+      "abs_rel": 0.0024735957010812884,
+      "bias_m": -0.011353199016404598,
+      "count": 981,
+      "mae_m": 0.04089905427732898,
+      "max_abs_error_m": 0.15337788871866742,
+      "p95_abs_error_m": 0.11329915424724213,
+      "rmse_m": 0.053426706032900846
+    },
+    "role": "Calibration-sequence fitted-GT reference, not independent validation"
+  },
+  "mae_delta_midpoint_vs_b": {
+    "difference_between_these_deltas_m": 0.06224298965374897,
+    "no_exponential_m": 0.09828818533885497,
+    "note": "Arithmetic comparison of two formula regimes; not a uniquely identified causal share.",
+    "original_m": 0.16053117499260394
+  },
+  "methods": {
+    "eood": {
+      "exp_multiplier": {
+        "max": 1.014345442960557,
+        "mean": 1.0009150135041514,
+        "median": 1.0004171327423899,
+        "p95": 1.0033004798482383
+      },
+      "no_exponential_counterfactual_metrics": {
+        "abs_rel": 0.032533316570806874,
+        "bias_m": 0.6210656867061739,
+        "count": 981,
+        "mae_m": 0.6210656867061739,
+        "max_abs_error_m": 1.3502183113779473,
+        "p95_abs_error_m": 1.0030010720610427,
+        "rmse_m": 0.6623836264124824
+      },
+      "no_exponential_role": "offline formula-input sensitivity only: fixed c, exp factor=1, no fitting, no delivered predictions changed",
+      "original_formula_improved_frames": 0,
+      "original_formula_worsened_frames": 981,
+      "original_frozen_formula_metrics": {
+        "abs_rel": 0.03347892165320255,
+        "bias_m": 0.6392116520861715,
+        "count": 981,
+        "mae_m": 0.6392116520861715,
+        "max_abs_error_m": 1.3604625772777865,
+        "p95_abs_error_m": 1.0207896112255561,
+        "rmse_m": 0.6803703359613388
+      },
+      "original_minus_no_exponential_absolute_error_mean_m": 0.01814596537999758,
+      "q_signed": {
+        "max": 0.026242751524362416,
+        "mean": -0.00042191307006428065,
+        "min": -0.023705436429693534,
+        "p95_abs": 0.012622093199069512
+      },
+      "tied_frames": 0
+    },
+    "symeood": {
+      "exp_multiplier": {
+        "max": 1.111244845712561,
+        "mean": 1.0293113089586976,
+        "median": 1.023607670620352,
+        "p95": 1.0738753536609484
+      },
+      "no_exponential_counterfactual_metrics": {
+        "abs_rel": 0.04046046764636943,
+        "bias_m": 0.8237987037277685,
+        "count": 981,
+        "mae_m": 0.8382012848613679,
+        "max_abs_error_m": 2.6049183322443312,
+        "p95_abs_error_m": 1.8877990506019415,
+        "rmse_m": 1.0066466545542996
+      },
+      "no_exponential_role": "offline formula-input sensitivity only: fixed c, exp factor=1, no fitting, no delivered predictions changed",
+      "original_formula_improved_frames": 13,
+      "original_formula_worsened_frames": 968,
+      "original_frozen_formula_metrics": {
+        "abs_rel": 0.06979839272662447,
+        "bias_m": 1.369679430390482,
+        "count": 981,
+        "mae_m": 1.371203042482677,
+        "max_abs_error_m": 3.207882284106251,
+        "p95_abs_error_m": 2.365363296523949,
+        "rmse_m": 1.4984149437911356
+      },
+      "original_minus_no_exponential_absolute_error_mean_m": 0.5330017576213092,
+      "q_signed": {
+        "max": 0.07141468810108668,
+        "mean": 0.03470489214232595,
+        "min": -0.0016374450285357297,
+        "p95_abs": 0.05870377774875349
+      },
+      "tied_frames": 0
+    },
+    "symeood_b": {
+      "exp_multiplier": {
+        "max": 1.0933868647253717,
+        "mean": 1.0122981241490594,
+        "median": 1.0074396283869398,
+        "p95": 1.041871753212005
+      },
+      "no_exponential_counterfactual_metrics": {
+        "abs_rel": 0.043858767625465894,
+        "bias_m": 0.8191984520160944,
+        "count": 981,
+        "mae_m": 0.8451010959425426,
+        "max_abs_error_m": 2.961708771279053,
+        "p95_abs_error_m": 1.8814104385188521,
+        "rmse_m": 1.0016026775427675
+      },
+      "no_exponential_role": "offline formula-input sensitivity only: fixed c, exp factor=1, no fitting, no delivered predictions changed",
+      "original_formula_improved_frames": 24,
+      "original_formula_worsened_frames": 957,
+      "original_frozen_formula_metrics": {
+        "abs_rel": 0.05580471812166638,
+        "bias_m": 1.0545294208544975,
+        "count": 981,
+        "mae_m": 1.0605693805752643,
+        "max_abs_error_m": 3.9846852913373993,
+        "p95_abs_error_m": 2.2856710564240004,
+        "rmse_m": 1.223300900569863
+      },
+      "original_minus_no_exponential_absolute_error_mean_m": 0.21546828463272175,
+      "q_signed": {
+        "max": 0.06570191271686543,
+        "mean": -0.009746748516308443,
+        "min": -0.05891090590621012,
+        "p95_abs": 0.04453407916867105
+      },
+      "tied_frames": 0
+    },
+    "symeood_b_midpoint": {
+      "exp_multiplier": {
+        "max": 1.1348999973278264,
+        "mean": 1.0135971454545765,
+        "median": 1.005888620405479,
+        "p95": 1.0550693011847783
+      },
+      "no_exponential_counterfactual_metrics": {
+        "abs_rel": 0.04912201750663031,
+        "bias_m": 0.9311443560176427,
+        "count": 981,
+        "mae_m": 0.9433892812813975,
+        "max_abs_error_m": 3.1269712696932785,
+        "p95_abs_error_m": 2.0160130145804835,
+        "rmse_m": 1.1046259685109485
+      },
+      "no_exponential_role": "offline formula-input sensitivity only: fixed c, exp factor=1, no fitting, no delivered predictions changed",
+      "original_formula_improved_frames": 6,
+      "original_formula_worsened_frames": 975,
+      "original_frozen_formula_metrics": {
+        "abs_rel": 0.06288751798701568,
+        "bias_m": 1.219876468293167,
+        "count": 981,
+        "mae_m": 1.2211005555678682,
+        "max_abs_error_m": 5.538538460734745,
+        "p95_abs_error_m": 2.624758175172989,
+        "rmse_m": 1.434224916904762
+      },
+      "original_minus_no_exponential_absolute_error_mean_m": 0.27771127428647063,
+      "q_signed": {
+        "max": 0.06705228747224738,
+        "mean": 0.0010327031805116428,
+        "min": -0.07822082588219557,
+        "p95_abs": 0.050910718883237734
+      },
+      "tied_frames": 0
+    }
+  },
+  "note": "Differences in MAE here are descriptive counterfactual differences, not uniquely separable causal contributions; beta=0 is not an accepted or independently validated replacement formula.",
+  "numerical_examples": {
+    "0.02": 1.0083072309489838,
+    "0.03": 1.0187883821459365,
+    "0.05": 1.053065804770876,
+    "0.08": 1.1415267868579924,
+    "0.1": 1.2297647555431062
+  },
+  "parameters": {
+    "b_m": 0.0,
+    "beta": 20.682289543661955,
+    "c": 1.0044577340905951,
+    "fit_offset": false,
+    "q_signed_max": 0.006703449986171836,
+    "q_signed_min": -0.02070317402614643,
+    "q_signed_p01": -0.02019995536448857,
+    "q_signed_p99": 0.005640719944840945
+  },
+  "per_frame_diagnostic_examples": {
+    "frame_00550": {
+      "methods": {
+        "eood": {
+          "exp_factor": 1.0030615791834385,
+          "long_relative_error": -0.01596777194124699,
+          "predicted_z_m": 21.051992529765787,
+          "q_signed": -0.012157421045754188,
+          "short_relative_error": -0.025925957360418472
+        },
+        "symeood": {
+          "exp_factor": 1.0331302447978548,
+          "long_relative_error": -0.0864190469287941,
+          "predicted_z_m": 22.17494790197562,
+          "q_signed": 0.03969763506885776,
+          "short_relative_error": -0.0475327550870408
+        },
+        "symeood_b": {
+          "exp_factor": 1.0102133835205025,
+          "long_relative_error": -0.07983690339659133,
+          "predicted_z_m": 22.90180839110701,
+          "q_signed": -0.022165692269606834,
+          "short_relative_error": -0.09821932778444131
+        },
+        "symeood_b_midpoint": {
+          "exp_factor": 1.1348999973278264,
+          "long_relative_error": -0.03625498241789993,
+          "predicted_z_m": 25.981328565004706,
+          "q_signed": -0.07822082588219557,
+          "short_relative_error": -0.1069951415225493
+        }
+      },
+      "truth_z_m": 20.44279010426996
+    },
+    "frame_00974": {
+      "methods": {
+        "eood": {
+          "exp_factor": 1.0002003019311403,
+          "long_relative_error": -0.03606273947765837,
+          "predicted_z_m": 25.248644291489196,
+          "q_signed": -0.0031118705001901606,
+          "short_relative_error": -0.033809655849064035
+        },
+        "symeood": {
+          "exp_factor": 1.0127463618796397,
+          "long_relative_error": -0.08082218332186075,
+          "predicted_z_m": 26.073671338221853,
+          "q_signed": 0.024746694152306126,
+          "short_relative_error": -0.05264602783344907
+        },
+        "symeood_b": {
+          "exp_factor": 1.0727568166134545,
+          "long_relative_error": -0.02846878836695832,
+          "predicted_z_m": 28.392299180960386,
+          "q_signed": -0.05827302862729796,
+          "short_relative_error": -0.07845935292362682
+        },
+        "symeood_b_midpoint": {
+          "exp_factor": 1.0770909571278604,
+          "long_relative_error": -0.039584815863520695,
+          "predicted_z_m": 28.884557947743513,
+          "q_signed": -0.059922430397478146,
+          "short_relative_error": -0.09050476124051388
+        }
+      },
+      "truth_z_m": 24.407613889622986
+    }
+  },
+  "scope": "Offline descriptive diagnostic only; no model update, parameter fit, delivered formula change, filter, selection, or independent validation",
+  "sensitivity_derivatives_equal_fx_fy": {
+    "long_log_derivative": "-2*beta*q",
+    "short_log_derivative": "-1+2*beta*q"
+  },
+  "sensitivity_verification": {
+    "all_frame_no_exp_matches_c_f_short_over_predicted_short_edge": true,
+    "analytic_vs_central_difference_checks": 24,
+    "max_abs_derivative_difference": 3.4116043323706435e-11
+  },
+  "source_archive_sha256": "eb30b838ea31fb88f8d483eb2ab3090137ea2b0b7b7ef21bd14d5310df5be854"
+}
