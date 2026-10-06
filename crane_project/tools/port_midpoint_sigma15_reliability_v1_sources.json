@@ -1,6 +1,6 @@
 {
   "protocol": "port_midpoint_sigma15_reliability_v1",
-  "protocol_sha256": "703613bbd2d57c5861eb80443f5969f875318fef336a735d7b86dce4901e5550",
+  "protocol_sha256": "51d8181285ff671fa4ddbf4adad53899306b8b08fecfb03cdb9a5433725440d4",
   "sources": {
     "configs/_base_/default_runtime.py": "046fc7f2d6a8dd3891b2ad90f1c5c5ea3e45345a1f44163318a6b8e8e33ceb77",
     "configs/_base_/schedules/schedule_1x.py": "eef4b63abefd4e51bce476a012013d63ec27e06c87516a2352ff57b5f46f80e9",
@@ -45,7 +45,7 @@
     "crane_project/tools/port_geometry_midpoint_v1_test_sources.json": "b5cbc799b1aa8a6e5ff5956783e896294ef5ded3037c15a14a9e5619b1ca37c1",
     "crane_project/tools/port_midpoint_reliability_v1_protocol.json": "9b7274a8872adeffa85dc738b10c42458fd940e22bec671f2e898b80c5b10216",
     "crane_project/tools/port_midpoint_reliability_v1_sources.json": "ec4ff3d468e0521a00b765ddf67655c8ffd6705dec34e81a52000bd85e02a4a8",
-    "crane_project/tools/port_midpoint_sigma15_reliability_v1_protocol.json": "703613bbd2d57c5861eb80443f5969f875318fef336a735d7b86dce4901e5550",
+    "crane_project/tools/port_midpoint_sigma15_reliability_v1_protocol.json": "51d8181285ff671fa4ddbf4adad53899306b8b08fecfb03cdb9a5433725440d4",
     "crane_project/tools/port_simple_reliability_v1_protocol.json": "d9e91ea72ea1d0543206d73fedab2a957aa3d18dbb880e118b62bf18f2409b61",
     "crane_project/tools/port_simple_reliability_v1_sources.json": "48d0155cb85babbc1ea960979e3d7a5eedd735a339a3b5f64e82d0d4b35449d3",
     "crane_project/tools/port_size_f_s_v1_sources.json": "4e27e775f3bfe3abbb4ab93ed4111b57532fe3dded55b018497908dd8354ec7f",
@@ -59,7 +59,7 @@
     "crane_project/tools/preflight_port_size_f_s_v1.py": "da542ae08cd5cd569e02ea6454be0c8857fcdba1321c7f17fb421c502b787c0e",
     "crane_project/tools/preflight_port_structure_reliability_v1.py": "eb8e9a0fba0ad1414585254a21abd956962a5c6a3537e3cfb4363af2fde81458",
     "crane_project/tools/run_port_midpoint_reliability_v1.py": "05cdb142f5e648711626cb8998a8e6f0f6998e3c0c774220f69f343602e3f8fc",
-    "crane_project/tools/run_port_midpoint_sigma15_reliability_v1.py": "55c49b594b51764dd60aa02c557480ddf09ace462c17bb5ab60beb52b239d7f2",
+    "crane_project/tools/run_port_midpoint_sigma15_reliability_v1.py": "a62efbf66a4f650f4b7ddb8684fe93863dd2ffff4b77e90473e18a062ee34684",
     "crane_project/tools/run_port_simple_reliability_v1.py": "d9f83f3d45d9c2fd577fe9defba2133d5c7be4f0b8155024ccf79da86f42cde4",
     "crane_project/tools/train_port_geometry_midpoint_formal_v1.py": "b8d0e2f1647dea9b1976914000175a867f5d1574d551e80b2566f81ec8eff3d9",
     "crane_project/tools/train_port_geometry_midpoint_sigma_v1.py": "4ff427f3b5ef4c5fa72af47642c058058926e5161a843ebf30aaaef2ddfc933f",
@@ -96,7 +96,7 @@
     "tests/test_port_geometry_midpoint_v1.py": "9f06049d6f9a1b865022d71ec10fd8ea691e29e32f017340105aa0f67dfbc041",
     "tests/test_port_geometry_midpoint_v1_test.py": "378bc60509170f1dc814706e65084d5208981d2277b864c5ad6ef97cc6b590d8",
     "tests/test_port_midpoint_reliability_v1.py": "b6de21709d2f2131ad61e033b549a2c8e6275caff68ee214b18d99efea869c97",
-    "tests/test_port_midpoint_sigma15_reliability_v1.py": "b2e3a7b5c2ae5e6b2db3d023f86845d7338601be468f64bcd0158d3c68c4217b",
+    "tests/test_port_midpoint_sigma15_reliability_v1.py": "b3bbf762c6f770240ab85b96544b393e6618d84aa906235e95d5a539e6658212",
     "tools/dist_train.sh": "799c72e62a7901e7fb6d148727d5ff91f261d7c41a0147188f03c1fc0f8ff697",
     "tools/train.py": "50b49af8c85e2ad1a2e255894f2bc7f0124fe57b118c64801a6fdad8e1921b87"
   }

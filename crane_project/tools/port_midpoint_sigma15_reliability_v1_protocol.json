@@ -9,6 +9,8 @@
   "midpoint_updates": 0,
   "reference_updates": 0,
   "test_read": false,
+  "cross_cache_tolerances": {"pixel_atol": 0.0005, "pixel_rtol": 0.000001, "angle_atol_rad": 0.000002, "score_atol": 0.000002},
+  "cross_cache_check": "Legacy B and native-midpoint B are independently inferred caches: bind sealed source identities and allow only recorded FP32-scale numeric deltas. Log per-domain/video maxima; never replace either cache's scores or coordinates. Within-pipeline B->midpoint score/count and reliability preservation remain exact.",
   "test_repeatedly_exposed": true,
   "automatic_promotion": false,
   "frontend": "Frozen B24 -> explicit SigmaMidpointHead(1.5)/epoch03 -> unchanged final original OBB+score -> three independent flags.",

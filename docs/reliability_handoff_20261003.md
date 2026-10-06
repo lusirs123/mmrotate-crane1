@@ -1,6 +1,6 @@
 # SymEOOD 分量可靠性交接：保留midpoint23比较基线；σ1.5／epoch03三标志迁移
 
-**2026-10-06执行入口：用户已授权将可靠性前端迁移至B24＋midpoint σ1.5／head_epoch03，继续simple三分量判断。先读第24节。新入口已实现且本地17项测试通过，服务器TRAIN/VAL迁移尚待运行；σ1／epoch23及下述已完成TEST成绩仍保留原比较基线身份，不能写成新前端成绩。本次不启动检测器、midpoint或图像参考训练，也不运行TEST。**
+**2026-10-06执行入口：用户已授权将可靠性前端迁移至B24＋midpoint σ1.5／head_epoch03，继续simple三分量判断。先读第24节，最新修复与命令见24.5。服务器首次check因错误要求独立B缓存score逐位相等失败；cachefix1已修复，本地20项测试及现存SHA绑定全887帧VAL跨缓存核对通过，服务器真实TRAIN／GPU流程尚待运行。σ1／epoch23及下述已完成TEST成绩仍保留原比较基线身份，不能写成新前端成绩。本次不启动检测器、midpoint或图像参考训练，也不运行TEST。**
 
 更新：2026-10-05；用户明确将**B epoch24＋正式midpoint epoch23＋现有simple三标志**的已完成固定TEST流程作为后续可靠性优化的比较基线（第19节）。基线身份已固定，不以性能最好或先优于score作为采用前提；现有取舍是比较起点。第17节为CPU TEST入口，第18节为已核验结果，第19节区分几何变化与可靠性判别改进。第14节保留迁移事实，第15/16节保留模板候选验证，模板未进入基线。旧B＋simple TEST保留第3节历史身份，不能替代当前主基线成绩。
 
@@ -1313,3 +1313,33 @@ tar -czf work_dirs/port_midpoint_sigma15_reliability_v1/analysis_20261006.tar.gz
 ```
 
 新policy目标路径为`work_dirs/port_midpoint_sigma15_reliability_v1/fit/policy.json`，尚待服务器生成与检查；第1节旧policy保持不变。没有改动几何窗口、深度窗口、实际大小论文或新增本地服务器结果副本。
+
+### 24.5 cachefix1：独立B缓存跨推理数值比较修复（2026-10-06）
+
+**失败与原因（事实）：** 用户服务器首次`--mode check`在`prepare → validate_b_pair`的`real_seq07_00001`失败，尚未创建check阶段目录。原实现把旧可靠性B缓存与原生midpoint B缓存视为同一次推理产物，要求两者score逐位相等；这是本次迁移代码的错误要求。前者由常规`detector(return_loss=False, rescale=True, **batch)`推理保存，后者由冻结特征捕获后`simple_test_from_features`独立推理保存；冻结权重相同不保证两个独立缓存逐位相等。
+
+本机只读已有`work_dirs/port_reliability_branches_v1_server_review_20261003/val_qualities.jsonl`（SHA=`d0c84a58cbb3aa589874026fdc8d0b87bbf43ef1b747bb5f504cf1c42c7359b1`）与既有σ1.5封存目录内`val_epoch_03.rows.jsonl`（SHA=`691599c82d5aa90d4bde4af2e72daa76cd53ca2eaf33003ee391ac4feb49fa34`，与其artifacts索引相符）；没有复制、重新解压、改写预测或访问TEST。首帧旧／原生B score为`.33164161443710327/.33164167404174805`，差约`5.96046e-8`。887帧中886个输出、745个score末位不同，missing和逐帧GT／domain／sequence／frame_id一致；六字段最大绝对差为`[0.0001220703125, 0.00006103515625, 0.0003204345703125, 0.0001068115234375, 0.0000011920928955, 0.0000011324882507]`，前四项单位px，第五项rad，第六项score。其中一个尺寸字段亦超过原跨缓存`atol=1e-4,rtol=1e-6`条件。差异量级符合float32数值误差，不能据此称检测器变更或性能改善。
+
+**修复范围（已实现）：** 仅独立旧B缓存与原生midpoint B缓存的比较使用固定公差：前四坐标`abs_delta ≤ 5e-4px + 1e-6*abs(旧值)`；角度`≤2e-6rad`；score`≤2e-6`。source／权重／head／cache SHA门控、frame身份和缺失输出仍要求一致。所有数值先验证有限且符合有效OBB+score约束；超限报image、六字段绝对差与允许量。`check/check_report.json`及执行contract记录VAL比较；`collect/independent_B_cache_comparisons.json`记录TRAIN/VAL按域、逐视频最大差、对应帧和score末位不同数量。比较只读取原值，不把旧score写入新框、不折算或补框。
+
+**严格边界不变：** 同一次原生B→midpoint推理的score和输出数仍逐位一致；可靠性层六字段无损保留仍逐位一致；锁定epoch03与collect／原生VAL重放仍沿用原`verify_replay`与原生几何验证公差，score逐位一致。没有扩大原生重放公差、改变95%门限规则或放过真实漂移。修复的数值公差只用于跨来源身份兼容，不依赖GT正确性、不改变质量模型或几何参数。
+
+**本地验证（事实）：** 修复后20项测试通过。新增首帧真实数值回归、像素／角度／score边界与漏检／NaN拒绝，以及同一链路score仅变化`6e-8`仍拒绝的测试。只读现存完整887帧VAL交叉比较通过，原行fingerprint前后相同；97文件source闭包仍通过，所有继承源未修改。服务器真实TRAIN缓存及GPU collect／verify仍未运行，不能把本地数值回归称为服务器完整迁移成功。
+
+通过Git同步本次四个源文件更新（runner、protocol、sources、tests）及本交接。保留首次目录与失败日志，新的各阶段和日志集中于`work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1`；依次执行，每条一行，失败则停在当前阶段：
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"; export CUDA_VISIBLE_DEVICES=3; set -o pipefail; mkdir -p work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1
+python -m unittest discover -s tests -p 'test_port_midpoint_sigma15_reliability_v1.py' -v 2>&1 | tee work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/unittest.log
+python crane_project/tools/run_port_midpoint_sigma15_reliability_v1.py --mode check --run-dir work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1 2>&1 | tee work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/check.log
+python crane_project/tools/run_port_midpoint_sigma15_reliability_v1.py --mode collect --gpu 0 --run-dir work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1 2>&1 | tee work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/collect.log
+python crane_project/tools/run_port_midpoint_sigma15_reliability_v1.py --mode fit --run-dir work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1 2>&1 | tee work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit.log
+python crane_project/tools/run_port_midpoint_sigma15_reliability_v1.py --mode verify --gpu 0 --run-dir work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1 2>&1 | tee work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/verify.log
+```
+
+全部完成后，仅回传一个分析包；不压缩本地代码、模型或ROI缓存：
+
+```bash
+tar -czf work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/analysis_20261006.tar.gz -C work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1 check collect fit verify unittest.log check.log collect.log fit.log verify.log
+```

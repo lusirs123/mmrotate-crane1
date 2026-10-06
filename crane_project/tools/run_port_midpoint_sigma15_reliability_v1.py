@@ -23,6 +23,10 @@ PROTOCOL = ROOT/'crane_project/tools/port_midpoint_sigma15_reliability_v1_protoc
 SOURCES = ROOT/'crane_project/tools/port_midpoint_sigma15_reliability_v1_sources.json'
 OLD_POLICY_SHA = '1adac499369bade5ef1f79495260002697d2b698c80ebf5424d3d77438fae4af'
 CACHE_SHA = '046c5998dee0ba3703f1ae4e08fc6a02e9804d216ea12241357f69f2a4afd1e3'
+# Only independent legacy-B vs native-midpoint caches use these tolerances.
+# Same-pipeline B->midpoint score/count and lossless reliability stay exact.
+CROSS_CACHE_TOLERANCES = dict(pixel_atol=5e-4, pixel_rtol=1e-6,
+    angle_atol_rad=2e-6, score_atol=2e-6)
 STATUSES = dict(check='SIGMA15_RELIABILITY_INPUTS_PASS',
     collect='SIGMA15_RELIABILITY_COLLECTION_COMPLETE', fit='SIGMA15_SIMPLE_FIT_COMPLETE_REVIEW_REQUIRED',
     verify='SIGMA15_THREE_FLAGS_FULL_VAL_VERIFY_PASS_REVIEW_REQUIRED')
@@ -51,7 +55,8 @@ def checked_sources():
     actual = {name: base.sha(ROOT/name) for name in manifest['sources']}
     if (set(actual) != required or manifest['protocol'] != new.VERSION or actual != manifest['sources'] or
             manifest['protocol_sha256'] != base.sha(PROTOCOL) or protocol['protocol'] != new.VERSION or
-            protocol['midpoint_sha256'] != new.HEAD_SHA or protocol['test_read'] is not False):
+            protocol['midpoint_sha256'] != new.HEAD_SHA or protocol['test_read'] is not False or
+            protocol['cross_cache_tolerances'] != CROSS_CACHE_TOLERANCES):
         raise ValueError('Sigma15 reliability sources/protocol differ')
     base.checked_sources()
     return protocol, dict(sources=actual, manifest_sha256=base.sha(SOURCES))
@@ -83,12 +88,13 @@ def prepare(args):
     selected_path = args.selection.parent/'val_epoch_03.rows.jsonl'
     selected = rows(selected_path)
     final = binding.paired_rows(val, selected)
-    validate_b_pair(val, final)
+    comparison = validate_b_pair(val, final)
     front = dict(name='B24_midpoint_sigma1p5_epoch03', frozen_b=old_protocol['frozen_b'],
         midpoint_checkpoint=selection['selected_checkpoint'], selection_sha256=base.sha(args.selection))
     new.checked_frontend(front)
     contract = dict(protocol=protocol, sources=sources, front_end=front, sigma_proof=proof,
         numeric_input_proof=numeric, cache_manifest_sha256=CACHE_SHA,
+        independent_B_VAL_cache_comparison=comparison,
         final_VAL_fingerprint=simple.fingerprint(final), old_policy_sha256=OLD_POLICY_SHA,
         test_read=False, test_repeatedly_exposed=True)
     return dict(protocol=protocol, contract=contract, train=train, val=val, final=final,
@@ -96,14 +102,42 @@ def prepare(args):
 
 
 def validate_b_pair(sources, paired):
+    """Compare two independent frozen-B runs, never rewrite either prediction.
+
+Legacy detector.forward and native feature-capture caches can differ by FP32
+roundoff. Their identities and missing outputs remain exact; the within-native
+B->midpoint score equality is enforced independently by paired_rows/capture.
+"""
     source = {r['image']: r for r in sources}
     if len(source) != len(sources) or len(paired) != len(sources) or {r['image'] for r in paired} != set(source):
         raise ValueError('Original B paired identity/count differs')
+    t = CROSS_CACHE_TOLERANCES
+    groups = {}
     for row in paired:
-        b, original = row['b_original'], source[row['image']]['pred']
-        if (b is None) != (original is None) or (b is not None and
-                (b[5] != original[5] or not np.allclose(b[:5], original[:5], atol=1e-4, rtol=1e-6))):
-            raise ValueError('Midpoint cache does not share reviewed B: '+row['image'])
+        b, original = simple.prediction(row['b_original']), simple.prediction(source[row['image']]['pred'])
+        if (b is None) != (original is None):
+            raise ValueError('Independent B caches have different missing outputs: '+row['image'])
+        for name in ('all','domain:'+row['domain'],'sequence:'+row['sequence']):
+            group = groups.setdefault(name, dict(frames=0, outputs=0, score_bit_differences=0,
+                max_abs_delta=[0.]*6, max_delta_images=[None]*6))
+            group['frames'] += 1
+            if b is not None:
+                group['outputs'] += 1
+                group['score_bit_differences'] += int(b[5] != original[5])
+                for k, difference in enumerate(np.abs(b-original)):
+                    if difference > group['max_abs_delta'][k]:
+                        group['max_abs_delta'][k] = float(difference)
+                        group['max_delta_images'][k] = row['image']
+        if b is None: continue
+        delta = np.abs(b-original)
+        allowed = np.r_[t['pixel_atol']+t['pixel_rtol']*np.abs(original[:4]),
+                         t['angle_atol_rad'], t['score_atol']]
+        if np.any(delta > allowed):
+            raise ValueError('Independent B caches exceed numeric tolerance: '+row['image']+
+                ' abs_delta='+str(delta.tolist())+' allowed='+str(allowed.tolist()))
+    return dict(scope='independent_legacy_B_vs_native_midpoint_B_only',
+        tolerances=deepcopy(t), coordinate_order=['cx_px','cy_px','w_px','h_px','angle_rad','score'],
+        groups=groups, inputs_unchanged=True, within_pipeline_score_count_still_exact=True)
 
 
 def verify_replay(current, expected):
@@ -159,6 +193,7 @@ def collect(args, prepared, out):
         raise ValueError('Loaded sigma15 checkpoint differs')
     head.eval().requires_grad_(False)
     before = formal.g.state_digest(head)
+    comparisons = {}
     with (out/'final_rows.jsonl').open('x') as stream:
         for key, role in (('train_s1','train'),('val_s1','val')):
             path = args.formal_cache/(key+'.pt')
@@ -172,7 +207,7 @@ def collect(args, prepared, out):
                 raise ValueError('ROI shard role/identity/count differs')
             predictions = formal.evaluate(head, records, 'cuda:'+str(args.gpu))
             paired = binding.paired_rows(prepared[role], predictions)
-            validate_b_pair(prepared[role], paired)
+            comparisons[role] = validate_b_pair(prepared[role], paired)
             if role == 'val':
                 verify_replay(paired, prepared['final'])
                 paired = prepared['final']  # Keep sealed selected-epoch VAL values.
@@ -185,6 +220,7 @@ def collect(args, prepared, out):
     base.write_new(out/'collect_report.json', dict(train_frames=2558, val_frames=887,
         head_state_before=before, head_state_after=before, detector_loaded=False,
         feature_extractions=0, head_updates=0, detector_updates=0, test_read=False))
+    base.write_new(out/'independent_B_cache_comparisons.json', comparisons)
 
 
 def read_collection(args, prepared):
@@ -359,6 +395,7 @@ def main():
         if args.mode == 'check':
             base.write_new(out/'check_report.json', dict(front_end=prepared['contract']['front_end'],
                 train_frames=len(prepared['train']), val_frames=len(prepared['val']),
+                independent_B_VAL_cache_comparison=prepared['contract']['independent_B_VAL_cache_comparison'],
                 static_only=True, tensor_loads=0, detector_updates=0, head_updates=0, test_read=False))
         else: globals()[args.mode](args, prepared, out)
         if prepare(args)['contract'] != prepared['contract']: raise ValueError('Inputs changed during stage')

@@ -239,6 +239,52 @@ class StageTests(unittest.TestCase):
         changed = deepcopy(val); changed[1]['b_original'] = None
         with self.assertRaises(ValueError): entry.validate_b_pair(sources,changed)
 
+    def test_server_first_frame_independent_cache_roundoff_is_accepted_without_mutation(self):
+        original = [1008.9555053710938,332.60150146484375,136.53184509277344,
+                    63.132293701171875,-.03347897529602051,.33164161443710327]
+        native = [1008.9555053710938,332.60150146484375,136.53182983398438,
+                  63.132301330566406,-.03347885608673096,.33164167404174805]
+        sources = [dict(image='real_seq07_00001',domain='real',sequence='real_seq07',pred=original)]
+        paired = [dict(sources[0],b_original=native)]
+        before = deepcopy([sources,paired])
+        report = entry.validate_b_pair(sources,paired)
+        self.assertEqual([sources,paired],before)
+        self.assertEqual(report['groups']['all']['score_bit_differences'],1)
+        self.assertEqual(report['groups']['all']['max_abs_delta'][5],abs(native[5]-original[5]))
+        self.assertEqual(report['groups']['sequence:real_seq07']['outputs'],1)
+        self.assertTrue(report['within_pipeline_score_count_still_exact'])
+
+    def test_independent_cache_pixel_score_angle_limits_and_missing_are_not_removed(self):
+        _, val = fixture()
+        sources = [dict(r,pred=r['b_original']) for r in val]
+        for index, delta in ((0,5e-5),(2,3.3e-4),(4,1.2e-6),(5,1.2e-6)):
+            changed = deepcopy(val); changed[1]['b_original'][index] += delta
+            entry.validate_b_pair(sources,changed)
+        for index, delta in ((0,.01),(2,.01),(4,3e-6),(5,3e-6)):
+            changed = deepcopy(val); changed[1]['b_original'][index] += delta
+            with self.assertRaisesRegex(ValueError,'exceed numeric tolerance'):
+                entry.validate_b_pair(sources,changed)
+        changed = deepcopy(val); changed[1]['b_original'] = None
+        with self.assertRaisesRegex(ValueError,'different missing outputs'):
+            entry.validate_b_pair(sources,changed)
+        changed = deepcopy(val); changed[1]['b_original'][5] = float('nan')
+        with self.assertRaises(ValueError): entry.validate_b_pair(sources,changed)
+        with self.assertRaises(ValueError): entry.validate_b_pair(sources,val[:-1])
+
+    def test_within_pipeline_score_equality_remains_exact_at_roundoff_scale(self):
+        _, val = fixture()
+        row = val[1]
+        original = dict(row,pred=row['b_original'])
+        record = predictions([row])[0]
+        record['midpoint'] = deepcopy(record['midpoint'])
+        record['midpoint'][5] += 6e-8
+        record['candidate'] = deepcopy(record['midpoint'])
+        with self.assertRaisesRegex(ValueError,'changed detector score'):
+            entry.binding.paired_rows([original],[record])
+        changed = deepcopy(val); changed[1]['pred'][5] += 6e-8
+        with self.assertRaisesRegex(ValueError,'Replay box/score/count differs'):
+            entry.verify_replay(changed,val)
+
     def test_completion_detects_mutation_failure_and_wrong_contract(self):
         with tempfile.TemporaryDirectory() as d:
             out = Path(d)
