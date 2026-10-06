@@ -1,0 +1,45 @@
+{
+  "arms": [
+    "eood",
+    "symeood",
+    "symeood_b",
+    "symeood_b_midpoint"
+  ],
+  "baselines": {
+    "eood": {
+      "checkpoint_sha256": "ee277d72cdf27d76e3216da4d17256b453b539d69d692cdd71960fadf7ebd2bf",
+      "config": "crane_project/configs/crane_eood_k1_port_day2night_v1.py",
+      "epoch": 24,
+      "historical_config_sha256": "4265a9362b5e2dc99f273591a98342c9ba8deba3bbca8ae1059bf4a209a1a3c0",
+      "selection_sha256": "a0bf581181890dc65cc381812cff44e93dd5c6e5658857443c08bfebba39dc8a",
+      "stem": "crane_eood_k1"
+    },
+    "symeood": {
+      "checkpoint_sha256": "780a5de1a17b32041175bdf408a209872100f776de811075c55204bf333a92fe",
+      "config": "crane_project/configs/crane_symeood_k1_port_day2night_v1.py",
+      "epoch": 20,
+      "historical_config_sha256": "ca8b950c8bba2775b20a075e619a24915bcee443c1a1e0bd1858a908d966ea45",
+      "selection_sha256": "7f1439a451442572c9e35131a3b29312f0c37900a5414a59f8e98c3769ff502d",
+      "stem": "crane_symeood_k1"
+    }
+  },
+  "calibration_sha256": "c9c14fc1b09ba8223996121425e302888ac7d44213192225acd5365fb2f1ffe2",
+  "evidence": "Compare original fixed frontends through unchanged Raw-opt. Prediction streams close before new metric truth parsing. No detector/head update, refit, selection, DINO, reliability filtering, TEST, Fixed-dev or Unknown reads.",
+  "frame_count": 981,
+  "frozen_b_sha256": "8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23",
+  "frozen_midpoint_sha256": "16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7",
+  "inference": "Only existing EOOD ep24 and unaugmented SymEOOD ep20 infer all981 Train-03 frames. Original native pipeline/NMS retained. EOOD highest-score native candidate, stable first index for ties; do not change max_per_img. Reuse previously sealed B/M predictions, do not rerun them.",
+  "limitation": "Train-03 calibration diagnostic, not independently held-out final or real-port metric depth precision. Existing B/M are historical sealed outputs, not same-run inference with the new baselines.",
+  "numerical": {
+    "batch": 1,
+    "cudnn_allow_tf32": false,
+    "cudnn_benchmark": false,
+    "cudnn_deterministic": true,
+    "input_dtype": "float32",
+    "matmul_allow_tf32": false
+  },
+  "protocol": "port_depth_four_arm_v1_train03",
+  "reporting": "Output/numeric coverage, absolute depth difference/MAE/median/P95/bias/full-frame descriptive coverage; center has output-conditional and all-frame denominators. Same q support, actual sx/sy and raw w/h-angle. Offline GT substitution is an error-propagation diagnostic, not deployable output.",
+  "reused_reference_archive_sha256": "ec24e38ad9c9efc1ca07887e1efd53897766fae358ea17fabc6620513811e07f",
+  "sequence": "calibration_train_03_tilt_obb"
+}

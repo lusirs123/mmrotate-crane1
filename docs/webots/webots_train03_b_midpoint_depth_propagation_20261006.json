@@ -1,0 +1,85 @@
+{
+  "calibration_sha256": "c9c14fc1b09ba8223996121425e302888ac7d44213192225acd5365fb2f1ffe2",
+  "date": "2026-10-06",
+  "formula_generalization_guaranteed": false,
+  "gt_obb_formula_metrics": {
+    "abs_rel": 0.0024735957010812884,
+    "bias_m": -0.011353199016404598,
+    "count": 981,
+    "mae_m": 0.04089905427732898,
+    "max_abs_error_m": 0.15337788871866742,
+    "p95_abs_error_m": 0.11329915424724213,
+    "rmse_m": 0.053426706032900846
+  },
+  "identities": "Z_short_only = Z_GTbox/(1+short_relative_error); Z_ratio_only = Z_GTbox*exp(beta*(q_pred^2-q_GT^2)); exact components sum to signed bias, not MAE",
+  "inference_or_training_performed": false,
+  "interpretation": "Short-edge scale error is the largest current signed-bias term. Formula ratio sensitivity amplifies input errors; low GT-box residual on calibration-train is not independent formula validation.",
+  "models": {
+    "symeood_b": {
+      "count": 981,
+      "diagnostic_uncomputable_count": 0,
+      "max_signed_identity_residual_m": 0.0,
+      "note": "Components add to signed bias on common diagnostic frames, not to MAE. GT substitutions never alter delivered model boxes or enter inference.",
+      "ratio_only_diagnostic": {
+        "abs_rel": 0.011444914045969317,
+        "bias_m": 0.19662190173692443,
+        "count": 981,
+        "mae_m": 0.21679666562151276,
+        "max_abs_error_m": 2.2938718462619683,
+        "p95_abs_error_m": 0.726374775625505,
+        "rmse_m": 0.34309496367317055
+      },
+      "role": "offline_GT_substitution_diagnostic_not_deployable",
+      "short_scale_only_diagnostic": {
+        "abs_rel": 0.04471117789294758,
+        "bias_m": 0.8382491338329174,
+        "count": 981,
+        "mae_m": 0.8623234535521408,
+        "max_abs_error_m": 3.0976127584489355,
+        "p95_abs_error_m": 1.933786278414825,
+        "rmse_m": 1.0212645103167688
+      },
+      "signed_error_component_mean_m": {
+        "gt_formula": -0.011353199016404598,
+        "interaction": 0.008305186268251184,
+        "ratio_q": 0.207975100753329,
+        "short_scale": 0.8496023328493221
+      }
+    },
+    "symeood_b_midpoint": {
+      "count": 981,
+      "diagnostic_uncomputable_count": 0,
+      "max_signed_identity_residual_m": 0.0,
+      "note": "Components add to signed bias on common diagnostic frames, not to MAE. GT substitutions never alter delivered model boxes or enter inference.",
+      "ratio_only_diagnostic": {
+        "abs_rel": 0.013355906363560977,
+        "bias_m": 0.24587468197207515,
+        "count": 981,
+        "mae_m": 0.273634097898164,
+        "max_abs_error_m": 2.758662533978221,
+        "p95_abs_error_m": 1.1632424597339117,
+        "rmse_m": 0.4753065116401596
+      },
+      "role": "offline_GT_substitution_diagnostic_not_deployable",
+      "short_scale_only_diagnostic": {
+        "abs_rel": 0.04999334005504987,
+        "bias_m": 0.9502817826913681,
+        "count": 981,
+        "mae_m": 0.9610045893789629,
+        "max_abs_error_m": 3.2637046620401726,
+        "p95_abs_error_m": 2.0524052395266636,
+        "rmse_m": 1.124131166848658
+      },
+      "signed_error_component_mean_m": {
+        "gt_formula": -0.011353199016404598,
+        "interaction": 0.012366804613319198,
+        "ratio_q": 0.25722788098847976,
+        "short_scale": 0.9616349817077727
+      }
+    }
+  },
+  "parameters_refitted": false,
+  "reference_archive_sha256": "ec24e38ad9c9efc1ca07887e1efd53897766fae358ea17fabc6620513811e07f",
+  "role": "offline_GT_substitution_error_propagation_only",
+  "sequence_id": "calibration_train_03_tilt_obb"
+}
