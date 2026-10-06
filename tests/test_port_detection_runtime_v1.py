@@ -75,6 +75,8 @@ class ContractTests(unittest.TestCase):
         documented = {k:v for k,v in c.protocol_document()['numerical_settings'].items() if k != 'reason'}
         documented['cudnn_benchmark'] = c.protocol_document()['cudnn_benchmark']
         self.assertEqual(flags, documented)
+        for arm in c.ARMS:
+            self.assertEqual(b.numerical_settings(fake,historical_arm=arm),c.historical_settings(arm))
 
     def test_score_mismatch_records_frame_exact_values_and_keeps_strict_gate(self):
         actual = [[50.,40.,20.,10.,.2,.80000001]]
@@ -92,21 +94,19 @@ class ContractTests(unittest.TestCase):
             self.assertGreater(report['component_absolute_errors'][0][5],0.)
             self.assertIn('tolerance=0', report['error'])
 
-    def test_historical_fp32_compatibility_does_not_relax_same_run_scores_or_geometry(self):
-        ref = [[50.,40.,20.,10.,.2,.992497980594635]]
-        actual = deepcopy(ref); actual[0][5] = .9924980998039246
-        c.check_boxes(actual,ref,historical_scores=True)
+    def test_cross_setting_drift_is_descriptive_but_exact_replay_and_behavior_are_gated(self):
+        ref = [[50.,40.,20.,10.,.2,.6598626375198364]]
+        actual = deepcopy(ref); actual[0][5] = .6598590016365051
+        c.check_boxes(actual,ref,cross_setting=True)
         with self.assertRaises(ValueError): c.check_boxes(actual,ref)
-        actual[0][5] = ref[0][5]+2e-6
-        with self.assertRaises(ValueError): c.check_boxes(actual,ref,historical_scores=True)
         actual = deepcopy(ref); actual[0][0] += .01
-        with self.assertRaises(ValueError): c.check_boxes(actual,ref,historical_scores=True)
+        with self.assertRaises(ValueError): c.check_boxes(actual,ref,cross_setting=True)
         actual = deepcopy(ref); actual[0][5] = 1.0000001
-        with self.assertRaises(ValueError): c.check_boxes(actual,ref,historical_scores=True)
-        with self.assertRaises(ValueError): c.check_boxes([],ref,historical_scores=True)
+        with self.assertRaises(ValueError): c.check_boxes(actual,ref,cross_setting=True)
+        with self.assertRaises(ValueError): c.check_boxes([],ref,cross_setting=True)
         with self.assertRaises(ValueError):
             c.check_boxes([[50.,40.,20.,10.,.2,.0500001]],
-                          [[50.,40.,20.,10.,.2,.0499999]],historical_scores=True)
+                          [[50.,40.,20.,10.,.2,.0499999]],cross_setting=True)
 
     def test_midpoint_preserves_native_scores_exactly_even_when_history_is_close(self):
         box = [[50.,40.,20.,10.,.2,.8]]
@@ -114,20 +114,29 @@ class ContractTests(unittest.TestCase):
         c.check_midpoint_scores([],[])
         with self.assertRaises(ValueError): c.check_midpoint_scores(box,[.80000001])
         with self.assertRaises(ValueError): c.check_midpoint_scores(box,[])
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp); value = SimpleNamespace(tolist=lambda:box)
+            with self.assertRaisesRegex(ValueError,'midpoint image=frame'):
+                b.verify_midpoint_scores(value,[.80000001],out,dict(image='frame'),'native_check',{})
+            self.assertEqual(c.read(out/'output_mismatch.json')['expected_native_scores'],[.80000001])
 
     def test_full_output_preflight_checks_all_arms_and_all_frames_without_publishing_speed(self):
         rows = [dict(image='frame_%02d'%i,sequence='real_seq03') for i in range(31)]
         weights = {arm:None for arm in c.ARMS}
-        torch = SimpleNamespace(no_grad=nullcontext,cuda=SimpleNamespace(empty_cache=lambda:None))
+        torch = SimpleNamespace(no_grad=nullcontext,cuda=SimpleNamespace(empty_cache=lambda:None),
+            backends=SimpleNamespace(cudnn=SimpleNamespace(benchmark=False,deterministic=True,allow_tf32=True),
+                                     cuda=SimpleNamespace(matmul=SimpleNamespace(allow_tf32=False))))
         cv2 = SimpleNamespace(imread=lambda path:object())
         current_arm = []; calls = {arm:0 for arm in c.ARMS}
-        score = .9924980998039246; oldscore = .992497980594635
+        score = .6598590016365051; oldscore = .6598626375198364
         class FakePipeline:
             def __init__(self,*args):
                 self.arm = current_arm[-1]; self.native_scores = [score]
             def __call__(self,*args):
                 calls[self.arm] += 1
-                return SimpleNamespace(dtype='float32',tolist=lambda:[[50.,40.,20.,10.,.2,score]])
+                value = oldscore if calls[self.arm] <= 62 else score
+                self.native_scores = [value]
+                return SimpleNamespace(dtype='float32',tolist=lambda:[[50.,40.,20.,10.,.2,value]])
         def fakebuild(arm,*args):
             current_arm.append(arm); return object(),None,None,None,{}
         with tempfile.TemporaryDirectory() as tmp, patch.multiple(b,
@@ -135,14 +144,36 @@ class ContractTests(unittest.TestCase):
                 prepare=lambda *args:(object(),[]),state_sha=lambda model:'unchanged',
                 expected_boxes=lambda *args:[[50.,40.,20.,10.,.2,oldscore]]):
             out = Path(tmp)
-            proof,values = b.preflight_outputs(rows,{},weights,{},0,torch,None,cv2,None,out,{})
+            flags = b.numerical_settings(torch)
+            proof,values = b.preflight_outputs(rows,{},weights,{},0,torch,None,cv2,None,out,flags)
             self.assertEqual(set(proof['arms']),set(c.ARMS))
             for arm in c.ARMS:
                 self.assertEqual(proof['arms'][arm]['verified_predictions'],31)
-                self.assertEqual(calls[arm],62)  # all31 fixture warmup + all31 checks
+                self.assertEqual(calls[arm],124)  # two modes, each31 warmup +31 checks
                 self.assertEqual(len(values[arm]),31)
-                self.assertEqual(proof['arms'][arm]['historical_score_drift']['nonidentical_score_outputs'],31)
+                self.assertEqual(proof['arms'][arm]['cross_setting_score_drift']['nonidentical_score_outputs'],31)
+                self.assertEqual(proof['arms'][arm]['historical_replay']['verified_predictions'],31)
+                self.assertEqual(proof['arms'][arm]['historical_replay']['numerical_settings'],c.historical_settings(arm))
             self.assertFalse((out/'runtime_compare.json').exists())
+            self.assertFalse((out/'timings.jsonl').exists())
+
+    def test_historical_replay_failure_stops_before_common_cache_and_timing(self):
+        rows = [dict(image='first',sequence='real_seq03')]
+        torch = SimpleNamespace(no_grad=nullcontext,cuda=SimpleNamespace(empty_cache=lambda:None),
+            backends=SimpleNamespace(cudnn=SimpleNamespace(benchmark=False,deterministic=True,allow_tf32=True),
+                                     cuda=SimpleNamespace(matmul=SimpleNamespace(allow_tf32=False))))
+        actual = [[50.,40.,20.,10.,.2,.80000001]]; expected = [[50.,40.,20.,10.,.2,.8]]
+        # A changed original-mode score must never become its own accepted reference.
+        with tempfile.TemporaryDirectory() as tmp, patch.multiple(b,
+                build=lambda *args:(None,None,None,None,{}),
+                Pipeline=lambda *args:lambda *a:SimpleNamespace(dtype='float32',tolist=lambda:actual),
+                transform=lambda cfg:None, prepare=lambda *a:(None,None),
+                state_sha=lambda model:'same', expected_boxes=lambda *a:expected):
+            out = Path(tmp)
+            with self.assertRaisesRegex(ValueError,'historical_mode_replay'):
+                b.preflight_outputs(rows,{}, {},{},0,torch,None,
+                    SimpleNamespace(imread=lambda path:object()),None,out,b.numerical_settings(torch))
+            self.assertFalse(any(out.glob('*.runtime_outputs.json')))
             self.assertFalse((out/'timings.jsonl').exists())
 
     def test_equivalent_axis_swap_cannot_silently_replace_raw_contract(self):

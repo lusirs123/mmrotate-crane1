@@ -15,7 +15,6 @@ M_ROWS_SHA = '13c4cfa7f1f67a7bc2cad36da1ec067adbeae74080b387d39efe39fdc41a788d'
 EOOD_CONFIG = 'crane_project/configs/crane_eood_k1_port_day2night_v1.py'
 SYM_CONFIG = 'crane_project/configs/crane_symeood_k1_port_day2night_v1.py'
 B_CONFIG = 'crane_project/configs/crane_symeood_k1_port_day2night_aug_b_v1.py'
-HISTORICAL_SCORE_ATOL = 1e-6
 ARCHIVE = 'crane_project/data/crane_grab_port_day2night_v1/provenance/config_retirement_20260929'
 # Exact immutable identities reviewed from the 20261006 server input receipt.
 # Only these two migrations are accepted; unknown historical SHA stays an error.
@@ -155,9 +154,10 @@ def protocol_document():
         numerical_settings=dict(cudnn_deterministic=True, cuda_matmul_allow_tf32=False,
             cudnn_allow_tf32=True,
             reason='Restore seed_all cuDNN determinism and unchanged torch1.13 convolution default from sealed sigma15 evaluation; same flags for all four arms. No autocast/half.'),
-        output_preflight='Before any timed arm, replay all1440 frozen frames for all four arms under one common numerical setting, after 50 warmup frames each. Check immutable historical references with score absolute tolerance1e-6, unchanged raw geometry tolerance, exact counts/order and threshold side. Save same-setting runtime outputs for strict score checks during all timed repeats. No GT metrics or parameter selection.',
-        score_validation=dict(historical_atol=HISTORICAL_SCORE_ATOL, historical_rtol=0.,
-            historical_reason='Different cuDNN arithmetic modes need not reproduce old FP32 scores bitwise. A bounded compatibility check is not a new precision result.',
+        output_preflight='For each arm, replay all1440 frames under its original numerical settings with exact historical scores, then replay under one common timing setting. Each phase has 50 warmup frames. Cross-setting scores are descriptive; output counts/order/raw geometry/threshold side must remain compatible. Save common-setting outputs for strict repeated-score checks. No timed arm starts until every history and common-setting check passes.',
+        historical_numerical_settings={arm:historical_settings(arm) for arm in ARMS},
+        score_validation=dict(historical_same_setting='Exact score equality; no new tolerance.',
+            cross_setting='Measure and report score differences; no magnitude cutoff or score adjustment. Valid scores, count, candidate order, raw geometry and fixed threshold side are gated separately. Exact historical reproduction must pass first.',
             same_setting_repeats='Exact score equality against the full current-run preflight outputs.',
             midpoint='Exact equality to the native B scores from the same extraction/forward.',
             output_count_order_threshold='Unchanged count, ordered raw boxes and side of fixed score threshold0.05; no threshold tuning.'),
@@ -172,7 +172,7 @@ def protocol_document():
         input_diagnosis='Optional inputs stage reads existing metadata and streams file SHA only. No pickle/torch load, GPU, images, annotations, prediction generation or reselection. Missing or inconsistent provenance is reported, never repaired automatically.',
         historical_migration='Only the two reviewed seq06 config/weight/selection/TEST/prediction byte identities are accepted. Archived override AST must equal current config apart from work_dir and inheritance flattening; full resolved checkpoint config is still required. Old records remain unchanged; recorded paths are limited to the original named seq06 directories.',
         artifact_layout='Unified shell runner writes tests/logs/check/inputs/benchmark below one new work_dirs/port_detection_runtime_v1 task directory and packages it once on success or failure. Old task directories are retained.',
-        validation='All1440 outputs of every repeat must match sealed predictions. A single backbone and native detector-head call per production frame. Extra audit forwards are not timed.',
+        validation='Original-mode full outputs must reproduce sealed historical scores exactly. Common-mode repeats must match their common-mode full replay scores exactly; raw geometry, count/order/threshold-side remain compatible with sealed outputs. A single backbone and native detector-head call per production frame. Extra audit forwards are not timed.',
         scope=dict(training_updates=0, gt_online=False, ground_truth_scoring=False,
             selection_on_test=False, test_repeatedly_exposed=True,
             reliability_included=False, size_residual_candidate_included=False,
@@ -196,7 +196,14 @@ def timing_summary(seconds):
         p95_ms=1000*percentile(seconds, .95), max_ms=1000*max(seconds))
 
 
-def check_boxes(actual, expected, historical_scores=False):
+def historical_settings(arm):
+    detector_identity(arm)
+    # tools/test.py does not enable deterministic cuDNN; sigma15 eval calls seed_all.
+    return dict(cudnn_benchmark=False, cudnn_deterministic=arm in ('symeood_b','symeood_b_midpoint'),
+                cuda_matmul_allow_tf32=False, cudnn_allow_tf32=True)
+
+
+def check_boxes(actual, expected, cross_setting=False):
     """Raw w/h-angle and score; no GT, canonical reordering or best-candidate pick."""
     if len(actual) != len(expected):
         raise ValueError('Output presence/candidate count differs from sealed result')
@@ -208,12 +215,14 @@ def check_boxes(actual, expected, historical_scores=False):
             raise ValueError('Nonfinite output/reference')
         if a[2] <= 0 or a[3] <= 0:
             raise ValueError('Nonpositive output size')
-        if historical_scores and (not 0 <= a[5] <= 1 or not 0 <= b[5] <= 1 or
+        if cross_setting and (not 0 <= a[5] <= 1 or not 0 <= b[5] <= 1 or
                                   (a[5] > .05) != (b[5] > .05)):
             raise ValueError('Score range or fixed threshold side differs')
         for index, (x, y) in enumerate(zip(a, b)):
             error = abs(float(x)-float(y))
-            tolerance = (HISTORICAL_SCORE_ATOL if historical_scores else 0.) if index == 5 else 1e-4+1e-6*abs(float(y))
+            if index == 5 and cross_setting:
+                continue  # score drift is recorded; exact historical mode was gated separately
+            tolerance = 0. if index == 5 else 1e-4+1e-6*abs(float(y))
             if error > tolerance:
                 raise ValueError('Output component %d differs from sealed result: actual=%.17g, '
                     'expected=%.17g, abs_error=%.17g, tolerance=%.17g' %

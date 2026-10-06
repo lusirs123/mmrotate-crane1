@@ -52,11 +52,36 @@
     "cudnn_allow_tf32": true,
     "reason": "Restore seed_all cuDNN determinism and unchanged torch1.13 convolution default from sealed sigma15 evaluation; same flags for all four arms. No autocast/half."
   },
-  "output_preflight": "Before any timed arm, replay all1440 frozen frames for all four arms under one common numerical setting, after 50 warmup frames each. Check immutable historical references with score absolute tolerance1e-6, unchanged raw geometry tolerance, exact counts/order and threshold side. Save same-setting runtime outputs for strict score checks during all timed repeats. No GT metrics or parameter selection.",
+  "output_preflight": "For each arm, replay all1440 frames under its original numerical settings with exact historical scores, then replay under one common timing setting. Each phase has 50 warmup frames. Cross-setting scores are descriptive; output counts/order/raw geometry/threshold side must remain compatible. Save common-setting outputs for strict repeated-score checks. No timed arm starts until every history and common-setting check passes.",
+  "historical_numerical_settings": {
+    "eood": {
+      "cudnn_benchmark": false,
+      "cudnn_deterministic": false,
+      "cuda_matmul_allow_tf32": false,
+      "cudnn_allow_tf32": true
+    },
+    "symeood": {
+      "cudnn_benchmark": false,
+      "cudnn_deterministic": false,
+      "cuda_matmul_allow_tf32": false,
+      "cudnn_allow_tf32": true
+    },
+    "symeood_b": {
+      "cudnn_benchmark": false,
+      "cudnn_deterministic": true,
+      "cuda_matmul_allow_tf32": false,
+      "cudnn_allow_tf32": true
+    },
+    "symeood_b_midpoint": {
+      "cudnn_benchmark": false,
+      "cudnn_deterministic": true,
+      "cuda_matmul_allow_tf32": false,
+      "cudnn_allow_tf32": true
+    }
+  },
   "score_validation": {
-    "historical_atol": 1e-06,
-    "historical_rtol": 0.0,
-    "historical_reason": "Different cuDNN arithmetic modes need not reproduce old FP32 scores bitwise. A bounded compatibility check is not a new precision result.",
+    "historical_same_setting": "Exact score equality; no new tolerance.",
+    "cross_setting": "Measure and report score differences; no magnitude cutoff or score adjustment. Valid scores, count, candidate order, raw geometry and fixed threshold side are gated separately. Exact historical reproduction must pass first.",
     "same_setting_repeats": "Exact score equality against the full current-run preflight outputs.",
     "midpoint": "Exact equality to the native B scores from the same extraction/forward.",
     "output_count_order_threshold": "Unchanged count, ordered raw boxes and side of fixed score threshold0.05; no threshold tuning."
@@ -76,7 +101,7 @@
   "input_diagnosis": "Optional inputs stage reads existing metadata and streams file SHA only. No pickle/torch load, GPU, images, annotations, prediction generation or reselection. Missing or inconsistent provenance is reported, never repaired automatically.",
   "historical_migration": "Only the two reviewed seq06 config/weight/selection/TEST/prediction byte identities are accepted. Archived override AST must equal current config apart from work_dir and inheritance flattening; full resolved checkpoint config is still required. Old records remain unchanged; recorded paths are limited to the original named seq06 directories.",
   "artifact_layout": "Unified shell runner writes tests/logs/check/inputs/benchmark below one new work_dirs/port_detection_runtime_v1 task directory and packages it once on success or failure. Old task directories are retained.",
-  "validation": "All1440 outputs of every repeat must match sealed predictions. A single backbone and native detector-head call per production frame. Extra audit forwards are not timed.",
+  "validation": "Original-mode full outputs must reproduce sealed historical scores exactly. Common-mode repeats must match their common-mode full replay scores exactly; raw geometry, count/order/threshold-side remain compatible with sealed outputs. A single backbone and native detector-head call per production frame. Extra audit forwards are not timed.",
   "scope": {
     "training_updates": 0,
     "gt_online": false,

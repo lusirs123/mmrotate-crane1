@@ -62,6 +62,8 @@ SOURCE_PATHS = (
     # Evidence for the restored seed_all settings, not called by timed inference.
     'crane_project/tools/train_port_geometry_midpoint_formal_v1.py',
     'crane_project/tools/eval_port_geometry_midpoint_sigma15_v1.py',
+    'crane_project/tools/ckpt_sweep.py',
+    'tools/test.py',
     c.ARCHIVE+'/manifest.json',
     c.ARCHIVE+'/crane_eood_k1_port_day2night_seq06_v1.py.txt',
     c.ARCHIVE+'/crane_eood_k1_port_day2night_v1.py.txt',
@@ -421,15 +423,16 @@ def prepare(compose, frame, gpu):
     return image, metas
 
 
-def numerical_settings(torch):
+def numerical_settings(torch, historical_arm=None):
     """Match the original sigma15 eval's seed_all and torch1.13 defaults.
 
     Deterministic cuDNN changes convolution algorithm selection, not weights.
-    Apply the same settings to all arms; historical compatibility is bounded,
-    while same-setting repeat scores and midpoint native scores stay exact.
+    History replays use original settings; all timed arms use common settings.
+    All comparisons within one numerical setting keep exact scores.
     """
     torch.backends.cudnn.benchmark = False
-    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.deterministic = (c.historical_settings(historical_arm)['cudnn_deterministic']
+                                         if historical_arm is not None else True)
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cudnn.allow_tf32 = True
     return dict(cudnn_benchmark=bool(torch.backends.cudnn.benchmark),
@@ -445,15 +448,15 @@ def expected_boxes(arm, index, row, references, np):
     return [] if value is None else [value]
 
 
-def verify_output(result, expected, out, arm, row, repeat, stage, flags, historical=False):
+def verify_output(result, expected, out, arm, row, repeat, stage, flags, cross_setting=False):
     actual = result.tolist()
     try:
-        return c.check_boxes(actual, expected, historical_scores=historical)
+        return c.check_boxes(actual, expected, cross_setting=cross_setting)
     except ValueError as error:
         details = dict(arm=arm, image=row['image'], repeat=repeat, stage=stage,
             numerical_settings=flags, actual_dtype=str(result.dtype),
             actual=actual, expected=expected, error=str(error),
-            score_policy='Historical abs1e-6/rtol0' if historical else 'Exact; unchanged',
+            score_policy='Cross-setting drift reported; no magnitude cutoff' if cross_setting else 'Exact; unchanged',
             geometry_policy='atol1e-4 + rtol1e-6; unchanged')
         if len(actual) == len(expected):
             details['component_absolute_errors'] = [[abs(float(a)-float(b))
@@ -461,6 +464,17 @@ def verify_output(result, expected, out, arm, row, repeat, stage, flags, histori
         c.write_new(out/'output_mismatch.json', details)
         raise ValueError('%s image=%s stage=%s repeat=%s: %s' %
                          (arm, row['image'], stage, repeat, error)) from error
+
+
+def verify_midpoint_scores(result, scores, out, row, stage, flags):
+    try:
+        c.check_midpoint_scores(result.tolist(),scores)
+    except ValueError as error:
+        c.write_new(out/'output_mismatch.json',dict(arm='symeood_b_midpoint',image=row['image'],
+            stage=stage,numerical_settings=flags,actual=result.tolist(),
+            expected_native_scores=[float(s) for s in scores],score_policy='Exact native-score inheritance',
+            error=str(error)))
+        raise ValueError('midpoint image=%s stage=%s: %s'%(row['image'],stage,error)) from error
 
 
 def preflight_outputs(rows, references, weights, sealed, gpu, torch, np, cv2, Config, out, flags):
@@ -472,10 +486,36 @@ def preflight_outputs(rows, references, weights, sealed, gpu, torch, np, cv2, Co
             detector, head, cfg, geometry, meta = build(arm,gpu,weights,sealed,torch,Config)
             pipe = Pipeline(detector,head,torch,np,geometry); compose = transform(cfg)
             before = dict(detector=state_sha(detector), head=state_sha(head) if head is not None else None)
+            original_flags = numerical_settings(torch,historical_arm=arm)
             for row in rows[:50]:
                 frame = cv2.imread(str(DATA/'test/images'/(row['image']+'.jpg')))
                 if frame is None: raise ValueError('Cannot decode output preflight warmup image')
                 image, metas = prepare(compose,frame,gpu); pipe(image,metas)
+            historical_worst = 0.
+            for index,row in enumerate(rows):
+                frame = cv2.imread(str(DATA/'test/images'/(row['image']+'.jpg')))
+                if frame is None: raise ValueError('Cannot decode historical replay image')
+                image,metas = prepare(compose,frame,gpu); result = pipe(image,metas)
+                expected = expected_boxes(arm,index,row,references,np)
+                historical_worst = max(historical_worst,verify_output(result,expected,out,arm,row,0,
+                    'historical_mode_replay',original_flags))
+                if arm == 'symeood_b_midpoint':
+                    verify_midpoint_scores(result,pipe.native_scores,out,row,'historical_native_score',original_flags)
+                if (index+1)%200 == 0 or index+1 == len(rows):
+                    print('Historical replay',arm,index+1,'/',len(rows),'exact scores pass',flush=True)
+            historical_after = dict(detector=state_sha(detector),head=state_sha(head) if head is not None else None)
+            if before != historical_after: raise ValueError('Historical replay changed frozen state')
+            history = dict(verified_predictions=len(rows),numerical_settings=original_flags,
+                max_box_component_difference=historical_worst,state_before=before,state_after=historical_after,
+                score_policy='Exact historical reproduction; no tolerance')
+            c.write_new(out/(arm+'.historical_replay.json'),history)
+            # A shared timing condition is never chosen using score/precision results.
+            actual_common_flags = numerical_settings(torch)
+            if actual_common_flags != flags: raise ValueError('Common numerical settings changed')
+            for row in rows[:50]:
+                frame = cv2.imread(str(DATA/'test/images'/(row['image']+'.jpg')))
+                if frame is None: raise ValueError('Cannot decode common-setting warmup image')
+                image,metas = prepare(compose,frame,gpu); pipe(image,metas)
             worst = 0.
             values = []
             drift = dict(outputs_checked=0, nonidentical_score_outputs=0,
@@ -486,12 +526,13 @@ def preflight_outputs(rows, references, weights, sealed, gpu, torch, np, cv2, Co
                 image, metas = prepare(compose,frame,gpu); result = pipe(image,metas)
                 expected = expected_boxes(arm,index,row,references,np)
                 worst = max(worst,verify_output(result,expected,out,arm,row,0,'output_preflight',flags,
-                                                historical=True))
+                                                cross_setting=True))
                 actual = result.tolist()
                 if arm == 'symeood_b_midpoint':
-                    c.check_midpoint_scores(actual,pipe.native_scores)
+                    verify_midpoint_scores(result,pipe.native_scores,out,row,'common_native_score',flags)
                     # Same B weight/flags should preserve count and score across both arms.
-                    c.check_midpoint_scores(actual,[box[5] for box in runtime_outputs['symeood_b'][index]])
+                    verify_midpoint_scores(result,[box[5] for box in runtime_outputs['symeood_b'][index]],
+                                           out,row,'common_paired_B_score',flags)
                 for a,old in zip(actual,expected):
                     delta = abs(a[5]-old[5]); drift['outputs_checked'] += 1
                     drift['nonidentical_score_outputs'] += int(delta != 0.)
@@ -499,7 +540,7 @@ def preflight_outputs(rows, references, weights, sealed, gpu, torch, np, cv2, Co
                         drift['max_score_abs_error'] = delta; drift['max_score_error_image'] = row['image']
                 values.append(actual)
                 if (index+1)%200 == 0 or index+1 == len(rows):
-                    print('Full output preflight',arm,index+1,'/',len(rows),'historical checks pass',flush=True)
+                    print('Common-setting replay',arm,index+1,'/',len(rows),'behavior checks pass',flush=True)
             after = dict(detector=state_sha(detector), head=state_sha(head) if head is not None else None)
             if before != after: raise ValueError('Output preflight changed frozen state')
             value_path = out/(arm+'.runtime_outputs.json')
@@ -507,7 +548,8 @@ def preflight_outputs(rows, references, weights, sealed, gpu, torch, np, cv2, Co
                 numerical_settings=flags, role='Same-setting replay reference; historical references remain immutable'))
             proof['arms'][arm] = dict(verified_predictions=len(rows), state_before=before,
                 state_after=after, max_box_component_difference=worst, detector_checkpoint_meta=meta,
-                historical_score_drift=drift, runtime_outputs_sha256=c.sha(value_path))
+                historical_replay=history, cross_setting_score_drift=drift,
+                runtime_outputs_sha256=c.sha(value_path))
             c.write_new(out/(arm+'.output_preflight.json'),proof['arms'][arm])
             runtime_outputs[arm] = values
             print('Full output preflight',arm,'complete;',drift,flush=True)
@@ -562,7 +604,7 @@ def run(args):
                 cuda_visible_devices=os.environ.get('CUDA_VISIBLE_DEVICES'), logical_gpu=args.gpu,
                 warmup_frames=50, repeats=3, batch_size=1, precision='FP32')
             # Keep the original runtime for a fair precision/output identity check.
-            for key in ('torch', 'cuda', 'cudnn', 'mmcv', 'mmdet', 'mmrotate', 'opencv'):
+            for key in ('torch', 'cuda', 'cudnn', 'mmcv', 'mmdet', 'mmrotate', 'opencv', 'gpu'):
                 if report['runtime'][key] != sealed['runtime'][key]:
                     raise ValueError('Runtime differs from sealed inference: '+key)
             report['output_preflight'],runtime_outputs = preflight_outputs(rows,references,weights,sealed,
@@ -616,12 +658,13 @@ def run(args):
                                 worst = max(worst,verify_output(result,expected,out,arm,row,
                                     repeat+1,'timed_output_check',flags))
                                 historical = expected_boxes(arm,index,row,references,np)
-                                verify_output(result,historical,out,arm,row,repeat+1,'timed_historical_check',flags,
-                                              historical=True)
+                                verify_output(result,historical,out,arm,row,repeat+1,'timed_cross_setting_check',flags,
+                                              cross_setting=True)
                                 if arm == 'symeood_b_midpoint':
-                                    c.check_midpoint_scores(result.tolist(),pipe.native_scores)
-                                    c.check_midpoint_scores(result.tolist(),
-                                        [box[5] for box in runtime_outputs['symeood_b'][index]])
+                                    verify_midpoint_scores(result,pipe.native_scores,out,row,'timed_native_score',flags)
+                                    verify_midpoint_scores(result,
+                                        [box[5] for box in runtime_outputs['symeood_b'][index]],
+                                        out,row,'timed_paired_B_score',flags)
                                 record = dict(arm=arm, repeat=repeat+1, image=row['image'], sequence=row['sequence'],
                                     native_candidates=len(result), decoded_frame_to_obb=finish-app_start,
                                     model_and_postprocess=finish-model_start, file_to_obb=finish-file_start,
