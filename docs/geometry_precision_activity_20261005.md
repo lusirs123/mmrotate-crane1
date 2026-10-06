@@ -29,7 +29,7 @@
 - **当前后续任务（A017）：** 用户明确先跳过可靠性、停止继续几何／双边正确率优化，转向固定B24与B24＋σ1.5／ep03的Webots深度影响对照。旧Raw-opt标定与GT组件结果已定位／复核；先做Train-03同帧诊断，不训练、重选权或拟合新参数，不使用可靠性标志过滤输出。其它窗口可靠性身份／policy保持，不将本窗口任务变更当作其迁移授权。
 - **写作目标：** 根据各自封存文件写小论文。当前正文已纳入midpoint；几何结果与可靠性结果保留各自前端身份，不能拼成同一已验证链路。本窗口不修改可靠性文字、方法、policy或成绩。
 - **可靠性另一个窗口：** 固定B24＋默认σ1／head_epoch23＋simple三标志作为比较基线，不自动迁移至σ1.5。可靠性判断不写回框；检查揭示尺寸误差，不是检查把框改坏。
-- 可达性已在A007核验；A009尺寸支路／有限工具及A013测试修复已由用户在服务器运行，A014完成回传核验。当前没有该实验的运行待办，不重复测试／smoke／训练／评价；不连接服务器，不进行正式训练、旧选权或TEST开发。用户另行授权固定前端的TEST实时性补测（A015），已本地交付、等待服务器回传；它不重启几何优化或改变上述结论。
+- 可达性已在A007核验；A009尺寸支路／有限工具及A013测试修复已由用户在服务器运行，A014完成回传核验。当前没有该实验的运行待办，不重复测试／smoke／训练／评价；不连接服务器，不进行正式训练、旧选权或TEST开发。用户另行授权固定前端的TEST实时性补测，A015三组初稿已由A018四组替代（EOOD→SymEOOD→SymEOOD+B→固定midpoint），已本地交付、等待服务器回传；它不重启几何优化或改变上述结论。
 
 ### 1.2 已完成并固定的版本、训练及选权
 
@@ -536,7 +536,9 @@ real净少9帧（恢复2、新错误11），sim净多7帧（恢复12、新错误
 
 本记录A001～A014编号、17个本地链接、代码围栏、2段存档bash语法及`git diff --check`通过；源码未变，不重复模型测试。本轮仅维护本活动文件顶部、第1节及相关旧条目的已完成状态；未改源码、模型、协议、旧交接、可靠性、论文或服务器目录，未留下review脚本／解包副本。当前无该实验的服务器运行待办；其它研究另按明确任务范围安排。
 
-### A015. 2026-10-06：固定TEST实时性对照工具交付，EOOD基线不加B（待服务器运行）
+### A015. 2026-10-06：固定TEST实时性三组初稿交付，EOOD基线不加B（已由A018四组替代）
+
+**后续状态：** 此条保留三组初稿的范围／验证事实；用户要求拆开SymEOOD与B的变化后，A018加入原SymEOOD epoch20、更新当前源码／protocol／sources及测试。以下存档指令不再作为新运行入口，以A018四组新目录命令为准；尚无本条服务器测速回传，不将三组初稿当成已测数据。
 
 **授权与范围：** 用户认可补充检测实时性，并明确基线使用EOOD、不能用EOOD+B替代。仅固定权重的TEST推理测速，不训练、重选权重／σ、迁移可靠性、重跑精度选参或修改论文。A014几何实验收束及B24＋σ1.5／ep03采用状态保持。TEST已多次暴露如实披露；实时性是运行效率证据，不是新泛化验证或新增创新点。
 
@@ -550,7 +552,7 @@ real净少9帧（恢复2、新错误11），sim净多7帧（恢复12、新错误
 
 **本地验证事实：** 18项中14通过、4项原torch／NumPy张量检查因本机缺环境跳过；静态入口不加载模型／数据／GPU、拒绝覆盖、计时聚合分母、分数／输出保护及VAL选择绑定检查通过。3份Python3.8语法／编译／空白、30份源码SHA及CLI检查通过。尚无真实EOOD／B／midpoint CUDA测速或逐帧复现结果，不承诺FPS、实时达标或显存上限。GPU工程检查由服务器18项及实际测速验证；本机没有连接服务器。
 
-**服务器运行指令（待运行，先Git同步上述5份文件；选择独占空闲物理GPU，示例为3）：**
+**服务器运行指令（三组初稿存档，已由A018替代，不再执行；当时示例物理GPU3）：**
 
 ```bash
 cd /media/omnisky/personal_files/ljj/symEOOD
@@ -614,3 +616,48 @@ sha256sum work_dirs/port_detection_runtime_v1_review_20261006.tar.gz
 **当前对照与待办：** 固定①B24；②B24＋σ1.5／head_epoch03；③GT OBB公式参考。模型、σ、epoch、Raw-opt参数、相机／物理尺寸及原有推理约定全部固定。先在Train-03做GT无关的B／M同帧推理，再联接独立米制真值报告MAE／RMSE／AbsRel、偏差／尾部、两边及比例／`q`、原输出覆盖和q支持域覆盖；支持域仅诊断，不夹紧q、不事后选择更好帧或冻结新筛选门。检测数值不使用可靠性`center_accept/size_accept/angle_accept`；这些标志不改框，若以后用于拒绝帧则会改变深度有效覆盖，不能笼统说完全不影响下游。
 
 旧Webots入口只运行配置中的检测器，不会自动加载独立midpoint头；已有port σ1.5入口绑定检测VAL／TEST，也不能直接冒充Webots对照。当前`work_dirs/`未发现所需`head_epoch_03.pth`，不能本机执行当前M推理；后续须按已授权深度验证范围准备专用同帧入口、恢复原标定字节并绑定B／M权重SHA，由用户在服务器运行，结果tar仍放`work_dirs/`根目录。第一轮不进入Fixed-dev候选深度评价、不引入可靠性、训练或标定更新；当前M的深度影响尚无实测结论。
+
+### A018. 2026-10-06：实时性改为四组逐步对照，复用无B的SymEOOD epoch20（待服务器运行）
+
+**用户任务与决定：** EOOD直接对比SymEOOD+B同时包含模型和训练增强两个变化；三组初稿能比较最终系统与基线，但不能分开呈现这两步。按用户建议增设SymEOOD无B，形成四组逐步对照；不加入EOOD+B、不训练新模型、不修改选权或现有精度成绩。此任务仅补充固定TEST运行效率，A014收束、A016／A017深度核对及另一个窗口可靠性任务保持独立。
+
+| 组 | 配置及既有选中权重 | 相邻对照的解释 |
+|---|---|---|
+| EOOD，无B | `crane_eood_k1_port_day2night_v1.py`／epoch24 | 项目K=1原方法基线 |
+| SymEOOD，无B | `crane_symeood_k1_port_day2night_v1.py`／epoch20 | 与EOOD比较整套模型／推理路线，不能单独归因SymNFL、SymKLD或SymPOLA |
+| SymEOOD+B | `crane_symeood_k1_port_day2night_aug_b_v1.py`／epoch24 | 与无B的SymEOOD比较训练增强；B不增加部署模块／推理变换 |
+| SymEOOD+B+midpoint σ1.5 | 同一B24＋head_epoch03／2706步 | 与同一B检测器比较midpoint局部几何细化耗时 |
+
+**已有证据与边界：** [检测总记录](detection/港口新数据集与EOOD_SymEOOD尺度增强实验总记录.md)第3.2节明确原SymEOOD已完成、VAL选epoch20；EOOD及B为epoch24。各组使用原规则选中的权重，不为表格统一成epoch24，不重跑VAL选择。四组是顺序对照，不是模型×增强的完整因子实验；已有EOOD+B精度控制保留原角色，此轮不增加第五组。B只用于训练，所以其FPS差异不能解释为额外增强模块耗时；checkpoint预测分布、输出数量和测量波动仍可能使相同结构的实测耗时不同。实时性本身不能证明几何或所有精度指标改善，论文需与既有同协议精度证据对应。
+
+**实现：** 更新A015的入口／合同工具／protocol／sources／测试共5份文件，固定协议名改为`port_detection_runtime_v1_four_arm`，避免和三组结果混认；文件入口名仍为v1。四组依次加载、释放，单GPU／batch1／FP32、1024等比例推理、50预热及1440×3保持，不同时驻留四个模型。新增原SymEOOD模型路径`work_dirs/crane_symeood_k1_port_day2night_v1/epoch_20.pth`及其既有source-VAL／final-TEST预测绑定；新增`--symeood-sweep-dir`／`--symeood-test-dir`只定位已有文件，不提供σ／epoch／阈值参数。新断言在实际运行时检查SymEOOD及B的解析模型结构、四组TEST变换一致；输出保存三段相邻平均延迟差值／百分比，以及完整各组FPS／P95／显存。源文件／权重前后SHA、冻结状态、原图坐标／分数／候选数及每组4320预测复现保护保持。
+
+**本地验证：** 20项中16通过、4项原torch张量测试因本机无环境跳过；新增epoch20正确绑定、拒绝强行epoch24、拒绝B参考冒充无B组的合同检查通过。30份来源SHA、3份Python3.8语法／编译／空白、CLI及静态无GPU入口通过。真实四组权重／CUDA输出复现／速度待服务器回传，不冒称已测速；未改检测器、配置、midpoint、旧精度评价器、选权、深度、可靠性或论文，不连接服务器。
+
+**四组服务器指令（替代A015旧指令，先Git同步5份改动；示例空闲物理GPU3）：**
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+set -e
+python -c 'import torch, numpy, cv2'
+PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python -m unittest discover -s tests -p test_port_detection_runtime_v1.py -v
+
+CUDA_VISIBLE_DEVICES="" PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/benchmark_port_detection_runtime_v1.py \
+  --stage check \
+  --out-dir work_dirs/port_detection_runtime_v1_four_arm_static_20261006
+
+CUDA_VISIBLE_DEVICES=3 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/benchmark_port_detection_runtime_v1.py \
+  --stage benchmark --gpu 0 \
+  --out-dir work_dirs/port_detection_runtime_v1_four_arm_test_20261006
+
+tar -czf work_dirs/port_detection_runtime_v1_four_arm_review_20261006.tar.gz \
+  -C work_dirs \
+  port_detection_runtime_v1_four_arm_static_20261006 \
+  port_detection_runtime_v1_four_arm_test_20261006
+sha256sum work_dirs/port_detection_runtime_v1_four_arm_review_20261006.tar.gz
+```
+
+**待办／结果入口：** 服务器20项应全部执行通过，再运行check／benchmark；四组1440帧×3＝17,280个正式计时样本，不含各50预热。成功状态仍为`FROZEN_TEST_RUNTIME_COMPLETE_REVIEW_REQUIRED`，同时protocol必须为four_arm，arms含四个指定角色；回传`runtime_compare.json`／逐帧时间与来源、冻结一致性报告所在根目录tar。原SymEOOD默认查其`val_sweep_port_v1`或`ckpt_sweep`及`final_test/epoch_20`；路径变化时显式传上述定位参数，不重建预测、训练或重选。若新输出目录已存在，整组使用新后缀，不覆盖旧三组／四组结果。TEST多次暴露仍披露，仅测效率、不据此选模型。

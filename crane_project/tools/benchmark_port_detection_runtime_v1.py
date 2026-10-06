@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""EOOD (no B), frozen SymEOOD+B, and frozen sigma1.5 midpoint TEST timing.
+"""Four frozen TEST arms: EOOD, SymEOOD, SymEOOD+B, and sigma1.5 midpoint.
 
 CPU --stage check loads only sources/protocol. Actual timing is single-GPU,
 batch1 FP32. Frozen outputs are checked outside timers, no GT scoring/selection.
@@ -24,6 +24,7 @@ from crane_project.utils import port_detection_runtime_v1 as c
 PROTOCOL = ROOT/'crane_project/tools/port_detection_runtime_v1_protocol.json'
 SOURCES = ROOT/'crane_project/tools/port_detection_runtime_v1_sources.json'
 EOOD_DIR = ROOT/'work_dirs/crane_eood_k1_port_day2night_v1'
+SYM_DIR = ROOT/'work_dirs/crane_symeood_k1_port_day2night_v1'
 B_WEIGHT = ROOT/'work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/epoch_24.pth'
 M_WEIGHT = ROOT/'work_dirs/crane_symeood_k1_port_day2night_midpoint_sigma_v1/sigma_1p5/head_epoch_03.pth'
 DATA = ROOT/'crane_project/data/crane_grab_port_day2night_v1'
@@ -70,25 +71,45 @@ def source_contract():
     return dict(protocol_sha256=c.sha(PROTOCOL), sources_sha256=c.sha(SOURCES), sources=actual)
 
 
-def inputs(args):
-    eood = c.unique_directory([args.eood_sweep_dir] if args.eood_sweep_dir else
-        [EOOD_DIR/'val_sweep_port_v1', EOOD_DIR/'ckpt_sweep'], ['sweep_results.json'])
-    eood_weight = EOOD_DIR/'epoch_24.pth'
-    eood_sha = c.sha(eood_weight)
-    selection = c.read(eood/'sweep_results.json')
-    c.check_selection(selection, c.sha(ROOT/c.EOOD_CONFIG), eood_sha)
-    for path in (selection['selected_path'], selection['all_checkpoints']['epoch_24']['checkpoint']):
-        if Path(path).resolve() != eood_weight.resolve():
-            raise ValueError('EOOD selection points to a different checkpoint')
-    final = c.unique_directory([args.eood_test_dir] if args.eood_test_dir else
-        [eood/'final_test/epoch_24'], ['final_test_metrics_v2.json', 'preds/results.pkl'])
+def checked_detector_inputs(arm, model_dir, sweep_dir=None, test_dir=None):
+    spec = c.detector_identity(arm)
+    key = 'epoch_%d' % spec['selected_epoch']
+    sweep = c.unique_directory([sweep_dir] if sweep_dir else
+        [model_dir/'val_sweep_port_v1', model_dir/'ckpt_sweep'], ['sweep_results.json'])
+    weight = model_dir/(key+'.pth')
+    weight_sha = c.sha(weight)
+    config_sha = c.sha(ROOT/spec['config'])
+    selection = c.read(sweep/'sweep_results.json')
+    c.check_selection(selection, config_sha, weight_sha, spec['selected_epoch'])
+    for path in (selection['selected_path'], selection['all_checkpoints'][key]['checkpoint']):
+        if Path(path).resolve() != weight.resolve():
+            raise ValueError(arm+' selection points to a different checkpoint')
+    final = c.unique_directory([test_dir] if test_dir else
+        [sweep/'final_test'/key], ['final_test_metrics_v2.json', 'preds/results.pkl'])
     receipt = c.read(final/'final_test_metrics_v2.json')
-    eood_pkl = final/'preds/results.pkl'
+    predictions = final/'preds/results.pkl'
     if (receipt['evidence_role'] != 'fixed_test_after_source_val_selection' or
-            receipt['config_sha256'] != c.sha(ROOT/c.EOOD_CONFIG) or
-            receipt['checkpoint_sha256'] != eood_sha or receipt['frame_count'] != 1440 or
-            receipt['results_pkl_sha256'] != c.sha(eood_pkl)):
-        raise ValueError('EOOD sealed TEST reference identity differs')
+            receipt['config_sha256'] != config_sha or
+            receipt['checkpoint_sha256'] != weight_sha or receipt['frame_count'] != 1440 or
+            receipt['results_pkl_sha256'] != c.sha(predictions)):
+        raise ValueError(arm+' sealed TEST reference identity differs')
+    # Read references only, never recompute their GT metrics or selection.
+    with predictions.open('rb') as stream:
+        references = pickle.load(stream)
+    if len(references) != 1440:
+        raise ValueError(arm+' reference frame count differs')
+    proof = dict(arm=arm, selected_epoch=spec['selected_epoch'], config_sha256=config_sha,
+        checkpoint_sha256=weight_sha, selection_sha256=c.sha(sweep/'sweep_results.json'),
+        test_report_sha256=c.sha(final/'final_test_metrics_v2.json'),
+        reference_sha256=c.sha(predictions), sweep=str(sweep), test=str(final))
+    return references, weight, proof
+
+
+def inputs(args):
+    eood_refs, eood_weight, eood_proof = checked_detector_inputs(
+        'eood', EOOD_DIR, args.eood_sweep_dir, args.eood_test_dir)
+    sym_refs, sym_weight, sym_proof = checked_detector_inputs(
+        'symeood', SYM_DIR, args.symeood_sweep_dir, args.symeood_test_dir)
     roots = [ROOT/'work_dirs', ROOT/'work_dirs/port_results/geometry']
     roots += sorted((ROOT/'work_dirs').glob('port_geometry_midpoint_sigma15_v1_results_*'))
     mdir = c.unique_directory([args.midpoint_test_dir] if args.midpoint_test_dir else
@@ -120,20 +141,16 @@ def inputs(args):
         frame_hash.update(bytes.fromhex(c.sha(image)))
     if frame_hash.hexdigest() != c.IMAGE_SHA:
         raise ValueError('Fixed TEST image bytes differ')
-    # Read reference predictions, never recompute their GT metrics.
-    with eood_pkl.open('rb') as stream:
-        eood_rows = pickle.load(stream)
-    if len(eood_rows) != 1440:
-        raise ValueError('EOOD reference frame count differs')
-    proof = dict(eood_checkpoint_sha256=eood_sha, b_checkpoint_sha256=c.B_SHA,
+    proof = dict(eood=eood_proof, symeood=sym_proof, b_checkpoint_sha256=c.B_SHA,
         midpoint_checkpoint_sha256=c.M_SHA, image_identity_sha256=c.IMAGE_SHA,
-        eood_selection_sha256=c.sha(eood/'sweep_results.json'),
-        eood_test_report_sha256=c.sha(final/'final_test_metrics_v2.json'),
-        eood_reference_sha256=c.sha(eood_pkl), midpoint_reference_sha256=c.M_ROWS_SHA,
+        midpoint_reference_sha256=c.M_ROWS_SHA,
         midpoint_test_report_sha256=c.sha(mdir/'completion.json'),
-        directories=dict(eood_sweep=str(eood), eood_test=str(final), midpoint_test=str(mdir)),
+        midpoint_test=str(mdir),
         frames=1440, annotation_reads=0, gt_scoring=False)
-    return rows, eood_rows, eood_weight, report, proof
+    references = dict(eood=eood_refs, symeood=sym_refs)
+    weights = dict(eood=eood_weight, symeood=sym_weight, symeood_b=B_WEIGHT,
+                   symeood_b_midpoint=B_WEIGHT)
+    return rows, references, weights, report, proof
 
 
 def flatten(value, np):
@@ -209,21 +226,22 @@ class Pipeline:
         return result['boxes_original'].cpu().numpy()
 
 
-def build(arm, gpu, eood_weight, reference_report, torch, Config):
+def build(arm, gpu, weights, reference_report, torch, Config):
     from mmcv.runner import load_checkpoint
     from mmcv.utils import import_modules_from_strings
     from mmrotate.models import build_detector
     from crane_project.utils import port_geometry_refine_g_v1 as geometry
     from crane_project.utils.port_geometry_midpoint_sigma_v1 import SigmaMidpointHead
-    cfg = Config.fromfile(str(ROOT/(c.EOOD_CONFIG if arm == 'eood' else c.B_CONFIG)))
+    spec_identity = c.detector_identity(arm)
+    cfg = Config.fromfile(str(ROOT/spec_identity['config']))
     import_modules_from_strings(**cfg.custom_imports)
     spec = deepcopy(cfg.model); spec.pretrained = None
     if arm != 'eood':
         spec.train_cfg = None
     detector = build_detector(spec)
-    weight = eood_weight if arm == 'eood' else B_WEIGHT
+    weight = weights[arm]
     payload = load_checkpoint(detector, str(weight), map_location='cpu', strict=True)
-    meta = c.check_checkpoint_meta(payload['meta'], cfg.to_dict())
+    meta = c.check_checkpoint_meta(payload['meta'], cfg.to_dict(), spec_identity['selected_epoch'])
     del payload
     detector.cuda(gpu).eval().requires_grad_(False)
     head = None
@@ -293,7 +311,7 @@ def run(args):
             torch.backends.cudnn.benchmark = False
             torch.backends.cuda.matmul.allow_tf32 = False
             torch.backends.cudnn.allow_tf32 = False
-            rows, eood_rows, eood_weight, sealed, proof = inputs(args)
+            rows, references, weights, sealed, proof = inputs(args)
             report['inputs'] = proof
             props = torch.cuda.get_device_properties(args.gpu)
             report['host'] = host_info()
@@ -311,11 +329,15 @@ def run(args):
             with (out/'timings.jsonl').open('x', encoding='utf-8') as log:
                 for arm in c.ARMS:
                     torch.cuda.empty_cache()
-                    detector, head, cfg, geometry, meta = build(arm, args.gpu, eood_weight, sealed, torch, Config)
+                    detector, head, cfg, geometry, meta = build(arm, args.gpu, weights, sealed, torch, Config)
                     if arm != 'eood' and cfg.data.test.pipeline != eood_pipeline:
                         raise ValueError('EOOD and SymEOOD TEST transforms differ')
                     if arm == 'eood':
                         eood_pipeline = deepcopy(cfg.data.test.pipeline)
+                    if arm == 'symeood':
+                        sym_structure = c.plain(cfg.model)
+                    elif arm.startswith('symeood_b') and c.plain(cfg.model) != sym_structure:
+                        raise ValueError('B must not add or change the deployed SymEOOD structure')
                     pipe = Pipeline(detector, head, torch, np, geometry)
                     compose = transform(cfg)
                     before = dict(detector=state_sha(detector), head=state_sha(head) if head is not None else None)
@@ -348,8 +370,8 @@ def run(args):
                                 torch.cuda.synchronize(args.gpu)
                                 finish = time.perf_counter()
                                 # All source/ref matching is outside every timer.
-                                if arm == 'eood':
-                                    expected = flatten(eood_rows[index], np).tolist()
+                                if arm in references:
+                                    expected = flatten(references[arm][index], np).tolist()
                                 else:
                                     value = row['b' if arm == 'symeood_b' else 'midpoint']
                                     expected = [] if value is None else [value]
@@ -380,7 +402,8 @@ def run(args):
                     print(arm, groups['overall']['decoded_frame_to_obb'], flush=True)
                     del pipe, compose, detector, head, image, result, records
                     gc.collect(); torch.cuda.empty_cache()
-            if c.sha(B_WEIGHT) != c.B_SHA or c.sha(M_WEIGHT) != c.M_SHA or c.sha(eood_weight) != proof['eood_checkpoint_sha256']:
+            if (c.sha(B_WEIGHT) != c.B_SHA or c.sha(M_WEIGHT) != c.M_SHA or
+                    any(c.sha(weights[arm]) != proof[arm]['checkpoint_sha256'] for arm in references)):
                 raise ValueError('Weight bytes changed during benchmark')
             if source_contract() != identity:
                 raise ValueError('Source bytes changed during benchmark')
@@ -389,6 +412,12 @@ def run(args):
             m = arms['symeood_b_midpoint']['groups']['overall']['decoded_frame_to_obb']['mean_ms']
             report['midpoint_overhead'] = dict(mean_ms=m-b, relative_percent=100*(m/b-1),
                 note='Difference of same-condition measured complete pipelines, not isolated CUDA kernel time.')
+            report['adjacent_comparisons'] = {}
+            for left, right in zip(c.ARMS, c.ARMS[1:]):
+                x = arms[left]['groups']['overall']['decoded_frame_to_obb']['mean_ms']
+                y = arms[right]['groups']['overall']['decoded_frame_to_obb']['mean_ms']
+                report['adjacent_comparisons'][left+' -> '+right] = dict(
+                    mean_ms_difference=y-x, relative_percent=100*(y/x-1))
             report['status'] = 'FROZEN_TEST_RUNTIME_COMPLETE_REVIEW_REQUIRED'
             c.write_new(out/'runtime_compare.json', report)
         c.write_new(out/'completion.json', report)
@@ -408,6 +437,8 @@ def parser():
     p.add_argument('--out-dir', required=True)
     p.add_argument('--eood-sweep-dir', help='Existing source-VAL sweep directory; no reselection')
     p.add_argument('--eood-test-dir', help='Existing EOOD epoch24 final_test directory')
+    p.add_argument('--symeood-sweep-dir', help='Existing unaugmented SymEOOD source-VAL sweep; no reselection')
+    p.add_argument('--symeood-test-dir', help='Existing unaugmented SymEOOD epoch20 final_test directory')
     p.add_argument('--midpoint-test-dir', help='Existing sealed sigma1.5 TEST evaluation directory')
     return p
 

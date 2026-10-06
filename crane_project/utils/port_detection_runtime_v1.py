@@ -5,15 +5,26 @@ import json
 import math
 from pathlib import Path
 
-VERSION = 'port_detection_runtime_v1'
-ARMS = ('eood', 'symeood_b', 'symeood_b_midpoint')
+VERSION = 'port_detection_runtime_v1_four_arm'
+ARMS = ('eood', 'symeood', 'symeood_b', 'symeood_b_midpoint')
 COUNTS = {'real_seq03': 200, 'real_seq04': 668, 'sim_seq09': 572}
 B_SHA = '8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23'
 M_SHA = '16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7'
 IMAGE_SHA = '6448e47b9a715f47f04eacaaabb54a32b522c72208bf6e82793284de2aad665d'
 M_ROWS_SHA = '13c4cfa7f1f67a7bc2cad36da1ec067adbeae74080b387d39efe39fdc41a788d'
 EOOD_CONFIG = 'crane_project/configs/crane_eood_k1_port_day2night_v1.py'
+SYM_CONFIG = 'crane_project/configs/crane_symeood_k1_port_day2night_v1.py'
 B_CONFIG = 'crane_project/configs/crane_symeood_k1_port_day2night_aug_b_v1.py'
+
+
+def detector_identity(arm):
+    if arm == 'eood':
+        return dict(config=EOOD_CONFIG, selected_epoch=24, augmentation_b=False)
+    if arm == 'symeood':
+        return dict(config=SYM_CONFIG, selected_epoch=20, augmentation_b=False)
+    if arm in ('symeood_b', 'symeood_b_midpoint'):
+        return dict(config=B_CONFIG, selected_epoch=24, augmentation_b=True)
+    raise ValueError('Unknown fixed benchmark arm')
 
 
 def sha(path):
@@ -39,6 +50,8 @@ def protocol_document():
         sequence_counts=COUNTS, image_identity_sha256=IMAGE_SHA,
         eood=dict(config=EOOD_CONFIG, selected_epoch=24, augmentation_b=False,
             role='Existing project EOOD K=1 baseline; preserve native multi-candidate/NMS.'),
+        symeood=dict(config=SYM_CONFIG, selected_epoch=20, augmentation_b=False,
+            role='Existing VAL-selected SymEOOD K=1 control without B; native single-output inference.'),
         symeood_b=dict(config=B_CONFIG, selected_epoch=24, checkpoint_sha256=B_SHA),
         midpoint=dict(sigma_cells=1.5, epoch=3, updates=2706,
             checkpoint_sha256=M_SHA, test_rows_sha256=M_ROWS_SHA, parameters=17696),
@@ -49,6 +62,9 @@ def protocol_document():
             file_to_obb='JPEG read/decode plus decoded-frame-to-OBB (filesystem cache may be warm).',
             excluded='Model/source/reference loading, GT/metric evaluation, consistency checks, logging, drawing and result-file writes.',
             fps='n / sum(per-frame seconds); never mean(1 / per-frame seconds).'),
+        comparisons=['EOOD -> SymEOOD: whole model/inference route change.',
+            'SymEOOD -> SymEOOD+B: same deployed structure; B is training-only, not an inference transform.',
+            'SymEOOD+B -> SymEOOD+B+midpoint: frozen detector plus the fixed geometry head.'],
         validation='All1440 outputs of every repeat must match sealed predictions. A single backbone and native detector-head call per production frame. Extra audit forwards are not timed.',
         scope=dict(training_updates=0, gt_online=False, ground_truth_scoring=False,
             selection_on_test=False, test_repeatedly_exposed=True,
@@ -114,7 +130,7 @@ def plain(value):
     return value
 
 
-def check_checkpoint_meta(meta, cfg):
+def check_checkpoint_meta(meta, cfg, epoch=24):
     fields = ('model', 'data', 'optimizer', 'optimizer_config', 'lr_config',
               'runner', 'load_from', 'resume_from')
     saved = {}
@@ -125,18 +141,19 @@ def check_checkpoint_meta(meta, cfg):
             if key in saved:
                 raise ValueError('Duplicate checkpoint config field')
             saved[key] = literal(node.value)
-    if saved != plain({k: cfg[k] for k in fields}) or meta.get('epoch') != 24 or meta.get('seed') != 0:
+    if saved != plain({k: cfg[k] for k in fields}) or meta.get('epoch') != epoch or meta.get('seed') != 0:
         raise ValueError('Checkpoint is not the original selected detector/config')
-    return dict(epoch=24, seed=0, saved_config_sha256=hashlib.sha256(meta['config'].encode()).hexdigest())
+    return dict(epoch=epoch, seed=0, saved_config_sha256=hashlib.sha256(meta['config'].encode()).hexdigest())
 
 
-def check_selection(selection, config_sha, checkpoint_sha):
+def check_selection(selection, config_sha, checkpoint_sha, epoch=24):
+    key = 'epoch_%d' % epoch
     if (selection.get('evidence_role') != 'source_val_checkpoint_selection' or
-            selection.get('selected_checkpoint') != 'epoch_24' or
+            selection.get('selected_checkpoint') != key or
             selection.get('config_sha256') != config_sha or
-            selection['all_checkpoints']['epoch_24']['checkpoint_sha256'] != checkpoint_sha or
-            Path(selection['selected_path']).name != 'epoch_24.pth'):
-        raise ValueError('Requires the existing VAL-selected epoch24; no new selection')
+            selection['all_checkpoints'][key]['checkpoint_sha256'] != checkpoint_sha or
+            Path(selection['selected_path']).name != key+'.pth'):
+        raise ValueError('Requires the existing VAL-selected '+key+'; no new selection')
 
 
 def unique_directory(candidates, required):

@@ -1,7 +1,8 @@
 {
-  "protocol": "port_detection_runtime_v1",
+  "protocol": "port_detection_runtime_v1_four_arm",
   "arms": [
     "eood",
+    "symeood",
     "symeood_b",
     "symeood_b_midpoint"
   ],
@@ -18,6 +19,12 @@
     "selected_epoch": 24,
     "augmentation_b": false,
     "role": "Existing project EOOD K=1 baseline; preserve native multi-candidate/NMS."
+  },
+  "symeood": {
+    "config": "crane_project/configs/crane_symeood_k1_port_day2night_v1.py",
+    "selected_epoch": 20,
+    "augmentation_b": false,
+    "role": "Existing VAL-selected SymEOOD K=1 control without B; native single-output inference."
   },
   "symeood_b": {
     "config": "crane_project/configs/crane_symeood_k1_port_day2night_aug_b_v1.py",
@@ -46,6 +53,11 @@
     "excluded": "Model/source/reference loading, GT/metric evaluation, consistency checks, logging, drawing and result-file writes.",
     "fps": "n / sum(per-frame seconds); never mean(1 / per-frame seconds)."
   },
+  "comparisons": [
+    "EOOD -> SymEOOD: whole model/inference route change.",
+    "SymEOOD -> SymEOOD+B: same deployed structure; B is training-only, not an inference transform.",
+    "SymEOOD+B -> SymEOOD+B+midpoint: frozen detector plus the fixed geometry head."
+  ],
   "validation": "All1440 outputs of every repeat must match sealed predictions. A single backbone and native detector-head call per production frame. Extra audit forwards are not timed.",
   "scope": {
     "training_updates": 0,

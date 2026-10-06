@@ -4,6 +4,7 @@ import importlib.util
 import json
 import math
 from pathlib import Path
+import pickle
 import sys
 import tempfile
 import unittest
@@ -17,9 +18,17 @@ from crane_project.tools import benchmark_port_detection_runtime_v1 as b
 class ContractTests(unittest.TestCase):
     def test_fixed_identity_and_no_augmented_eood_baseline(self):
         p = c.protocol_document()
-        self.assertEqual(p['arms'], ['eood', 'symeood_b', 'symeood_b_midpoint'])
+        self.assertEqual(p['arms'], ['eood', 'symeood', 'symeood_b', 'symeood_b_midpoint'])
         self.assertFalse(p['eood']['augmentation_b'])
         self.assertNotIn('aug_b', p['eood']['config'])
+        self.assertFalse(p['symeood']['augmentation_b'])
+        self.assertNotIn('aug_b', p['symeood']['config'])
+        self.assertEqual(p['symeood']['selected_epoch'], 20)
+        self.assertEqual(c.detector_identity('symeood')['config'], c.SYM_CONFIG)
+        for arm in ('symeood_b', 'symeood_b_midpoint'):
+            self.assertEqual(c.detector_identity(arm)['config'], c.B_CONFIG)
+            self.assertEqual(c.detector_identity(arm)['selected_epoch'], 24)
+        with self.assertRaises(ValueError): c.detector_identity('eood_b')
         self.assertEqual(p['midpoint']['sigma_cells'], 1.5)
         self.assertEqual(p['midpoint']['epoch'], 3)
         self.assertFalse(p['scope']['selection_on_test'])
@@ -92,6 +101,42 @@ class ContractTests(unittest.TestCase):
         meta['config'] = text.replace("{'type': 'Eood'}", "__import__('os').system('false')")
         with self.assertRaises(ValueError):
             c.check_checkpoint_meta(meta, cfg)
+
+    def test_unaugmented_symeood_keeps_its_val_epoch20(self):
+        s = dict(evidence_role='source_val_checkpoint_selection', selected_checkpoint='epoch_20',
+            config_sha256='cfg', selected_path='/server/epoch_20.pth',
+            all_checkpoints={'epoch_20':dict(checkpoint_sha256='weight')})
+        c.check_selection(s, 'cfg', 'weight', epoch=20)
+        with self.assertRaises(ValueError): c.check_selection(s, 'cfg', 'weight', epoch=24)
+        keys = ('model', 'data', 'optimizer', 'optimizer_config', 'lr_config',
+                'runner', 'load_from', 'resume_from')
+        cfg = {key:None for key in keys}
+        meta = dict(config='\n'.join(key+' = None' for key in keys), epoch=20, seed=0)
+        self.assertEqual(c.check_checkpoint_meta(meta, cfg, epoch=20)['epoch'], 20)
+        with self.assertRaises(ValueError): c.check_checkpoint_meta(meta, cfg, epoch=24)
+
+    def test_unaugmented_symeood_reference_is_bound_to_its_own_weight_and_config(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            model = Path(tmp); sweep = model/'ckpt_sweep'
+            final = sweep/'final_test/epoch_20'; (final/'preds').mkdir(parents=True)
+            weight = model/'epoch_20.pth'; weight.write_bytes(b'synthetic fixture only')
+            predictions = final/'preds/results.pkl'
+            with predictions.open('wb') as stream: pickle.dump([[] for _ in range(1440)], stream)
+            config_sha = c.sha(ROOT/c.SYM_CONFIG)
+            c.write_new(sweep/'sweep_results.json', dict(
+                evidence_role='source_val_checkpoint_selection', selected_checkpoint='epoch_20',
+                config_sha256=config_sha, selected_path=str(weight),
+                all_checkpoints={'epoch_20':dict(checkpoint=str(weight), checkpoint_sha256=c.sha(weight))}))
+            receipt = dict(evidence_role='fixed_test_after_source_val_selection',
+                config_sha256=config_sha, checkpoint_sha256=c.sha(weight), frame_count=1440,
+                results_pkl_sha256=c.sha(predictions))
+            c.write_new(final/'final_test_metrics_v2.json', receipt)
+            refs, actual_weight, proof = b.checked_detector_inputs('symeood', model)
+            self.assertEqual((len(refs), actual_weight, proof['selected_epoch']), (1440, weight, 20))
+            # A B-config reference cannot silently become the no-B control.
+            receipt['config_sha256'] = c.sha(ROOT/c.B_CONFIG)
+            (final/'final_test_metrics_v2.json').write_text(json.dumps(receipt))
+            with self.assertRaises(ValueError): b.checked_detector_inputs('symeood', model)
 
     def test_directory_copies_must_be_identical(self):
         with tempfile.TemporaryDirectory() as tmp:
