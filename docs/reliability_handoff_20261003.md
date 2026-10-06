@@ -1,6 +1,8 @@
 # SymEOOD 分量可靠性交接：保留midpoint23比较基线；σ1.5／epoch03三标志迁移
 
-**2026-10-06执行入口：用户已授权将可靠性前端迁移至B24＋midpoint σ1.5／head_epoch03，继续simple三分量判断。先读第24节，最新修复与命令见24.5。服务器首次check因错误要求独立B缓存score逐位相等失败；cachefix1已修复，本地20项测试及现存SHA绑定全887帧VAL跨缓存核对通过，服务器真实TRAIN／GPU流程尚待运行。σ1／epoch23及下述已完成TEST成绩仍保留原比较基线身份，不能写成新前端成绩。本次不启动检测器、midpoint或图像参考训练，也不运行TEST。**
+**2026-10-06执行入口：用户已授权将可靠性前端迁移至B24＋midpoint σ1.5／head_epoch03，继续simple三分量判断。先读第24节，最新服务器结果见24.6，修复与命令保留24.5。cachefix1的check／collect／fit／全887帧原生VAL verify均已完成，服务器20项测试通过；新simple尺寸／方向各接受843帧，Real尺寸FA144、FR10，Sim尺寸FA46、FR0。分域同接受数尺寸与score相同，seq07局部较score少5个FA；总体迁移收益含检测几何变更，尚不能称可靠性机制创新。σ1／epoch23及下述已完成TEST成绩仍保留原比较基线身份，不能写成新前端成绩。本次没有检测／midpoint／图像参考训练或TEST访问。**
+
+**结果文档入口：[可靠性实验主要结果与对比分析](obb/可靠性实验主要结果与对比分析_20261006.md)。实验主表、前端配对比较及与深度问题的分析集中在那里；本交接保留执行、来源、修复和决定记录。**
 
 更新：2026-10-05；用户明确将**B epoch24＋正式midpoint epoch23＋现有simple三标志**的已完成固定TEST流程作为后续可靠性优化的比较基线（第19节）。基线身份已固定，不以性能最好或先优于score作为采用前提；现有取舍是比较起点。第17节为CPU TEST入口，第18节为已核验结果，第19节区分几何变化与可靠性判别改进。第14节保留迁移事实，第15/16节保留模板候选验证，模板未进入基线。旧B＋simple TEST保留第3节历史身份，不能替代当前主基线成绩。
 
@@ -1343,3 +1345,19 @@ python crane_project/tools/run_port_midpoint_sigma15_reliability_v1.py --mode ve
 ```bash
 tar -czf work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/analysis_20261006.tar.gz -C work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1 check collect fit verify unittest.log check.log collect.log fit.log verify.log
 ```
+
+### 24.6 σ1.5／epoch03三标志服务器结果核验（2026-10-06）
+
+**来源与完成事实：** 用户回传`/Users/mac/Downloads/analysis_20261006.tar.gz`，包SHA=`e11e1bb8d82596082c9cbfea521b5a02a12a98a485449749b343a8ab9a32197a`，连同终端附件直接在内存读取，没有解压或新增本地结果副本。四阶段check／collect／fit／verify均完成，完成清单中的全部产物字节SHA、四份执行contract／input_check、97文件来源闭包及协议与当前代码匹配；没有failure、软硬链接、重复或越界成员。服务器20项测试通过，66.048秒。冻结前端确为B24＋σ1.5／epoch03、2706原训练更新，未新增B／midpoint／参考更新；原生887帧VAL一次特征提取／三次B头调用，共887／2661，模型state前后相同，GT_online=false、TEST未访问。
+
+新policy SHA=`38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f`，服务器路径`work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json`。size风险门限`.41665113433410333`，angle风险门限`.4305892873822406`；score对照风险门限`.7043236196041107`（risk=1-score）。两个simple各接受843/887=95.0395%，为pooled全帧覆盖，不是每域／视频各95%。旧policy和门限不改。
+
+**独立离线复算范围：** 收集文件为TRAIN2558＋VAL887行，VAL指纹与锁定epoch03合同一致。fit和verify全部导出框与锁定VAL六值逐位相同，三标志本地重放一致，逐组从保存标志与GT重算四类混淆／覆盖指标一致；本地NumPy风险计算仅存在float64末位差，≤1e-12，没有标志变化，不能误报同机保存重载失败。完成包不含B／head权重或原ROI张量，故此处不声称本地重新加载实际权重或重新运行GPU；服务器完成链已记录实际输入验证和冻结状态。
+
+工程四阶段核验已完成，具体性能表、同接受数对照与分析已迁入[结果文档第6节](obb/可靠性实验主要结果与对比分析_20261006.md)。冻结旧policy／门限／权重及来源保留；本次没有训练、调参或TEST访问。
+
+## 25. 结果文档迁移记录（2026-10-06）
+
+用户要求结果集中放入独立结果文档，交接仅存记录。本轮撤回此处原第25节的实验主表及写作分析，完整迁入[可靠性实验主要结果与对比分析](obb/可靠性实验主要结果与对比分析_20261006.md)第1—5节；24.6的完整核验与性能表迁至该文档第6节，本处保留执行来源。该文档第7节只读引用现有Webots证据，区分共同尺寸瓶颈、可靠性覆盖／排序限制与深度公式敏感性。
+
+未改变既有实验结论、原policy／权重／门限／结果身份，未新增回传结果副本；未修改算法、几何或深度窗口、论文，未启动训练／推理、连接服务器或访问TEST。后续新增主表／分析更新结果文档，过程和决定继续记入本交接。

@@ -1,0 +1,61 @@
+{
+  "collection_artifacts": {
+    "collect/collect_report.json": "3c39308d481e6154e9f23ba6055c52e8d7ed707994b262d0d8546c3cdf762922",
+    "collect/completion.json": "9af0d982326b20fef2a49b13b5e973ba1ba6e17101207f3abafdfda25981c9ac",
+    "collect/final_rows.jsonl": "0d971bb608761ecd9df180f3e6c0dffb46ca71974431cc97375b9cc9b14c88c6",
+    "collect/independent_B_cache_comparisons.json": "254525cd0a2530cfd738d342b0952fb33fc135519ad542ba96414af1e35e04c3",
+    "collect/input_check.json": "b9679c4b2ec586e89992c411922acc9afa250a2e66ba969bb9c96daa14615318"
+  },
+  "counts": {
+    "train": {
+      "real_seq01": 339,
+      "real_seq05": 560,
+      "real_seq06": 466,
+      "real_seq12": 141,
+      "real_seq13": 304,
+      "sim_seq08": 748
+    },
+    "val": {
+      "real_seq07": 226,
+      "real_seq14": 149,
+      "sim_seq10": 512
+    }
+  },
+  "frontend": {
+    "b_sha256": "8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23",
+    "epoch": 3,
+    "head_sha256": "16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7",
+    "selection_sha256": "c52bf18854a514e171c4f5cf2e6afce69b7b372412f56f3d9ec74edadd9386c0",
+    "sigma_cells": 1.5,
+    "updates": 2706
+  },
+  "labels": "Hash only fixed TRAIN/VAL annfiles and mapped axis snapshots. Polygon geometry is a rounding-aware diagnostic, not reconstructed native GT. Axis/k consistency does not prove Webots physical-reference matching.",
+  "promotion": "Human review required; no architecture/loss weights/checkpoints selected or paper claims.",
+  "protocol": "port_geometry_size_support_v1",
+  "runs": "Break source video/segment/time gaps where mapped; other runs are frame-index-only. Overlapping flag runs are not independent scenes. Never automatically certify support sufficiency.",
+  "sampling": "Standard scale only. Preserve legacy64 fit/probe, remaining TRAIN and all VAL roles.",
+  "scope": {
+    "depth_fits": 0,
+    "feature_extractions": 0,
+    "model_loads": 0,
+    "parameter_updates": 0,
+    "policy_loads": 0,
+    "split_reassignments": 0,
+    "test_image_annotation_reads": 0,
+    "test_prediction_reads": 0,
+    "threshold_fits": 0,
+    "webots_frame_reads": 0
+  },
+  "settings": {
+    "annotation_pixel_tolerance": 0.25,
+    "center_px_limit": 15.0,
+    "known_sampling_step_seconds": 0.3333333333333333,
+    "sampling_gap_multiple": 2.0,
+    "size_relative_limit": 0.1
+  },
+  "sizes": "Canonical final ORIGINAL pixel long/short edges; natural log pred/GT.",
+  "stages": [
+    "check",
+    "diagnose"
+  ]
+}

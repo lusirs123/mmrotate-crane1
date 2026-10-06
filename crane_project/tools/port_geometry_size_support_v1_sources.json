@@ -1,0 +1,16 @@
+{
+  "protocol": "port_geometry_size_support_v1",
+  "protocol_sha256": "c46e4407ab4ab556a15a70b122c31dbc84ed5834cb0b4846229bd87768892d7e",
+  "sources": {
+    "crane_project/configs/depth_scale_calibration_obb_raw_opt_short_q2_train03_v1.json": "c9c14fc1b09ba8223996121425e302888ac7d44213192225acd5365fb2f1ffe2",
+    "crane_project/data/crane_grab_port_day2night_v1/provenance/axis_k2p1/conversion_manifest.json": "e2bf063c83c4079aecbb5b804785de59d33fd1183265ee7ea8312111087f559a",
+    "crane_project/data/crane_grab_port_day2night_v1/provenance/axis_k2p1/sampling_frame_sources.csv": "8958cbd84d5c47d2f90d0d5fc0c309edc6a51dd737a1ad926cc4153045df14e4",
+    "crane_project/tools/diagnose_port_geometry_size_support_v1.py": "db2dcb960818dc29d5597c6653cee2f50c3c687f9569f4f4e0fb8a1177ae6001",
+    "crane_project/tools/port_geometry_g_v1_train_samples.json": "616ac890b9a60689c7fb52c08bf58b4fe85e2542090b158d79ce0d429902209c",
+    "crane_project/tools/port_geometry_size_support_v1_labels.json": "04db8a5423273b4b7217c71477d24b58ad6cee5f1bc9ae7c033855ecedd93295",
+    "crane_project/tools/port_geometry_size_support_v1_protocol.json": "c46e4407ab4ab556a15a70b122c31dbc84ed5834cb0b4846229bd87768892d7e",
+    "crane_project/tools/run_port_geometry_size_support_v1.sh": "fc8b6758b81ef87753ad8aad845f6de785150d610b67aaaa330a0087fb9c8124",
+    "crane_project/utils/port_geometry_size_support_v1.py": "f01f569fe0c0adad3ebf182a23d041fb90a9023a8016004ab07a43b1ea9e02db",
+    "tests/test_port_geometry_size_support_v1.py": "42aeb296ad08c33d4361d54acda2bbefc299b56688aad507f6599b91b02d12e1"
+  }
+}
