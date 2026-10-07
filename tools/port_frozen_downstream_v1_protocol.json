@@ -1,0 +1,108 @@
+{
+  "arms": {
+    "eood": {
+      "checkpoint_sha256": "ee277d72cdf27d76e3216da4d17256b453b539d69d692cdd71960fadf7ebd2bf",
+      "config": "crane_project/configs/crane_eood_k1_port_day2night_v1.py",
+      "epoch": 24,
+      "historical_config_sha256": "4265a9362b5e2dc99f273591a98342c9ba8deba3bbca8ae1059bf4a209a1a3c0",
+      "selection_sha256": "a0bf581181890dc65cc381812cff44e93dd5c6e5658857443c08bfebba39dc8a",
+      "stem": "crane_eood_k1"
+    },
+    "symeood": {
+      "checkpoint_sha256": "780a5de1a17b32041175bdf408a209872100f776de811075c55204bf333a92fe",
+      "config": "crane_project/configs/crane_symeood_k1_port_day2night_v1.py",
+      "epoch": 20,
+      "historical_config_sha256": "ca8b950c8bba2775b20a075e619a24915bcee443c1a1e0bd1858a908d966ea45",
+      "selection_sha256": "7f1439a451442572c9e35131a3b29312f0c37900a5414a59f8e98c3769ff502d",
+      "stem": "crane_symeood_k1"
+    },
+    "symeood_b": {
+      "checkpoint_sha256": "8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23"
+    },
+    "symeood_b_midpoint": {
+      "checkpoint_sha256": "16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7"
+    }
+  },
+  "calibration": {
+    "coordinate_contract": "raw_opt_v1",
+    "path": "crane_project/configs/depth_scale_calibration_obb_raw_opt_short_q2_train03_v1.json",
+    "sha256": "c9c14fc1b09ba8223996121425e302888ac7d44213192225acd5365fb2f1ffe2",
+    "target": "z_cg_opt_m"
+  },
+  "depth_order": [
+    "unknown_test_02_coverage_retry",
+    "fixed_dev_01_unseen_depth_swing"
+  ],
+  "protocol": "port_frozen_downstream_v1_exposed_test_report",
+  "reliability": {
+    "geometry_files": {
+      "artifacts.json": "262f2622c722414283045cba18b293866a3138868f186564b5406fc37cc2558d",
+      "completion.json": "8fe7f065ddca16871b9dbf41f84186b99ff3a51e46c308b8c3dfa5d71f7a0ce2",
+      "frozen_selection.json": "c52bf18854a514e171c4f5cf2e6afce69b7b372412f56f3d9ec74edadd9386c0",
+      "progress.jsonl": "fb5f228e8f2da23e6121719e5c9471ced79469a8647c09c7667ee2042ae12ba4",
+      "protocol.json": "140111513d69eef9377012d4774019c406fa8a8f72321ef2315e543155efeb1c",
+      "sources.json": "cb6ea7a1fffde7bf4564101cf31230cd0fef45ad3807c4d5e300cf343a87d60c",
+      "test_compare.json": "5bcde34ebe3f260bed3b7074f809ec174c37199b2c8321d10d7475eb8ab80df2",
+      "test_rows.jsonl": "13c4cfa7f1f67a7bc2cad36da1ec067adbeae74080b387d39efe39fdc41a788d"
+    },
+    "metadata_files": {
+      "completion.json": "4e514b97da3997573fe3b7959f86df2d96c2579989eefa4e6a63d96700a33233",
+      "input_check.json": "b50f8aef14d4baacca41ac3e3e6f454ba93ed31fd898551a9319ef93d76f6110",
+      "test_compare.json": "56f1e238db0236c6cb06d095daa3d0d5d53575b4d3f5eb6851b3878e86408ab3",
+      "test_qualities.jsonl": "d95cdeb8958bfff69f82fcc0c9f4650557245070ae68745971b1bff7e2ae23e9"
+    },
+    "policy_files": {
+      "completion.json": "f975e2fd6fed5e75d602ac9c1043f36e06106561467b59725b89696130244189",
+      "fit_report.json": "8c245cf5d2c5f5178dba33436ee5f49f0b5918c90fb1ac66473398346eb4f3af",
+      "input_check.json": "b9679c4b2ec586e89992c411922acc9afa250a2e66ba969bb9c96daa14615318",
+      "policy.json": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f",
+      "val_decisions.jsonl": "d657e93f59235122a1f8e2d8341e986a8c4e51f8dd88b8f651384f846e573bc9"
+    }
+  },
+  "reporting": "Depth: all numeric outputs including outside q support, full-frame <=0.5/1/2m coverage and signed bias, oracle diagnostic, per-depth/per-theta strata. Reliability: no box or score changes, center only output frames plus all-frame coverage, size/angle FA FR ED CR, raw/frozen score/simple and matched-score diagnostic. Metric GT is offline only. No formula or frontend selection from exposed TEST.",
+  "scope": {
+    "formula_refit": false,
+    "old_sigma1_migration": false,
+    "policy_refit": false,
+    "snow_analysis": false,
+    "threshold_updates": 0,
+    "training": false
+  },
+  "selection_paths": {
+    "eood": "work_dirs/crane_eood_k1_port_day2night_v1/selection.json",
+    "symeood": "work_dirs/crane_symeood_k1_port_day2night_v1/selection.json"
+  },
+  "sequences": {
+    "fixed_dev_01_unseen_depth_swing": {
+      "count": 893,
+      "evidence_role": "formula_development_sequence_frozen_diagnostic",
+      "image_identity_sha256": "1e6265c6e3b14293c942465edd8e35112546c5bcc86e88a6a22353fe204a12c7",
+      "manifest_sha256": "b86a86a154d1552500cf11bafef677f24b1bb9a7bca59b47c6235f8aa8705259",
+      "run_instance_id": "07c8ea8327704719837d33c49b2dca45",
+      "split": "fixed_dev",
+      "truth_sha256": "a4e0b59d54b7cffd3c0299c3470f660510f37ac2d6c63ee1f8bd76d953584d87"
+    },
+    "unknown_test_02_coverage_retry": {
+      "count": 1097,
+      "evidence_role": "previously_exposed_TEST_frozen_Raw_opt_reporting_not_untouched_confirmation",
+      "image_identity_sha256": "e95effdb49856e1ba451c0534e1530044af4485c0d037cac1fbbf4c1a54c5ed3",
+      "manifest_sha256": "ed8a42c3755d67ff0051b7dfc3a898e1dd94d5325de275883d795a7d21dc5f15",
+      "run_instance_id": "c7ed7b43768e4b38aff7046b2266cf68",
+      "split": "unknown_test",
+      "truth_sha256": "6c5a728833a77b4f12caa854c8720d12813602a67a9caf75c9563c21c71ac29e"
+    }
+  },
+  "stages": [
+    "check",
+    "reliability",
+    "depth"
+  ],
+  "test_repeatedly_exposed": true,
+  "test_used_for_selection": false,
+  "weight_paths": {
+    "eood": "work_dirs/crane_eood_k1_port_day2night_v1/epoch_24.pth",
+    "symeood": "work_dirs/crane_symeood_k1_port_day2night_v1/epoch_20.pth",
+    "symeood_b": "work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/epoch_24.pth",
+    "symeood_b_midpoint": "work_dirs/crane_symeood_k1_port_day2night_midpoint_sigma_v1/sigma_1p5/head_epoch_03.pth"
+  }
+}
