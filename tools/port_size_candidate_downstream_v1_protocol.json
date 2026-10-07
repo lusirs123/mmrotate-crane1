@@ -1,0 +1,33 @@
+{
+  "automatic_promotion": false,
+  "base_protocol_sha256": "fd67ee50e3436ab0228062da3f7c58c7f07a4e073614d1a8e92221d50ba71aa0",
+  "baseline_prediction_sha256": {
+    "fixed_dev_01_unseen_depth_swing": "240d7cbfb89e96911b433b3ab9aa6305e5bab794d80a3a7044a564d403f19501",
+    "unknown_test_02_coverage_retry": "2a2161b5bdd5ca962be6154a1cf95b1d320edf6b2b44914a61c9e03c37554519"
+  },
+  "candidate_digest": {
+    "buffer_count": 0,
+    "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "parameter_count": 2760,
+    "parameters": "f1b33868620432eb70763155543ceae63bc74061a406878749f395a7e323dc76"
+  },
+  "candidate_runtime": {
+    "cuda": "11.7",
+    "cudnn": 8500,
+    "tf32_cudnn": true,
+    "tf32_matmul": false,
+    "torch": "1.13.1+cu117"
+  },
+  "candidate_sha256": "de94b8d8a4d17d7770ea332be7589912fba762bde6e773fac44560bbb686858b",
+  "numeric": "Native B/M cuDNN8801; detached GT-free ROI on disk; separate candidate process original training cuDNN8500, same input transform and actual sx/sy. Neutral bitwise replay; center/canonical long-axis/score/output identity exact. Predictions close before downstream metric truth is read.",
+  "original_TRAIN_failed_checks": 16,
+  "original_TRAIN_gate_passed": false,
+  "protocol": "port_size_candidate_downstream_v1_fixed_diagnostic",
+  "scope": "User-authorized fixed final200 candidate diagnosis despite failed TRAIN gate; no training, fitting, TEST selection or promotion. Port exposed TEST1440 original M policy transfer, Webots exposed Unknown02 TEST1097 and formula-dev893 frozen Raw-opt. All numeric depths retained. Original sigma1 reliability stays immutable.",
+  "source_roles": "All original source/protocol bytes retained; this is an independent diagnostic, not a reopened TRAIN/VAL gate. No paper promotion.",
+  "stages": [
+    "check",
+    "collect",
+    "candidate"
+  ]
+}
