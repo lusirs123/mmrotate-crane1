@@ -208,6 +208,23 @@ class ReadoutTests(unittest.TestCase):
                 m.diagnose(packet,out,'native',require_axis=True)
         self.assertFalse(out.exists())
 
+    def test_grouped_output_paths_and_legacy_paths_are_accepted_without_creation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary).resolve()
+            with patch.object(m,'ROOT',root):
+                for parent in (root/'work_dirs',root/'work_dirs'/m.VERSION):
+                    out=parent/(m.VERSION+'_fixture')
+                    self.assertEqual(m.checked_output_directory(out),out)
+                    self.assertFalse(out.exists())
+                for out in (root/'elsewhere'/(m.VERSION+'_fixture'),
+                            root/'work_dirs'/m.VERSION/'extra'/(m.VERSION+'_fixture'),
+                            root/'work_dirs'/m.VERSION/'unrelated',
+                            root/'work_dirs'/m.VERSION/'..'/'..'/(m.VERSION+'_fixture')):
+                    with self.assertRaises(ValueError):m.checked_output_directory(out)
+                out=root/'work_dirs'/m.VERSION/(m.VERSION+'_fixture')
+                out.mkdir(parents=True)
+                with self.assertRaises(ValueError):m.checked_output_directory(out)
+
     @unittest.skipUnless(importlib.util.find_spec('cv2') is not None and importlib.util.find_spec('numpy') is not None,'Native OpenCV not installed locally')
     def test_native_exact_repo_function_matches_rectangle_and_reference(self):
         read,info=m.native_loader();r=read(self.points)

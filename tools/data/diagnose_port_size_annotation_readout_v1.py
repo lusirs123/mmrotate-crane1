@@ -290,11 +290,19 @@ def pair_summary(rows, group_by_image):
         'No automatic significance, causal conclusion, GT replacement or training approval.')
 
 
+def checked_output_directory(out):
+    """Group new runs under one parent; keep historical root paths readable."""
+    out = Path(out).resolve()
+    allowed = (ROOT/'work_dirs', ROOT/'work_dirs'/VERSION)
+    if out.parent not in allowed or not out.name.startswith(VERSION+'_') or out.exists():
+        raise ValueError('Use a new work_dirs/'+VERSION+'/'+VERSION+'_... result directory; '
+                         'historical direct work_dirs children remain supported')
+    return out
+
+
 def diagnose(path, out, backend, require_axis=False):
     path, rows, sources = checked_packet(path)
-    out = Path(out).resolve()
-    if out.parent != ROOT/'work_dirs' or not out.name.startswith(VERSION+'_') or out.exists():
-        raise ValueError('Use a new work_dirs/'+VERSION+'_... result directory')
+    out = checked_output_directory(out)
     for f in (Path(__file__), ROOT/'tools/data/prepare_port_independent_size_labels_v1.py',
               ROOT/'tools/data/prepare_port_size_reference_review_v1.py',
               ROOT/'crane_project/utils/port_geometry_size_support_v1.py',
@@ -385,7 +393,7 @@ def diagnose(path, out, backend, require_axis=False):
         'Quad-derived direction is not an independent axis. No label export or automatic promotion.', sources_sha256=sources)
     for f, digest in sources.items():
         if packet.sha(f) != digest: raise ValueError('Inputs changed during diagnostic')
-    out.mkdir(); packet.write_json(out/'readout_report.json',report)
+    out.mkdir(parents=True); packet.write_json(out/'readout_report.json',report)
     packet.write_json(out/'artifacts.json', {'readout_report.json':packet.sha(out/'readout_report.json')})
     print('SIZE_ANNOTATION_READOUT_COMPLETE', json.dumps(summary), 'backend='+info['name'], 'ready_for_training=false')
     if require_axis:
