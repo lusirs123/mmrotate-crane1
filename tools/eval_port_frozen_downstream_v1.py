@@ -344,8 +344,8 @@ def run_depth(args,contract,calibration,identity,out):
         path=ROOT/preferred
         return o.checked_weight(ROOT,path if path.is_file() else None,filename,digest)
     weights={a:resolve(contract['weight_paths'][a],'epoch_%02d.pth'%c.BASELINES[a]['epoch'],c.BASELINES[a]['checkpoint_sha256']) for a in ('eood','symeood')}
-    selections={a:resolve(contract['selection_paths'][a],'selection.json',c.BASELINES[a]['selection_sha256']) for a in weights}
-    for a in weights:c.selection_contract(ROOT,a,selections[a])
+    selections={a:resolve(contract['selection_paths'][a],'sweep_results.json',c.BASELINES[a]['selection_sha256']) for a in weights}
+    for a in weights:c.selection_contract(ROOT,a,json.loads(selections[a].read_text()))
     bp=resolve(contract['weight_paths']['symeood_b'],'epoch_24.pth',o.B_SHA)
     hp=resolve(contract['weight_paths']['symeood_b_midpoint'],'head_epoch_03.pth',o.HEAD_SHA)
     for name in contract['depth_order']:

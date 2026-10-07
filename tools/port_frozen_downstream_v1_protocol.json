@@ -69,8 +69,8 @@
     "training": false
   },
   "selection_paths": {
-    "eood": "work_dirs/crane_eood_k1_port_day2night_v1/selection.json",
-    "symeood": "work_dirs/crane_symeood_k1_port_day2night_v1/selection.json"
+    "eood": "work_dirs/crane_eood_k1_port_day2night_v1/sweep_results.json",
+    "symeood": "work_dirs/crane_symeood_k1_port_day2night_v1/sweep_results.json"
   },
   "sequences": {
     "fixed_dev_01_unseen_depth_swing": {

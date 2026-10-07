@@ -5,7 +5,7 @@
     "tools/depth/port_depth_four_arm_v1_sources.json": "c3e4e85e6084642fba874f43da51dac18423038c01f6ad7d8f62dd404a478078"
   },
   "protocol": "port_frozen_downstream_v1_exposed_test_report",
-  "protocol_sha256": "d3ab41e444301ab79c747bd27570b4f128a14298d90f728055ccf984a5787845",
+  "protocol_sha256": "fd67ee50e3436ab0228062da3f7c58c7f07a4e073614d1a8e92221d50ba71aa0",
   "sources": {
     "configs/_base_/default_runtime.py": "046fc7f2d6a8dd3891b2ad90f1c5c5ea3e45345a1f44163318a6b8e8e33ceb77",
     "configs/_base_/schedules/schedule_1x.py": "eef4b63abefd4e51bce476a012013d63ec27e06c87516a2352ff57b5f46f80e9",
@@ -137,8 +137,8 @@
     "tools/depth/port_midpoint_depth_v1_sources.json": "d29f6f04fa9f45378d21ec3f1299a4cf57eba470013e2342e574fcaea00d4f17",
     "tools/depth/run_port_depth_four_arm_v1.sh": "02d0959c32eb332777fcd61a2a396906a0cfa43d87aef609ba0b6d08d5905806",
     "tools/dist_train.sh": "799c72e62a7901e7fb6d148727d5ff91f261d7c41a0147188f03c1fc0f8ff697",
-    "tools/eval_port_frozen_downstream_v1.py": "092f694ca36d0f692a32100f12fcaeec1be2971a2724ef42fdcc60e09cc9883b",
-    "tools/port_frozen_downstream_v1_protocol.json": "d3ab41e444301ab79c747bd27570b4f128a14298d90f728055ccf984a5787845",
+    "tools/eval_port_frozen_downstream_v1.py": "42df1b80066baa2b383d63610c7ae82840dc6a03a60eba2f8fe51c9a7ed5f119",
+    "tools/port_frozen_downstream_v1_protocol.json": "fd67ee50e3436ab0228062da3f7c58c7f07a4e073614d1a8e92221d50ba71aa0",
     "tools/run_port_frozen_downstream_v1.sh": "3ca66762cb1212a79890b13c741be322874c7635384bb66f62ebfcf0ca4e80b5",
     "tools/train.py": "50b49af8c85e2ad1a2e255894f2bc7f0124fe57b118c64801a6fdad8e1921b87"
   }
