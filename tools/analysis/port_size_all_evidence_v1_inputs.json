@@ -1,0 +1,160 @@
+{
+  "date": "2026-10-07",
+  "expected_counts": {
+    "calibration_train_03_tilt_obb": 981,
+    "fixed_dev_01_unseen_depth_swing": 893,
+    "port_TEST": 1440,
+    "port_TRAIN": 2558,
+    "port_TRAIN_half_view": 2558,
+    "port_VAL": 887,
+    "unknown_test_02_coverage_retry": 1097
+  },
+  "identities": {
+    "B": "B24 sha256 8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23",
+    "C": "Rejected fixed-200 continuous head sha256 de94b8d8a4d17d7770ea332be7589912fba762bde6e773fac44560bbb686858b",
+    "M": "sigma1.5/epoch03 sha256 16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7",
+    "previous_candidate_integrity": "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/return_integrity_review.json"
+  },
+  "inputs": {
+    "calibration": {
+      "jsonl": false,
+      "path": "crane_project/configs/depth_scale_calibration_obb_raw_opt_short_q2_train03_v1.json",
+      "sha256": "c9c14fc1b09ba8223996121425e302888ac7d44213192225acd5365fb2f1ffe2"
+    },
+    "calibration_train_03_tilt_obb_four_arm": {
+      "jsonl": true,
+      "member": "port_depth_four_arm_v1_train03_20261006_142450_604135/audit/depth_rows.jsonl",
+      "member_sha256": "660695dcf8c40b4cb0a05f250b64955bda0b9db24852a7de63f5f36f86485bc5",
+      "path": "/Users/mac/Downloads/port_depth_four_arm_v1_train03_20261006_142450_604135.tar.gz",
+      "sha256": "eb30b838ea31fb88f8d483eb2ab3090137ea2b0b7b7ef21bd14d5310df5be854"
+    },
+    "calibration_train_03_tilt_obb_manifest": {
+      "jsonl": false,
+      "path": "/Users/mac/Documents/fangzhen/grab_副本/datasets/yolo_obb_depth_dataset/calibration_train_03_tilt_obb/metadata/manifest.json",
+      "sha256": "4dbc6c8dcb039c73cca0311da1a648fa08ad807d6b29a1e23124d6c659a4c0d6"
+    },
+    "calibration_train_03_tilt_obb_truth": {
+      "jsonl": true,
+      "path": "/Users/mac/Documents/fangzhen/grab_副本/datasets/yolo_obb_depth_dataset/calibration_train_03_tilt_obb/metadata/frames.jsonl",
+      "sha256": "3441b0e1dad135ee7d49b0ee2c243fc603c5193284aa69a8ab67d71b52db7aad"
+    },
+    "collection": {
+      "jsonl": true,
+      "member": "collect/final_rows.jsonl",
+      "member_sha256": "0d971bb608761ecd9df180f3e6c0dffb46ca71974431cc97375b9cc9b14c88c6",
+      "path": "/Users/mac/Downloads/analysis_20261006.tar.gz",
+      "sha256": "e11e1bb8d82596082c9cbfea521b5a02a12a98a485449749b343a8ab9a32197a"
+    },
+    "fixed_dev_01_unseen_depth_swing_candidate": {
+      "jsonl": true,
+      "path": "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/candidate/fixed_dev_01_unseen_depth_swing/evaluation_rows.jsonl",
+      "sha256": "eb07c2fb560b4572db551ff46a650ac8e3f9eb3c62350d62c6aaafb41203b529"
+    },
+    "fixed_dev_01_unseen_depth_swing_four_arm": {
+      "jsonl": true,
+      "path": "work_dirs/port_depth_four_arm_v1/frozen_downstream_20261007_163625_1260566/fixed_dev_01_unseen_depth_swing/evaluation_rows.jsonl",
+      "sha256": "447789973065f25316a761a5f5493bf8f584dd8c58bd5708f42f917b90b3022e"
+    },
+    "fixed_dev_01_unseen_depth_swing_manifest": {
+      "jsonl": false,
+      "path": "/Users/mac/Documents/fangzhen/grab_副本/datasets/yolo_obb_depth_dataset/fixed_dev_01_unseen_depth_swing/metadata/manifest.json",
+      "sha256": "b86a86a154d1552500cf11bafef677f24b1bb9a7bca59b47c6235f8aa8705259"
+    },
+    "fixed_dev_01_unseen_depth_swing_truth": {
+      "jsonl": true,
+      "path": "/Users/mac/Documents/fangzhen/grab_副本/datasets/yolo_obb_depth_dataset/fixed_dev_01_unseen_depth_swing/metadata/frames.jsonl",
+      "sha256": "a4e0b59d54b7cffd3c0299c3470f660510f37ac2d6c63ee1f8bd76d953584d87"
+    },
+    "policy": {
+      "jsonl": false,
+      "path": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json",
+      "sha256": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f"
+    },
+    "test_candidate": {
+      "jsonl": true,
+      "path": "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/candidate/port_test/predictions.jsonl",
+      "sha256": "1e26ed15466f01bb21c277c3018e88ce44f5666530be04bb516742429d4d8c0b"
+    },
+    "test_gt": {
+      "jsonl": true,
+      "path": "work_dirs/port_geometry_midpoint_sigma15_v1_results_20261005_095254/port_geometry_midpoint_sigma15_v1_test_eval/test_rows.jsonl",
+      "sha256": "13c4cfa7f1f67a7bc2cad36da1ec067adbeae74080b387d39efe39fdc41a788d"
+    },
+    "test_metadata": {
+      "jsonl": true,
+      "path": "work_dirs/port_simple_reliability_v1_test_numeric_source_20261003/test_qualities.jsonl",
+      "sha256": "d95cdeb8958bfff69f82fcc0c9f4650557245070ae68745971b1bff7e2ae23e9"
+    },
+    "train_candidate": {
+      "jsonl": true,
+      "path": "work_dirs/port_geometry_size_boundary_v1/port_geometry_size_boundary_continuous_v1_20261007_154944_1078779/finite/boundary_continuous/final_rows.jsonl",
+      "sha256": "34c0df37f49a36027377a1a950886d8628e0aca0c34d1082882fcef3bb10a8fc"
+    },
+    "unknown_test_02_coverage_retry_candidate": {
+      "jsonl": true,
+      "path": "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/candidate/unknown_test_02_coverage_retry/evaluation_rows.jsonl",
+      "sha256": "a3ad71e7d8d0c7e4db170dc8b1c08b5bee951bbd63bf0298c4a5e93d46bfc5f8"
+    },
+    "unknown_test_02_coverage_retry_four_arm": {
+      "jsonl": true,
+      "path": "work_dirs/port_depth_four_arm_v1/frozen_downstream_20261007_163625_1260566/unknown_test_02_coverage_retry/evaluation_rows.jsonl",
+      "sha256": "49648359887ea67b46cc553d60943bbdc748a6ddd6b13cead6e51cfd9095909c"
+    },
+    "unknown_test_02_coverage_retry_manifest": {
+      "jsonl": false,
+      "path": "/Users/mac/Documents/fangzhen/grab_副本/datasets/yolo_obb_depth_dataset/unknown_test_02_coverage_retry/metadata/manifest.json",
+      "sha256": "ed8a42c3755d67ff0051b7dfc3a898e1dd94d5325de275883d795a7d21dc5f15"
+    },
+    "unknown_test_02_coverage_retry_truth": {
+      "jsonl": true,
+      "path": "/Users/mac/Documents/fangzhen/grab_副本/datasets/yolo_obb_depth_dataset/unknown_test_02_coverage_retry/metadata/frames.jsonl",
+      "sha256": "6c5a728833a77b4f12caa854c8720d12813602a67a9caf75c9563c21c71ac29e"
+    }
+  },
+  "protocol": "port_size_all_evidence_v1",
+  "roles": {
+    "calibration_train_03_tilt_obb": "Raw-opt calibration TRAIN, diagnostic only.",
+    "fixed_dev_01_unseen_depth_swing": "Formula-development Fixed-dev, diagnostic only.",
+    "port_TEST": "Repeatedly exposed TEST, descriptive comparison only.",
+    "port_TRAIN": "Original detector TRAIN, mixed finite fit/probe/legacy/purged roles; no role reassignment.",
+    "port_TRAIN_half_view": "Same TRAIN frame identities, half-scale transformed diagnostic views; not independent support.",
+    "port_VAL": "Original source VAL, frozen policy calibration/geometry evaluation.",
+    "unknown_test_02_coverage_retry": "Previously exposed TEST, descriptive reporting only."
+  },
+  "scope": {
+    "candidate_VAL": "Not run because original TRAIN gate failed; no substitute from old candidates.",
+    "formula_refit": false,
+    "inference": false,
+    "old_closed_routes": "Retain reviewed failure conclusions; no complete old-route reaudit or restart.",
+    "parameter_selection": false,
+    "physical_reference": "Port real independent short-edge/physical reference correspondence remains unconfirmed.",
+    "policy_refit": false,
+    "reliable_policy": "Unchanged matched M sigma15 policy; B/C transfer diagnostic only.",
+    "training": false
+  },
+  "webots": {
+    "calibration_train_03_tilt_obb": {
+      "count": 981,
+      "manifest_sha256": "4dbc6c8dcb039c73cca0311da1a648fa08ad807d6b29a1e23124d6c659a4c0d6",
+      "truth_sha256": "3441b0e1dad135ee7d49b0ee2c243fc603c5193284aa69a8ab67d71b52db7aad"
+    },
+    "fixed_dev_01_unseen_depth_swing": {
+      "count": 893,
+      "evidence_role": "formula_development_sequence_frozen_diagnostic",
+      "image_identity_sha256": "1e6265c6e3b14293c942465edd8e35112546c5bcc86e88a6a22353fe204a12c7",
+      "manifest_sha256": "b86a86a154d1552500cf11bafef677f24b1bb9a7bca59b47c6235f8aa8705259",
+      "run_instance_id": "07c8ea8327704719837d33c49b2dca45",
+      "split": "fixed_dev",
+      "truth_sha256": "a4e0b59d54b7cffd3c0299c3470f660510f37ac2d6c63ee1f8bd76d953584d87"
+    },
+    "unknown_test_02_coverage_retry": {
+      "count": 1097,
+      "evidence_role": "previously_exposed_TEST_frozen_Raw_opt_reporting_not_untouched_confirmation",
+      "image_identity_sha256": "e95effdb49856e1ba451c0534e1530044af4485c0d037cac1fbbf4c1a54c5ed3",
+      "manifest_sha256": "ed8a42c3755d67ff0051b7dfc3a898e1dd94d5325de275883d795a7d21dc5f15",
+      "run_instance_id": "c7ed7b43768e4b38aff7046b2266cf68",
+      "split": "unknown_test",
+      "truth_sha256": "6c5a728833a77b4f12caa854c8720d12813602a67a9caf75c9563c21c71ac29e"
+    }
+  }
+}

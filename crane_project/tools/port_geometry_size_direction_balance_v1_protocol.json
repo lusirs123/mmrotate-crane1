@@ -1,0 +1,111 @@
+{
+  "arms": [
+    "uniform_control",
+    "direction_balanced"
+  ],
+  "cache_manifest_sha256": "046c5998dee0ba3703f1ae4e08fc6a02e9804d216ea12241357f69f2a4afd1e3",
+  "collection_artifacts": {
+    "collect/collect_report.json": "3c39308d481e6154e9f23ba6055c52e8d7ed707994b262d0d8546c3cdf762922",
+    "collect/completion.json": "9af0d982326b20fef2a49b13b5e973ba1ba6e17101207f3abafdfda25981c9ac",
+    "collect/final_rows.jsonl": "0d971bb608761ecd9df180f3e6c0dffb46ca71974431cc97375b9cc9b14c88c6",
+    "collect/independent_B_cache_comparisons.json": "254525cd0a2530cfd738d342b0952fb33fc135519ad542ba96414af1e35e04c3",
+    "collect/input_check.json": "b9679c4b2ec586e89992c411922acc9afa250a2e66ba969bb9c96daa14615318"
+  },
+  "direction_settings": {
+    "metric_tolerance": 1e-06,
+    "near_relative": 0.03,
+    "weight_cap": 4.0
+  },
+  "expected_initial": {
+    "buffer_count": 0,
+    "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "parameter_count": 2760,
+    "parameters": "baffcbce4031ed78f054efd6271149771b5a9513d49cb390f083930aa0f8c5ce"
+  },
+  "exposure_sha256": "64d200de2eb0f9d2a48d42189177747944dc650adbf6a05757202cde3d019bab",
+  "fixed_checkpoint": {
+    "epoch": 3,
+    "head_digest": {
+      "buffer_count": 0,
+      "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "parameter_count": 17696,
+      "parameters": "f84d99dac7cb0f2dcb86b5eaf33c21c1d360bdca5d0193b7b3da6c98f92bdc63"
+    },
+    "path": "head_epoch_03.pth",
+    "save_reload_exact": true,
+    "sha256": "16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7",
+    "sigma_cells": 1.5,
+    "updates": 2706
+  },
+  "gates": "Final delivered TRAIN outputs only; inherited fit/probe and geometry guards plus fixed M direction-group continuous scale/short/ratio/tail protection, strict fit common-scale gain for enlarge/shrink, near-correct no new joint10 errors. Balanced must pass before any VAL tensor load. Then evaluate BOTH final heads on same full887 VAL as a predeclared controlled diagnostic; failed control is not thereby promoted. Original VAL/probe/bias/ratio gates apply, balanced also must meet direct two-arm protection. No best checkpoint/arm selection.",
+  "groups": "Original M canonical original-image relative errors. Near_correct if both abs<=.03; otherwise need_enlarge if both negative, need_shrink if both positive, mixed otherwise. Missing never enters updates. Domain/scale cells are offline training organization only.",
+  "limitations": [
+    "Exposure imbalance is not a proven root cause; group weights test one training factor.",
+    "TRAIN/probe were exposed to detector/M training; no new events or independent labels.",
+    "Direction groups use projected OBB sizes, not verified physical short-edge measurements.",
+    "Gradient clipping may alter effective contributions; raw/weighted group losses and pre/post clip norms are logged.",
+    "CUDA grid_sample backward may be nondeterministic; fresh control is required, old200 results are contextual only.",
+    "Geometry pass does not establish reliability or metric-depth benefit; downstream requires separate authorization/evaluation."
+  ],
+  "model_settings": {
+    "bins": 9,
+    "decoded_beta": 0.1,
+    "hidden_channels": 8,
+    "in_channels": 256,
+    "log_range": 0.5,
+    "prior_sigma_bins": 1.0,
+    "roi_size": 9,
+    "seed": 1703,
+    "tangent_samples": 9
+  },
+  "original_baseline_sha256": "8f225449749466923527449b4af34035dce5c4a031b9c3a1bbc1eedb8329f288",
+  "original_schedule_sha256": "50de269e32e1d5c7280fcbe7523bde8c5c5fe8a48837d72a6f56fccfbd347615",
+  "parameter_count": 2760,
+  "protocol": "port_geometry_size_direction_balance_v1",
+  "runtime_core": {
+    "cuda": "11.7",
+    "cudnn": 8500,
+    "dtype": "torch.float32",
+    "tf32_cudnn": true,
+    "tf32_matmul": false,
+    "torch": "1.13.1+cu117"
+  },
+  "scope": {
+    "automatic_promotion": false,
+    "dataset_splits_modified": false,
+    "depth_formula_modified": false,
+    "detector_updates": 0,
+    "feature_extractions": 0,
+    "formal_training": false,
+    "frozen_midpoint_updates": 0,
+    "labels_modified": false,
+    "policy_modified": false,
+    "test_access": false
+  },
+  "settings": {
+    "batch_size": 8,
+    "clip_norm": 10.0,
+    "error_repeat_cap": 4,
+    "holdout_divisor": 5,
+    "loss_beta": 0.1,
+    "lr": 0.001,
+    "purge_frames": 10,
+    "ratio_weight": 0.25,
+    "scales": [
+      1.0,
+      0.5
+    ],
+    "seed": 1703,
+    "smoke_steps": 2,
+    "steps": 200,
+    "weight_decay": 0.0
+  },
+  "single_factor": "Only per-view loss weight changes. Original fixed batches, inputs, head, initialization, Adam, lr, clipping and200 updates unchanged. Fresh independent2-step smoke discarded, fresh200 final only per arm.",
+  "stages": [
+    "check",
+    "prepare",
+    "smoke",
+    "finite"
+  ],
+  "weights": "Actual original200 schedule exposure, not full-fit counts. Per-cell capped inverse exposure: w_g=min(4,lambda/n_g), sum(n_g*w_g)=400. All four groups must have scheduled exposure. Fixed entire-run weights; no per-batch normalization, sampler change or GT in forward. Uniform control calls exact original mean SmoothL1 beta.1; balanced uses mean(weight*same pointwise loss)."
+}
