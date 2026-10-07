@@ -19,6 +19,7 @@
     "torch": "1.13.1+cu117"
   },
   "candidate_sha256": "de94b8d8a4d17d7770ea332be7589912fba762bde6e773fac44560bbb686858b",
+  "gpu_scheduling": "Prefer idle2/3 then idle1/0; if no idle GPU, use2/3 with >=4096MiB free, nice10, never terminate other jobs. Shared duration is not latency/FPS evidence.",
   "numeric": "Native B/M cuDNN8801; detached GT-free ROI on disk; separate candidate process original training cuDNN8500, same input transform and actual sx/sy. Neutral bitwise replay; center/canonical long-axis/score/output identity exact. Predictions close before downstream metric truth is read.",
   "original_TRAIN_failed_checks": 16,
   "original_TRAIN_gate_passed": false,

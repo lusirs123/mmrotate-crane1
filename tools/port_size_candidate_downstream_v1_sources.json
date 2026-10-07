@@ -4,7 +4,7 @@
     "tools/port_frozen_downstream_v1_sources.json": "47d2cd54a1d51f2fdbbe2a361da22d31353f703f4bbf04f1058ee6b89838d18e"
   },
   "protocol": "port_size_candidate_downstream_v1_fixed_diagnostic",
-  "protocol_sha256": "c82b285dc0d891645e5bf9637e347a83d1b5d4e0736b914e8113d5dc0df640e3",
+  "protocol_sha256": "86bd8fbdd383faaedde65366382eb2d365b0670662de44fc1ca18cb230efd416",
   "sources": {
     "configs/_base_/default_runtime.py": "046fc7f2d6a8dd3891b2ad90f1c5c5ea3e45345a1f44163318a6b8e8e33ceb77",
     "configs/_base_/schedules/schedule_1x.py": "eef4b63abefd4e51bce476a012013d63ec27e06c87516a2352ff57b5f46f80e9",
@@ -174,9 +174,9 @@
     "tools/eval_port_size_candidate_downstream_v1.py": "9623d49aeb55637dec00bf139356f7fad3ac7c8dfcb105aca0b7bb5d0531fce6",
     "tools/port_frozen_downstream_v1_protocol.json": "fd67ee50e3436ab0228062da3f7c58c7f07a4e073614d1a8e92221d50ba71aa0",
     "tools/port_frozen_downstream_v1_sources.json": "47d2cd54a1d51f2fdbbe2a361da22d31353f703f4bbf04f1058ee6b89838d18e",
-    "tools/port_size_candidate_downstream_v1_protocol.json": "c82b285dc0d891645e5bf9637e347a83d1b5d4e0736b914e8113d5dc0df640e3",
+    "tools/port_size_candidate_downstream_v1_protocol.json": "86bd8fbdd383faaedde65366382eb2d365b0670662de44fc1ca18cb230efd416",
     "tools/run_port_frozen_downstream_v1.sh": "3ca66762cb1212a79890b13c741be322874c7635384bb66f62ebfcf0ca4e80b5",
-    "tools/run_port_size_candidate_downstream_v1.sh": "d2c471c0237bfe6605f27b059930ea35466101120e506a252d94887dac0f9730",
+    "tools/run_port_size_candidate_downstream_v1.sh": "c7d64d6973d20546c1bf79152b906aab49a3cc5246b561b74637ab58eca52416",
     "tools/train.py": "50b49af8c85e2ad1a2e255894f2bc7f0124fe57b118c64801a6fdad8e1921b87"
   }
 }
