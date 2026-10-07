@@ -1,0 +1,257 @@
+{
+  "review_date": "2026-10-07",
+  "activity": "A055",
+  "scope": "confirm_saved_manual_review_completion_no_label_mutation",
+  "predecessor_review": {
+    "path": "annotation_review.json",
+    "sha256": "169289bb618e532266a12c6a5b633313e63a80aadaf416448b5acdc2d2029e35",
+    "activity": "A054",
+    "preserved": true
+  },
+  "summary": {
+    "annotation_count": 20,
+    "reviewed_true_count": 20,
+    "reviewed_false_count": 0,
+    "unmeasurable_count": 0,
+    "changed_annotations": [
+      "annotations/candidate08_f00386.json",
+      "annotations/candidate08_f00452.json"
+    ],
+    "unchanged_points_count": 20,
+    "unchanged_png_sha_count": 20,
+    "empty_object_definition_count": 20,
+    "empty_measurement_basis_count": 20
+  },
+  "user_declared_target": "top_beam_body_including_trapezoidal_protrusions_along_long_edges",
+  "packet_sha256": "ec1b4cc0d53da8b0762c0163ecd28c6c3f284a5ac986367cc4f83bb8af1653c7",
+  "geometry_check_evidence": "A054 structure/geometry results inherited because all20 point coordinates, types and labels unchanged; no repeat geometry or model tests",
+  "legacy_checker_status": "A054 returncode2 and manual_visible_four_corners mismatch remain unresolved; legacy check not rerun for flag-only update",
+  "ready_for_training": false,
+  "split_assigned": false,
+  "fixed_k_bias_evaluated": false,
+  "physical_reference_match": "UNCONFIRMED",
+  "annotation_files_unmodified_by_assistant": true,
+  "historical_overlay_status": "A054 overlay snapshots still show previous false flags on two frames; use A055 completion JSON for current flags",
+  "rows": [
+    {
+      "annotation": "annotations/candidate08_f00055.json",
+      "annotation_sha256": "13c1db6cdd8167e1ac455a9d2071236cf817fd371af4b76fd46ec2cec2be1bf5",
+      "previous_annotation_sha256": "13c1db6cdd8167e1ac455a9d2071236cf817fd371af4b76fd46ec2cec2be1bf5",
+      "changed_since_a054": false,
+      "points_unchanged_since_a054": true,
+      "reviewed": true,
+      "unmeasurable": false,
+      "object_definition": "",
+      "measurement_basis": ""
+    },
+    {
+      "annotation": "annotations/candidate08_f00121.json",
+      "annotation_sha256": "3eeca0e47ce808ccfc5a8940c17018c0ed2c54f19acf64557221d4d5a112749a",
+      "previous_annotation_sha256": "3eeca0e47ce808ccfc5a8940c17018c0ed2c54f19acf64557221d4d5a112749a",
+      "changed_since_a054": false,
+      "points_unchanged_since_a054": true,
+      "reviewed": true,
+      "unmeasurable": false,
+      "object_definition": "",
+      "measurement_basis": ""
+    },
+    {
+      "annotation": "annotations/candidate08_f00188.json",
+      "annotation_sha256": "1d151a16f1c2fd5dea7174223d962524fe83f9df3ba5de6a712fbc00164936a0",
+      "previous_annotation_sha256": "1d151a16f1c2fd5dea7174223d962524fe83f9df3ba5de6a712fbc00164936a0",
+      "changed_since_a054": false,
+      "points_unchanged_since_a054": true,
+      "reviewed": true,
+      "unmeasurable": false,
+      "object_definition": "",
+      "measurement_basis": ""
+    },
+    {
+      "annotation": "annotations/candidate08_f00254.json",
+      "annotation_sha256": "3e42bffc6686f05c4521a34c8253025174ae40fdb8f8b5cc4d53c9783e3dfd8a",
+      "previous_annotation_sha256": "3e42bffc6686f05c4521a34c8253025174ae40fdb8f8b5cc4d53c9783e3dfd8a",
+      "changed_since_a054": false,
+      "points_unchanged_since_a054": true,
+      "reviewed": true,
+      "unmeasurable": false,
+      "object_definition": "",
+      "measurement_basis": ""
+    },
+    {
+      "annotation": "annotations/candidate08_f00320.json",
+      "annotation_sha256": "0f73adade668645b42f2138a2c86c5f4deeb546f7116e4cd9ee34eecda4f2487",
+      "previous_annotation_sha256": "0f73adade668645b42f2138a2c86c5f4deeb546f7116e4cd9ee34eecda4f2487",
+      "changed_since_a054": false,
+      "points_unchanged_since_a054": true,
+      "reviewed": true,
+      "unmeasurable": false,
+      "object_definition": "",
+      "measurement_basis": ""
+    },
+    {
+      "annotation": "annotations/candidate08_f00386.json",
+      "annotation_sha256": "a551ee1a63a4edc21e76afcc705031188f6431afc9b69281449a32bfed881377",
+      "previous_annotation_sha256": "7afbea85c3ec48c111f80ee49bbfc7c84069fa50bb0159417eb24b616aadb6e5",
+      "changed_since_a054": true,
+      "points_unchanged_since_a054": true,
+      "reviewed": true,
+      "unmeasurable": false,
+      "object_definition": "",
+      "measurement_basis": ""
+    },
+    {
+      "annotation": "annotations/candidate08_f00452.json",
+      "annotation_sha256": "c8c51007d78d87721c7f84c1d3b6ddeb09add2d431756831869a55290fb638d2",
+      "previous_annotation_sha256": "214da4db28d022b561beffb3be6855f421d71b6497aff7b7c0b6f6090f9db5cc",
+      "changed_since_a054": true,
+      "points_unchanged_since_a054": true,
+      "reviewed": true,
+      "unmeasurable": false,
+      "object_definition": "",
+      "measurement_basis": ""
+    },
+    {
+      "annotation": "annotations/candidate08_f00518.json",
+      "annotation_sha256": "7427f7ad54cd7b303ec68bc599d774afc7b652be2bb34246a91d43382637b4ce",
+      "previous_annotation_sha256": "7427f7ad54cd7b303ec68bc599d774afc7b652be2bb34246a91d43382637b4ce",
+      "changed_since_a054": false,
+      "points_unchanged_since_a054": true,
+      "reviewed": true,
+      "unmeasurable": false,
+      "object_definition": "",
+      "measurement_basis": ""
+    },
+    {
+      "annotation": "annotations/candidate08_f00585.json",
+      "annotation_sha256": "41add6e15ce787f6cec06d046e6f9ec4deb249bf5ceb7c75628ed7e91ea6cd3a",
+      "previous_annotation_sha256": "41add6e15ce787f6cec06d046e6f9ec4deb249bf5ceb7c75628ed7e91ea6cd3a",
+      "changed_since_a054": false,
+      "points_unchanged_since_a054": true,
+      "reviewed": true,
+      "unmeasurable": false,
+      "object_definition": "",
+      "measurement_basis": ""
+    },
+    {
+      "annotation": "annotations/candidate08_f00651.json",
+      "annotation_sha256": "ba503b8b4b1845dc67f43ea9bbb29ec8f792fc1b8ffc77c581931f96a026649c",
+      "previous_annotation_sha256": "ba503b8b4b1845dc67f43ea9bbb29ec8f792fc1b8ffc77c581931f96a026649c",
+      "changed_since_a054": false,
+      "points_unchanged_since_a054": true,
+      "reviewed": true,
+      "unmeasurable": false,
+      "object_definition": "",
+      "measurement_basis": ""
+    },
+    {
+      "annotation": "annotations/candidate08_f00717.json",
+      "annotation_sha256": "0bc1d115a0d5a968a1e32c79a420b6a564748fd9416aa218ee94c65872d348af",
+      "previous_annotation_sha256": "0bc1d115a0d5a968a1e32c79a420b6a564748fd9416aa218ee94c65872d348af",
+      "changed_since_a054": false,
+      "points_unchanged_since_a054": true,
+      "reviewed": true,
+      "unmeasurable": false,
+      "object_definition": "",
+      "measurement_basis": ""
+    },
+    {
+      "annotation": "annotations/candidate08_f00783.json",
+      "annotation_sha256": "9e97167207437f55e13aebb5164274ac277671410ef316c1959aa57a4cd909bb",
+      "previous_annotation_sha256": "9e97167207437f55e13aebb5164274ac277671410ef316c1959aa57a4cd909bb",
+      "changed_since_a054": false,
+      "points_unchanged_since_a054": true,
+      "reviewed": true,
+      "unmeasurable": false,
+      "object_definition": "",
+      "measurement_basis": ""
+    },
+    {
+      "annotation": "annotations/candidate08_f00849.json",
+      "annotation_sha256": "fe69630ca1e9549dfe4f0636b9599921e41b9e1603e1459c42dc5105775275ba",
+      "previous_annotation_sha256": "fe69630ca1e9549dfe4f0636b9599921e41b9e1603e1459c42dc5105775275ba",
+      "changed_since_a054": false,
+      "points_unchanged_since_a054": true,
+      "reviewed": true,
+      "unmeasurable": false,
+      "object_definition": "",
+      "measurement_basis": ""
+    },
+    {
+      "annotation": "annotations/candidate08_f00915.json",
+      "annotation_sha256": "1be3dd1374183987757162c5285363e3c4b7929a393d99078e8f627c8fa69902",
+      "previous_annotation_sha256": "1be3dd1374183987757162c5285363e3c4b7929a393d99078e8f627c8fa69902",
+      "changed_since_a054": false,
+      "points_unchanged_since_a054": true,
+      "reviewed": true,
+      "unmeasurable": false,
+      "object_definition": "",
+      "measurement_basis": ""
+    },
+    {
+      "annotation": "annotations/candidate08_f00982.json",
+      "annotation_sha256": "9c551e977b4d30a18970d0c02677a6e021ca48047e50e845514f4c1fb0cb928b",
+      "previous_annotation_sha256": "9c551e977b4d30a18970d0c02677a6e021ca48047e50e845514f4c1fb0cb928b",
+      "changed_since_a054": false,
+      "points_unchanged_since_a054": true,
+      "reviewed": true,
+      "unmeasurable": false,
+      "object_definition": "",
+      "measurement_basis": ""
+    },
+    {
+      "annotation": "annotations/candidate08_f01048.json",
+      "annotation_sha256": "b62ef033b5c7e00f1879dfe4cfb8a013876dda6bc8870f411381286c18ad8511",
+      "previous_annotation_sha256": "b62ef033b5c7e00f1879dfe4cfb8a013876dda6bc8870f411381286c18ad8511",
+      "changed_since_a054": false,
+      "points_unchanged_since_a054": true,
+      "reviewed": true,
+      "unmeasurable": false,
+      "object_definition": "",
+      "measurement_basis": ""
+    },
+    {
+      "annotation": "annotations/candidate11_f00008.json",
+      "annotation_sha256": "82693ea26ff68921c222aa628793069c0b21233673f37b7bdcbddb660e31580d",
+      "previous_annotation_sha256": "82693ea26ff68921c222aa628793069c0b21233673f37b7bdcbddb660e31580d",
+      "changed_since_a054": false,
+      "points_unchanged_since_a054": true,
+      "reviewed": true,
+      "unmeasurable": false,
+      "object_definition": "",
+      "measurement_basis": ""
+    },
+    {
+      "annotation": "annotations/candidate11_f00057.json",
+      "annotation_sha256": "8dbf0f76103c226eb6d71c5adb8908d71ddf9348f960cbcec0ce3fad16051732",
+      "previous_annotation_sha256": "8dbf0f76103c226eb6d71c5adb8908d71ddf9348f960cbcec0ce3fad16051732",
+      "changed_since_a054": false,
+      "points_unchanged_since_a054": true,
+      "reviewed": true,
+      "unmeasurable": false,
+      "object_definition": "",
+      "measurement_basis": ""
+    },
+    {
+      "annotation": "annotations/candidate11_f00105.json",
+      "annotation_sha256": "fcdd6e2e699680fe36b72b0f65a31f9656c9556895691d8ac8af5c54a6a17768",
+      "previous_annotation_sha256": "fcdd6e2e699680fe36b72b0f65a31f9656c9556895691d8ac8af5c54a6a17768",
+      "changed_since_a054": false,
+      "points_unchanged_since_a054": true,
+      "reviewed": true,
+      "unmeasurable": false,
+      "object_definition": "",
+      "measurement_basis": ""
+    },
+    {
+      "annotation": "annotations/candidate11_f00154.json",
+      "annotation_sha256": "1f93127ddde10ae1c009b8452cc0370cf39af8e954ac68676ec228e3dc9dcf1b",
+      "previous_annotation_sha256": "1f93127ddde10ae1c009b8452cc0370cf39af8e954ac68676ec228e3dc9dcf1b",
+      "changed_since_a054": false,
+      "points_unchanged_since_a054": true,
+      "reviewed": true,
+      "unmeasurable": false,
+      "object_definition": "",
+      "measurement_basis": ""
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "version": "3.3.10",
+  "flags": {
+    "independent_reviewed": false,
+    "unmeasurable": false
+  },
+  "shapes": [],
+  "imagePath": "../../images/candidate08_f01048.png",
+  "imageData": null,
+  "imageWidth": 1920,
+  "imageHeight": 1088,
+  "object_definition": "top_beam_body_including_trapezoidal_protrusions_along_long_edges",
+  "measurement_basis": "manual_enclosing_boundary_repeat"
+}

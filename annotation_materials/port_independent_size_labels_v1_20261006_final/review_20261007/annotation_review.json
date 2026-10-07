@@ -1,0 +1,1461 @@
+{
+  "review_date": "2026-10-07",
+  "scope": "read_only_saved_annotation_review_no_GT_export_no_training",
+  "packet_sha256": "ec1b4cc0d53da8b0762c0163ecd28c6c3f284a5ac986367cc4f83bb8af1653c7",
+  "packet_sha_matches_creation_artifacts": true,
+  "historical_artifacts_not_rewritten": true,
+  "checker_sha256": "04058fdc846aacb714f793bfd8433a29a412e8c67cc9909bc2decea28de63961",
+  "user_declared_target": "top_beam_body_including_trapezoidal_protrusions_along_long_edges",
+  "declaration_source": "human_user_in_current_chat",
+  "annotation_files_unmodified": true,
+  "legacy_check": {
+    "command": [
+      "/Users/mac/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "/Users/mac/Documents/paper/symEOOD/tools/data/prepare_port_independent_size_labels_v1.py",
+      "check",
+      "--packet-dir",
+      "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final"
+    ],
+    "returncode": 2,
+    "stdout": "",
+    "stderr": "ERROR: Independent review needs object definition and visible-corner declaration\n"
+  },
+  "diagnostic_method": "run_existing_validate_annotation_on_in_memory_copy_with_reviewed_false_to_separate_structure_from_missing_manual_declarations; originals_unchanged; geometry_from_raw_four_points; no_rectangularization",
+  "summary": {
+    "count": 20,
+    "shape_four_point_polygon_count": 20,
+    "structure_valid_count": 20,
+    "matching_image_sha_count": 20,
+    "matching_size_count": 20,
+    "matching_image_path_count": 20,
+    "reviewed_flag_true_count": 18,
+    "reviewed_flag_false_names": [
+      "candidate08_f00386.json",
+      "candidate08_f00452.json"
+    ],
+    "empty_object_definition_count": 20,
+    "empty_measurement_basis_count": 20,
+    "max_right_angle_deviation_deg_range": [
+      0.5972921416289694,
+      6.083188737651611
+    ],
+    "max_right_angle_deviation_deg_median": 1.8208718205074064,
+    "closure_residual_px_range": [
+      0.7444168734489267,
+      9.78787357579771
+    ],
+    "opposite_edge_mean_ratio_range": [
+      2.0928580288634007,
+      2.526741479104084
+    ]
+  },
+  "ready_for_training": false,
+  "split_assigned": false,
+  "physical_reference_match": "UNCONFIRMED",
+  "fixed_k_bias_evaluated": false,
+  "paired_original_axis_and_applicable_k_available": false,
+  "limitations": [
+    "Review flags and user target declaration are not geometric or physical ground truth.",
+    "Four cyclic convex points need not form a rotated rectangle.",
+    "Opposite-edge means and their ratio are quadrilateral descriptors, not native OBB dimensions.",
+    "Candidate sources are not matched same-frame old TRAIN axes; no per-frame old-k bias or failure causality inferred.",
+    "No source labels, flags, images, historical artifacts, detector, policy, depth formula or split changed."
+  ],
+  "rows": [
+    {
+      "annotation": "annotations/candidate08_f00055.json",
+      "annotation_sha256": "13c1db6cdd8167e1ac455a9d2071236cf817fd371af4b76fd46ec2cec2be1bf5",
+      "image": "images/candidate08_f00055.png",
+      "image_sha256": "2dc4c692ecb7754168d78088fc6572ac35b60427817a6fbac1330da124835119",
+      "image_sha_matches_packet": true,
+      "actual_image_size": [
+        1920,
+        1088
+      ],
+      "size_matches_packet": true,
+      "image_path_matches": true,
+      "source_video": "1 (8).mp4",
+      "decode_index": 55,
+      "role": "UNASSIGNED_ANNOTATION_CANDIDATE",
+      "shape_count": 1,
+      "shape_type": "polygon",
+      "label": "central_structure_reference",
+      "points": [
+        [
+          1045.359801488834,
+          747.1017369727048
+        ],
+        [
+          1169.181141439206,
+          728.2431761786601
+        ],
+        [
+          1173.3995037220845,
+          784.3225806451613
+        ],
+        [
+          1052.5558312655087,
+          802.6848635235732
+        ]
+      ],
+      "review_flags": {
+        "independent_reviewed": true,
+        "unmeasurable": false
+      },
+      "object_definition": "",
+      "measurement_basis": "",
+      "structure_valid_without_review_declaration": true,
+      "structure_error": null,
+      "edge_lengths_px": [
+        125.24922970752465,
+        56.23783589068,
+        122.2307923777761,
+        56.04700528767478
+      ],
+      "interior_angles_deg": [
+        91.28313449904677,
+        85.64189776806741,
+        94.33828443795326,
+        88.73668329493258
+      ],
+      "max_right_angle_deviation_deg": 4.358102231932591,
+      "parallelogram_closure_residual_px": 3.01874070982485,
+      "opposite_edge_relative_difference_pct": [
+        2.4393381771302445,
+        0.3399044804313461
+      ],
+      "opposite_edge_means_px": [
+        123.74001104265037,
+        56.14242058917739
+      ],
+      "opposite_edge_mean_ratio": 2.204037691002297,
+      "scope": "descriptive_quadrilateral_geometry_not_converted_OBB_or_physical_dimensions"
+    },
+    {
+      "annotation": "annotations/candidate08_f00121.json",
+      "annotation_sha256": "3eeca0e47ce808ccfc5a8940c17018c0ed2c54f19acf64557221d4d5a112749a",
+      "image": "images/candidate08_f00121.png",
+      "image_sha256": "5bd2ae8129c5239d6bf7468679a0cf72f759f8d178c7c50f94326d2567eeef0e",
+      "image_sha_matches_packet": true,
+      "actual_image_size": [
+        1920,
+        1088
+      ],
+      "size_matches_packet": true,
+      "image_path_matches": true,
+      "source_video": "1 (8).mp4",
+      "decode_index": 121,
+      "role": "UNASSIGNED_ANNOTATION_CANDIDATE",
+      "shape_count": 1,
+      "shape_type": "polygon",
+      "label": "central_structure_reference",
+      "points": [
+        [
+          1089.3687707641195,
+          703.3023255813953
+        ],
+        [
+          1203.3222591362126,
+          702.6378737541528
+        ],
+        [
+          1203.3222591362126,
+          752.8039867109634
+        ],
+        [
+          1089.3687707641195,
+          751.1428571428571
+        ]
+      ],
+      "review_flags": {
+        "independent_reviewed": true,
+        "unmeasurable": false
+      },
+      "object_definition": "",
+      "measurement_basis": "",
+      "structure_valid_without_review_declaration": true,
+      "structure_error": null,
+      "edge_lengths_px": [
+        113.95542553296647,
+        50.16611295681059,
+        113.96559508733668,
+        47.84053156146183
+      ],
+      "interior_angles_deg": [
+        90.33408239174852,
+        89.66591760825148,
+        89.16484370777911,
+        90.83515629222089
+      ],
+      "max_right_angle_deviation_deg": 0.835156292220887,
+      "parallelogram_closure_residual_px": 2.325581395348877,
+      "opposite_edge_relative_difference_pct": [
+        0.00892375292329832,
+        4.745762711864256
+      ],
+      "opposite_edge_means_px": [
+        113.96051031015158,
+        49.00332225913621
+      ],
+      "opposite_edge_mean_ratio": 2.3255670239563138,
+      "scope": "descriptive_quadrilateral_geometry_not_converted_OBB_or_physical_dimensions"
+    },
+    {
+      "annotation": "annotations/candidate08_f00188.json",
+      "annotation_sha256": "1d151a16f1c2fd5dea7174223d962524fe83f9df3ba5de6a712fbc00164936a0",
+      "image": "images/candidate08_f00188.png",
+      "image_sha256": "1d342de818488e37004b0a414a39babe71d8032146d38014a15a89d357d7f8c5",
+      "image_sha_matches_packet": true,
+      "actual_image_size": [
+        1920,
+        1088
+      ],
+      "size_matches_packet": true,
+      "image_path_matches": true,
+      "source_video": "1 (8).mp4",
+      "decode_index": 188,
+      "role": "UNASSIGNED_ANNOTATION_CANDIDATE",
+      "shape_count": 1,
+      "shape_type": "polygon",
+      "label": "central_structure_reference",
+      "points": [
+        [
+          1065.7432432432433,
+          644.3378378378378
+        ],
+        [
+          1170.472972972973,
+          655.8243243243243
+        ],
+        [
+          1161.6891891891892,
+          699.9684684684684
+        ],
+        [
+          1061.2387387387387,
+          688.9324324324324
+        ]
+      ],
+      "review_flags": {
+        "independent_reviewed": true,
+        "unmeasurable": false
+      },
+      "object_definition": "",
+      "measurement_basis": "",
+      "structure_valid_without_review_declaration": true,
+      "structure_error": null,
+      "edge_lengths_px": [
+        105.3577508352681,
+        45.009558093578676,
+        101.05487166429481,
+        44.82151746524595
+      ],
+      "interior_angles_deg": [
+        89.50885259279211,
+        85.0053312708666,
+        94.98402245717399,
+        90.50179367916729
+      ],
+      "max_right_angle_deviation_deg": 4.994668729133394,
+      "parallelogram_closure_residual_px": 4.302921886158095,
+      "opposite_edge_relative_difference_pct": [
+        4.16920159132459,
+        0.41865385038074754
+      ],
+      "opposite_edge_means_px": [
+        103.20631124978146,
+        44.91553777941231
+      ],
+      "opposite_edge_mean_ratio": 2.2977863864537222,
+      "scope": "descriptive_quadrilateral_geometry_not_converted_OBB_or_physical_dimensions"
+    },
+    {
+      "annotation": "annotations/candidate08_f00254.json",
+      "annotation_sha256": "3e42bffc6686f05c4521a34c8253025174ae40fdb8f8b5cc4d53c9783e3dfd8a",
+      "image": "images/candidate08_f00254.png",
+      "image_sha256": "03ffee39ce6feccc764302104265e46ff4327a13808140878e3671cb019c5ab6",
+      "image_sha_matches_packet": true,
+      "actual_image_size": [
+        1920,
+        1088
+      ],
+      "size_matches_packet": true,
+      "image_path_matches": true,
+      "source_video": "1 (8).mp4",
+      "decode_index": 254,
+      "role": "UNASSIGNED_ANNOTATION_CANDIDATE",
+      "shape_count": 1,
+      "shape_type": "polygon",
+      "label": "central_structure_reference",
+      "points": [
+        [
+          1031.189591078067,
+          616.1710037174721
+        ],
+        [
+          1124.4981412639406,
+          627.8810408921934
+        ],
+        [
+          1119.10780669145,
+          672.8624535315985
+        ],
+        [
+          1023.5687732342008,
+          661.1524163568773
+        ]
+      ],
+      "review_flags": {
+        "independent_reviewed": true,
+        "unmeasurable": false
+      },
+      "object_definition": "",
+      "measurement_basis": "",
+      "structure_valid_without_review_declaration": true,
+      "structure_error": null,
+      "edge_lengths_px": [
+        94.04047271480005,
+        45.303235975367386,
+        96.25399672002574,
+        45.62241058565224
+      ],
+      "interior_angles_deg": [
+        92.46271754462613,
+        90.31967210772123,
+        89.84565607959858,
+        87.37195426805405
+      ],
+      "max_right_angle_deviation_deg": 2.628045731945946,
+      "parallelogram_closure_residual_px": 2.230483271375533,
+      "opposite_edge_relative_difference_pct": [
+        2.3264196923850236,
+        0.7020562896314584
+      ],
+      "opposite_edge_means_px": [
+        95.14723471741289,
+        45.46282328050981
+      ],
+      "opposite_edge_mean_ratio": 2.0928580288634007,
+      "scope": "descriptive_quadrilateral_geometry_not_converted_OBB_or_physical_dimensions"
+    },
+    {
+      "annotation": "annotations/candidate08_f00320.json",
+      "annotation_sha256": "0f73adade668645b42f2138a2c86c5f4deeb546f7116e4cd9ee34eecda4f2487",
+      "image": "images/candidate08_f00320.png",
+      "image_sha256": "75dbf06e22d834127ee8d9caa48a6902c8e507bebca64f8d697b925e323ebeb7",
+      "image_sha_matches_packet": true,
+      "actual_image_size": [
+        1920,
+        1088
+      ],
+      "size_matches_packet": true,
+      "image_path_matches": true,
+      "source_video": "1 (8).mp4",
+      "decode_index": 320,
+      "role": "UNASSIGNED_ANNOTATION_CANDIDATE",
+      "shape_count": 1,
+      "shape_type": "polygon",
+      "label": "central_structure_reference",
+      "points": [
+        [
+          1028.982630272953,
+          623.7766749379653
+        ],
+        [
+          1124.2679900744417,
+          633.454094292804
+        ],
+        [
+          1120.0496277915634,
+          676.1339950372209
+        ],
+        [
+          1024.7642679900746,
+          665.712158808933
+        ]
+      ],
+      "review_flags": {
+        "independent_reviewed": true,
+        "unmeasurable": false
+      },
+      "object_definition": "",
+      "measurement_basis": "",
+      "structure_valid_without_review_declaration": true,
+      "structure_error": null,
+      "edge_lengths_px": [
+        95.77553047552689,
+        42.887859679667905,
+        95.85360954532919,
+        42.14711600859318
+      ],
+      "interior_angles_deg": [
+        89.94494069466867,
+        90.15459542331239,
+        89.40270785837103,
+        90.49775602364791
+      ],
+      "max_right_angle_deviation_deg": 0.5972921416289694,
+      "parallelogram_closure_residual_px": 0.7444168734489267,
+      "opposite_edge_relative_difference_pct": [
+        0.0814897669465113,
+        1.7422094028468877
+      ],
+      "opposite_edge_means_px": [
+        95.81457001042804,
+        42.51748784413054
+      ],
+      "opposite_edge_mean_ratio": 2.253533189959036,
+      "scope": "descriptive_quadrilateral_geometry_not_converted_OBB_or_physical_dimensions"
+    },
+    {
+      "annotation": "annotations/candidate08_f00386.json",
+      "annotation_sha256": "7afbea85c3ec48c111f80ee49bbfc7c84069fa50bb0159417eb24b616aadb6e5",
+      "image": "images/candidate08_f00386.png",
+      "image_sha256": "ff71f119a430eecae6bf473ceabf8dd4fa7a5e8c2d030eea50d53a5417e8b3b7",
+      "image_sha_matches_packet": true,
+      "actual_image_size": [
+        1920,
+        1088
+      ],
+      "size_matches_packet": true,
+      "image_path_matches": true,
+      "source_video": "1 (8).mp4",
+      "decode_index": 386,
+      "role": "UNASSIGNED_ANNOTATION_CANDIDATE",
+      "shape_count": 1,
+      "shape_type": "polygon",
+      "label": "central_structure_reference",
+      "points": [
+        [
+          1037.5900900900901,
+          608.0765765765765
+        ],
+        [
+          1130.1576576576576,
+          617.7612612612612
+        ],
+        [
+          1125.4279279279278,
+          661.9054054054053
+        ],
+        [
+          1033.536036036036,
+          650.1936936936936
+        ]
+      ],
+      "review_flags": {
+        "independent_reviewed": false,
+        "unmeasurable": false
+      },
+      "object_definition": "",
+      "measurement_basis": "",
+      "structure_valid_without_review_declaration": true,
+      "structure_error": null,
+      "edge_lengths_px": [
+        93.07280850397682,
+        44.39679949653197,
+        92.63522001209577,
+        42.311782147885864
+      ],
+      "interior_angles_deg": [
+        89.52544288012304,
+        89.85721627857261,
+        88.85225882570094,
+        91.7650820156034
+      ],
+      "max_right_angle_deviation_deg": 1.7650820156033973,
+      "parallelogram_closure_residual_px": 2.1366740947083693,
+      "opposite_edge_relative_difference_pct": [
+        0.4712650232493012,
+        4.809252577089836
+      ],
+      "opposite_edge_means_px": [
+        92.8540142580363,
+        43.35429082220892
+      ],
+      "opposite_edge_mean_ratio": 2.1417491209536834,
+      "scope": "descriptive_quadrilateral_geometry_not_converted_OBB_or_physical_dimensions"
+    },
+    {
+      "annotation": "annotations/candidate08_f00452.json",
+      "annotation_sha256": "214da4db28d022b561beffb3be6855f421d71b6497aff7b7c0b6f6090f9db5cc",
+      "image": "images/candidate08_f00452.png",
+      "image_sha256": "6b42e88e10fe813239d527924b6b699ef97a840b563be79144e13f5f1abbc5ae",
+      "image_sha_matches_packet": true,
+      "actual_image_size": [
+        1920,
+        1088
+      ],
+      "size_matches_packet": true,
+      "image_path_matches": true,
+      "source_video": "1 (8).mp4",
+      "decode_index": 452,
+      "role": "UNASSIGNED_ANNOTATION_CANDIDATE",
+      "shape_count": 1,
+      "shape_type": "polygon",
+      "label": "central_structure_reference",
+      "points": [
+        [
+          1051.5544041450778,
+          598.4041450777203
+        ],
+        [
+          1145.0777202072538,
+          605.139896373057
+        ],
+        [
+          1141.9689119170985,
+          647.3678756476685
+        ],
+        [
+          1049.4818652849742,
+          640.1139896373057
+        ]
+      ],
+      "review_flags": {
+        "independent_reviewed": false,
+        "unmeasurable": false
+      },
+      "object_definition": "",
+      "measurement_basis": "",
+      "structure_valid_without_review_declaration": true,
+      "structure_error": null,
+      "edge_lengths_px": [
+        93.76556400288064,
+        42.342259299687285,
+        92.77107661865341,
+        41.76130446371881
+      ],
+      "interior_angles_deg": [
+        88.7252027384683,
+        89.90895446300293,
+        89.72589239375743,
+        91.63995040477134
+      ],
+      "max_right_angle_deviation_deg": 1.6399504047713407,
+      "parallelogram_closure_residual_px": 1.1585844443002289,
+      "opposite_edge_relative_difference_pct": [
+        1.0662649235170394,
+        1.3815225181248583
+      ],
+      "opposite_edge_means_px": [
+        93.26832031076702,
+        42.05178188170305
+      ],
+      "opposite_edge_mean_ratio": 2.2179397908308034,
+      "scope": "descriptive_quadrilateral_geometry_not_converted_OBB_or_physical_dimensions"
+    },
+    {
+      "annotation": "annotations/candidate08_f00518.json",
+      "annotation_sha256": "7427f7ad54cd7b303ec68bc599d774afc7b652be2bb34246a91d43382637b4ce",
+      "image": "images/candidate08_f00518.png",
+      "image_sha256": "4df444396b4033517ef52b8504d91ef688f7ca243e1df0b868b8360a3b22a4ad",
+      "image_sha_matches_packet": true,
+      "actual_image_size": [
+        1920,
+        1088
+      ],
+      "size_matches_packet": true,
+      "image_path_matches": true,
+      "source_video": "1 (8).mp4",
+      "decode_index": 518,
+      "role": "UNASSIGNED_ANNOTATION_CANDIDATE",
+      "shape_count": 1,
+      "shape_type": "polygon",
+      "label": "central_structure_reference",
+      "points": [
+        [
+          1058.4699453551912,
+          593.1693989071038
+        ],
+        [
+          1157.6502732240438,
+          597.8142076502731
+        ],
+        [
+          1154.6448087431693,
+          644.535519125683
+        ],
+        [
+          1055.7377049180327,
+          638.5245901639344
+        ]
+      ],
+      "review_flags": {
+        "independent_reviewed": true,
+        "unmeasurable": false
+      },
+      "object_definition": "",
+      "measurement_basis": "",
+      "structure_valid_without_review_declaration": true,
+      "structure_error": null,
+      "edge_lengths_px": [
+        99.28903103784286,
+        46.817878665399405,
+        99.08958802043499,
+        45.437413127841324
+      ],
+      "interior_angles_deg": [
+        90.76607253418969,
+        89.00069214464483,
+        90.2028356532325,
+        90.03039966793298
+      ],
+      "max_right_angle_deviation_deg": 0.9993078553551697,
+      "parallelogram_closure_residual_px": 1.3931747304899034,
+      "opposite_edge_relative_difference_pct": [
+        0.20107309785162122,
+        2.9927075417027154
+      ],
+      "opposite_edge_means_px": [
+        99.18930952913892,
+        46.127645896620365
+      ],
+      "opposite_edge_mean_ratio": 2.15032238478934,
+      "scope": "descriptive_quadrilateral_geometry_not_converted_OBB_or_physical_dimensions"
+    },
+    {
+      "annotation": "annotations/candidate08_f00585.json",
+      "annotation_sha256": "41add6e15ce787f6cec06d046e6f9ec4deb249bf5ceb7c75628ed7e91ea6cd3a",
+      "image": "images/candidate08_f00585.png",
+      "image_sha256": "90e10744674f03ae02287af42286cad92a0d7f72b53684e5bd91720746417061",
+      "image_sha_matches_packet": true,
+      "actual_image_size": [
+        1920,
+        1088
+      ],
+      "size_matches_packet": true,
+      "image_path_matches": true,
+      "source_video": "1 (8).mp4",
+      "decode_index": 585,
+      "role": "UNASSIGNED_ANNOTATION_CANDIDATE",
+      "shape_count": 1,
+      "shape_type": "polygon",
+      "label": "central_structure_reference",
+      "points": [
+        [
+          1072.9032258064517,
+          588.044665012407
+        ],
+        [
+          1171.9106699751862,
+          593.7518610421837
+        ],
+        [
+          1169.6774193548388,
+          633.9503722084368
+        ],
+        [
+          1069.925558312655,
+          626.5062034739454
+        ]
+      ],
+      "review_flags": {
+        "independent_reviewed": true,
+        "unmeasurable": false
+      },
+      "object_definition": "",
+      "measurement_basis": "",
+      "structure_valid_without_review_declaration": true,
+      "structure_error": null,
+      "edge_lengths_px": [
+        99.1718008677234,
+        40.26049811312144,
+        100.02924287190572,
+        38.576630808457274
+      ],
+      "interior_angles_deg": [
+        91.12785832830555,
+        90.11928319930965,
+        88.91193681957353,
+        89.84092165281128
+      ],
+      "max_right_angle_deviation_deg": 1.1278583283055497,
+      "parallelogram_closure_residual_px": 1.8897700014550367,
+      "opposite_edge_relative_difference_pct": [
+        0.8608810356466395,
+        4.271762119442869
+      ],
+      "opposite_edge_means_px": [
+        99.60052186981457,
+        39.418564460789355
+      ],
+      "opposite_edge_mean_ratio": 2.526741479104084,
+      "scope": "descriptive_quadrilateral_geometry_not_converted_OBB_or_physical_dimensions"
+    },
+    {
+      "annotation": "annotations/candidate08_f00651.json",
+      "annotation_sha256": "ba503b8b4b1845dc67f43ea9bbb29ec8f792fc1b8ffc77c581931f96a026649c",
+      "image": "images/candidate08_f00651.png",
+      "image_sha256": "0da1f65fcb948cb14a93a0e129fd2e961254a1323aee086f00e69a489f3930b8",
+      "image_sha_matches_packet": true,
+      "actual_image_size": [
+        1920,
+        1088
+      ],
+      "size_matches_packet": true,
+      "image_path_matches": true,
+      "source_video": "1 (8).mp4",
+      "decode_index": 651,
+      "role": "UNASSIGNED_ANNOTATION_CANDIDATE",
+      "shape_count": 1,
+      "shape_type": "polygon",
+      "label": "central_structure_reference",
+      "points": [
+        [
+          1080.8333333333333,
+          579.0225225225224
+        ],
+        [
+          1177.6801801801803,
+          583.527027027027
+        ],
+        [
+          1175.6531531531532,
+          627.6711711711711
+        ],
+        [
+          1079.2567567567567,
+          622.2657657657658
+        ]
+      ],
+      "review_flags": {
+        "independent_reviewed": true,
+        "unmeasurable": false
+      },
+      "object_definition": "",
+      "measurement_basis": "",
+      "structure_valid_without_review_declaration": true,
+      "structure_error": null,
+      "edge_lengths_px": [
+        96.95154617131047,
+        44.19065852402824,
+        96.54783087054828,
+        43.27197337649533
+      ],
+      "interior_angles_deg": [
+        89.4249830666562,
+        90.03391888042843,
+        89.41959556784681,
+        91.12150248506855
+      ],
+      "max_right_angle_deviation_deg": 1.1215024850685467,
+      "parallelogram_closure_residual_px": 1.0072378277024916,
+      "opposite_edge_relative_difference_pct": [
+        0.4172781400478133,
+        2.1007489200137037
+      ],
+      "opposite_edge_means_px": [
+        96.74968852092937,
+        43.73131595026179
+      ],
+      "opposite_edge_mean_ratio": 2.212366273884109,
+      "scope": "descriptive_quadrilateral_geometry_not_converted_OBB_or_physical_dimensions"
+    },
+    {
+      "annotation": "annotations/candidate08_f00717.json",
+      "annotation_sha256": "0bc1d115a0d5a968a1e32c79a420b6a564748fd9416aa218ee94c65872d348af",
+      "image": "images/candidate08_f00717.png",
+      "image_sha256": "2568992b8dcd4d3fc46dc1d2ecad79f2b0d7bc29cbdd0bb8ecba33320f3b3c08",
+      "image_sha_matches_packet": true,
+      "actual_image_size": [
+        1920,
+        1088
+      ],
+      "size_matches_packet": true,
+      "image_path_matches": true,
+      "source_video": "1 (8).mp4",
+      "decode_index": 717,
+      "role": "UNASSIGNED_ANNOTATION_CANDIDATE",
+      "shape_count": 1,
+      "shape_type": "polygon",
+      "label": "central_structure_reference",
+      "points": [
+        [
+          1078.313253012048,
+          576.8072289156626
+        ],
+        [
+          1178.9156626506024,
+          580.722891566265
+        ],
+        [
+          1177.1084337349396,
+          623.1927710843373
+        ],
+        [
+          1075.602409638554,
+          620.1807228915662
+        ]
+      ],
+      "review_flags": {
+        "independent_reviewed": true,
+        "unmeasurable": false
+      },
+      "object_definition": "",
+      "measurement_basis": "",
+      "structure_valid_without_review_declaration": true,
+      "structure_error": null,
+      "edge_lengths_px": [
+        100.6785838154113,
+        42.508313806044846,
+        101.55070340559723,
+        43.45812526413638
+      ],
+      "interior_angles_deg": [
+        91.3473842410697,
+        89.79230188711745,
+        90.73697549722426,
+        88.12333837458858
+      ],
+      "max_right_angle_deviation_deg": 1.8766616254114155,
+      "parallelogram_closure_residual_px": 1.2779038214214093,
+      "opposite_edge_relative_difference_pct": [
+        0.8625057252294285,
+        2.209726187020786
+      ],
+      "opposite_edge_means_px": [
+        101.11464361050426,
+        42.98321953509061
+      ],
+      "opposite_edge_mean_ratio": 2.3524213566170014,
+      "scope": "descriptive_quadrilateral_geometry_not_converted_OBB_or_physical_dimensions"
+    },
+    {
+      "annotation": "annotations/candidate08_f00783.json",
+      "annotation_sha256": "9e97167207437f55e13aebb5164274ac277671410ef316c1959aa57a4cd909bb",
+      "image": "images/candidate08_f00783.png",
+      "image_sha256": "ed3c6cf9e974fe115a1df3cfccaf0f06b698877cafdb3be01e16613ec9b0626a",
+      "image_sha_matches_packet": true,
+      "actual_image_size": [
+        1920,
+        1088
+      ],
+      "size_matches_packet": true,
+      "image_path_matches": true,
+      "source_video": "1 (8).mp4",
+      "decode_index": 783,
+      "role": "UNASSIGNED_ANNOTATION_CANDIDATE",
+      "shape_count": 1,
+      "shape_type": "polygon",
+      "label": "central_structure_reference",
+      "points": [
+        [
+          1076.775956284153,
+          583.6065573770492
+        ],
+        [
+          1177.3224043715848,
+          581.967213114754
+        ],
+        [
+          1176.775956284153,
+          628.1420765027323
+        ],
+        [
+          1076.2295081967213,
+          628.6885245901639
+        ]
+      ],
+      "review_flags": {
+        "independent_reviewed": true,
+        "unmeasurable": false
+      },
+      "object_definition": "",
+      "measurement_basis": "",
+      "structure_valid_without_review_declaration": true,
+      "structure_error": null,
+      "edge_lengths_px": [
+        100.55981141892094,
+        46.17809669541081,
+        100.5479329897479,
+        45.08527889806834
+      ],
+      "interior_angles_deg": [
+        91.62854784151885,
+        88.38788753527933,
+        90.98941195102624,
+        88.99415267217557
+      ],
+      "max_right_angle_deviation_deg": 1.6285478415188521,
+      "parallelogram_closure_residual_px": 1.0928961748635402,
+      "opposite_edge_relative_difference_pct": [
+        0.011813000248165286,
+        2.3948660461788847
+      ],
+      "opposite_edge_means_px": [
+        100.55387220433443,
+        45.63168779673957
+      ],
+      "opposite_edge_mean_ratio": 2.2035974792832254,
+      "scope": "descriptive_quadrilateral_geometry_not_converted_OBB_or_physical_dimensions"
+    },
+    {
+      "annotation": "annotations/candidate08_f00849.json",
+      "annotation_sha256": "fe69630ca1e9549dfe4f0636b9599921e41b9e1603e1459c42dc5105775275ba",
+      "image": "images/candidate08_f00849.png",
+      "image_sha256": "6ce91a8ff640ae08ca111fcbf10ebbd4d66df550141b2bb1e3672c462b692e98",
+      "image_sha_matches_packet": true,
+      "actual_image_size": [
+        1920,
+        1088
+      ],
+      "size_matches_packet": true,
+      "image_path_matches": true,
+      "source_video": "1 (8).mp4",
+      "decode_index": 849,
+      "role": "UNASSIGNED_ANNOTATION_CANDIDATE",
+      "shape_count": 1,
+      "shape_type": "polygon",
+      "label": "central_structure_reference",
+      "points": [
+        [
+          1070.1807228915661,
+          584.3373493975903
+        ],
+        [
+          1181.3253012048192,
+          578.6144578313252
+        ],
+        [
+          1182.5301204819275,
+          628.6144578313252
+        ],
+        [
+          1069.2771084337348,
+          631.6265060240963
+        ]
+      ],
+      "review_flags": {
+        "independent_reviewed": true,
+        "unmeasurable": false
+      },
+      "object_definition": "",
+      "measurement_basis": "",
+      "structure_valid_without_review_declaration": true,
+      "structure_error": null,
+      "edge_lengths_px": [
+        111.2918181013774,
+        50.01451378840438,
+        113.29305880019149,
+        47.29778909774348
+      ],
+      "interior_angles_deg": [
+        94.04227666812115,
+        88.43276799717613,
+        90.14311071820752,
+        87.3818446164952
+      ],
+      "max_right_angle_deviation_deg": 4.042276668121147,
+      "parallelogram_closure_residual_px": 3.4342633286119675,
+      "opposite_edge_relative_difference_pct": [
+        1.7821687073713257,
+        5.583517417811751
+      ],
+      "opposite_edge_means_px": [
+        112.29243845078445,
+        48.65615144307393
+      ],
+      "opposite_edge_mean_ratio": 2.3078775266918274,
+      "scope": "descriptive_quadrilateral_geometry_not_converted_OBB_or_physical_dimensions"
+    },
+    {
+      "annotation": "annotations/candidate08_f00915.json",
+      "annotation_sha256": "1be3dd1374183987757162c5285363e3c4b7929a393d99078e8f627c8fa69902",
+      "image": "images/candidate08_f00915.png",
+      "image_sha256": "e73260c3712a5ce343be23307b87024516655f4b5fa747e5ae10b64d8dc5e76b",
+      "image_sha_matches_packet": true,
+      "actual_image_size": [
+        1920,
+        1088
+      ],
+      "size_matches_packet": true,
+      "image_path_matches": true,
+      "source_video": "1 (8).mp4",
+      "decode_index": 915,
+      "role": "UNASSIGNED_ANNOTATION_CANDIDATE",
+      "shape_count": 1,
+      "shape_type": "polygon",
+      "label": "central_structure_reference",
+      "points": [
+        [
+          1068.0645161290324,
+          583.0645161290323
+        ],
+        [
+          1190.241935483871,
+          581.4516129032259
+        ],
+        [
+          1194.274193548387,
+          636.6935483870968
+        ],
+        [
+          1068.8709677419356,
+          637.9032258064516
+        ]
+      ],
+      "review_flags": {
+        "independent_reviewed": true,
+        "unmeasurable": false
+      },
+      "object_definition": "",
+      "measurement_basis": "",
+      "structure_valid_without_review_declaration": true,
+      "structure_error": null,
+      "edge_lengths_px": [
+        122.18806511694952,
+        55.38890268910387,
+        125.4090601277386,
+        54.8446391481267
+      ],
+      "interior_angles_deg": [
+        89.9138117320854,
+        93.41843389908664,
+        86.37790537303572,
+        90.28984899579224
+      ],
+      "max_right_angle_deviation_deg": 3.6220946269642837,
+      "parallelogram_closure_residual_px": 3.2509103823784944,
+      "opposite_edge_relative_difference_pct": [
+        2.601803237905876,
+        0.987473561868895
+      ],
+      "opposite_edge_means_px": [
+        123.79856262234406,
+        55.11677091861529
+      ],
+      "opposite_edge_mean_ratio": 2.246114214585311,
+      "scope": "descriptive_quadrilateral_geometry_not_converted_OBB_or_physical_dimensions"
+    },
+    {
+      "annotation": "annotations/candidate08_f00982.json",
+      "annotation_sha256": "9c551e977b4d30a18970d0c02677a6e021ca48047e50e845514f4c1fb0cb928b",
+      "image": "images/candidate08_f00982.png",
+      "image_sha256": "77cc53c44379516c0719c399030d62db817387eaf5f671060ea7cf9b2475a8e6",
+      "image_sha_matches_packet": true,
+      "actual_image_size": [
+        1920,
+        1088
+      ],
+      "size_matches_packet": true,
+      "image_path_matches": true,
+      "source_video": "1 (8).mp4",
+      "decode_index": 982,
+      "role": "UNASSIGNED_ANNOTATION_CANDIDATE",
+      "shape_count": 1,
+      "shape_type": "polygon",
+      "label": "central_structure_reference",
+      "points": [
+        [
+          1060.1328903654485,
+          578.7176079734219
+        ],
+        [
+          1200.3322259136212,
+          581.3754152823919
+        ],
+        [
+          1198.3388704318936,
+          643.1694352159468
+        ],
+        [
+          1056.8106312292357,
+          638.5182724252492
+        ]
+      ],
+      "review_flags": {
+        "independent_reviewed": true,
+        "unmeasurable": false
+      },
+      "object_definition": "",
+      "measurement_basis": "",
+      "structure_valid_without_review_declaration": true,
+      "structure_error": null,
+      "edge_lengths_px": [
+        140.22452577149525,
+        61.82616246885382,
+        141.60464613532397,
+        59.892878329966656
+      ],
+      "interior_angles_deg": [
+        92.093784293858,
+        89.2384355600118,
+        89.96532782298387,
+        88.70245232314636
+      ],
+      "max_right_angle_deviation_deg": 2.0937842938579934,
+      "parallelogram_closure_residual_px": 2.3957151331988444,
+      "opposite_edge_relative_difference_pct": [
+        0.9794020643718391,
+        3.1766338712486824
+      ],
+      "opposite_edge_means_px": [
+        140.9145859534096,
+        60.85952039941024
+      ],
+      "opposite_edge_mean_ratio": 2.315407433851141,
+      "scope": "descriptive_quadrilateral_geometry_not_converted_OBB_or_physical_dimensions"
+    },
+    {
+      "annotation": "annotations/candidate08_f01048.json",
+      "annotation_sha256": "b62ef033b5c7e00f1879dfe4cfb8a013876dda6bc8870f411381286c18ad8511",
+      "image": "images/candidate08_f01048.png",
+      "image_sha256": "5d0604c099b021a79849be918503203b7286b3c6c9ec7a92d1f2c82a07586e15",
+      "image_sha_matches_packet": true,
+      "actual_image_size": [
+        1920,
+        1088
+      ],
+      "size_matches_packet": true,
+      "image_path_matches": true,
+      "source_video": "1 (8).mp4",
+      "decode_index": 1048,
+      "role": "UNASSIGNED_ANNOTATION_CANDIDATE",
+      "shape_count": 1,
+      "shape_type": "polygon",
+      "label": "central_structure_reference",
+      "points": [
+        [
+          1048.0,
+          486.6666666666667
+        ],
+        [
+          1207.111111111111,
+          486.22222222222223
+        ],
+        [
+          1207.111111111111,
+          560.0
+        ],
+        [
+          1047.111111111111,
+          558.6666666666666
+        ]
+      ],
+      "review_flags": {
+        "independent_reviewed": true,
+        "unmeasurable": false
+      },
+      "object_definition": "",
+      "measurement_basis": "",
+      "structure_valid_without_review_declaration": true,
+      "structure_error": null,
+      "edge_lengths_px": [
+        159.11173184236458,
+        73.77777777777777,
+        160.00555545910828,
+        72.00548675939065
+      ],
+      "interior_angles_deg": [
+        90.86736302915028,
+        89.83995633939399,
+        89.52254622269041,
+        89.77013440876532
+      ],
+      "max_right_angle_deviation_deg": 0.8673630291502832,
+      "parallelogram_closure_residual_px": 1.987615980000073,
+      "opposite_edge_relative_difference_pct": [
+        0.5601850180553206,
+        2.431405311184076
+      ],
+      "opposite_edge_means_px": [
+        159.55864365073643,
+        72.8916322685842
+      ],
+      "opposite_edge_mean_ratio": 2.1889843687792556,
+      "scope": "descriptive_quadrilateral_geometry_not_converted_OBB_or_physical_dimensions"
+    },
+    {
+      "annotation": "annotations/candidate11_f00008.json",
+      "annotation_sha256": "82693ea26ff68921c222aa628793069c0b21233673f37b7bdcbddb660e31580d",
+      "image": "images/candidate11_f00008.png",
+      "image_sha256": "68550eff0594c55eb74b6950f59075217eea0b59f738824bf22b429d5b388616",
+      "image_sha_matches_packet": true,
+      "actual_image_size": [
+        1920,
+        1088
+      ],
+      "size_matches_packet": true,
+      "image_path_matches": true,
+      "source_video": "1 (11).mp4",
+      "decode_index": 8,
+      "role": "UNASSIGNED_ANNOTATION_CANDIDATE",
+      "shape_count": 1,
+      "shape_type": "polygon",
+      "label": "central_structure_reference",
+      "points": [
+        [
+          1007.5555555555555,
+          379.55555555555554
+        ],
+        [
+          1163.111111111111,
+          320.8888888888889
+        ],
+        [
+          1192.888888888889,
+          398.22222222222223
+        ],
+        [
+          1027.5555555555557,
+          456.44444444444446
+        ]
+      ],
+      "review_flags": {
+        "independent_reviewed": true,
+        "unmeasurable": false
+      },
+      "object_definition": "",
+      "measurement_basis": "",
+      "structure_valid_without_review_declaration": true,
+      "structure_error": null,
+      "edge_lengths_px": [
+        166.2507402749693,
+        82.86833227371696,
+        175.2853053498921,
+        79.44747468968356
+      ],
+      "interior_angles_deg": [
+        96.08318873765161,
+        90.3959641842442,
+        88.34016912506239,
+        85.18067795304177
+      ],
+      "max_right_angle_deviation_deg": 6.083188737651611,
+      "parallelogram_closure_residual_px": 9.78787357579771,
+      "opposite_edge_relative_difference_pct": [
+        5.290548503244217,
+        4.215064013826756
+      ],
+      "opposite_edge_means_px": [
+        170.7680228124307,
+        81.15790348170026
+      ],
+      "opposite_edge_mean_ratio": 2.1041453202513543,
+      "scope": "descriptive_quadrilateral_geometry_not_converted_OBB_or_physical_dimensions"
+    },
+    {
+      "annotation": "annotations/candidate11_f00057.json",
+      "annotation_sha256": "8dbf0f76103c226eb6d71c5adb8908d71ddf9348f960cbcec0ce3fad16051732",
+      "image": "images/candidate11_f00057.png",
+      "image_sha256": "6d5092f639ee52f9618589e58b1155c3a5b74796aa35a1c072cbfeba7c23414f",
+      "image_sha_matches_packet": true,
+      "actual_image_size": [
+        1920,
+        1088
+      ],
+      "size_matches_packet": true,
+      "image_path_matches": true,
+      "source_video": "1 (11).mp4",
+      "decode_index": 57,
+      "role": "UNASSIGNED_ANNOTATION_CANDIDATE",
+      "shape_count": 1,
+      "shape_type": "polygon",
+      "label": "central_structure_reference",
+      "points": [
+        [
+          994.5588235294118,
+          329.78431372549016
+        ],
+        [
+          1190.637254901961,
+          328.3137254901961
+        ],
+        [
+          1191.6176470588236,
+          414.09803921568624
+        ],
+        [
+          995.0490196078432,
+          417.52941176470586
+        ]
+      ],
+      "review_flags": {
+        "independent_reviewed": true,
+        "unmeasurable": false
+      },
+      "object_definition": "",
+      "measurement_basis": "",
+      "structure_valid_without_review_declaration": true,
+      "structure_error": null,
+      "edge_lengths_px": [
+        196.08394600088303,
+        85.78991578346816,
+        196.5985748054459,
+        87.7464672913211
+      ],
+      "interior_angles_deg": [
+        90.10962546561936,
+        90.22507011286667,
+        90.345293725855,
+        89.32001069565897
+      ],
+      "max_right_angle_deviation_deg": 0.679989304341035,
+      "parallelogram_closure_residual_px": 2.0211302086362277,
+      "opposite_edge_relative_difference_pct": [
+        0.2621093515984074,
+        2.254917929238755
+      ],
+      "opposite_edge_means_px": [
+        196.34126040316448,
+        86.76819153739463
+      ],
+      "opposite_edge_mean_ratio": 2.2628253156405473,
+      "scope": "descriptive_quadrilateral_geometry_not_converted_OBB_or_physical_dimensions"
+    },
+    {
+      "annotation": "annotations/candidate11_f00105.json",
+      "annotation_sha256": "fcdd6e2e699680fe36b72b0f65a31f9656c9556895691d8ac8af5c54a6a17768",
+      "image": "images/candidate11_f00105.png",
+      "image_sha256": "28aebd2d143536fada319c665d177e2d885438aab8dcce0ce99aeb3f8d29f791",
+      "image_sha_matches_packet": true,
+      "actual_image_size": [
+        1920,
+        1088
+      ],
+      "size_matches_packet": true,
+      "image_path_matches": true,
+      "source_video": "1 (11).mp4",
+      "decode_index": 105,
+      "role": "UNASSIGNED_ANNOTATION_CANDIDATE",
+      "shape_count": 1,
+      "shape_type": "polygon",
+      "label": "central_structure_reference",
+      "points": [
+        [
+          991.8918918918919,
+          214.54054054054058
+        ],
+        [
+          1215.135135135135,
+          274.00000000000006
+        ],
+        [
+          1184.8648648648648,
+          366.43243243243245
+        ],
+        [
+          969.7297297297297,
+          302.6486486486487
+        ]
+      ],
+      "review_flags": {
+        "independent_reviewed": true,
+        "unmeasurable": false
+      },
+      "object_definition": "",
+      "measurement_basis": "",
+      "structure_valid_without_review_declaration": true,
+      "structure_error": null,
+      "edge_lengths_px": [
+        231.02591407236747,
+        97.26275663177239,
+        224.39139342539258,
+        90.8526287241709
+      ],
+      "interior_angles_deg": [
+        89.20477489440724,
+        86.78128149757516,
+        91.61870100084097,
+        92.39524260717664
+      ],
+      "max_right_angle_deviation_deg": 3.218718502424835,
+      "parallelogram_closure_residual_px": 9.189189189189078,
+      "opposite_edge_relative_difference_pct": [
+        2.913600575888313,
+        6.81510222619223
+      ],
+      "opposite_edge_means_px": [
+        227.70865374888,
+        94.05769267797164
+      ],
+      "opposite_edge_mean_ratio": 2.4209466261148194,
+      "scope": "descriptive_quadrilateral_geometry_not_converted_OBB_or_physical_dimensions"
+    },
+    {
+      "annotation": "annotations/candidate11_f00154.json",
+      "annotation_sha256": "1f93127ddde10ae1c009b8452cc0370cf39af8e954ac68676ec228e3dc9dcf1b",
+      "image": "images/candidate11_f00154.png",
+      "image_sha256": "d9a955f50dcefe27259f7f0e8dfeace8635f386ec6b140391a2d32f540101d43",
+      "image_sha_matches_packet": true,
+      "actual_image_size": [
+        1920,
+        1088
+      ],
+      "size_matches_packet": true,
+      "image_path_matches": true,
+      "source_video": "1 (11).mp4",
+      "decode_index": 154,
+      "role": "UNASSIGNED_ANNOTATION_CANDIDATE",
+      "shape_count": 1,
+      "shape_type": "polygon",
+      "label": "central_structure_reference",
+      "points": [
+        [
+          929.7297297297297,
+          237.78378378378383
+        ],
+        [
+          1156.7567567567567,
+          250.7567567567568
+        ],
+        [
+          1147.5675675675675,
+          349.67567567567573
+        ],
+        [
+          920.0,
+          334.5405405405406
+        ]
+      ],
+      "review_flags": {
+        "independent_reviewed": true,
+        "unmeasurable": false
+      },
+      "object_definition": "",
+      "measurement_basis": "",
+      "structure_valid_without_review_declaration": true,
+      "structure_error": null,
+      "edge_lengths_px": [
+        227.39738131405102,
+        99.34482230112634,
+        228.07031837610566,
+        97.2447305446407
+      ],
+      "interior_angles_deg": [
+        92.47179535462054,
+        87.96316107385239,
+        91.50228492991364,
+        88.06275864161343
+      ],
+      "max_right_angle_deviation_deg": 2.4717953546205393,
+      "parallelogram_closure_residual_px": 2.228705743577163,
+      "opposite_edge_relative_difference_pct": [
+        0.295492770403884,
+        2.136524272104379
+      ],
+      "opposite_edge_means_px": [
+        227.73384984507834,
+        98.29477642288353
+      ],
+      "opposite_edge_mean_ratio": 2.3168459010000935,
+      "scope": "descriptive_quadrilateral_geometry_not_converted_OBB_or_physical_dimensions"
+    }
+  ],
+  "visual_review": {
+    "all_20_overlay_crops_inspected": true,
+    "overlay_files": [
+      "annotation_overlay_01_10.jpg",
+      "annotation_overlay_11_20.jpg"
+    ],
+    "assessment": "Overlay crops consistently cover the central elongated target region; the human user identifies it as top beam including trapezoidal protrusions. This review cannot independently prove exact physical target extent or full protrusion inclusion in every image.",
+    "priority_boundary_and_rectangle_recheck": [
+      "candidate11_f00008.json",
+      "candidate11_f00105.json",
+      "candidate08_f00188.json",
+      "candidate08_f00055.json",
+      "candidate08_f00849.json"
+    ]
+  }
+}

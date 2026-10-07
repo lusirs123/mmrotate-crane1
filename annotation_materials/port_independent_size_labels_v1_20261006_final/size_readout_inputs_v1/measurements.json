@@ -1,0 +1,167 @@
+{
+  "protocol": "port_size_annotation_readout_v1",
+  "target": "top_beam_body_including_trapezoidal_protrusions_along_long_edges",
+  "records": {
+    "candidate08_f00055.png": {
+      "image_sha256": "2dc4c692ecb7754168d78088fc6572ac35b60427817a6fbac1330da124835119",
+      "axis_points": [],
+      "axis_reviewed": false,
+      "axis_source": "PENDING_MANUAL_SAME_FRAME_AXIS",
+      "reference_k": null,
+      "k_basis": ""
+    },
+    "candidate08_f00121.png": {
+      "image_sha256": "5bd2ae8129c5239d6bf7468679a0cf72f759f8d178c7c50f94326d2567eeef0e",
+      "axis_points": [],
+      "axis_reviewed": false,
+      "axis_source": "PENDING_MANUAL_SAME_FRAME_AXIS",
+      "reference_k": null,
+      "k_basis": ""
+    },
+    "candidate08_f00188.png": {
+      "image_sha256": "1d342de818488e37004b0a414a39babe71d8032146d38014a15a89d357d7f8c5",
+      "axis_points": [],
+      "axis_reviewed": false,
+      "axis_source": "PENDING_MANUAL_SAME_FRAME_AXIS",
+      "reference_k": null,
+      "k_basis": ""
+    },
+    "candidate08_f00254.png": {
+      "image_sha256": "03ffee39ce6feccc764302104265e46ff4327a13808140878e3671cb019c5ab6",
+      "axis_points": [],
+      "axis_reviewed": false,
+      "axis_source": "PENDING_MANUAL_SAME_FRAME_AXIS",
+      "reference_k": null,
+      "k_basis": ""
+    },
+    "candidate08_f00320.png": {
+      "image_sha256": "75dbf06e22d834127ee8d9caa48a6902c8e507bebca64f8d697b925e323ebeb7",
+      "axis_points": [],
+      "axis_reviewed": false,
+      "axis_source": "PENDING_MANUAL_SAME_FRAME_AXIS",
+      "reference_k": null,
+      "k_basis": ""
+    },
+    "candidate08_f00386.png": {
+      "image_sha256": "ff71f119a430eecae6bf473ceabf8dd4fa7a5e8c2d030eea50d53a5417e8b3b7",
+      "axis_points": [],
+      "axis_reviewed": false,
+      "axis_source": "PENDING_MANUAL_SAME_FRAME_AXIS",
+      "reference_k": null,
+      "k_basis": ""
+    },
+    "candidate08_f00452.png": {
+      "image_sha256": "6b42e88e10fe813239d527924b6b699ef97a840b563be79144e13f5f1abbc5ae",
+      "axis_points": [],
+      "axis_reviewed": false,
+      "axis_source": "PENDING_MANUAL_SAME_FRAME_AXIS",
+      "reference_k": null,
+      "k_basis": ""
+    },
+    "candidate08_f00518.png": {
+      "image_sha256": "4df444396b4033517ef52b8504d91ef688f7ca243e1df0b868b8360a3b22a4ad",
+      "axis_points": [],
+      "axis_reviewed": false,
+      "axis_source": "PENDING_MANUAL_SAME_FRAME_AXIS",
+      "reference_k": null,
+      "k_basis": ""
+    },
+    "candidate08_f00585.png": {
+      "image_sha256": "90e10744674f03ae02287af42286cad92a0d7f72b53684e5bd91720746417061",
+      "axis_points": [],
+      "axis_reviewed": false,
+      "axis_source": "PENDING_MANUAL_SAME_FRAME_AXIS",
+      "reference_k": null,
+      "k_basis": ""
+    },
+    "candidate08_f00651.png": {
+      "image_sha256": "0da1f65fcb948cb14a93a0e129fd2e961254a1323aee086f00e69a489f3930b8",
+      "axis_points": [],
+      "axis_reviewed": false,
+      "axis_source": "PENDING_MANUAL_SAME_FRAME_AXIS",
+      "reference_k": null,
+      "k_basis": ""
+    },
+    "candidate08_f00717.png": {
+      "image_sha256": "2568992b8dcd4d3fc46dc1d2ecad79f2b0d7bc29cbdd0bb8ecba33320f3b3c08",
+      "axis_points": [],
+      "axis_reviewed": false,
+      "axis_source": "PENDING_MANUAL_SAME_FRAME_AXIS",
+      "reference_k": null,
+      "k_basis": ""
+    },
+    "candidate08_f00783.png": {
+      "image_sha256": "ed3c6cf9e974fe115a1df3cfccaf0f06b698877cafdb3be01e16613ec9b0626a",
+      "axis_points": [],
+      "axis_reviewed": false,
+      "axis_source": "PENDING_MANUAL_SAME_FRAME_AXIS",
+      "reference_k": null,
+      "k_basis": ""
+    },
+    "candidate08_f00849.png": {
+      "image_sha256": "6ce91a8ff640ae08ca111fcbf10ebbd4d66df550141b2bb1e3672c462b692e98",
+      "axis_points": [],
+      "axis_reviewed": false,
+      "axis_source": "PENDING_MANUAL_SAME_FRAME_AXIS",
+      "reference_k": null,
+      "k_basis": ""
+    },
+    "candidate08_f00915.png": {
+      "image_sha256": "e73260c3712a5ce343be23307b87024516655f4b5fa747e5ae10b64d8dc5e76b",
+      "axis_points": [],
+      "axis_reviewed": false,
+      "axis_source": "PENDING_MANUAL_SAME_FRAME_AXIS",
+      "reference_k": null,
+      "k_basis": ""
+    },
+    "candidate08_f00982.png": {
+      "image_sha256": "77cc53c44379516c0719c399030d62db817387eaf5f671060ea7cf9b2475a8e6",
+      "axis_points": [],
+      "axis_reviewed": false,
+      "axis_source": "PENDING_MANUAL_SAME_FRAME_AXIS",
+      "reference_k": null,
+      "k_basis": ""
+    },
+    "candidate08_f01048.png": {
+      "image_sha256": "5d0604c099b021a79849be918503203b7286b3c6c9ec7a92d1f2c82a07586e15",
+      "axis_points": [],
+      "axis_reviewed": false,
+      "axis_source": "PENDING_MANUAL_SAME_FRAME_AXIS",
+      "reference_k": null,
+      "k_basis": ""
+    },
+    "candidate11_f00008.png": {
+      "image_sha256": "68550eff0594c55eb74b6950f59075217eea0b59f738824bf22b429d5b388616",
+      "axis_points": [],
+      "axis_reviewed": false,
+      "axis_source": "PENDING_MANUAL_SAME_FRAME_AXIS",
+      "reference_k": null,
+      "k_basis": ""
+    },
+    "candidate11_f00057.png": {
+      "image_sha256": "6d5092f639ee52f9618589e58b1155c3a5b74796aa35a1c072cbfeba7c23414f",
+      "axis_points": [],
+      "axis_reviewed": false,
+      "axis_source": "PENDING_MANUAL_SAME_FRAME_AXIS",
+      "reference_k": null,
+      "k_basis": ""
+    },
+    "candidate11_f00105.png": {
+      "image_sha256": "28aebd2d143536fada319c665d177e2d885438aab8dcce0ce99aeb3f8d29f791",
+      "axis_points": [],
+      "axis_reviewed": false,
+      "axis_source": "PENDING_MANUAL_SAME_FRAME_AXIS",
+      "reference_k": null,
+      "k_basis": ""
+    },
+    "candidate11_f00154.png": {
+      "image_sha256": "d9a955f50dcefe27259f7f0e8dfeace8635f386ec6b140391a2d32f540101d43",
+      "axis_points": [],
+      "axis_reviewed": false,
+      "axis_source": "PENDING_MANUAL_SAME_FRAME_AXIS",
+      "reference_k": null,
+      "k_basis": ""
+    }
+  },
+  "instructions": "Axis endpoints must be measured independently on the same original frame; never copy polygon-derived direction, use detector predictions, or infer width from k. Only supply reference_k with explicit object/sequence basis. Repeats should be blind to first polygon."
+}

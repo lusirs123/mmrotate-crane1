@@ -1,15 +1,46 @@
 {
   "version": "3.3.10",
   "flags": {
-    "independent_reviewed": false,
+    "independent_reviewed": true,
     "unmeasurable": false
   },
-  "shapes": [],
-  "imagePath": "../images/candidate08_f00386.png",
+  "shapes": [
+    {
+      "kie_linking": [],
+      "label": "central_structure_reference",
+      "score": null,
+      "points": [
+        [
+          1037.5900900900901,
+          608.0765765765765
+        ],
+        [
+          1130.1576576576576,
+          617.7612612612612
+        ],
+        [
+          1125.4279279279278,
+          661.9054054054053
+        ],
+        [
+          1033.536036036036,
+          650.1936936936936
+        ]
+      ],
+      "group_id": null,
+      "description": "",
+      "difficult": false,
+      "shape_type": "polygon",
+      "flags": {},
+      "attributes": {}
+    }
+  ],
+  "imagePath": "candidate08_f00386.png",
   "imageData": null,
-  "imageWidth": 1920,
   "imageHeight": 1088,
+  "imageWidth": 1920,
   "object_definition": "",
   "measurement_basis": "",
-  "review_note": ""
+  "review_note": "",
+  "description": ""
 }
