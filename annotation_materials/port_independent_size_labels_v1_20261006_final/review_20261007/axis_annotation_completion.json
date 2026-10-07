@@ -1,0 +1,381 @@
+{
+  "date": "2026-10-07",
+  "protocol": "port_same_frame_axis_annotation_completion_v1",
+  "human_completion_evidence": "User: 标注完成，检查看一下",
+  "completed_axes": 20,
+  "structure_image_bounds_long_identity_pass": 20,
+  "visual_review": "two contact sheets show the declared same top-beam object; not independent truth",
+  "packet_sha256": "ec1b4cc0d53da8b0762c0163ecd28c6c3f284a5ac986367cc4f83bb8af1653c7",
+  "measurements_before_sha256": "6e145194574962a4af730d9b968d5a5e3cb8cfae994fbdd7c90f5c22fe09815a",
+  "measurements_after_sha256": "b819e39392e9d96502a8d9b202971764f98dbded39a5c88cf99f765e99c6f41b",
+  "reference_k_count": 0,
+  "completed_repeats": 0,
+  "ready_for_training": false,
+  "split_assigned": false,
+  "rows": [
+    {
+      "image": "candidate08_f00055.png",
+      "axis_annotation": "axis_annotations/candidate08_f00055.json",
+      "axis_json_sha256": "41c4ffc40dad3e5b17bfa127d40945bb7eaab67a028b87bd5f64996c8b05a3a4",
+      "image_sha256": "2dc4c692ecb7754168d78088fc6572ac35b60427817a6fbac1330da124835119",
+      "axis_length_px": 125.45442892019396,
+      "raw_image_path": "../../images/candidate08_f00055.png"
+    },
+    {
+      "image": "candidate08_f00121.png",
+      "axis_annotation": "axis_annotations/candidate08_f00121.json",
+      "axis_json_sha256": "244934dc8467ab4654d1d1a975aa46b446adeadcf538ffc18f62134acaf35ecf",
+      "image_sha256": "5bd2ae8129c5239d6bf7468679a0cf72f759f8d178c7c50f94326d2567eeef0e",
+      "axis_length_px": 116.57599349211313,
+      "raw_image_path": "../../images/candidate08_f00121.png"
+    },
+    {
+      "image": "candidate08_f00188.png",
+      "axis_annotation": "axis_annotations/candidate08_f00188.json",
+      "axis_json_sha256": "99794c457ac5c49a53eba8e9c9be67aaf06a24bfb684555985021fa560b4f44d",
+      "image_sha256": "1d342de818488e37004b0a414a39babe71d8032146d38014a15a89d357d7f8c5",
+      "axis_length_px": 97.58680274922429,
+      "raw_image_path": "../../images/candidate08_f00188.png"
+    },
+    {
+      "image": "candidate08_f00254.png",
+      "axis_annotation": "axis_annotations/candidate08_f00254.json",
+      "axis_json_sha256": "f6c4957b88ed3f56807370016127ba2453466f1ee6abb430d9715e1634567594",
+      "image_sha256": "03ffee39ce6feccc764302104265e46ff4327a13808140878e3671cb019c5ab6",
+      "axis_length_px": 90.82388053876853,
+      "raw_image_path": "../../images/candidate08_f00254.png"
+    },
+    {
+      "image": "candidate08_f00320.png",
+      "axis_annotation": "axis_annotations/candidate08_f00320.json",
+      "axis_json_sha256": "5056c0ec2475fbee0ae39ba172f46d8ca73cbc1aaf3b14e3df146f12cab4087d",
+      "image_sha256": "75dbf06e22d834127ee8d9caa48a6902c8e507bebca64f8d697b925e323ebeb7",
+      "axis_length_px": 92.49553682781,
+      "raw_image_path": "../../images/candidate08_f00320.png"
+    },
+    {
+      "image": "candidate08_f00386.png",
+      "axis_annotation": "axis_annotations/candidate08_f00386.json",
+      "axis_json_sha256": "7df4287e918bd147e812a483b5a948b3afece4d3939ba010d5f22eab64757a42",
+      "image_sha256": "ff71f119a430eecae6bf473ceabf8dd4fa7a5e8c2d030eea50d53a5417e8b3b7",
+      "axis_length_px": 90.95044668905533,
+      "raw_image_path": "../../images/candidate08_f00386.png"
+    },
+    {
+      "image": "candidate08_f00452.png",
+      "axis_annotation": "axis_annotations/candidate08_f00452.json",
+      "axis_json_sha256": "a06e2554c1d02dccfba0e44285a0743a78607db4221626cc551a673e571fa28f",
+      "image_sha256": "6b42e88e10fe813239d527924b6b699ef97a840b563be79144e13f5f1abbc5ae",
+      "axis_length_px": 88.87379838559393,
+      "raw_image_path": "../../images/candidate08_f00452.png"
+    },
+    {
+      "image": "candidate08_f00518.png",
+      "axis_annotation": "axis_annotations/candidate08_f00518.json",
+      "axis_json_sha256": "dc69a857168c11462400e6338b69d9a649e8639550a7471346ef017bc60ef42d",
+      "image_sha256": "4df444396b4033517ef52b8504d91ef688f7ca243e1df0b868b8360a3b22a4ad",
+      "axis_length_px": 92.34326693568934,
+      "raw_image_path": "../../images/candidate08_f00518.png"
+    },
+    {
+      "image": "candidate08_f00585.png",
+      "axis_annotation": "axis_annotations/candidate08_f00585.json",
+      "axis_json_sha256": "fdce06f0d3116d5e3a956f2fd9f3b9359fe33d92ad73e4ea4e580556ceb06b0e",
+      "image_sha256": "90e10744674f03ae02287af42286cad92a0d7f72b53684e5bd91720746417061",
+      "axis_length_px": 98.68787216736652,
+      "raw_image_path": "../../images/candidate08_f00585.png"
+    },
+    {
+      "image": "candidate08_f00651.png",
+      "axis_annotation": "axis_annotations/candidate08_f00651.json",
+      "axis_json_sha256": "9e817d455d74c59d0bf61ec7770e9ca98991aabf4f2c6b667a53d6bb1b59a621",
+      "image_sha256": "0da1f65fcb948cb14a93a0e129fd2e961254a1323aee086f00e69a489f3930b8",
+      "axis_length_px": 100.63331770621059,
+      "raw_image_path": "../../images/candidate08_f00651.png"
+    },
+    {
+      "image": "candidate08_f00717.png",
+      "axis_annotation": "axis_annotations/candidate08_f00717.json",
+      "axis_json_sha256": "129054c7aff8e4a53a3c5bb715f8a0a64a09a3e25e5c6dd0d8601b9f5df187bd",
+      "image_sha256": "2568992b8dcd4d3fc46dc1d2ecad79f2b0d7bc29cbdd0bb8ecba33320f3b3c08",
+      "axis_length_px": 99.74981048281745,
+      "raw_image_path": "../../images/candidate08_f00717.png"
+    },
+    {
+      "image": "candidate08_f00783.png",
+      "axis_annotation": "axis_annotations/candidate08_f00783.json",
+      "axis_json_sha256": "da5818ffe3010f9bfae2117b27258cb83f784bfc5c2494e925b646f28c8fc3e9",
+      "image_sha256": "ed3c6cf9e974fe115a1df3cfccaf0f06b698877cafdb3be01e16613ec9b0626a",
+      "axis_length_px": 98.38792305311428,
+      "raw_image_path": "../../images/candidate08_f00783.png"
+    },
+    {
+      "image": "candidate08_f00849.png",
+      "axis_annotation": "axis_annotations/candidate08_f00849.json",
+      "axis_json_sha256": "e9b1c4f30a489af8630abe5d704300bfd609c9b5eca9d2ff5527e16c125d05e9",
+      "image_sha256": "6ce91a8ff640ae08ca111fcbf10ebbd4d66df550141b2bb1e3672c462b692e98",
+      "axis_length_px": 111.33843412577815,
+      "raw_image_path": "../../images/candidate08_f00849.png"
+    },
+    {
+      "image": "candidate08_f00915.png",
+      "axis_annotation": "axis_annotations/candidate08_f00915.json",
+      "axis_json_sha256": "1ee4a872733f7154b6d919ca33eec8f9aa532863c42c3488c5502eeb932d485c",
+      "image_sha256": "e73260c3712a5ce343be23307b87024516655f4b5fa747e5ae10b64d8dc5e76b",
+      "axis_length_px": 127.60510071464631,
+      "raw_image_path": "../../images/candidate08_f00915.png"
+    },
+    {
+      "image": "candidate08_f00982.png",
+      "axis_annotation": "axis_annotations/candidate08_f00982.json",
+      "axis_json_sha256": "da2f288cc8844f4c78fa632b340f9e4fa63a0271bfe3bd6ae708f98818270fba",
+      "image_sha256": "77cc53c44379516c0719c399030d62db817387eaf5f671060ea7cf9b2475a8e6",
+      "axis_length_px": 138.15808299079575,
+      "raw_image_path": "../../images/candidate08_f00982.png"
+    },
+    {
+      "image": "candidate08_f01048.png",
+      "axis_annotation": "axis_annotations/candidate08_f01048.json",
+      "axis_json_sha256": "573b405e5675ac46223250970b693334eb7c433ebdec72eb28e0577bab9093b7",
+      "image_sha256": "5d0604c099b021a79849be918503203b7286b3c6c9ec7a92d1f2c82a07586e15",
+      "axis_length_px": 157.29822605837072,
+      "raw_image_path": "../../images/candidate08_f01048.png"
+    },
+    {
+      "image": "candidate11_f00008.png",
+      "axis_annotation": "axis_annotations/candidate11_f00008.json",
+      "axis_json_sha256": "fcafc011925497a5b793fee667bc4f86ed8322790dbbc2e73889ebfb05067a25",
+      "image_sha256": "68550eff0594c55eb74b6950f59075217eea0b59f738824bf22b429d5b388616",
+      "axis_length_px": 167.90757457931443,
+      "raw_image_path": "../../images/candidate11_f00008.png"
+    },
+    {
+      "image": "candidate11_f00057.png",
+      "axis_annotation": "axis_annotations/candidate11_f00057.json",
+      "axis_json_sha256": "b40f5d771ef9621700f5b1d3bee6ba259a525e3be111577cb5fcef7e5754ee66",
+      "image_sha256": "6d5092f639ee52f9618589e58b1155c3a5b74796aa35a1c072cbfeba7c23414f",
+      "axis_length_px": 193.48368879103822,
+      "raw_image_path": "../../images/candidate11_f00057.png"
+    },
+    {
+      "image": "candidate11_f00105.png",
+      "axis_annotation": "axis_annotations/candidate11_f00105.json",
+      "axis_json_sha256": "85e0d3a03425fcde1da1cfa68c06a4d70e2042df0a97c27d4cd6ccf9e2bb4d5d",
+      "image_sha256": "28aebd2d143536fada319c665d177e2d885438aab8dcce0ce99aeb3f8d29f791",
+      "axis_length_px": 216.5263413760443,
+      "raw_image_path": "../../images/candidate11_f00105.png"
+    },
+    {
+      "image": "candidate11_f00154.png",
+      "axis_annotation": "axis_annotations/candidate11_f00154.json",
+      "axis_json_sha256": "48cb497c4d8a92738cd7c8b7dfffd7b48ab546270650be0e33a8b302b58f192b",
+      "image_sha256": "d9a955f50dcefe27259f7f0e8dfeace8635f386ec6b140391a2d32f540101d43",
+      "axis_length_px": 217.88330937347985,
+      "raw_image_path": "candidate11_f00154.png"
+    }
+  ],
+  "path_note": "19 relative image paths resolve to original PNG; final basename alias is bound by fixed frame name, dimensions, original PNG SHA and confirmed launch folder. Raw JSON retained unchanged.",
+  "sources_sha256": {
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/packet.json": "ec1b4cc0d53da8b0762c0163ecd28c6c3f284a5ac986367cc4f83bb8af1653c7",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/annotations/candidate08_f00055.json": "13c1db6cdd8167e1ac455a9d2071236cf817fd371af4b76fd46ec2cec2be1bf5",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/images/candidate08_f00055.png": "2dc4c692ecb7754168d78088fc6572ac35b60427817a6fbac1330da124835119",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/annotations/candidate08_f00121.json": "3eeca0e47ce808ccfc5a8940c17018c0ed2c54f19acf64557221d4d5a112749a",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/images/candidate08_f00121.png": "5bd2ae8129c5239d6bf7468679a0cf72f759f8d178c7c50f94326d2567eeef0e",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/annotations/candidate08_f00188.json": "1d151a16f1c2fd5dea7174223d962524fe83f9df3ba5de6a712fbc00164936a0",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/images/candidate08_f00188.png": "1d342de818488e37004b0a414a39babe71d8032146d38014a15a89d357d7f8c5",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/annotations/candidate08_f00254.json": "3e42bffc6686f05c4521a34c8253025174ae40fdb8f8b5cc4d53c9783e3dfd8a",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/images/candidate08_f00254.png": "03ffee39ce6feccc764302104265e46ff4327a13808140878e3671cb019c5ab6",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/annotations/candidate08_f00320.json": "0f73adade668645b42f2138a2c86c5f4deeb546f7116e4cd9ee34eecda4f2487",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/images/candidate08_f00320.png": "75dbf06e22d834127ee8d9caa48a6902c8e507bebca64f8d697b925e323ebeb7",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/annotations/candidate08_f00386.json": "a551ee1a63a4edc21e76afcc705031188f6431afc9b69281449a32bfed881377",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/images/candidate08_f00386.png": "ff71f119a430eecae6bf473ceabf8dd4fa7a5e8c2d030eea50d53a5417e8b3b7",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/annotations/candidate08_f00452.json": "c8c51007d78d87721c7f84c1d3b6ddeb09add2d431756831869a55290fb638d2",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/images/candidate08_f00452.png": "6b42e88e10fe813239d527924b6b699ef97a840b563be79144e13f5f1abbc5ae",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/annotations/candidate08_f00518.json": "7427f7ad54cd7b303ec68bc599d774afc7b652be2bb34246a91d43382637b4ce",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/images/candidate08_f00518.png": "4df444396b4033517ef52b8504d91ef688f7ca243e1df0b868b8360a3b22a4ad",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/annotations/candidate08_f00585.json": "41add6e15ce787f6cec06d046e6f9ec4deb249bf5ceb7c75628ed7e91ea6cd3a",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/images/candidate08_f00585.png": "90e10744674f03ae02287af42286cad92a0d7f72b53684e5bd91720746417061",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/annotations/candidate08_f00651.json": "ba503b8b4b1845dc67f43ea9bbb29ec8f792fc1b8ffc77c581931f96a026649c",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/images/candidate08_f00651.png": "0da1f65fcb948cb14a93a0e129fd2e961254a1323aee086f00e69a489f3930b8",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/annotations/candidate08_f00717.json": "0bc1d115a0d5a968a1e32c79a420b6a564748fd9416aa218ee94c65872d348af",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/images/candidate08_f00717.png": "2568992b8dcd4d3fc46dc1d2ecad79f2b0d7bc29cbdd0bb8ecba33320f3b3c08",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/annotations/candidate08_f00783.json": "9e97167207437f55e13aebb5164274ac277671410ef316c1959aa57a4cd909bb",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/images/candidate08_f00783.png": "ed3c6cf9e974fe115a1df3cfccaf0f06b698877cafdb3be01e16613ec9b0626a",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/annotations/candidate08_f00849.json": "fe69630ca1e9549dfe4f0636b9599921e41b9e1603e1459c42dc5105775275ba",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/images/candidate08_f00849.png": "6ce91a8ff640ae08ca111fcbf10ebbd4d66df550141b2bb1e3672c462b692e98",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/annotations/candidate08_f00915.json": "1be3dd1374183987757162c5285363e3c4b7929a393d99078e8f627c8fa69902",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/images/candidate08_f00915.png": "e73260c3712a5ce343be23307b87024516655f4b5fa747e5ae10b64d8dc5e76b",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/annotations/candidate08_f00982.json": "9c551e977b4d30a18970d0c02677a6e021ca48047e50e845514f4c1fb0cb928b",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/images/candidate08_f00982.png": "77cc53c44379516c0719c399030d62db817387eaf5f671060ea7cf9b2475a8e6",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/annotations/candidate08_f01048.json": "b62ef033b5c7e00f1879dfe4cfb8a013876dda6bc8870f411381286c18ad8511",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/images/candidate08_f01048.png": "5d0604c099b021a79849be918503203b7286b3c6c9ec7a92d1f2c82a07586e15",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/annotations/candidate11_f00008.json": "82693ea26ff68921c222aa628793069c0b21233673f37b7bdcbddb660e31580d",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/images/candidate11_f00008.png": "68550eff0594c55eb74b6950f59075217eea0b59f738824bf22b429d5b388616",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/annotations/candidate11_f00057.json": "8dbf0f76103c226eb6d71c5adb8908d71ddf9348f960cbcec0ce3fad16051732",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/images/candidate11_f00057.png": "6d5092f639ee52f9618589e58b1155c3a5b74796aa35a1c072cbfeba7c23414f",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/annotations/candidate11_f00105.json": "fcdd6e2e699680fe36b72b0f65a31f9656c9556895691d8ac8af5c54a6a17768",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/images/candidate11_f00105.png": "28aebd2d143536fada319c665d177e2d885438aab8dcce0ce99aeb3f8d29f791",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/annotations/candidate11_f00154.json": "1f93127ddde10ae1c009b8452cc0370cf39af8e954ac68676ec228e3dc9dcf1b",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/images/candidate11_f00154.png": "d9a955f50dcefe27259f7f0e8dfeace8635f386ec6b140391a2d32f540101d43",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/size_readout_inputs_v1/axis_annotations/candidate08_f00055.json": "41c4ffc40dad3e5b17bfa127d40945bb7eaab67a028b87bd5f64996c8b05a3a4",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/size_readout_inputs_v1/axis_annotations/candidate08_f00121.json": "244934dc8467ab4654d1d1a975aa46b446adeadcf538ffc18f62134acaf35ecf",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/size_readout_inputs_v1/axis_annotations/candidate08_f00188.json": "99794c457ac5c49a53eba8e9c9be67aaf06a24bfb684555985021fa560b4f44d",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/size_readout_inputs_v1/axis_annotations/candidate08_f00254.json": "f6c4957b88ed3f56807370016127ba2453466f1ee6abb430d9715e1634567594",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/size_readout_inputs_v1/axis_annotations/candidate08_f00320.json": "5056c0ec2475fbee0ae39ba172f46d8ca73cbc1aaf3b14e3df146f12cab4087d",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/size_readout_inputs_v1/axis_annotations/candidate08_f00386.json": "7df4287e918bd147e812a483b5a948b3afece4d3939ba010d5f22eab64757a42",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/size_readout_inputs_v1/axis_annotations/candidate08_f00452.json": "a06e2554c1d02dccfba0e44285a0743a78607db4221626cc551a673e571fa28f",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/size_readout_inputs_v1/axis_annotations/candidate08_f00518.json": "dc69a857168c11462400e6338b69d9a649e8639550a7471346ef017bc60ef42d",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/size_readout_inputs_v1/axis_annotations/candidate08_f00585.json": "fdce06f0d3116d5e3a956f2fd9f3b9359fe33d92ad73e4ea4e580556ceb06b0e",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/size_readout_inputs_v1/axis_annotations/candidate08_f00651.json": "9e817d455d74c59d0bf61ec7770e9ca98991aabf4f2c6b667a53d6bb1b59a621",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/size_readout_inputs_v1/axis_annotations/candidate08_f00717.json": "129054c7aff8e4a53a3c5bb715f8a0a64a09a3e25e5c6dd0d8601b9f5df187bd",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/size_readout_inputs_v1/axis_annotations/candidate08_f00783.json": "da5818ffe3010f9bfae2117b27258cb83f784bfc5c2494e925b646f28c8fc3e9",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/size_readout_inputs_v1/axis_annotations/candidate08_f00849.json": "e9b1c4f30a489af8630abe5d704300bfd609c9b5eca9d2ff5527e16c125d05e9",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/size_readout_inputs_v1/axis_annotations/candidate08_f00915.json": "1ee4a872733f7154b6d919ca33eec8f9aa532863c42c3488c5502eeb932d485c",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/size_readout_inputs_v1/axis_annotations/candidate08_f00982.json": "da2f288cc8844f4c78fa632b340f9e4fa63a0271bfe3bd6ae708f98818270fba",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/size_readout_inputs_v1/axis_annotations/candidate08_f01048.json": "573b405e5675ac46223250970b693334eb7c433ebdec72eb28e0577bab9093b7",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/size_readout_inputs_v1/axis_annotations/candidate11_f00008.json": "fcafc011925497a5b793fee667bc4f86ed8322790dbbc2e73889ebfb05067a25",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/size_readout_inputs_v1/axis_annotations/candidate11_f00057.json": "b40f5d771ef9621700f5b1d3bee6ba259a525e3be111577cb5fcef7e5754ee66",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/size_readout_inputs_v1/axis_annotations/candidate11_f00105.json": "85e0d3a03425fcde1da1cfa68c06a4d70e2042df0a97c27d4cd6ccf9e2bb4d5d",
+    "/Users/mac/Documents/paper/symEOOD/annotation_materials/port_independent_size_labels_v1_20261006_final/size_readout_inputs_v1/axis_annotations/candidate11_f00154.json": "48cb497c4d8a92738cd7c8b7dfffd7b48ab546270650be0e33a8b302b58f192b"
+  },
+  "local_native_backend": {
+    "name": "native_repository_le90_float32",
+    "cv2_version": "4.11.0",
+    "numpy_version": "1.26.4",
+    "function_file_sha256": "e133b1cfd3f4fe8e6aeb05d4d6d93d16b0d52a89ebcdeff43d46887729f1f53c"
+  },
+  "same_frame_long_direction_summary": {
+    "eligible_axis_count": 20,
+    "paired_k_count": 0,
+    "missing_axis_count": 0,
+    "long_identity_conflict_count": 0,
+    "pooled_frame_descriptions": {
+      "axis_count": 20,
+      "paired_k_count": 0,
+      "long_relative": {
+        "count": 20,
+        "mean": -0.028464039109796203,
+        "median": -0.025559251430584184,
+        "abs_p95": 0.07361278891661183,
+        "positive": 3,
+        "negative": 17,
+        "zero": 0
+      },
+      "short_relative": {
+        "count": 0,
+        "mean": null,
+        "median": null,
+        "abs_p95": null,
+        "positive": 0,
+        "negative": 0,
+        "zero": 0
+      },
+      "native_angle_delta_deg": {
+        "count": 20,
+        "mean": 0.7902744985506492,
+        "median": 0.7405896043251972,
+        "abs_p95": 1.5961536249201036,
+        "positive": 20,
+        "negative": 0,
+        "zero": 0
+      },
+      "paired_repeats": 0,
+      "reference_k_values": []
+    },
+    "by_source_video": {
+      "1 (11).mp4": {
+        "axis_count": 4,
+        "paired_k_count": 0,
+        "long_relative": {
+          "count": 4,
+          "mean": -0.04201397104053539,
+          "median": -0.0448736425790654,
+          "abs_p95": 0.06028588821640897,
+          "positive": 0,
+          "negative": 4,
+          "zero": 0
+        },
+        "short_relative": {
+          "count": 0,
+          "mean": null,
+          "median": null,
+          "abs_p95": null,
+          "positive": 0,
+          "negative": 0,
+          "zero": 0
+        },
+        "native_angle_delta_deg": {
+          "count": 4,
+          "mean": 0.6420690896900346,
+          "median": 0.6247677874812181,
+          "abs_p95": 1.2803251930345223,
+          "positive": 4,
+          "negative": 0,
+          "zero": 0
+        },
+        "paired_repeats": 0,
+        "reference_k_values": []
+      },
+      "1 (8).mp4": {
+        "axis_count": 16,
+        "paired_k_count": 0,
+        "long_relative": {
+          "count": 16,
+          "mean": -0.025076556127111405,
+          "median": -0.025062393240784908,
+          "abs_p95": 0.07442020961930493,
+          "positive": 3,
+          "negative": 13,
+          "zero": 0
+        },
+        "short_relative": {
+          "count": 0,
+          "mean": null,
+          "median": null,
+          "abs_p95": null,
+          "positive": 0,
+          "negative": 0,
+          "zero": 0
+        },
+        "native_angle_delta_deg": {
+          "count": 16,
+          "mean": 0.8273258507658029,
+          "median": 0.7405896043251972,
+          "abs_p95": 1.7103217668637862,
+          "positive": 16,
+          "negative": 0,
+          "zero": 0
+        },
+        "paired_repeats": 0,
+        "reference_k_values": []
+      }
+    },
+    "systematic_bias_status": "NOT_ESTABLISHED_REQUIRES_REPEATABILITY_OBJECT_AND_EVENT_EVIDENCE",
+    "supervision_only_training_contrast_ready": false,
+    "limitations": "Direction-fixed differences isolate readout orientation, not annotation truth. Adjacent frames are correlated. Mixed k within a video needs object/sequence review. No automatic significance, causal conclusion, GT replacement or training approval."
+  },
+  "descriptive_ratio_compatibility": {
+    "1 (8).mp4": {
+      "frames": 16,
+      "axis_over_transverse_min": 1.8844102796770161,
+      "axis_over_transverse_max": 2.4399581442505207,
+      "constant_k_short_discrepancy_within_10pct": {
+        "lower_inclusive": 2.2181437675004734,
+        "upper_inclusive": 2.093789199641129,
+        "intersection_nonempty": false
+      },
+      "scope": "conditional_annotation_geometry_compatibility_not_ground_truth_accuracy_no_k_selected"
+    },
+    "1 (11).mp4": {
+      "frames": 4,
+      "axis_over_transverse_min": 2.0135721273006033,
+      "axis_over_transverse_max": 2.2274251893164703,
+      "constant_k_short_discrepancy_within_10pct": {
+        "lower_inclusive": 2.0249319902877,
+        "upper_inclusive": 2.237302363667337,
+        "intersection_nonempty": true
+      },
+      "scope": "conditional_annotation_geometry_compatibility_not_ground_truth_accuracy_no_k_selected"
+    }
+  }
+}

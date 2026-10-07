@@ -169,7 +169,8 @@ def axis_measurement(record, frame, points):
                   fixed_axis_enclosing=box, fixed_k_status='NOT_EVALUATED')
     k = record.get('reference_k')
     if k is not None:
-        if type(k) not in (float, int) or not math.isfinite(k) or k <= 1 or not record.get('k_basis', '').strip():
+        basis = record.get('k_basis')
+        if type(k) not in (float, int) or not math.isfinite(k) or k <= 1 or not isinstance(basis, str) or not basis.strip():
             raise ValueError('k requires a positive justified same-object reference')
         generated = length/k
         result.update(fixed_k_status='PAIRED_GEOMETRIC_DISCREPANCY_NOT_TRUTH_ERROR',
@@ -178,15 +179,122 @@ def axis_measurement(record, frame, points):
     return result
 
 
-def diagnose(path, out, backend):
+def descriptive(values):
+    """Frame-level descriptions, not independent-event significance tests."""
+    if not values:
+        return dict(count=0, mean=None, median=None, abs_p95=None,
+                    positive=0, negative=0, zero=0)
+    ordered = sorted(abs(v) for v in values); pos = .95*(len(values)-1)
+    lo = math.floor(pos); hi = math.ceil(pos)
+    return dict(count=len(values), mean=statistics.mean(values),
+                median=statistics.median(values),
+                abs_p95=ordered[lo]+(ordered[hi]-ordered[lo])*(pos-lo),
+                positive=sum(v > 1e-12 for v in values),
+                negative=sum(v < -1e-12 for v in values),
+                zero=sum(abs(v) <= 1e-12 for v in values))
+
+
+def check_axis_annotation_source(record, frame, input_dir, sources):
+    """Bind imported GUI coordinates to their retained manual source file."""
+    if 'axis_annotation_file' not in record and 'axis_annotation_sha256' not in record:
+        return  # Existing manually entered measurements retain their contract.
+    if not isinstance(record.get('axis_annotation_file'), str) or not isinstance(record.get('axis_annotation_sha256'), str):
+        raise ValueError('Imported axis source needs both file and SHA')
+    path = packet.owned(input_dir/record['axis_annotation_file'], input_dir/'axis_annotations')
+    name = Path(frame['image']).name
+    if path.name != Path(name).stem+'.json' or packet.sha(path) != record.get('axis_annotation_sha256'):
+        raise ValueError('Imported axis annotation filename/SHA differs')
+    document = json.loads(path.read_text()); shapes = document.get('shapes', [])
+    if (document.get('imagePath') not in (name, '../../images/'+name) or
+        (document.get('imageWidth'), document.get('imageHeight')) != tuple(frame['size']) or
+        not isinstance(shapes, list) or len(shapes) != 1 or shapes[0].get('label') != 'axis' or
+        shapes[0].get('shape_type') != 'line' or shapes[0].get('points') != record['axis_points']):
+        raise ValueError('Imported axis annotation coordinates/image contract differs')
+    sources[str(path)] = packet.sha(path)
+
+
+def same_frame_pair(axis, points, obb, record, repeat_points=None):
+    """Compare label measurements; four-point annotation is not assumed truth.
+
+    Primary comparison fixes independent axis direction. Free native OBB is a
+    separate comparison because center/direction/extent can change together.
+    """
+    if axis['status'] != 'HUMAN_DECLARED_INDEPENDENT_AXIS':
+        return dict(status='MISSING_INDEPENDENT_SAME_FRAME_AXIS', eligible=False)
+    fixed = axis['fixed_axis_enclosing']; length = axis['axis_length_px']
+    if fixed['along_axis_px'] < fixed['transverse_px']:
+        return dict(status='AXIS_LONG_IDENTITY_CONFLICT_REVIEW_REQUIRED', eligible=False)
+    along, width = fixed['along_axis_px'], fixed['transverse_px']
+    k = record.get('reference_k')
+    endpoints = record['axis_points']
+    result = dict(status='LONG_DIRECTION_COMPARISON_ONLY_K_UNCONFIRMED' if k is None else
+                  'PAIRED_AXIS_K_AND_ENCLOSING_ANNOTATIONS', eligible=True,
+        primary=dict(axis_long_px=length, four_point_along_axis_px=along,
+            four_point_transverse_px=width,
+            long_delta_px=length-along, long_relative=length/along-1,
+            long_log_ratio=math.log(length/along)),
+        free_obb=dict(axis_vs_obb_angle_deg=angle_delta(fixed['angle_rad'], obb['angle_rad']),
+            long_relative=length/obb['long_px']-1,
+            center_delta_px=math.dist([(endpoints[0][i]+endpoints[1][i])/2 for i in (0,1)],obb['center_px'])),
+        scope='annotation_discrepancy_not_GT_error_or_training_gate')
+    if k is not None:
+        generated = length/k; scale_log = math.log(length/along)
+        ratio_log = math.log((along/width)/k)
+        result['primary'].update(reference_k=k, generated_short_px=generated,
+            short_delta_px=generated-width, short_relative=generated/width-1,
+            short_log_ratio=math.log(generated/width),
+            short_log_decomposition=dict(long_extent_component=scale_log,
+                projected_ratio_component=ratio_log, total=scale_log+ratio_log,
+                scope='exact_algebra_not_causal_attribution'))
+        result['free_obb'].update(short_relative=generated/obb['short_px']-1,
+            axis_k_vs_obb_ratio_log=math.log(k/(obb['long_px']/obb['short_px'])))
+    if repeat_points is not None:
+        again = project(repeat_points, fixed['angle_rad'])
+        repeat = dict(long_relative=again['along_axis_px']/along-1,
+            short_relative=again['transverse_px']/width-1,
+            short_delta_px=again['transverse_px']-width,
+            points_identical_to_first=repeat_points==points,
+            scope='one_repeat_difference_not_independent_truth_or_error_bound')
+        if k is not None:
+            gap1, gap2 = generated-width, generated-again['transverse_px']
+            spread = abs(again['transverse_px']-width)
+            repeat.update(generated_vs_repeat_short_relative=generated/again['transverse_px']-1,
+                short_gap_same_sign=gap1*gap2 > 0,
+                both_short_gaps_exceed_observed_repeat_difference=min(abs(gap1),abs(gap2)) > spread,
+                no_systematic_bias_inference=True)
+        result['fixed_axis_repeat'] = repeat
+    return result
+
+
+def pair_summary(rows, group_by_image):
+    eligible = [r for r in rows if r['same_frame_pair']['eligible']]
+    paired = [r for r in eligible if 'short_relative' in r['same_frame_pair']['primary']]
+    def group_stats(items):
+        has_k = [r for r in items if 'short_relative' in r['same_frame_pair']['primary']]
+        return dict(axis_count=len(items), paired_k_count=len(has_k),
+            long_relative=descriptive([r['same_frame_pair']['primary']['long_relative'] for r in items]),
+            short_relative=descriptive([r['same_frame_pair']['primary']['short_relative'] for r in has_k]),
+            native_angle_delta_deg=descriptive([r['same_frame_pair']['free_obb']['axis_vs_obb_angle_deg'] for r in items]),
+            paired_repeats=sum('fixed_axis_repeat' in r['same_frame_pair'] for r in has_k),
+            reference_k_values=sorted({r['same_frame_pair']['primary']['reference_k'] for r in has_k}))
+    groups = {name: group_stats([r for r in eligible if group_by_image[r['image']]==name])
+              for name in sorted(set(group_by_image.values()))}
+    return dict(eligible_axis_count=len(eligible), paired_k_count=len(paired),
+        missing_axis_count=sum(r['same_frame_pair']['status']=='MISSING_INDEPENDENT_SAME_FRAME_AXIS' for r in rows),
+        long_identity_conflict_count=sum(r['same_frame_pair']['status']=='AXIS_LONG_IDENTITY_CONFLICT_REVIEW_REQUIRED' for r in rows),
+        pooled_frame_descriptions=group_stats(eligible), by_source_video=groups,
+        systematic_bias_status='NOT_ESTABLISHED_REQUIRES_REPEATABILITY_OBJECT_AND_EVENT_EVIDENCE',
+        supervision_only_training_contrast_ready=False,
+        limitations='Direction-fixed differences isolate readout orientation, not annotation truth. '
+        'Adjacent frames are correlated. Mixed k within a video needs object/sequence review. '
+        'No automatic significance, causal conclusion, GT replacement or training approval.')
+
+
+def diagnose(path, out, backend, require_axis=False):
     path, rows, sources = checked_packet(path)
     out = Path(out).resolve()
     if out.parent != ROOT/'work_dirs' or not out.name.startswith(VERSION+'_') or out.exists():
         raise ValueError('Use a new work_dirs/'+VERSION+'_... result directory')
-    if backend == 'native':
-        reader, info = native_loader()
-    else:
-        reader = reference_obb; info = dict(name='reference_float64_edge_candidates_not_native')
     for f in (Path(__file__), ROOT/'tools/data/prepare_port_independent_size_labels_v1.py',
               ROOT/'tools/data/prepare_port_size_reference_review_v1.py',
               ROOT/'crane_project/utils/port_geometry_size_support_v1.py',
@@ -200,11 +308,23 @@ def diagnose(path, out, backend):
         raise ValueError('Measurement contract/frame identity differs')
     if {p.name for p in (input_dir/'repeat_annotations').glob('*.json')} != {Path(n).stem+'.json' for n in REPEAT_IMAGES}:
         raise ValueError('Repeat inventory differs from fixed three-frame plan')
+    for r in rows:
+        check_axis_annotation_source(inputs['records'][Path(r['frame']['image']).name],
+                                     r['frame'], input_dir, sources)
+    axes = {r['frame']['image']: axis_measurement(inputs['records'][Path(r['frame']['image']).name],
+                                                r['frame'], r['points']) for r in rows}
+    if require_axis and not any(a['status']=='HUMAN_DECLARED_INDEPENDENT_AXIS' for a in axes.values()):
+        raise ValueError('SAME_FRAME_PAIRS_MISSING independent_axis=0/20. Fill independent same-frame '
+                         'axis endpoints in measurements.json first; no report or training is generated.')
+    if backend == 'native':
+        reader, info = native_loader()
+    else:
+        reader = reference_obb; info = dict(name='reference_float64_edge_candidates_not_native')
     results = []
     for r in rows:
         points, frame = r['points'], r['frame']; name = Path(frame['image']).name
         obb = reader(points); theta = proxy_axis(points); fixed = project(points, theta)
-        axis = axis_measurement(inputs['records'][name], frame, points)
+        axis = axes[frame['image']]; again = None
         deltas = [project(points, theta+x*math.pi/180)['transverse_px']-fixed['transverse_px'] for x in (-1, 1)]
         lengths = [math.dist(points[i],points[(i+1)%4]) for i in range(4)]
         mean_short = min((lengths[0]+lengths[2])/2,(lengths[1]+lengths[3])/2)
@@ -247,6 +367,7 @@ def diagnose(path, out, backend):
                         result['repeat_fixed_axis_short_relative']=width/axis['fixed_axis_enclosing']['transverse_px']-1
             elif repeat.get('shapes'):
                 result['repeat_status']='PENDING_REPEAT_REVIEW'
+        result['same_frame_pair'] = same_frame_pair(axis, points, obb, inputs['records'][name], again)
         results.append(result)
     summary = dict(frames=len(results), independent_axis_count=sum(r['independent_axis']['status']=='HUMAN_DECLARED_INDEPENDENT_AXIS' for r in results),
         paired_k_count=sum(r['independent_axis']['fixed_k_status']!='NOT_EVALUATED' for r in results),
@@ -257,6 +378,8 @@ def diagnose(path, out, backend):
         edge_mean_vs_obb_short_relative_abs_max=max(abs(r['obb_vs_quad_edge_mean_short_relative']) for r in results),
         perturbation_1deg_short_abs_px_max=max(abs(x) for r in results for x in r['proxy_direction_perturbation_1deg_short_delta_px']))
     report = dict(protocol=VERSION, target=TARGET, backend=info, summary=summary, rows=results,
+        same_frame_comparison_version='port_size_same_frame_comparison_v1',
+        same_frame_comparison=pair_summary(results,{r['frame']['image']:r['frame']['source_video'] for r in rows}),
         ready_for_training=False, split_assigned=False, physical_reference_match='UNCONFIRMED',
         limitations='Readout differences/1deg sensitivity/repeatability are not truth errors or detector/depth gains. '
         'Quad-derived direction is not an independent axis. No label export or automatic promotion.', sources_sha256=sources)
@@ -265,17 +388,20 @@ def diagnose(path, out, backend):
     out.mkdir(); packet.write_json(out/'readout_report.json',report)
     packet.write_json(out/'artifacts.json', {'readout_report.json':packet.sha(out/'readout_report.json')})
     print('SIZE_ANNOTATION_READOUT_COMPLETE', json.dumps(summary), 'backend='+info['name'], 'ready_for_training=false')
+    if require_axis:
+        print('SAME_FRAME_SIZE_COMPARISON_COMPLETE', json.dumps(report['same_frame_comparison']))
 
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__); subs=parser.add_subparsers(dest='command',required=True)
     p=subs.add_parser('prepare');p.add_argument('--packet-dir',type=Path,required=True)
-    p=subs.add_parser('diagnose');p.add_argument('--packet-dir',type=Path,required=True)
-    p.add_argument('--out-dir',type=Path,required=True);p.add_argument('--backend',choices=('native','reference'),default='native')
+    for command in ('diagnose','paired'):
+        p=subs.add_parser(command);p.add_argument('--packet-dir',type=Path,required=True)
+        p.add_argument('--out-dir',type=Path,required=True);p.add_argument('--backend',choices=('native','reference'),default='native')
     args=parser.parse_args()
     try:
         if args.command=='prepare': prepare(args.packet_dir)
-        else: diagnose(args.packet_dir,args.out_dir,args.backend)
+        else: diagnose(args.packet_dir,args.out_dir,args.backend,require_axis=args.command=='paired')
     except (ValueError,FileNotFoundError,FileExistsError,ImportError) as error:
         parser.exit(2,'ERROR: '+str(error)+'\n')
 

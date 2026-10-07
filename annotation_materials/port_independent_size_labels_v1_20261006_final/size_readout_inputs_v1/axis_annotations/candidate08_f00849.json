@@ -1,0 +1,31 @@
+{
+  "version": "3.3.10",
+  "flags": {},
+  "shapes": [
+    {
+      "label": "axis",
+      "score": null,
+      "points": [
+        [
+          1069.7777777777778,
+          610.6666666666666
+        ],
+        [
+          1180.888888888889,
+          603.5555555555555
+        ]
+      ],
+      "group_id": null,
+      "description": "",
+      "difficult": false,
+      "shape_type": "line",
+      "flags": {},
+      "attributes": {},
+      "kie_linking": []
+    }
+  ],
+  "imagePath": "../../images/candidate08_f00849.png",
+  "imageData": null,
+  "imageHeight": 1088,
+  "imageWidth": 1920
+}
