@@ -1,6 +1,6 @@
 # SymEOOD 分量可靠性交接：保留midpoint23比较基线；σ1.5／epoch03三标志迁移
 
-**2026-10-08当前入口：用户已授权固定M/simple的TRAIN／VAL取舍分析、Git同步、服务器CPU运行及回传分析，并明确主约束为正确保留率≥95%（另报90%／99%）。本轮进度和运行入口见第27节；不训练模型或重拟合policy，不读TEST。尺寸修框／方向平衡与深度优化继续封存。当前前端为B24＋σ1.5／epoch03＋cachefix1 simple，旧σ1／epoch23保持历史身份；问题梳理见第26节。**
+**2026-10-08当前入口：固定M/simple的TRAIN／VAL取舍分析已完成，主约束为正确保留率≥95%（另报90%／99%）。服务器11项单测通过，完整曲线/逐帧评分已回传核验，有用结论见结果文档第9节、执行身份见第27节。pooled95%的simple为FA178/FR33，但Real正确保留仅83.42%；各域/视频均95%时FA200/FR7，同接受数score FA199。保留M与原policy，不部署诊断点、不读TEST；尺寸修框／方向平衡与深度继续封存。下一步应检验尺寸错误辨识增量，尚未确定或启动新结构/拟合。**
 
 **2026-10-06执行入口：用户已授权将可靠性前端迁移至B24＋midpoint σ1.5／head_epoch03，继续simple三分量判断。先读第24节，最新服务器结果见24.6，修复与命令保留24.5。cachefix1的check／collect／fit／全887帧原生VAL verify均已完成，服务器20项测试通过；新simple尺寸／方向各接受843帧，Real尺寸FA144、FR10，Sim尺寸FA46、FR0。分域同接受数尺寸与score相同，seq07局部较score少5个FA；总体迁移收益含检测几何变更，尚不能称可靠性机制创新。σ1／epoch23及下述已完成TEST成绩仍保留原比较基线身份，不能写成新前端成绩。本次没有检测／midpoint／图像参考训练或TEST访问。**
 
@@ -1432,7 +1432,7 @@ tar -czf work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/analysis_20261
 
 **代码与检查状态。** 新增utility、runner、protocol/source manifest、11项针对性数值/身份测试及单一运行脚本；旧模型/policy/评分/原实验源码不变。本地系统Python缺NumPy，改用已有Codex依赖Python，无安装；11项通过、Python3.8 AST与bash语法通过。提交前还核对固定输入完整路径、SHA及原VAL回放。服务器已有未提交/已暂存历史改动，保留其worktree/index摘要；同步只作快进，不stash/reset/清理。
 
-**服务器入口（CPU，无需显卡）。** 在项目根目录、既有mmrotljj环境运行：
+**本轮已执行的服务器入口（CPU，无需显卡；无需重跑）。** 项目根目录、既有mmrotljj环境；脚本拒绝覆盖已有ID：
 
 ```bash
 bash tools/run_port_reliability_tradeoff_v1.sh \
@@ -1444,4 +1444,12 @@ bash tools/run_port_reliability_tradeoff_v1.sh \
 
 **回传核验修复。** v1已运行并回传；本地与服务器NumPy/BLAS浮点末位差（边界差约1.11e−16）使少数非95%主结果的阈值边界帧重算计数不同，不能当作模型变化。v2只补存服务器精确逐帧评分/框/标志用于完整曲线复核，合同、输入、policy和诊断规则均不变；保留v1身份，不调整容差改变结果。
 
-**当前待办。** v2源码同步→CPU运行回传→精确评分下独立核验与有用结论写入结果文档→删除仅本次v1/v2新压缩包。原输入archive、服务器原结果及本地分析文件保留。完成后用结果和实际状态替换本段待办。
+**已完成运行与核验（事实）。** 实现提交`0218d231bcf448a43113dc7daa5a606c5ae49c9f`，精确评分补充提交`7f8933e5bd8d3e112a39c52a92ee4f565f965d27`，均已推送origin/main并在服务器快进拉取。v1/v2两次CPU运行成功，各11项测试通过，v2为11项/0.120s；v1/v2全部数值报告精确一致。补评分不更改任何排序、门限、角色、输入或规则。服务器M/policy/预测输入SHA全部一致，旧暂存/工作区改动完整保留（摘要worktree `b48cc0f92d424169abf2d767fd5d2ddd0e70974e14d3b92a363750d01addd6f1`、index `d54105b5f8055df157511d1d0af99e065bd2b61153373a69d377167d653eae2e`）。
+
+**回传身份。** 结果统一在两端`work_dirs/port_reliability_tradeoff_v1/20261008_retention95_v2/`，v1仍在同一父目录。v1包SHA `83a6a92d943a482ce76e133f570bbee41e9e6f52f349f15f02379657db5e7633`；v2包SHA `22798dfc47aa50633d554379996b197aec876b5140cd6416c2d6fd3f48b8da08`。v2报告SHA `4bcd7f64a71822f9a74c25d901e6c695989fdfd5f49acf920551de17e842ecbb`、完整曲线SHA `4ad847ccb4869b39b6a42ce0be5f111a9f274de21e90ffc10c233d3cb655e8fd`、精确评分SHA `02c2bf6a5ce7cd093acd013e22948251e9163eef6506dcf1a19b9a69a4bb987f`、completion SHA `3eafd63ff45a8b2c9d2fdb7c4e258f1181b1cd774f0fcdaec3612724d47818ea`。原输入`/Users/mac/Downloads/analysis_20261006.tar.gz`只读保留。
+
+**独立复核。** 包SHA/安全路径/完成回执/artifact及104份来源逐项通过。所有3445行元数据、GT、原图框与score和原输入一致；VAL887三方法框/标志/风险精确回放。服务器精确评分下独立重算78组55335个完整曲线点、360组约束混淆数和同数score全一致；独立成对AUROC最大差2.22e−16，本地/服务器评分最大末位差2.22e−16，均已记录于`local_review.json`。不存在新模型/评分/policy训练、检测推理或TEST访问。中心TRAIN2557/2558、VAL874/886命中；全帧正确覆盖分别2557/2558、874/887。
+
+**结果与决定。** 结果文档第9节已写入主要表格/限制：pooled95%不能替代逐视频95%，simple在Real的AUROC0.5448低于score0.6648；各域/视频95%点FA200，对同数score199无优势。seq07自身95%容量点仍接受风险68.42%。不部署诊断点、不仅靠门限/单调校准声称判别提升；后续候选先明确尺寸错误辨识证据及95%正确保留/同数FA/逐视频验收，未自动指定、恢复或训练新头。
+
+**压缩清理已完成。** 先完成分析并写入本交接和结果文档，再逐个核对包SHA、删除仅本次`work_dirs/port_reliability_tradeoff_v1_20261008_retention95_v1.tar.gz`及`...v2.tar.gz`的本地与服务器副本，并验证均不存在。两端v1/v2原结果目录、解压后报告/曲线/评分、local_review及旧输入`/Users/mac/Downloads/analysis_20261006.tar.gz`保留；没有清理其他结果或权重。没有待运行/待回传的本轮任务，结果记录纳入Git；后续评分候选仍待单独明确，不自动启动。
