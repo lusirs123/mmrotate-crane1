@@ -1,6 +1,8 @@
 # SymEOOD 分量可靠性交接：保留midpoint23比较基线；σ1.5／epoch03三标志迁移
 
-**2026-10-08当前入口：尺寸评分两项特征消融已完成Git同步、服务器CPU拟合/VAL评价、本地独立核验和本轮两端压缩包清理，合同与结果见第28节。去掉相对尺寸在同848接受数下比full_simple/score少2/3个FA，但连续不可用段保护未通过；去掉长宽比明显退化。没有选中或采用新policy，也未读取TEST。M、原policy、中心和方向保持，尺寸修框/图像头/深度仍封存。本轮无待运行、回传或清理任务。**
+**2026-10-08当前入口：用户授权第33节“冻结VAL补评”，完整评价887帧VAL，复用第32节模型/特征和历史fit门限，不重新拟合/重定点。第32节probe失败与旧合同仍保留；补评不能追溯改为原合同通过。新增9项工程测试通过，服务器执行/回传分析待完成。正式M/simple/policy不变，当前没有TEST任务。**
+
+**后续可靠性候选统一协议（用户明确，2026-10-08）：仅使用现有TRAIN／VAL／TEST，不再为每个候选新增fit/probe/legacy/purged等数据角色。完整TRAIN拟合候选及公平控制、标准化；完整VAL分域/逐视频评价同接受数/同正确保留下的FA/FR/ED/CR、覆盖与连续FR，并按预定要求确定使用门限；候选及门限冻结后TEST报告，已多次暴露TEST不调参/重选。固定中心、方向、框、score和输出/漏检身份。历史实验按其原角色和预算解释，不合并重算成新协议。当前这一次只做冻结VAL补评，不改历史训练集或工作门限。**
 
 **2026-10-06执行入口：用户已授权将可靠性前端迁移至B24＋midpoint σ1.5／head_epoch03，继续simple三分量判断。先读第24节，最新服务器结果见24.6，修复与命令保留24.5。cachefix1的check／collect／fit／全887帧原生VAL verify均已完成，服务器20项测试通过；新simple尺寸／方向各接受843帧，Real尺寸FA144、FR10，Sim尺寸FA46、FR0。分域同接受数尺寸与score相同，seq07局部较score少5个FA；总体迁移收益含检测几何变更，尚不能称可靠性机制创新。σ1／epoch23及下述已完成TEST成绩仍保留原比较基线身份，不能写成新前端成绩。本次没有检测／midpoint／图像参考训练或TEST访问。**
 
@@ -1762,3 +1764,29 @@ fit总体AUROC对边0.82869高于3维0.78319，但同1919接受数对边FA51，3
 **回传独立复核。** 包SHA`e52fe79c2e79f699deb509757e3f22ded736a3a0b1cf4c6bb48faf34635116be`、tar路径/类型安全检查通过。2558行原M/B/GT/角色、score/输出身份及只改size决定逐帧一致，原方向标志/风险/资格保持；probe中心输出帧命中492/492、输出覆盖492/492、全帧中心正确覆盖492/492，方向另沿原449可评价输出分母。全部原缓存、source/input/控制/回执SHA核验通过。用独立标量双线性、区域/边带循环与公式重建特征最大差8.88e−16、风险9.55e−15、最优objective2.22e−16；344份四状态/连续段（含同CR）、180组AUROC/AP、所有fit-only整tie工作点、同数tie边界及19项失败逐一重现，未重新拟合。完整256通道缓存未复制本机，channel mean/RMS由字节固定源/缓存和已知值测试核验；本机固定场NPZ可独立重建空间读出，不能声称复制了完整P3。
 
 核心产物在本节结果目录`train_check/`：`report.json` SHA`bdf70c2ca312a02d3abf93bf9790b1075e4f6e52a0fe9e72ce592de5c9228795`，`models.json` SHA`b533fd0efb2849ac22d449c3302aa398f419813d8d2c04330c003e9156c084ef`，`scored_rows.jsonl.gz` SHA`3bf194e0bb17cf7d8e4513e6ac3259a494d8dbb9e3561473fa02e025d2f7fef0`，`fixed_fields.npz` SHA`59a9e88dec568e9d469e50dc0bb08f682fdb92bc1ae6ea3d6d1275c2a08fc73d`；同父`local_review.json` SHA`a90aedd99ba39cf4032b66ac21f040af9820c58a45a3595949598193a6eb1b2e`。源码/最终记录沿main同步。清理已完成：分析写入后回执同步服务器且SHA一致，经报告/全部产物/包SHA核验，仅删除本次两端fix1包，两端均验证不存在；结果、参数、固定场、原缓存/权重、首轮工程日志全部保留，无本次待清理包。
+
+
+## 33. 冻结VAL补评与后续统一TRAIN／VAL／TEST协议（2026-10-08）
+
+### 33.1 本次授权、冻结边界与实现
+
+用户明确授权：第32节现有冻结模型即使probe失败，也补完整VAL评价，另记“冻结VAL补评”；不重新拟合/调整采样或fit门限，不追溯原合同通过，不根据VAL补评扩大预算/选新结构。后续新候选只使用现有TRAIN、VAL、TEST，不再增加数据角色，详见文首最新协议。当前模型仍来源原1942帧历史拟合集，不能称其已经按完整TRAIN2558重拟合；本次普通ROI和同历史训练子集3维控制复用原权重，正式simple和score另报。
+
+新增单用途`crane_project/tools/run_port_reliability_opposite_border_v1_frozen_val.py`、source SHA清单、`tests/test_port_reliability_opposite_border_v1_frozen_val.py`及`tools/run_port_reliability_opposite_border_v1_frozen_val.sh`。不修改第32节封存源清单、训练/采样函数和失败回执；旧入口的失败禁VAL保护仍成立，新入口明确只接受用户授权的特定失败模型/报告/完整产物SHA。该入口无TRAIN拟合或TEST阶段、无拟合/定门限调用。旧普通ROI/对边/3维模型、5种fit门限逐值读取，原M/GT/score/中心/方向决定保留，唯一变化size风险/flag。正式policy的原尺寸标志另报，避免把新fit比较工作点当成正式policy。
+
+VAL仍为原887帧（Real375、Sim512），886帧有输出、1帧无框保留；无框不产生可靠性风险或FA/FR，覆盖及MISSING单列。使用原字节固定val_s1缓存及原VAL主框，actual sx/sy、规范轴和原raw宽高关联沿第32节。返回当前M对边三带、普通ROI3×3以及simple/score，完整分域/逐视频报告FA/FR/ED/CR、接受风险/正确保留/全帧覆盖、错误接受/正确误拒/正确拒错/漏检/总不可用连续段，同数和同CR比较含保守tie边界。原95%保留与控制保护仅作冻结点描述检查，不叫旧合同续跑或自动采用；不扫描VAL门限。补评后再根据完整证据做保留/结束决定。
+
+本地9项测试通过：限定特定封存模型/失败身份、改字节/任意模型拒绝、旧保护不变、VAL唯一数据角色、运行时禁止拟合/门限求解、工作点不重算、仅size改变/漏检无风险、正式policy单列、路径/覆盖保护、887帧来源与源闭包。Python3.8和shell语法检查通过；无新特征、网络、训练预算或GPU任务。
+
+### 33.2 服务器命令与产物
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+bash tools/run_port_reliability_opposite_border_v1_frozen_val.sh
+```
+
+结果置同一实验父目录`work_dirs/port_reliability_opposite_border_v1/20261008_border_evidence_fix1/val_supplement/`，原train_check和VAL_SKIPPED.txt保持历史阶段身份。包在work_dirs根`port_reliability_opposite_border_v1_frozen_val_20261008.tar.gz`，拒绝覆盖。保存源/模型/固定点SHA、report、逐帧scored_VAL、固定场NPZ、模型原字节副本、日志/测试和原服务器diff SHA；运行成功后回传核验/写分析，最后仅删除本次两端包，全部产物、旧权重/缓存与失败日志保留。源码/记录在main上传同步，不改原dirty工作区/index。
+
+### 33.3 实测、核验与决定
+
+状态：冻结补评入口与本地检查完成，服务器运行/回传核验/分析待完成。保留原probe失败事实，没有本次已验证收益，没有线上policy迁移或TEST任务。完成后替换本状态，不重复增加待办条目。
