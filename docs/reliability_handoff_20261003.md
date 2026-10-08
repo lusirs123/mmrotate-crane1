@@ -1,6 +1,6 @@
 # SymEOOD 分量可靠性交接：保留midpoint23比较基线；σ1.5／epoch03三标志迁移
 
-**2026-10-08最新：第34节ReDC启发的两臂完整TRAIN／VAL已完成并独立复核，VAL_FAILED_STOP，不采用、不进入TEST；正式M/simple保持。**
+**2026-10-08最新：第35节温度／有符号修正的有限对照已完成并独立复核，VAL_FAILED_STOP，不采用、不进入TEST；温度控制精确重现第34节，解除公式约束未解决泛化，正式M/simple保持。**
 
 **2026-10-08当前入口：用户授权第33节“冻结VAL补评”，完整评价887帧VAL，复用第32节模型/特征和历史fit门限，不重新拟合/重定点。第32节probe失败与旧合同仍保留；补评不能追溯改为原合同通过。本地/服务器9项新增测试及887帧独立复核通过；同CR663下对边FA221、simple208，完整VAL未建立稳定增量，结束本项对边方案。正式M/simple/policy不变，未读TEST，结果与清理见33.3。**
 
@@ -1881,7 +1881,7 @@ CUDA_VISIBLE_DEVICES=2 bash tools/run_port_reliability_redc_size_v1.sh 20261008_
 
 同CR是每个报告组分别取控制的最小整tie集合，仅用于离线公平排序，不是重新定义线上门限或按视频部署。seq07同204接受数时candidateFA144、simple141、score144、linear145；同CR60更清楚地显示对simple多14FA。各组最长FR均满足本轮同CR保护，没有把连续ED算为FR。5项失败为：总体同数/同CR对score严格增益未成立、Real同CR相对simple退化、seq07同数/同CR相对simple退化；它们不是5个独立错误事件。没有保留率、连续FR或工程失败，不能再把未采用原因写成“评价把拒错误算为误拒”。
 
-错误AUROC：全VAL redc0.667519、linear0.608607、simple0.785635、score0.684385；Real redc0.654673，seq07 redc0.471389，Sim redc0.696929。TRAIN类平衡末态loss从score初始化0.913548降至redc0.475896、linear0.370829；TRAIN错误AUROC分别0.850864/0.918698。loss下降、优于新linear控制不等于优于已保留simple/score，也没有稳定跨视频收益。
+错误AUROC：全VAL redc0.667519、linear0.608607、simple0.785626、score0.684394；Real redc0.654673，seq07 redc0.471389，Sim redc0.696929。TRAIN类平衡末态loss从score初始化0.913548降至redc0.475896、linear0.370829；TRAIN错误AUROC分别0.850864/0.918698。loss下降、优于新linear控制不等于优于已保留simple/score，也没有稳定跨视频收益。第35节复核更正了simple/score的文字末位抄录，原报告/模型/逐帧产物不变。
 
 **机制事实与推断。** 学到β=-0.476239。TRAIN2049/2558、VAL749/886输出的第二个ReLU隐层8个激活全部为0，因此它们的温度完全相同0.778454；该子集的risk是score统一单调变换，不能通过内部特征改变子集内部排序。其余样本仍有不同温度，不能把整个网络说成完全没用特征。smoke第二步首层grad_norm0.05117非零，说明图像特征路径连接成立；大量末态零激活是本版本表达/拟合的限制线索，不是已经证明唯一根因或整个ReDC无效。不追加epoch、改激活/容量/特征/权重或另选linear。
 
@@ -1911,4 +1911,48 @@ CUDA_VISIBLE_DEVICES=2 bash tools/run_port_reliability_redc_size_v1.sh 20261008_
 
 ### 35.2 执行进度
 
-本地15项数值/来源/接口测试通过，7项Torch测试因本地无Torch待服务器执行；SHA、Python3.8与shell语法待最后核验。服务器只读检查main77cc965、原工作区/暂存SHA保持；GPU2有其他任务，GPU3空闲，优先GPU3。尚未实际训练，无新性能结论。
+初始本地15项数值/来源/接口测试通过，7项Torch测试因本地无Torch随后交服务器执行；SHA、Python3.8与shell语法核验通过。服务器只读检查main77cc965、原工作区/暂存SHA保持；执行前GPU2有其他任务，GPU3空闲，脚本只允许在2/3中选空闲卡。初始预检不构成性能结论，最终实测如下。
+
+### 35.3 实测、独立核验及决定
+
+**执行事实。** 源码9bc0136已推送并在指定服务器main快进拉取，保留既有改动；临时loopback转发仅用于Git拉取，没有持久代理修改。Python3.8.20/Torch1.13.1+cu117/NumPy1.24.4、后两卡空闲GTX1080执行，22项服务器测试全通过，两臂独立2步smoke丢弃。完整TRAIN2558、完整VAL887/886输出、663正确/223错误、1漏检。各100轮/1000更新，总2000；temperature末态全部参数与第34节max差0、批次digest相同。复用原冻结特征，无新检测或几何头forward，无新角色/扰动/重采样/选权/追加预算。
+
+**机制检验成立但采用收益不成立。** 高score错误—低score正确的配对，temperature在TRAIN15000、VAL14766对中正确排序均0；residual分别14921/15000=99.4733%、1128/14766=7.6392%。配对复用帧、彼此相关，不是独立事件样本。seq07仅122/2726=4.4754%。residual已能跨score=.5分界重新排序，所以不是代码未解除数学限制；但该能力主要在TRAIN，未迁移到VAL。
+
+| 排序／拟合指标 | temperature | residual |
+|---|---:|---:|
+| TRAIN类平衡末态loss | 0.475896 | 0.121823 |
+| TRAIN错误AUROC | 0.850864 | 0.996506 |
+| 全VAL错误AUROC | 0.667519 | 0.599267 |
+| Real VAL错误AUROC | 0.654673 | 0.626676 |
+| Sim VAL错误AUROC | 0.696929 | 0.636629 |
+| seq07错误AUROC | 0.471389 | 0.455124 |
+
+这表现为更强TRAIN拟合而VAL排序退化，不能用loss/训练AUROC或解除公式限制宣布可靠性提升。simple全VAL AUROC0.785626、score0.684394。
+
+**预定全局使用点。** residual门限risk<=0.9855444386015616，859接受、FA219/FR23/ED4/CR640/MISSING1；正确保留640/663=96.5309%，Sim441/464=95.0431%，每域/视频>=95%满足。temperature仍861接受、FA201/FR3/ED22/CR660。接受数不同，不直接把219与201作为公平排序比较。原policy固定点未改，FA190/FR10/ED33/CR653，843接受。
+
+| 全VAL同859接受 | FA | FR | ED | CR |
+|---|---:|---:|---:|---:|
+| residual候选 | 219 | 23 | 4 | 640 |
+| temperature控制 | 200 | 4 | 23 | 659 |
+| 冻结simple评分 | 202 | 6 | 21 | 657 |
+| score | 200 | 4 | 23 | 659 |
+
+| 同正确保留参照 | residual FA | temperature FA | simple FA | score FA |
+|---|---:|---:|---:|---:|
+| 全VAL CR640 | 219 | 182 | 184 | 185 |
+| Real CR199 | 173 | 164 | 161 | 163 |
+| Sim CR441 | 46 | 38 | 33 | 37 |
+| seq07 CR63 | 160 | 151 | 141 | 150 |
+| seq14 CR136 | 13 | 13 | 13 | 13 |
+
+同CR参照只作离线公平排序，不按视频改线上门限。residual全部23个FR均在Sim，最长连续FR4；同全VAL CR640控制最长FR均2。Real仅检出2/175错误、seq07仅检出2/162错误，正确Real全部保留；Sim检出2/48错误，却误拒23/464正确。37项失败含同指标/域与视频重复关系，不是37个独立失败帧；本轮没有95%正确保留或工程失败，排序和连续FR保护实际退化。
+
+**新的限制线索。** residual第二隐层全零TRAIN1910/2558包含1/71错误，VAL610/886包含173/223错误，seq07包含137/162错误；零区域数量虽少于temperature，绝大多数VAL错误仍落入原score加常量的区域。Sim正确框的95%所需门限为0.985544，比Real的0.639984明显高，单一全局门限被Sim决定，从而几乎全收Real错误。这是跨域风险值失配的事实；同时两域各自AUROC也退化，故不能把失败全部归于全局门限，也不改成分视频/分域门限追求通过。根因是否来自冻结特征、训练错误支持、监督/拟合方式尚未隔离，不宣布ReLU或数据缺乏为唯一根因。
+
+**工程与独立核验。** 首层smoke第二步梯度temperature0.05117、residual0.05893非零；输入detach、clip、参数数目/隐层初值、NumPy/Torch重放通过，末态风险最大差2.44e-7/6.44e-7。3445行两端独立CPU网络重放、210组四状态/同数/同CR、120组pairwise AUROC、全部门限、2000更新/批次digest及机制诊断均一致；本地重放最大差1.89e-15，服务器0。`local_review.json`为服务器审查，`mac_review.json`为本地审查，末位浮点可不同但结论/原产物SHA保持。原M/score/输出及中心/方向标志保持；中心874/886=98.6456%，输出覆盖886/887=99.8873%，全帧中心正确覆盖874/887=98.5344%。
+
+**决定。** VAL_FAILED_STOP，不采用residual或第34节temperature，不进入TEST。结论限定为“解除正温度的排序限制不足以解决本项目当前冻结特征质量映射的泛化”，不是全部可靠性方法无效或原ReDC复现失败。不自动追加epoch、调激活/容量/特征/类权重/分域门限；正式M/simple继续保持，失败只记本运行记录，不写论文主要成果。
+
+产物统一`work_dirs/port_reliability_readout_compare_v1/20261008_readout_v1/result`，原特征引用第34节，未拷旧缓存。唯一包`work_dirs/port_reliability_readout_compare_v1_20261008_readout_v1.tar.gz` SHA4fcf151ca6f967a145d73c76aec1d227b7b42f07285a49b3fc673dc7b508c53c，路径/类型/完整回执核验通过；report SHA382f5c94ea636c1ca1a4ea6c0f63a57122f950f6be03de10f3e123e6a510a673，models SHAb49cc7c69ba8285cfc6f137c56b992bdc157410c070bbdbe0e7eb736922f41aa。服务器工作区/暂存SHA前后仍b48cc0…/d54105…，退出码0。分析同步后仅清理本次两端包，清理状态待更新；全部结果、权重、原特征及其他归档保留。
