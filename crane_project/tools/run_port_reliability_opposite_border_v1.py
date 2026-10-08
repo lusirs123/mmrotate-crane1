@@ -124,6 +124,21 @@ def checked_cache_path(path):
     return path,manifest
 
 
+def checked_gt_pair(cached,original):
+    """Keep original labels; tolerate only float32 periodic-angle rounding.
+
+    Centers and both sizes must match exactly. Cache annotation theta was
+    rounded before a different le90 wrap; it is never used in this descriptor.
+    """
+    a=np.asarray(cached,dtype=float);b=np.asarray(original,dtype=float)
+    if a.shape!=(5,) or b.shape!=(5,) or not np.isfinite(a).all() or not np.isfinite(b).all():
+        raise ValueError('Invalid paired GT')
+    delta=abs((a[4]-b[4]+np.pi/2)%np.pi-np.pi/2)
+    if not np.array_equal(a[:4],b[:4]) or delta>2e-6:
+        raise ValueError('GT center/size or periodic angle pairing differs')
+    return float(delta)
+
+
 def collect(rows,cache_dir,stage):
     import torch
     torch.set_num_threads(1)
@@ -139,13 +154,14 @@ def collect(rows,cache_dir,stage):
     cached=payload['records']; index={r['image']:r for r in cached}
     if len(index)!=len(cached) or set(index)!={r['image'] for r in rows}:
         raise ValueError('Complete single-scale cached frame identities differ')
-    result=[]; fields_all=[]; supports_all=[]; sampling=[]
+    result=[]; fields_all=[]; supports_all=[]; sampling=[];gt_angle_delta=0.
     for n,r in enumerate(sorted(rows,key=lambda r:r['image'])):
         c=index[r['image']]
         if (c['scale']!=1. or c['role']!=stage
             or any(c[k]!=r[k] for k in ('image','sequence','domain','split','frame_id','image_size'))
-            or c['gt_original'].shape!=(1,5) or c['gt_original'][0].tolist()!=r['gt']):
+            or c['gt_original'].shape!=(1,5)):
             raise ValueError('Standard view/metadata/GT cache pairing differs')
+        gt_angle_delta=max(gt_angle_delta,checked_gt_pair(c['gt_original'][0].tolist(),r['gt']))
         for k in ('roi','support','boxes_original','boxes_model','scale_xy','gt_original'):
             t=c[k]
             if t.device.type!='cpu' or t.requires_grad or not bool(torch.isfinite(t).all()):
@@ -186,6 +202,8 @@ def collect(rows,cache_dir,stage):
         raise ValueError('No fit frame has separated supported inner/edge/outer bands on both axes; stop before fitting')
     arrays=dict(image_ids=np.array([r['image'] for r in result]),fields=np.array(fields_all),support=np.array(supports_all))
     return result,arrays,dict(source_sha256=source,full_P3_available=False,stored_grid=[9,9],
+        GT_centers_and_sizes_exact=True,maximum_GT_periodic_angle_delta_rad=gt_angle_delta,
+        original_GT_labels_preserved=True,
         field_summary='fixed channel mean/RMS, no learned channel projection',
         interpolation_does_not_add_information=True,no_GT_or_center_eligibility_filter=True,
         source_valid_for='spatial organization test only; 10% error discrimination unproven',

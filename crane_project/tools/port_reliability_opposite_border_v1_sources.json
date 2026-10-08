@@ -23,12 +23,12 @@
     "tools/run_port_reliability_scale_asymmetry_v1.sh": "3348df292526dc686aef06e69c79871861c3aeefbe1ff252186e6720926e97a7",
     "crane_project/tools/port_reliability_scale_asymmetry_v1_sources.json": "a3550915b8972b3992595ecc173128108db852f6a613a61a462327aceabf7c5c",
     "crane_project/utils/port_reliability_opposite_border_v1.py": "056f4c889b7f14aad490240bf38033aedd326a98270d3e0948de3137ca50732e",
-    "crane_project/tools/run_port_reliability_opposite_border_v1.py": "2411ca89cbd64f53ce0272face63e316d45d20f4f5d8593ca37d5bdd37f59c16",
-    "crane_project/tools/port_reliability_opposite_border_v1_protocol.json": "796169469d4ce6678e086633a215d00a03286ec62e56e4c46f411f9f0b618656",
+    "crane_project/tools/run_port_reliability_opposite_border_v1.py": "d41bad17276a82ad75ebda8a7e548fa8cb9f66a19c3041b67e74c2ceab3530f1",
+    "crane_project/tools/port_reliability_opposite_border_v1_protocol.json": "006213c951dc56e30804137ebdce30cf0a9da782d1293bf5bed3c17992350a37",
     "crane_project/utils/port_structure_reliability_v1.py": "84e32d062f491070dcd6575cc4e50b231a0ff20cb835e70bec7e255c95181aa8",
     "crane_project/utils/port_geometry_refine_g_v1.py": "2545e32ef953d22ef359a56bfc1cadd38d28e69f22b30de6c7fa60f27092c51b",
     "crane_project/utils/port_geometry_midpoint_v1.py": "cfb90a032d7c74b0e911f5f89b6f23a422baf2b2824813fc92d7a832b049bad3",
-    "tests/test_port_reliability_opposite_border_v1.py": "ecf3926ca9d299c6c942a677fed68f46ad662200b3f1f09c3cc668d82201c6a7",
+    "tests/test_port_reliability_opposite_border_v1.py": "58320f005dc53f03ed88983f76fdc62e20506d6bf24b1d86811c45fb01d3bfc6",
     "tools/run_port_reliability_opposite_border_v1.sh": "4c81720da346923b8750e6240d683b7ac4ee368b2d72898218261db062d358d0"
   }
 }

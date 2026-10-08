@@ -188,6 +188,13 @@ class FittingAndDecisionTests(unittest.TestCase):
 
 
 class OfflineContractTests(unittest.TestCase):
+    def test_GT_pair_size_exact_angle_rounding_only_original_preserved(self):
+        gt=[10.,20.,100.,20.,.2];a=gt.copy();a[4]+=1.8e-7;before=a.copy()
+        self.assertLess(runner.checked_gt_pair(a,gt),2e-6);self.assertEqual(a,before)
+        for j,d in ((0,1e-6),(2,1e-6),(4,1e-3)):
+            a=gt.copy();a[j]+=d
+            with self.assertRaises(ValueError):runner.checked_gt_pair(a,gt)
+
     def test_fit_only_cutoff_and_whole_ties(self):
         rows=[row(i) for i in range(20)]+[row(20,bad=True)]
         risks={r['image']:(.4 if i<19 else .8) for i,r in enumerate(rows)}

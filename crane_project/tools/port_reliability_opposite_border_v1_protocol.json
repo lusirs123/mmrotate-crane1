@@ -180,5 +180,11 @@
     "angle risk/flag and eligibility",
     "original formal policy",
     "old results"
-  ]
+  ],
+  "cache_GT_pairing": {
+    "centers_and_sizes": "exact",
+    "periodic_angle_tolerance_rad": 2e-06,
+    "original_GT_preserved": true,
+    "reason": "float32 le90 wrap rounding; angle not a size input"
+  }
 }

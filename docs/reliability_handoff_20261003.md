@@ -1724,15 +1724,15 @@ Real同342接受为新候选11/5/4/331，seq05同103为10/4/4/93；其余视频F
 
 新增`crane_project/utils/port_reliability_opposite_border_v1.py`、对应tools入口、protocol/sources JSON、`tests/test_port_reliability_opposite_border_v1.py`、`tools/run_port_reliability_opposite_border_v1.sh`。旧源清单、算法、数据/policy、权重/论文不改。源/缓存/控制四产物/原policy全部SHA锁定，只有字节固定的仓库缓存可由Torch载入。
 
-本地29项必要测试通过：真实3×3分区、内边外网格间距、未分辨短边不删帧、通道统计、越界/掩码、实际sx/sy与宽高关联、π周期/规范交换及等比例原图单位不变、固定schema、目标gradient/Hessian有限差分/更新、漏检不判断、只改size、fit限定门限与整ties/逐视频要求、失败禁止VAL、路径/覆盖保护及源清单校验。实际数据控制最优解/风险、实际两新臂导数与零初单步下降须服务器拟合前再次验证。测试通过仅证明工程路径。
+本地30项必要测试通过（增加GT配对精度测试）：真实3×3分区、内边外网格间距、未分辨短边不删帧、通道统计、越界/掩码、实际sx/sy与宽高关联、π周期/规范交换及等比例原图单位不变、固定schema、目标gradient/Hessian有限差分/更新、漏检不判断、只改size、fit限定门限与整ties/逐视频要求、失败禁止VAL、路径/覆盖保护及源清单校验。实际数据控制最优解/风险、实际两新臂导数与零初单步下降须服务器拟合前再次验证。测试通过仅证明工程路径。
 
 ```bash
 cd /media/omnisky/personal_files/ljj/symEOOD
-bash tools/run_port_reliability_opposite_border_v1.sh 20261008_border_evidence_v1
+bash tools/run_port_reliability_opposite_border_v1.sh 20261008_border_evidence_fix1
 ```
 
-CPU缓存分析禁用GPU，无需后两张卡。版本结果共置`work_dirs/port_reliability_opposite_border_v1/20261008_border_evidence_v1/`，下分train_check及仅在通过时的val_check；包在work_dirs根`port_reliability_opposite_border_v1_20261008_border_evidence_v1.tar.gz`。脚本拒绝覆盖，保存原服务器工作区/index SHA、测试/运行日志、source/合同、模型/固定点、全部逐帧风险/决定及固定场NPZ，便于本地独立复算采样；结果不是需Git同步的源码。先分析写入32.4，再校验删除本包，两端原缓存/所有结果/权重保留。
+CPU缓存分析禁用GPU，无需后两张卡。版本结果共置`work_dirs/port_reliability_opposite_border_v1/20261008_border_evidence_fix1/`，下分train_check及仅在通过时的val_check；包在work_dirs根`port_reliability_opposite_border_v1_20261008_border_evidence_fix1.tar.gz`。脚本拒绝覆盖，保存原服务器工作区/index SHA、测试/运行日志、source/合同、模型/固定点、全部逐帧风险/决定及固定场NPZ，便于本地独立复算采样；结果不是需Git同步的源码。先分析写入32.4，再校验删除本包，两端原缓存/所有结果/权重保留。
 
 ### 32.4 实际执行、回传核验与决定
 
-状态：实现及本地测试完成；服务器运行与回传分析待完成。当前没有本项已验证可靠性收益，不改主要结果文档。本节将在执行完成后替换状态并写实测结果，不重复增加待办文本。
+首轮工程停止（未拟合）：源码3c7338c、运行20261008_border_evidence_v1的29项服务器测试通过，但GT角逐值检查失败。核对全部缓存：中心与双边完全一致，2167帧仅角度因float32/le90周期还原不同，最大差1.78814e−7rad。修复限定中心/尺寸仍逐值相同，仅允许周期角差≤2e−6rad；保持原GT/分量资格/决定，角度不进入尺寸特征。增加配对测试，不修改采样/预算/性能门槛；保留首轮日志，以fix1新目录执行唯一实际拟合。TLS拉取中断重试一次后快进成功，无持久配置改变。实际执行/回传分析待完成，暂无本项收益。
