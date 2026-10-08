@@ -1,0 +1,43 @@
+{
+  "protocol": "port_reliability_redc_size_v1",
+  "settings": {
+    "seed": 1701,
+    "epochs": 100,
+    "batch_size": 256,
+    "lr": 0.001,
+    "weight_decay": 0.0001,
+    "clip_norm": 5.0,
+    "temperature_floor": 0.25,
+    "feature_channels": 32,
+    "roi_size": 9,
+    "pool_size": 3,
+    "hidden": [
+      16,
+      8
+    ],
+    "correct_retention": 0.95
+  },
+  "input_pins": {
+    "work_dirs/port_reliability_feature_ablation_v1/20261008_size_features_v1/fit/scored_TRAIN_VAL.jsonl.gz": "e804241c2b7d529ed816f9d2f33dedad1e2961a5b132426bc816777b324c03b4",
+    "work_dirs/crane_symeood_k1_port_day2night_midpoint_sigma_v1/sigma_1p5/head_epoch_03.pth": "16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7",
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f",
+    "work_dirs/port_results/geometry/port_geometry_midpoint_formal_v1_roi_cache/cache_manifest.json": "046c5998dee0ba3703f1ae4e08fc6a02e9804d216ea12241357f69f2a4afd1e3",
+    "work_dirs/port_results/geometry/port_geometry_midpoint_formal_v1_roi_cache/train_s1.pt": "903ae2a2146665e6caa557fee6bed4cd6cadd51f842e6ee9e13bf82482976ec0",
+    "work_dirs/port_results/geometry/port_geometry_midpoint_formal_v1_roi_cache/val_s1.pt": "88a189cd707e2406acafbfabb198cbb71d72e118617a2cb1ed93702fff1c70db"
+  },
+  "frontend": "B24+sigma1.5/epoch03",
+  "description": "ReDC-inspired size ranking, not original ReDC reproduction or calibrated error probability",
+  "evidence": "Frozen actual midpoint stem 32x9x9 -> channel-major 3x3 pool ->288; final M simple descriptors3",
+  "target": "Genuine final M canonical max relative long/short error>0.10",
+  "fitting": "Complete TRAIN2558, class-balanced BCE, same 100 epochs/1000 updates per arm, no old-role filtering or new views",
+  "initialization": "Both score-risk identity within1e-5 logit tolerance; hidden seed1701; separate discarded2-update smoke",
+  "feature_standardization": "Complete TRAIN only; no VAL or TEST moments",
+  "selection": "Only final epoch100 ReDC may be selected; linear is control, never fallback winner",
+  "threshold": "One global VAL whole-tie minimum risk_le satisfying >=95% correct retention in every domain/video",
+  "gate": "Strict all same-count and same-CR FA improvement over simple/score/linear; group nonincrease; same-CR longest FR nonincrease; ties conservative",
+  "safety": "Original boxes, scores, output identities, center/angle flags and policy fixed; GT never online; missing bypass",
+  "TEST": "Only after VAL passing frozen selection, previously exposed TEST report; no TEST parameter/threshold/model selection",
+  "engineering": "SHA pins, complete frame/metadata pairing, native replay tolerances5e-4px+2e-5relative/2e-6rad/score exact; no size-label changes",
+  "budget_changes_allowed": false,
+  "official_repository_confirmed": false
+}

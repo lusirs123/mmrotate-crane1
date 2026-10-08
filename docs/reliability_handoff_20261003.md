@@ -1822,3 +1822,33 @@ Real总体AUROC相对simple略增，不能抵消同CR FA退化、seq07及Sim排�
 结论：完整VAL也未优于simple，问题不限原seq05；**结束本项固定9×9 mean/RMS对边线性方案**，不增加特征、训练网络或预算、不调VAL门限、不进入TEST。正式M/simple/policy保持；失败只记本运行记录，不写成主要结果/论文新成果。它不能否定所有主框局部证据，尚无唯一根因证明。下一步整理正式可靠性任务、评价协议及已采用结果进入论文写作；如将来有明确授权的新候选，统一完整TRAIN拟合＋完整VAL评价/门限＋冻结TEST报告，不再新增数据子角色，本次历史权重不重拟合或改身份。
 
 产物均在33.2补评目录：report SHA`861e6b60f5a04cbe1b16edffb04e5f7f8c351d39f411f0cf06681204c416f7e8`，scored_VAL SHA`c96c6279bd35cd99f8978a91b39cc9500ac9254fbd1b8ed2438ef1356194aeaa`，fixed_fields SHA`621e69fd5efa29b47b37984ad238750c592d3aeacc13630de5d82c38449defd1`，frozen_fit_points SHA`483238611bd2a9c1dd66ad2ecf6bef1ad4a7903743d1c4a6bac296e68438371a`，frozen_models SHA仍`b533fd0efb2849ac22d449c3302aa398f419813d8d2c04330c003e9156c084ef`，local_review SHA`c08e235eaa9a9474c294249a570737814eb71b1e876797ab811a2266ed7c6de2`。清理已完成：分析写入后复核回执同步服务器且SHA一致，经全部结果/原参数/包SHA核验，仅删除本次两端冻结VAL包，两端均验证不存在。完整结果/模型/固定场与旧缓存/权重保留，无本次待回传或清理任务；源码/最终记录沿main同步。
+
+
+## 34. ReDC启发的冻结几何特征尺寸评分（2026-10-08）
+
+### 34.1 授权与预先固定设计
+
+用户授权按已审议设计完成本地代码、必要检查、Git提交/服务器拉取运行、回传分析和压缩包清理。只研究可靠性尺寸评分，不修框，不恢复尺寸/深度支路。未核实作者官方GitHub，依据ReDC正文公式9和附录CR机制做项目适配；不是原论文CAR/四水平坐标校准复现，也不将类平衡风险称为真实错误概率。
+
+固定当前B24＋σ1.5/epoch03与cachefix1原policy（SHA38d914…）；完整TRAIN2558（Real1810、Sim748）全部拟合，完整VAL887评价/定点，历史fit/probe/legacy/purged字段不进入新训练筛选。只读标准尺度缓存，记录原B→M、GT/身份配对，保留原M输出；跨设备重放只作来源核对，像素atol5e-4/rtol2e-5、π周期角2e-6rad、score逐值相同，并要求尺寸正确标签一致。中心、方向标志、原框/score/count/missing均保留。
+
+实际冻结midpoint stem32×9×9→逐通道固定3×3均值池化288维，加最终M相对尺寸/比例2维，共290维温度输入；score_logit单独使用。ReDC臂290→16→8→1、ReLU，T=.25+softplus(a)，risk=sigmoid(-(z/T+β))，4802参数；线性控制完整291维、292参数。两臂neutral score-risk初始化，末层零权重；标准化只用完整TRAIN。唯一监督为原图规范长短边最大相对误差>10%二值标签；类别各总贡献.5，minibatch权重固定N/(2*Nclass)，不按当前批次类别重归一。没有其他辅助损失/增强/重采样。
+
+固定seed1701、各100轮、batch256、各1000更新，同批次次序；AdamW lr.001/weight_decay1e-4仅weights，clip5。独立两步smoke丢弃，原头无梯度，最后第100轮权重唯一评价，不选最好一步。工程通过后完整VAL，不加probe性能预门槛。VAL为开发/门限数据，不包装成独立无偏测试。
+
+每个评分仅一个全局VAL最小整tie门限，使每域/视频正确保留>=95%。原policy固定点另报；同接受数用图像ID分同分诊断并报最优/最坏tie界，同CR用最小整tie集合、不能GT拆同分。只允许预定redc候选采用，不事后改选linear：总体同数/同CR严格优于simple、score、linear，各组FA不增，同CR最长FR不增；不能精确匹配CR的整tie不确定项保守记不能确认通过。FR与ED/MISSING分开。失败封存不加预算、不读TEST；通过后才能冻结报告已暴露TEST，不据TEST选参。
+
+实现入口`crane_project/tools/run_port_reliability_redc_size_v1.py`；公式/线上decision在`utils/port_reliability_redc_size_v1.py`，Torch头/梯度在`utils/port_reliability_redc_size_v1_torch.py`。独立source/contract SHA清单封存上述设定及全部依赖。所有产物放`work_dirs/port_reliability_redc_size_v1/RUN_ID`，分析包仅一个在work_dirs根目录；分析/核验/记录同步后仅清理本次两端包，完整结果、权重、缓存保持。
+
+### 34.2 执行记录（待运行）
+
+本地18项数值/接口检查通过，8项Torch检查因本地缺Torch未执行，必须在服务器真实Torch环境全部执行；Python编译、shell语法和来源清单检查通过。服务器已只读核实路径`/media/omnisky/personal_files/ljj/symEOOD`、origin`https://github.com/lusirs123/mmrotate-crane1.git`，两端起始main96ca7dd。服务器既有工作区/index指纹b48cc0…/d54105…已保存并将核对保持；本地已有7份删除文档和未跟踪检索词文件不纳入本次提交。GPU2/3均空闲，优先GPU2。尚无真实性能收益结论。
+
+授权运行入口（实施完成后更新实际状态）：
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+source /media/omnisky/4435947f-033c-4e45-904d-f2c4d0bfbf70/Anaconda3/etc/profile.d/conda.sh
+conda activate mmrotljj
+git pull --ff-only
+CUDA_VISIBLE_DEVICES=2 bash tools/run_port_reliability_redc_size_v1.sh 20261008_redc_v1
+```

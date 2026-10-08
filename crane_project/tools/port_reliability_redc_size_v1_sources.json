@@ -1,0 +1,21 @@
+{
+  "protocol": "port_reliability_redc_size_v1",
+  "sources": {
+    "crane_project/utils/port_reliability_redc_size_v1.py": "e6d8e0deb0a535947db6858ac13400e98b2ad0954a980c620fb529164bd7437c",
+    "crane_project/utils/port_reliability_redc_size_v1_torch.py": "4d1ec52b7035054ed5c87d7200037cae83a647c7af943b9018d457aca90b4909",
+    "crane_project/tools/run_port_reliability_redc_size_v1.py": "786fb36c867d8c06d9cd6ec86d30e3f3f54edd1a96477c7a7ef934734c0ec357",
+    "crane_project/tools/port_reliability_redc_size_v1_protocol.json": "106bdc6132b6c98020dd3d6b9f0adb9f9d917168795e8fb5df53719e2bba6387",
+    "tests/test_port_reliability_redc_size_v1.py": "bbe3eb0cab7934de70fcfabfa50d872c81a712d80d75dde633ae9b8f475668ac",
+    "tools/run_port_reliability_redc_size_v1.sh": "895a42e5a87981afd931ae17f214820cfc478acca8dbf2192ab3fda954c63bea",
+    "crane_project/utils/port_simple_component_reliability_v1.py": "05cb0fb1f59fd353725134471bc98bc0026d5beb789526618add08eb46837309",
+    "crane_project/utils/port_reliability_feature_ablation_v1.py": "673ec3169a1704b6ff27256cb4817326cb95a6a5e3e42410c70e21d0d6c2e4ec",
+    "crane_project/utils/port_reliability_separability_v1.py": "15507b41ac132248355cc62b9cd08f78bfb6e2b0970231f01cd0c08ddb2d9cdd",
+    "crane_project/utils/port_reliability_state_continuity_v1.py": "443efc73e7e6069a960f81962d4dea032bedadd0901943284e6647b29f138c9c",
+    "crane_project/utils/port_reliability_tradeoff_v1.py": "6dfc5044bca05ea68c7f99e1448e813feb98d26f09748ec93774aaf10b41340e",
+    "crane_project/utils/port_midpoint_sigma15_reliability_v1.py": "d4b21b17b316a43e58ac547a7e03cbfdabe0a561cc05c15a6a6fad7cbd25ecd5",
+    "crane_project/utils/port_geometry_midpoint_v1.py": "cfb90a032d7c74b0e911f5f89b6f23a422baf2b2824813fc92d7a832b049bad3",
+    "crane_project/utils/port_geometry_midpoint_sigma_v1.py": "e634d5cfdab0547c038c0bba48518c2494f526aed624e2b6a96affe7a31cfd85",
+    "crane_project/utils/port_geometry_refine_g_v1.py": "2545e32ef953d22ef359a56bfc1cadd38d28e69f22b30de6c7fa60f27092c51b",
+    "crane_project/utils/port_structure_reliability_v1.py": "84e32d062f491070dcd6575cc4e50b231a0ff20cb835e70bec7e255c95181aa8"
+  }
+}
