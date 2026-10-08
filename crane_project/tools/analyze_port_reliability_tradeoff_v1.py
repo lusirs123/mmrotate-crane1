@@ -138,7 +138,7 @@ def main():
     p, sources = checked_sources()
     rows, policy, proof, paths = checked_inputs(args.input_dir, p)
     args.out.mkdir(parents=True, exist_ok=False)
-    reports, all_curves = {}, []
+    reports, all_curves, scored_rows = {}, [], []
     old = read(paths['fit/fit_report.json'])
     for role in ('train', 'val'):
         role_rows = [r for r in rows if r['reliability_role'] == role]
@@ -148,6 +148,11 @@ def main():
         verify_frozen_report(report, old, role)
         reports[role] = report
         all_curves.extend(curves)
+        for row in prepared:
+            saved = dict(row, methods={m: dict(d) for m, d in row['methods'].items()})
+            for decision in saved['methods'].values():
+                decision['final_box_original'] = decision.pop('raw_b_output')
+            scored_rows.append(saved)
     if proof['input_sha256'] != {n: sha(path) for n, path in paths.items()}:
         raise ValueError('Input file changed during analysis')
     result = dict(protocol=p, proof=proof, source_proof=sources, reports=reports,
@@ -156,10 +161,15 @@ def main():
     with gzip.open(args.out/'complete_curves.jsonl.gz', 'xt') as f:
         for row in all_curves:
             f.write(json.dumps(row, ensure_ascii=False, allow_nan=False)+'\n')
+    # Exact server risks preserve threshold-boundary membership across BLAS/NumPy versions.
+    with gzip.open(args.out/'frozen_scored_rows.jsonl.gz', 'xt') as f:
+        for row in scored_rows:
+            f.write(json.dumps(row, ensure_ascii=False, allow_nan=False)+'\n')
     commit = subprocess.check_output(['git','rev-parse','HEAD'], cwd=str(ROOT), text=True).strip()
     write(args.out/'completion.json', dict(protocol=trade.VERSION,
         status='FROZEN_M_TRADEOFF_COMPLETE_REVIEW_REQUIRED', git_commit=commit,
-        artifacts={n: sha(args.out/n) for n in ('report.json','complete_curves.jsonl.gz')},
+        artifacts={n: sha(args.out/n) for n in
+                   ('report.json','complete_curves.jsonl.gz','frozen_scored_rows.jsonl.gz')},
         input_sha256=proof['input_sha256'], source_manifest_sha256=sha(SOURCES),
         parameter_updates=0, detector_inferences=0, test_read=False, policy_created=False,
         curve_points=len(all_curves), frozen_VAL_replay=proof['VAL_replay']))

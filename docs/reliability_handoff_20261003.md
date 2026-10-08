@@ -1437,9 +1437,11 @@ tar -czf work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/analysis_20261
 ```bash
 bash tools/run_port_reliability_tradeoff_v1.sh \
   work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1 \
-  20261008_retention95_v1
+  20261008_retention95_v2
 ```
 
 所有本轮运行产物统一在`work_dirs/port_reliability_tradeoff_v1/<run_id>/`，包含测试、运行日志、report、完整压缩曲线及完成回执；压缩包位于`work_dirs`根目录。源码/协议/运行说明通过Git，数值输入复用服务器原产物，不把权重打包。脚本拒绝覆盖并比较运行前后暂存/工作区diff摘要。
 
-**当前待办。** 固定输入预检→提交/服务器快进→运行回传→独立核验与有用结论写入结果文档→删除仅本次新压缩包。原输入archive、服务器原结果及本地分析文件保留。完成后用结果和实际状态替换本段待办。
+**回传核验修复。** v1已运行并回传；本地与服务器NumPy/BLAS浮点末位差（边界差约1.11e−16）使少数非95%主结果的阈值边界帧重算计数不同，不能当作模型变化。v2只补存服务器精确逐帧评分/框/标志用于完整曲线复核，合同、输入、policy和诊断规则均不变；保留v1身份，不调整容差改变结果。
+
+**当前待办。** v2源码同步→CPU运行回传→精确评分下独立核验与有用结论写入结果文档→删除仅本次v1/v2新压缩包。原输入archive、服务器原结果及本地分析文件保留。完成后用结果和实际状态替换本段待办。
