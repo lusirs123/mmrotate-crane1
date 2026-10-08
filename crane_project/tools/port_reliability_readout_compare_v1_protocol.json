@@ -1,0 +1,56 @@
+{
+  "protocol": "port_reliability_readout_compare_v1",
+  "settings": {
+    "seed": 1701,
+    "epochs": 100,
+    "batch_size": 256,
+    "lr": 0.001,
+    "weight_decay": 0.0001,
+    "clip_norm": 5.0,
+    "temperature_floor": 0.25,
+    "feature_channels": 32,
+    "roi_size": 9,
+    "pool_size": 3,
+    "hidden": [
+      16,
+      8
+    ],
+    "correct_retention": 0.95,
+    "readouts": {
+      "temperature": "-(z/(.25+softplus(a(h)))+beta)",
+      "residual": "-z+a(h)+beta"
+    }
+  },
+  "input_pins": {
+    "work_dirs/port_reliability_feature_ablation_v1/20261008_size_features_v1/fit/scored_TRAIN_VAL.jsonl.gz": "e804241c2b7d529ed816f9d2f33dedad1e2961a5b132426bc816777b324c03b4",
+    "work_dirs/crane_symeood_k1_port_day2night_midpoint_sigma_v1/sigma_1p5/head_epoch_03.pth": "16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7",
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f",
+    "work_dirs/port_results/geometry/port_geometry_midpoint_formal_v1_roi_cache/cache_manifest.json": "046c5998dee0ba3703f1ae4e08fc6a02e9804d216ea12241357f69f2a4afd1e3",
+    "work_dirs/port_results/geometry/port_geometry_midpoint_formal_v1_roi_cache/train_s1.pt": "903ae2a2146665e6caa557fee6bed4cd6cadd51f842e6ee9e13bf82482976ec0",
+    "work_dirs/port_results/geometry/port_geometry_midpoint_formal_v1_roi_cache/val_s1.pt": "88a189cd707e2406acafbfabb198cbb71d72e118617a2cb1ed93702fff1c70db",
+    "work_dirs/port_reliability_redc_size_v1/20261008_redc_v1/result/completion.json": "faebcd5ef0b64bbe86ebc86027eb2503aea7fa25969da06b99c895131f122880",
+    "work_dirs/port_reliability_redc_size_v1/20261008_redc_v1/result/report.json": "e18466a22f053501db264a8201421c0ffdcdcb519ac5978bf287b91e3ef981f8",
+    "work_dirs/port_reliability_redc_size_v1/20261008_redc_v1/result/models.json": "1e648ace3f2f350c284dc27a61f8a356f366f95a088b8569900492a71c1c4417",
+    "work_dirs/port_reliability_redc_size_v1/20261008_redc_v1/result/train_features.npz": "1d4a0b5e127f7f674bc18e881a49343c0b7277ed0c679bfdb2245c19511350b9",
+    "work_dirs/port_reliability_redc_size_v1/20261008_redc_v1/result/val_features.npz": "801d4c4ee44af61797ff326e495800f1a427b65d7b30c9e0f44bf9a926e19fef",
+    "work_dirs/port_reliability_redc_size_v1/20261008_redc_v1/result/scored_TRAIN.jsonl.gz": "dc1c4ebeafee9ade68594e87ca4b213bf8a5a2345196673e93f297a77ea362f9",
+    "work_dirs/port_reliability_redc_size_v1/20261008_redc_v1/result/scored_VAL.jsonl.gz": "4ca676dfdcc06bddff8dfcae808f947b2f9c4492de81e029e6ddaec720fc6dad"
+  },
+  "frontend": "B24+sigma1.5/epoch03",
+  "description": "Single readout ablation, signed residual versus positive temperature; not original ReDC reproduction",
+  "evidence": "Reuse byte-pinned actual midpoint 32x9x9 ->3x3 pool288 + delivered M descriptors3, no new inference",
+  "target": "Actual final M canonical max relative long/short error>0.10; same genuine TRAIN2558 and71 bad labels",
+  "initialization": "Temperature replicates old seed1701 including linear RNG consumption; same hidden weights; last weights0; neutral output bias inverse-softplus(.75) for temperature,0 for residual; beta0; both -z within1e-5",
+  "capacity": "Each290->16->8->1 ReLU+global beta,4802 params; score logit independent input; no activation/feature/loss/sampling change",
+  "fitting": "Each100 epochs1000 updates batch256 with identical permutation seed1701; class-balanced BCE; AdamW.001 decay1e-4 weights only clip5",
+  "feature_standardization": "Complete TRAIN only, identical previous normalizer; stored features never recomputed or replaced",
+  "selection": "Only predeclared residual finalepoch100 may pass; no early-stop/epoch selection/alternative model search",
+  "threshold": "One global VAL minimum whole-tie risk_le protects>=95% correct retention in every domain/video; no TEST",
+  "gate": "Strict all same-count and same-CR FA improvement over full_simple/score_only/temperature; group FA nonincrease; same-CR longestFR nonincrease; boundary ties conservative",
+  "secondary_diagnostics": "Hidden-zero membership and high-score-bad versus low-score-good pair ranking, reported TRAIN/VAL per domain/video; not selection criteria",
+  "control_replication": "Temperature final parameters reproduce prior redc within max1e-6 with identical order digest; failure is engineering stop",
+  "safety": "Original boxes/score/output/missing/center/angle and oldpolicy fixed; GT only offline; no online GT/domain/video inputs",
+  "TEST": "Finite comparison does not read TEST even after VAL pass; any frozen TEST report is a separate step",
+  "allowed_changes": "Readout and its neutral output-bias only; beta retained with unrestricted sign in both heads",
+  "budget_changes_allowed": false
+}

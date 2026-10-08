@@ -1892,3 +1892,23 @@ CUDA_VISIBLE_DEVICES=2 bash tools/run_port_reliability_redc_size_v1.sh 20261008_
 产物统一位于`work_dirs/port_reliability_redc_size_v1/20261008_redc_v1/result`；包含models.json/final_heads.pth、train/val_features.npz、逐帧scored_TRAIN/VAL、train_log、smoke/report/cutoffs/completion及local_review。唯一回传包`work_dirs/port_reliability_redc_size_v1_20261008_redc_v1.tar.gz` SHA07a027d4a1122f5af03b02ae4ef835c7d2e4ffe0faad8ffb6ad377245261ceef，路径/类型和完整产物SHA核验通过。report SHAe18466a22f053501db264a8201421c0ffdcdcb519ac5978bf287b91e3ef981f8，models SHA1e648ace3f2f350c284dc27a61f8a356f366f95a088b8569900492a71c1c4417。
 
 **同步与清理完成。** 审查器及分析提交425654c推送、服务器快进拉取；新增7项审查测试在两端均通过，服务器3445行/210组/120个AUROC及2000更新复核一致，风险重放最大差5.00e-16，报告与模型SHA和本地相同。两端审查末位数值因NumPy/BLAS不同略有差异，不要求审查JSON逐字节相同。服务器git diff --binary与暂存区指纹仍分别为b48cc0f92d424169abf2d767fd5d2ddd0e70974e14d3b92a363750d01addd6f1、d54105b5f8055df157511d1d0af99e065bd2b61153373a69d377167d653eae2e；既有改动保持。分析同步后，两端仅删除上述SHA核验的本次tar.gz，完整结果目录、权重及原缓存全部保留，不清理其他归档。
+
+## 35. 温度／有符号质量修正的单项有限对照（2026-10-08）
+
+### 35.1 已授权设计与预先合同
+
+用户授权按评分公式限制的建议做一次有限检验，沿用本地修改、Git同步到`/media/omnisky/personal_files/ljj/symEOOD`、服务器后两卡执行、回传核验记录及仅清理本次两端压缩包的流程。第34节模型未采用，原M、simple/policy、中心/方向及输出身份固定；不恢复修框/深度，不读TEST，不自动追加版本。
+
+**新增事实。** 第34节末态第二隐层全零区域，TRAIN包含7/71个错误，VAL包含207/223个错误，seq07包含157/162个错误；不是仅因全部网络没有梯度。温度风险logit为`-(z/T(h)+beta)`且T>0、beta全局，任何score>.5项的错误风险都低于任何score<.5项；无法重新排序这类错误—正确配对。VAL138个错误score>.5、107个正确score<.5，seq07为94/29。这是数学约束与当前离线事实，不认定唯一根因；本公式对所有低score错误／高score正确的配对同时有有利的固定次序，故解除约束也不保证总体收益。
+
+**唯一增量。** 复用第34节SHA核验的实际冻结stem特征288维及原M三描述量，不再检测/提取、不改变样本/激活/归一化/类权重。两臂同290→16→8→1 ReLU与全局beta，每臂4802参数；temperature=`-(z/(.25+softplus(a(h)))+beta)`，residual=`-z+a(h)+beta`。最后权重均0、beta均0；中性末层bias分别inverse-softplus(.75)/0，均在1e-5 logit容差内还原score风险（residual为精确零修正）。同隐层初值，保留旧linear RNG消耗以重现第34节temperature初值；参数/优化器独立。非完整ReDC复现，不将类平衡风险称为真实错误概率。
+
+完整TRAIN2558/71错误，两臂各100轮、batch256、各1000更新，总2000更新，seed1701同批次序；AdamW lr.001、仅weights衰减1e-4、clip5。独立2步smoke丢弃，检查首层后续梯度、Torch/NumPy重放、输入detachment；只用末态100轮。temperature末态参数必须重现第34节max差<=1e-6、批次digest相同，否则工程失败停止，不判候选优劣。完整TRAIN拟合后才打开VAL特征用于评价，不增加fit/probe等角色。
+
+**验收分开。** 机制诊断：分域/逐视频报告高score错误—低score正确配对排序、第二隐层全零的正确/错误组成，TRAIN/VAL均报告；只是解释，不作选权或替代验收。采用门槛：仍在VAL使用单一全局整tie门限满足各域/视频正确保留>=95%，同接受数/同CR总体FA严格优于temperature、冻结simple及score，每组FA不增、同CR连续FR不增；ties不可精确匹配保守记未确认。原policy固定点另报，FA/FR/ED/CR/MISSING及中心输出帧命中、输出覆盖、全帧正确覆盖保持原口径。VAL是反复使用的开发数据，TEST多次暴露；本轮无论VAL是否通过均不访问TEST，不据其选模型/门限。
+
+实现入口`crane_project/tools/run_port_reliability_readout_compare_v1.py`，独立审查器`review_port_reliability_readout_compare_v1.py`；源文件及合同SHA封存，既有第34节代码/权重/结果不覆盖。结果集中`work_dirs/port_reliability_readout_compare_v1/RUN_ID/result`，已有特征直接引用原路径，不另拷ROI/cache。仅本次一个回传包在work_dirs根目录，核验分析同步后只删两端这个包；未采用实验仅记本运行记录。
+
+### 35.2 执行进度
+
+本地15项数值/来源/接口测试通过，7项Torch测试因本地无Torch待服务器执行；SHA、Python3.8与shell语法待最后核验。服务器只读检查main77cc965、原工作区/暂存SHA保持；GPU2有其他任务，GPU3空闲，优先GPU3。尚未实际训练，无新性能结论。
