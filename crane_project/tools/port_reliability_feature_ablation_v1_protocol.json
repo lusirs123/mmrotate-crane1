@@ -1,0 +1,64 @@
+{
+  "protocol": "port_reliability_feature_ablation_v1",
+  "date": "2026-10-08",
+  "feature_arms": {
+    "drop_relative_size": [
+      0,
+      2
+    ],
+    "drop_aspect": [
+      0,
+      1
+    ]
+  },
+  "fitting": {
+    "l2": 0.1,
+    "max_iterations": 100,
+    "gradient_tolerance": 1e-08
+  },
+  "target_good_retention": 0.95,
+  "roles": {
+    "fit": "TRAIN2558 genuine M size labels",
+    "calibration_and_selection": "VAL887 previously exposed development; supervised GT constraints",
+    "test": "Only selected frozen VAL-passing arm; exposed TEST1440 reporting, no reselection"
+  },
+  "test_used_for_selection": false,
+  "controls": [
+    "frozen full_simple score",
+    "unchanged original score risk"
+  ],
+  "calibration": "Once per score, global risk cutoff=max first whole-tie threshold retaining ceil(.95*good) in all/domain/video groups. GT only offline. Control working points are newly named copies, original policy not overwritten.",
+  "gate": {
+    "overall": "Strictly fewer matched-count FA than BOTH full_simple and score controls; use conservative minimum FA at boundary ties",
+    "strata": "All/domain/video good retention >=95%; matched-count FA does not increase against either control",
+    "continuity": "Longest unavailable observed consecutive run does not increase against either same-count control in any stratum; zero extra frames allowed"
+  },
+  "selection_rule": "Only gate-passing candidates. Lowest global FA then highest global CR at their VAL cutoff; exact tie retains original policy. Neither passes: stop and never access TEST. No further regularization, combinations, losses, heads, budgets or thresholds searched.",
+  "protection": "Center/angle decisions and angle risk copied from original simple; final original M box/score/output identity exact. Size only. Original B24/sigma1.5/epoch03 and old sigma1 history immutable.",
+  "interpretation": "Beating original simple without score is only reduced feature harm, not a new ranking advantage; failure bounds this fixed linear setup, not all information in the descriptors. VAL fitting/selection empirical, TEST repeatedly exposed; no mechanical safety guarantee.",
+  "test_contract": {
+    "geometry_files": {
+      "artifacts.json": "262f2622c722414283045cba18b293866a3138868f186564b5406fc37cc2558d",
+      "completion.json": "8fe7f065ddca16871b9dbf41f84186b99ff3a51e46c308b8c3dfa5d71f7a0ce2",
+      "frozen_selection.json": "c52bf18854a514e171c4f5cf2e6afce69b7b372412f56f3d9ec74edadd9386c0",
+      "progress.jsonl": "fb5f228e8f2da23e6121719e5c9471ced79469a8647c09c7667ee2042ae12ba4",
+      "protocol.json": "140111513d69eef9377012d4774019c406fa8a8f72321ef2315e543155efeb1c",
+      "sources.json": "cb6ea7a1fffde7bf4564101cf31230cd0fef45ad3807c4d5e300cf343a87d60c",
+      "test_compare.json": "5bcde34ebe3f260bed3b7074f809ec174c37199b2c8321d10d7475eb8ab80df2",
+      "test_rows.jsonl": "13c4cfa7f1f67a7bc2cad36da1ec067adbeae74080b387d39efe39fdc41a788d"
+    },
+    "metadata_files": {
+      "completion.json": "4e514b97da3997573fe3b7959f86df2d96c2579989eefa4e6a63d96700a33233",
+      "input_check.json": "b50f8aef14d4baacca41ac3e3e6f454ba93ed31fd898551a9319ef93d76f6110",
+      "test_compare.json": "56f1e238db0236c6cb06d095daa3d0d5d53575b4d3f5eb6851b3878e86408ab3",
+      "test_qualities.jsonl": "d95cdeb8958bfff69f82fcc0c9f4650557245070ae68745971b1bff7e2ae23e9"
+    },
+    "policy_files": {
+      "completion.json": "f975e2fd6fed5e75d602ac9c1043f36e06106561467b59725b89696130244189",
+      "fit_report.json": "8c245cf5d2c5f5178dba33436ee5f49f0b5918c90fb1ac66473398346eb4f3af",
+      "input_check.json": "b9679c4b2ec586e89992c411922acc9afa250a2e66ba969bb9c96daa14615318",
+      "policy.json": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f",
+      "val_decisions.jsonl": "d657e93f59235122a1f8e2d8341e986a8c4e51f8dd88b8f651384f846e573bc9"
+    }
+  }
+}

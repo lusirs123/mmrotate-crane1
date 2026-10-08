@@ -1,6 +1,6 @@
 # SymEOOD 分量可靠性交接：保留midpoint23比较基线；σ1.5／epoch03三标志迁移
 
-**2026-10-08当前入口：固定M/simple的TRAIN／VAL取舍分析已完成，主约束为正确保留率≥95%（另报90%／99%）。服务器11项单测通过，完整曲线/逐帧评分已回传核验，有用结论见结果文档第9节、执行身份见第27节。pooled95%的simple为FA178/FR33，但Real正确保留仅83.42%；各域/视频均95%时FA200/FR7，同接受数score FA199。保留M与原policy，不部署诊断点、不读TEST；尺寸修框／方向平衡与深度继续封存。下一步应检验尺寸错误辨识增量，尚未确定或启动新结构/拟合。**
+**2026-10-08当前入口：用户已授权尺寸评分两项特征消融，固定合同/运行入口见第28节。代码及17项本地测试已完成，待Git同步、服务器CPU拟合/VAL验收；通过才冻结并补TEST，两项失败就停止。仅尺寸风险模型改变，M、原policy、方向和中心保持；尺寸修框/图像头/深度仍封存。上一轮固定评分诊断已完成，结论与SHA见第27节及结果文档第9节，不重复曲线诊断，也不将旧诊断点直接部署。**
 
 **2026-10-06执行入口：用户已授权将可靠性前端迁移至B24＋midpoint σ1.5／head_epoch03，继续simple三分量判断。先读第24节，最新服务器结果见24.6，修复与命令保留24.5。cachefix1的check／collect／fit／全887帧原生VAL verify均已完成，服务器20项测试通过；新simple尺寸／方向各接受843帧，Real尺寸FA144、FR10，Sim尺寸FA46、FR0。分域同接受数尺寸与score相同，seq07局部较score少5个FA；总体迁移收益含检测几何变更，尚不能称可靠性机制创新。σ1／epoch23及下述已完成TEST成绩仍保留原比较基线身份，不能写成新前端成绩。本次没有检测／midpoint／图像参考训练或TEST访问。**
 
@@ -1453,3 +1453,27 @@ bash tools/run_port_reliability_tradeoff_v1.sh \
 **结果与决定。** 结果文档第9节已写入主要表格/限制：pooled95%不能替代逐视频95%，simple在Real的AUROC0.5448低于score0.6648；各域/视频95%点FA200，对同数score199无优势。seq07自身95%容量点仍接受风险68.42%。不部署诊断点、不仅靠门限/单调校准声称判别提升；后续候选先明确尺寸错误辨识证据及95%正确保留/同数FA/逐视频验收，未自动指定、恢复或训练新头。
 
 **压缩清理已完成。** 先完成分析并写入本交接和结果文档，再逐个核对包SHA、删除仅本次`work_dirs/port_reliability_tradeoff_v1_20261008_retention95_v1.tar.gz`及`...v2.tar.gz`的本地与服务器副本，并验证均不存在。两端v1/v2原结果目录、解压后报告/曲线/评分、local_review及旧输入`/Users/mac/Downloads/analysis_20261006.tar.gz`保留；没有清理其他结果或权重。没有待运行/待回传的本轮任务，结果记录纳入Git；后续评分候选仍待单独明确，不自动启动。
+
+## 28. 尺寸评分两项特征消融（2026-10-08）
+
+**授权与固定合同（实现前确定，未实测）。** 用户授权按上一轮同样流程完成本地代码/检查、Git提交推送、服务器拉取CPU运行、条件性TEST、压缩回传分析记录，再删除本次压缩包。只检验两个候选：`drop_relative_size`＝score logit＋log长宽比，`drop_aspect`＝score logit＋log相对尺寸。固定M、相同TRAIN2558输出及真实双边≤10%标签；从零重新拟合两个3系数（含bias）尺寸线性模型。标准化仅用TRAIN，类总权重各0.5、L2=0.1、Newton≤100、梯度容差1e−8，与原simple一致；不是给旧系数置零，不另搜组合/正则/损失/预算，不训练图像头。旧尺寸与深度路线继续封存。
+
+**VAL标定与公平控制。** 原simple评分/参数、原score及历史policy原样保留。4种尺寸评分各按同一固定规则，仅一次从VAL887及GT标定新全局尺寸门限：各层正确输出至少保留`ceil(0.95×good)`，取all/domain/video各自首个whole-tie点的最大值；在线不使用GT、域或视频路由。新工作点属于受监督VAL标定，不能把上一轮诊断点直接部署、冒充历史95%覆盖规则，或当作独立确认。候选方向/中心标志与方向风险逐帧复制原simple，原框/score/漏检身份精确保持。
+
+**预定验收与停止条件。** 各域/视频正确保留≥95%；相同接受数下，总体FA严格少于原full_simple及score两种排序，域/视频FA均不增加。score边界等风险若被截断，同时报GT-free图像顺序和FA上下界，验收采用保守最小FA界，不利用GT选择边界帧。各统计层最长不可用观测连续段不超过两种同接受数控制，允许新增0帧；漏检计入、帧号间隔断开。若只胜simple而未胜score，至多说明减少特征负作用，不通过新判别优势验收。通过者按VAL全局FA最少、再CR最多选择；完全并列保留原方案，两项都不通过立即收束本线性配置，不调整门限/结构/权重、不访问TEST。不能据有限失败声称三特征完全没有信息。
+
+**TEST边界。** 先保存候选参数、VAL标定、gate及选中policy的完成回执/字节SHA，独立test阶段先核验冻结选择，通过后才读取原M TEST1440及原metadata。复用框，只重新评分，报告逐域/视频、三分量四状态、输出/中心正确覆盖、联合OBB与连续性；不据TEST反选或改门限。已暴露TEST只作冻结报告，不保证其正确保留也达到VAL95%。不存在GPU/检测/几何/深度训练或推理。
+
+**代码与检查。** 新增`crane_project/utils/port_reliability_feature_ablation_v1.py`、`crane_project/tools/run_port_reliability_feature_ablation_v1.py`、对应protocol/sources、17项定向测试及唯一脚本。147份来源封存，旧文件/manifest不改。测试覆盖旧求解器一致、删除特征不影响拟合/读出、重新拟合而非置零、单全局门限/完整tie、保护项、严格gate可通过/可拒绝、并列停止及未选中候选时不触碰TEST路径。系统Python缺NumPy，使用现有Codex依赖Python，不安装包；Python3.8语法与bash语法检查。服务器现有暂存/工作区改动保持第27节摘要，快进同步，不stash/reset/删除。
+
+**服务器单一入口（CPU，已授权待执行）。** 源码/命令留在Git；两项fit及可选TEST统一一个实验父目录，压缩包在`work_dirs`根目录。
+
+```bash
+bash tools/run_port_reliability_feature_ablation_v1.sh \
+  work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1 \
+  20261008_size_features_v1
+```
+
+产物：`work_dirs/port_reliability_feature_ablation_v1/20261008_size_features_v1/`。VAL没有选中时保存`TEST_SKIPPED.txt`，不启动TEST；脚本拒绝覆盖。回传包括精确逐帧评分、candidate模型/标定、报告、源证明与完成回执，不含权重或原缓存。保留原policy与所有原结果。
+
+**当前待办。** 本地必要检查→Git/服务器快进→fit与条件TEST→回传核验/有用结果与决定→删除仅本次新压缩包。实际结果回传后替换本段状态，不追加假成绩。
