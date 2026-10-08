@@ -1,0 +1,22 @@
+{
+  "protocol": "port_reliability_state_continuity_v1",
+  "date": "2026-10-08",
+  "scope": "offline TRAIN/VAL supplemental review; no adoption or historical gate revision",
+  "primary_component": "size",
+  "size_correct": "canonical long and short relative errors both <= 0.10",
+  "missing_output": "unavailable observation; no quality risk and excluded from FA/FR/ED/CR",
+  "adjacency": "same sequence and consecutive observed frame indices; gaps reset; not seconds",
+  "prospective_contract": {
+    "applies_to": "future independently versioned candidates only, before fit; no retrospective promotion",
+    "frozen_frontend": "B24 + midpoint sigma1.5/head_epoch03",
+    "correct_retention": ">=95% per domain/video on VAL using one global cutoff; no domain/video routing online",
+    "ranking": "overall same-count FA strictly below both frozen full_simple and score; per-domain/video FA nonincrease; tie FA lower bound protects against optimistic control ordering",
+    "matched_correct_retention": "also report FA and coverage at matched CR; no pooled-only success claim",
+    "correct_observation_continuity": "longest consecutive FR run must not increase versus either same-count control in each group; additionally report FR counts and CR/all-frame coverage",
+    "unsafe_observation_continuity": "report FA run lengths and composition; stable acceptance of errors is not a benefit",
+    "availability_cost": "report ED runs, missing runs, total unavailable runs and flag switches separately; total unavailable nonincrease is not a standalone rejection gate",
+    "limits": "no guarantee on unseen videos; offline GT determines evaluation only; no mechanical safety guarantee",
+    "TEST": "freeze candidate/parameters/cutoff before report; no TEST selection; no TEST read in this supplement",
+    "preservation": "original boxes/score/output identity, center/angle flags and original policy unchanged"
+  }
+}

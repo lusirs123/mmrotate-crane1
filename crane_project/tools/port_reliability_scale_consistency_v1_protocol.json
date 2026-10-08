@@ -1,0 +1,43 @@
+{
+  "protocol": "port_reliability_scale_consistency_v1",
+  "date": "2026-10-08",
+  "features": [
+    "score_logit",
+    "log_relative_geometric_size",
+    "log_aspect",
+    "max_abs_log_edge_disagreement",
+    "auxiliary_missing"
+  ],
+  "fitting": {
+    "l2": 0.1,
+    "max_iterations": 100,
+    "gradient_tolerance": 1e-08
+  },
+  "input_pins": {
+    "work_dirs/port_geometry_size_boundary_v1/port_geometry_size_boundary_continuous_v1_20261007_154944_1078779/finite/boundary_continuous/final_rows.jsonl": "34c0df37f49a36027377a1a950886d8628e0aca0c34d1082882fcef3bb10a8fc",
+    "work_dirs/port_geometry_size_boundary_v1/port_geometry_size_boundary_continuous_v1_20261007_154944_1078779/prepare/plan.json": "74e67df8810205a24fae8daeeaa2de75d644de2e9b53e0f9c5aca927e75b5ba7",
+    "work_dirs/port_reliability_feature_ablation_v1/20261008_size_features_v1/fit/scored_TRAIN_VAL.jsonl.gz": "e804241c2b7d529ed816f9d2f33dedad1e2961a5b132426bc816777b324c03b4"
+  },
+  "original_policy_sha256": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f",
+  "frontend": "B24 + midpoint sigma1.5/head_epoch03, unchanged standard output",
+  "auxiliary": "Exactly one fixed half-shrink view after native RResize, before Normalize/Pad, PortIsotropicShrink prob1 scale(.5,.5). Actual sx/sy restored by native pipeline, not assumed nominal .5. Original coordinates already restored in cached predictions; never divide sizes again.",
+  "evidence": "max(abs(log L_main-log L_aux),abs(log S_main-log S_aux)), plus binary auxiliary missing. Canonical sorted edges. No learned image reference, geometry averaging, score/angle feature from auxiliary, clipping, sequence routing or temporal state.",
+  "fitting_roles": "Reuse sealed TRAIN identity-only roles: fit1942, probe492, legacy64, purged60. Fit only standard-present fit rows; no center-error eligibility filter. Both arms zero init, class balance, mean/std from fit, L2.1, Newton max100, tol1e-8. One 3-feature fair refit control and one 5-feature candidate; no sweeps.",
+  "probe": "Previously exposed original TRAIN probe, not independent validation. 95% per-domain/video correct retention with a single whole-tie global cutoff on probe is supervised diagnostic only, not a deliverable policy. Fit/legacy/purged similarly reported without gating or selecting weights.",
+  "TRAIN_continue": "Probe: overall and Real same-count FA strictly below refit_simple, frozen full_simple and score; all other domains/videos FA no worse, conservative control minimum FA at boundary tie; every group correct retention >=95%, longest FR no worse versus same-count controls. Report matched CR controls, AUROC/AP and all FA/FR/ED/CR/missing runs. Failure stops before VAL auxiliary inference, no retry or scale search.",
+  "VAL_if_TRAIN_passes": "Collect only one matching half-scale auxiliary for all887 VAL frames. Keep fitted models, no refit or coefficient search. Global supervised VAL cutoff ensuring every-domain/video correct retention >=95%, disclose calibration not independent validation. Require overall FA strictly better than same-count refit_simple/full_simple/score, all groups FA nonincrease with conservative ties and longest FR nonincrease. Freeze before any exposed TEST report; no automatic deployment.",
+  "protections": "Only size risk/flag may change. Original OBB, score, count, center flag, angle risk/flag and depth API unchanged. No original output -> no size judgment even if auxiliary output exists; original center never removed by auxiliary failure. GT is offline only.",
+  "data_reads": "Sealed mixed scored_TRAIN_VAL gzip bytes and roles read for selection of TRAIN rows; no VAL fitting, scoring or metrics in capability stage. No TEST file opened.",
+  "limitations": [
+    "Consistency cannot detect shared errors across scales.",
+    "Top1 corresponds to the same image, not guaranteed same physical object across scales.",
+    "Midpoint was trained using these two scales; this is not unseen augmentation or independent model evidence.",
+    "Video frames/related views are not independent samples; no safety guarantee.",
+    "Probe has only few errors and omits VAL-only seq07 weather; failure is limited evidence, not proof all TTA fails.",
+    "Future online implementation needs one additional detector+midpoint pass; cached CPU runtime is not deployment latency."
+  ],
+  "baseline_adopted": false,
+  "automatic_TEST": false,
+  "geometry_training": false,
+  "depth_optimization": false
+}

@@ -1508,3 +1508,42 @@ bash tools/run_port_reliability_feature_ablation_v1.sh \
 **决定与待办。** `selected_arm=null`，两项不采用，不读取TEST；停止本轮三特征线性配置的进一步组合、系数、正则或门限搜索，原M/policy保持。去掉相对尺寸作为“有限排序收益但未通过完整合同”的离线候选封存，不能与去掉长宽比明显退化混为一谈。下一项若继续，先明确“正确观测连续保留”与“连续错误拒绝”的评价职责，再预先制定有限辨识证据合同；这不是自动放行本候选或恢复旧图像头的授权。
 
 回传包SHA `6990ea3fa306388ef45dc6f29b2b22d87cfa1c5e8cb3ac9f46a43875a0d86a80`。两端原结果集中于`work_dirs/port_reliability_feature_ablation_v1/20261008_size_features_v1/`，本机`local_review.json`保存独立复核，服务器`TEST_SKIPPED.txt`及回执确认未进入TEST。先完成分析并写入记录，再核对SHA删除仅本次本地/服务器压缩包，已验证两端均不存在；解压结果、候选参数、日志、旧输入包和所有历史结果保留。本轮执行/回传/记录/清理均已完成，无待运行任务。
+
+## 29. 连续状态分开统计及未来验收职责（2026-10-08）
+
+**授权与范围。** 用户授权实现上一轮建议、必要时在工作目录连接服务器。本机既有证据足够，本轮只在`/Users/mac/Documents/paper/symEOOD`操作，不连接服务器、不提交/推送、不重新训练/推理/拟合、不读TEST。保留第28节源码/合同/结果/policy及未采用状态；结果文档已有用户修改原样保留，在第11节追加补评。
+
+**实现。** 新独立utility `crane_project/utils/port_reliability_state_continuity_v1.py`、runner `crane_project/tools/review_port_reliability_state_continuity_v1.py`、protocol及17项测试，不修改任何旧评分或gate。输入按completion内SHA绑定三个fit产物与回执；原图框/score、中心/方向标志、候选门限决定逐帧核对。补评FA/FR/ED/CR/MISSING及各类连续段、不可用段构成、切换；missing不参与混淆。使用reliability_role划分TRAIN2558/VAL887，原sim的train_sim身份不改。源码/输入SHA写入报告，已有输出拒绝覆盖，输入/输出必须位于项目目录。
+
+**执行与检查。** 本地17项测试通过（无NumPy/Torch依赖，无skip）；覆盖连续拒错不算误拒、混合不可用组成、漏检不算ED/FR、帧号间隔/视频边界、规范长短边10%边界、ties的GT-free排序、禁止TEST/源角色冲突、篡改回执及覆盖拒绝。初版回放发现源sim split为train_sim，已改按原reliability_role读取并添加测试；该次无结果目录写出。最终在同一父目录`state_continuity_review_v1_final/`完成3445行补评、历史VAL混淆/连续性/同数控制回放、输入/源码哈希及Python3.8语法检查。`state_continuity_review_v1/`为开发过程中早期只读补评，最终报告/receipt/local_review以final目录为准。未生成回传压缩或本地源码副本。
+
+**结果与决定。** 详表集中结果文档第11节：去掉相对尺寸同848接受FA193/FR8，对完整simple195/10及score196/11；最长FR1对1/2；ED5对5/4。seq07的136—140和Sim的211—213全部ED。候选FA最长12对完整simple11，Sim为8对score7；故正确拒错不代表稳定判别增强。历史selected_arm仍null，不以新定义重选/部署/补TEST。新合同只用于未来独立版本：95%逐域/视频正确保留、同数FA优势及分组保护、连续FR保护；FA/ED/漏检/总不可用分别报告，不把总不可用非增加当作独立否决项。GT始终只离线评价，中心覆盖保持；尺寸/深度路线封存。
+
+**本机复现（本轮已完成，无需重跑；新输出名才可运行）。**
+
+```bash
+cd /Users/mac/Documents/paper/symEOOD
+python3 -m unittest tests.test_port_reliability_state_continuity_v1 -v
+python3 crane_project/tools/review_port_reliability_state_continuity_v1.py --out work_dirs/port_reliability_feature_ablation_v1/20261008_size_features_v1/state_continuity_review_v1_new
+```
+
+无远程运行/同步任务被本轮启动或停止；旧包清理状态不变，不删除任何历史文件。后续仅待决定新增辨识证据的设计，没有遗留必跑训练或TEST。
+
+## 30. 跨尺度尺寸一致性有限可靠性实验（2026-10-08）
+
+**授权与固定合同。** 用户授权本地实现、检查、Git同步，服务器在`/media/omnisky/personal_files/ljj/symEOOD`执行，回传分析并写入本记录后删除仅本次两端压缩包。主线为尺寸可靠性，不修改M标准输出、中心、方向、score、输出数量、原policy或深度公式，不运行封存尺寸头。以下合同在本次拟合/结果计算之前固定，源码和protocol单独SHA封存。
+
+**机制与对照。** 标准和固定半尺度M均已还原至原图坐标，规范排序长短边；新增`max(|log L1-log L0.5|,|log S1-log S0.5|)`及辅助漏检标记，后者编码为“差异0、missing1”，不会直接删除主输出/中心。保留原simple三特征，5维线性候选对比相同样本/零初始化/类平衡/标准化/L2=0.1/Newton最多100轮、梯度1e−8的3维重拟合控制；另保留冻结full_simple和score。无新网络/参考/扰动、扫描、尺寸修框或GT在线入口。
+
+**输入与职责。** 复用已有2558对TRAIN标准/半尺度M，只读旧有限尺寸结果的`midpoint`，不采用失败的`candidate`等字段。标准2558帧与可靠性原预测逐值一致。半尺度由RResize后固定PortIsotropicShrink生成并用原native sx/sy还原，不能再次除以0.5。沿用已封存身份划分：fit1942（Real1377/Sim565）、probe492（351/141）、legacy64、purged60；fit只按主输出存在筛选，不按正确性或中心误差排除。两尺度已参与M训练，probe也曾参与前端训练；不称独立泛化。混合TRAIN/VAL源gzip字节与角色字段需要读取，但VAL记录丢弃，不参与本阶段评分/拟合/指标；不读TEST。
+
+**预先继续条件。** probe使用一个离线全局工作点，保护各域/视频正确保留≥95%；这不是线上门限或独立验证。总体和Real同数FA严格少于3个控制，其余分组FA不增加，控制ties取最少FA边界进行保守验收；最长FR不增加。分域/逐视频报告FA/FR/ED/CR/MISSING、接受及全帧正确覆盖、AUROC/AP、同接受数及同CR控制、各类连续段；同时报告三分量及中心的输出帧命中、输出覆盖、全帧正确覆盖。fit/legacy/purged只作诊断，不选择权重。失败即收束本版本，不追加尺度/系数/训练，不进行辅助VAL推理或TEST。通过后才另行采集固定半尺度完整VAL，保持本轮拟合参数，依protocol预设VAL合同验收，再冻结后报告已暴露TEST。
+
+**代码与运行。** `crane_project/utils/port_reliability_scale_consistency_v1.py`、`crane_project/tools/run_port_reliability_scale_consistency_v1.py`、protocol/sources、`tools/run_port_reliability_scale_consistency_v1.sh`与21项新测试。新模块、连续状态与原消融相关共55项本地测试通过；Python3.8语法、脚本语法、输入3份SHA/完整配对/角色计数核对通过。此段写入时尚未开始真实拟合。服务器已有输入，无需新的图像推理或GPU。
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+bash tools/run_port_reliability_scale_consistency_v1.sh 20261008_paired_train_v1
+```
+
+结果集中`work_dirs/port_reliability_scale_consistency_v1/20261008_paired_train_v1/`，包位于work_dirs根目录，包含本轮报告、参数、逐帧评分和日志，不含权重或ROI缓存。保留服务器既有暂存/工作区改动。结果、回传核验、提交与清理状态在实际执行后追加。
