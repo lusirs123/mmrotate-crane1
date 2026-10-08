@@ -1844,7 +1844,7 @@ Real总体AUROC相对simple略增，不能抵消同CR FA退化、seq07及Sim排�
 
 ### 34.2 执行记录（已完成运行）
 
-本地18项数值/接口检查通过，8项Torch检查因本地缺Torch未执行，必须在服务器真实Torch环境全部执行；Python编译、shell语法和来源清单检查通过。服务器已只读核实路径`/media/omnisky/personal_files/ljj/symEOOD`、origin`https://github.com/lusirs123/mmrotate-crane1.git`，两端起始main96ca7dd。服务器既有工作区/index指纹b48cc0…/d54105…已保存并将核对保持；本地已有7份删除文档和未跟踪检索词文件不纳入本次提交。GPU2/3均空闲，优先GPU2。尚无真实性能收益结论。
+初始预检：本地18项数值/接口检查通过，8项Torch检查因本地缺Torch未执行，随后在服务器真实Torch环境全部执行通过；Python编译、shell语法和来源清单检查通过。服务器核实路径`/media/omnisky/personal_files/ljj/symEOOD`、origin`https://github.com/lusirs123/mmrotate-crane1.git`，两端起始main96ca7dd。服务器既有工作区/index指纹b48cc0…/d54105…前后保持；本地已有7份删除文档和未跟踪检索词文件不纳入本次提交。初检GPU2/3均空闲，实际使用GPU2。最终性能结论见34.3。
 
 实际已在GPU2完成的运行入口（存档，无需补跑）：
 ```bash
@@ -1889,4 +1889,6 @@ CUDA_VISIBLE_DEVICES=2 bash tools/run_port_reliability_redc_size_v1.sh 20261008_
 
 **决定。** status=VAL_FAILED_STOP，未通过预先合同，不采用本次ReDC启发版本，原M/simple/policy保持。完整VAL已完成，没有TEST访问、选权或门限调整；失败仅写本运行记录，不写主要结果或论文新成果。本结果限定于本项目本次特征/目标/结构/预算，不构成对ReDC原论文的复现失败结论。
 
-产物统一位于`work_dirs/port_reliability_redc_size_v1/20261008_redc_v1/result`；包含models.json/final_heads.pth、train/val_features.npz、逐帧scored_TRAIN/VAL、train_log、smoke/report/cutoffs/completion及local_review。唯一回传包`work_dirs/port_reliability_redc_size_v1_20261008_redc_v1.tar.gz` SHA07a027d4a1122f5af03b02ae4ef835c7d2e4ffe0faad8ffb6ad377245261ceef，路径/类型和完整产物SHA核验通过。report SHAe18466a22f053501db264a8201421c0ffdcdcb519ac5978bf287b91e3ef981f8，models SHA1e648ace3f2f350c284dc27a61f8a356f366f95a088b8569900492a71c1c4417。清理状态待分析记录同步后更新；只允许删除本次两端压缩包，保留全部结果与权重/原缓存。
+产物统一位于`work_dirs/port_reliability_redc_size_v1/20261008_redc_v1/result`；包含models.json/final_heads.pth、train/val_features.npz、逐帧scored_TRAIN/VAL、train_log、smoke/report/cutoffs/completion及local_review。唯一回传包`work_dirs/port_reliability_redc_size_v1_20261008_redc_v1.tar.gz` SHA07a027d4a1122f5af03b02ae4ef835c7d2e4ffe0faad8ffb6ad377245261ceef，路径/类型和完整产物SHA核验通过。report SHAe18466a22f053501db264a8201421c0ffdcdcb519ac5978bf287b91e3ef981f8，models SHA1e648ace3f2f350c284dc27a61f8a356f366f95a088b8569900492a71c1c4417。
+
+**同步与清理完成。** 审查器及分析提交425654c推送、服务器快进拉取；新增7项审查测试在两端均通过，服务器3445行/210组/120个AUROC及2000更新复核一致，风险重放最大差5.00e-16，报告与模型SHA和本地相同。两端审查末位数值因NumPy/BLAS不同略有差异，不要求审查JSON逐字节相同。服务器git diff --binary与暂存区指纹仍分别为b48cc0f92d424169abf2d767fd5d2ddd0e70974e14d3b92a363750d01addd6f1、d54105b5f8055df157511d1d0af99e065bd2b61153373a69d377167d653eae2e；既有改动保持。分析同步后，两端仅删除上述SHA核验的本次tar.gz，完整结果目录、权重及原缓存全部保留，不清理其他归档。
