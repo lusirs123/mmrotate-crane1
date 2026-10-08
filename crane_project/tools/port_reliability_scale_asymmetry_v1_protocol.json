@@ -1,0 +1,62 @@
+{
+  "protocol": "port_reliability_scale_asymmetry_v1",
+  "date": "2026-10-08",
+  "features": [
+    "score_logit",
+    "log_relative_geometric_size",
+    "log_aspect",
+    "max_abs_log_edge_disagreement",
+    "auxiliary_missing",
+    "signed_log_long_aux_minus_main",
+    "signed_log_short_aux_minus_main",
+    "score_logit_aux_minus_main"
+  ],
+  "fitting": {
+    "l2": 0.1,
+    "max_iterations": 100,
+    "gradient_tolerance": 1e-08
+  },
+  "input_pins": {
+    "work_dirs/port_geometry_size_boundary_v1/port_geometry_size_boundary_continuous_v1_20261007_154944_1078779/finite/boundary_continuous/final_rows.jsonl": "34c0df37f49a36027377a1a950886d8628e0aca0c34d1082882fcef3bb10a8fc",
+    "work_dirs/port_geometry_size_boundary_v1/port_geometry_size_boundary_continuous_v1_20261007_154944_1078779/prepare/plan.json": "74e67df8810205a24fae8daeeaa2de75d644de2e9b53e0f9c5aca927e75b5ba7",
+    "work_dirs/port_reliability_feature_ablation_v1/20261008_size_features_v1/fit/scored_TRAIN_VAL.jsonl.gz": "e804241c2b7d529ed816f9d2f33dedad1e2961a5b132426bc816777b324c03b4"
+  },
+  "control_pins": {
+    "work_dirs/port_reliability_scale_consistency_v1/20261008_paired_train_v1/train_check/scored_TRAIN.jsonl.gz": "f363f502f831a5396bb1782d8481d6e6e684fb67f616b14737f18eea68e6080f",
+    "work_dirs/port_reliability_scale_consistency_v1/20261008_paired_train_v1/train_check/models.json": "4e757fcad73a630cf625ed22d4551d2f4c729046e2eed9f3021fa800fa2489d2",
+    "work_dirs/port_reliability_scale_consistency_v1/20261008_paired_train_v1/train_check/report.json": "40e6b7c2090425b2a70ad7d19959531f6437f894bcca0ab2ff929fa075df1775",
+    "work_dirs/port_reliability_scale_consistency_v1/20261008_paired_train_v1/train_check/completion.json": "d45af55f0b64e9a2a514e08724964e8174a8b9a73ef240555bd7a916f2c25f6f"
+  },
+  "controls": [
+    "scale_consistency",
+    "refit_simple",
+    "full_simple",
+    "score_only"
+  ],
+  "original_policy_sha256": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f",
+  "frontend": "B24 + midpoint sigma1.5/head_epoch03, unchanged standard output",
+  "auxiliary": "Exactly one fixed half-shrink view after native RResize, before Normalize/Pad, PortIsotropicShrink prob1 scale(.5,.5). Actual sx/sy restored by native pipeline, not assumed nominal .5. Original coordinates already restored in cached predictions; never divide sizes again.",
+  "evidence": "Keep old five features exactly; add signed canonical long/short log(aux)-log(main) and clipped score-logit(aux)-logit(main). Missing aux zeros all differences, h=1. Missing main produces no risk/flags. No GT in online API.",
+  "fitting_roles": "Exact prior roles fit1942/probe492/legacy64/purged60. Only main-present fit. Class-balanced float64 Newton, zero init, fit-only normalization, 30 Armijo backtracks, bias unregularized. Fit the 8D/9-parameter arm once; no control refits, no sweep. Capacity differs from old5/6-parameter control.",
+  "probe": "Previously exposed original TRAIN probe, not independent validation. 95% per-domain/video correct retention with a single whole-tie global cutoff on probe is supervised diagnostic only, not a deliverable policy. Fit/legacy/purged similarly reported without gating or selecting weights.",
+  "TRAIN_continue": "Probe global whole-tie cutoff retaining >=95% good in every domain/video. Overall and Real FA strictly below all four same-count controls, other groups nonincrease, use conservative minimum FA across control boundary ties. Every group longest FR no worse than all controls. Additionally protect main_good_aux_bad FR, main_bad_aux_good FA and main_bad_aux_bad FA against old5: select whole group first with GT-free risk/image ties, then offline GT bookkeeping, never rerank a GT subset. Report all six combinations, unsupported rates null, matched CR and full state continuity.",
+  "authorized_scope": "Cached TRAIN-only finite capability check. Even on pass: freeze results and separately define/authorize VAL; no automatic VAL/TEST/deployment.",
+  "protections": "Only size risk/flag may change. Original OBB, score, count, center flag, angle risk/flag and depth API unchanged. No original output -> no size judgment even if auxiliary output exists; original center never removed by auxiliary failure. GT is offline only.",
+  "data_reads": "Sealed mixed scored_TRAIN_VAL gzip bytes and roles read for selection of TRAIN rows; no VAL fitting, scoring or metrics in capability stage. No TEST file opened.",
+  "limitations": [
+    "Consistency cannot detect shared errors across scales.",
+    "Top1 corresponds to the same image, not guaranteed same physical object across scales.",
+    "Midpoint was trained using these two scales; this is not unseen augmentation or independent model evidence.",
+    "Video frames/related views are not independent samples; no safety guarantee.",
+    "Probe has only few errors and omits VAL-only seq07 weather; failure is limited evidence, not proof all TTA fails.",
+    "Future online implementation needs one additional detector+midpoint pass; cached CPU runtime is not deployment latency.",
+    "Probe is previously exposed and its failure analysis informed this design; only 15 main errors concentrated in one video, not independent validation.",
+    "Signed changes do not establish which frame is correct; auxiliary confidence is not ground-truth quality.",
+    "Both model and error support are shared; disagreement cannot guarantee detection of common errors."
+  ],
+  "baseline_adopted": false,
+  "automatic_VAL": false,
+  "automatic_TEST": false,
+  "geometry_training": false,
+  "depth_optimization": false
+}
