@@ -1,0 +1,38 @@
+{
+  "protocol": "port_reliability_tradeoff_v1",
+  "date": "2026-10-08",
+  "primary_component": "size",
+  "primary_good_retention": 0.95,
+  "targets": [
+    0.9,
+    0.95,
+    0.99
+  ],
+  "test_read": false,
+  "parameter_updates": 0,
+  "detector_inferences": 0,
+  "policy_created": false,
+  "inputs": {
+    "collect/completion.json": "9af0d982326b20fef2a49b13b5e973ba1ba6e17101207f3abafdfda25981c9ac",
+    "collect/final_rows.jsonl": "0d971bb608761ecd9df180f3e6c0dffb46ca71974431cc97375b9cc9b14c88c6",
+    "fit/completion.json": "f975e2fd6fed5e75d602ac9c1043f36e06106561467b59725b89696130244189",
+    "fit/policy.json": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f",
+    "fit/fit_report.json": "8c245cf5d2c5f5178dba33436ee5f49f0b5918c90fb1ac66473398346eb4f3af",
+    "fit/val_decisions.jsonl": "d657e93f59235122a1f8e2d8341e986a8c4e51f8dd88b8f651384f846e573bc9"
+  },
+  "contract": "Predeclared by user: retain >=95% of originally correct size outputs, not 95% acceptance coverage. M=B24+sigma1.5/head_epoch03 and cachefix1 simple remain frozen. CPU numeric reuse only.",
+  "diagnostic_point_rule": "First whole risk tie retaining ceil(target*good) outputs. GT is used only to describe ordering capacity, never to create or select a deployable policy. Reject-all risk is null; risk on empty acceptance is unavailable.",
+  "constraint_scopes": [
+    "pooled",
+    "all_domains_and_videos"
+  ],
+  "group_rule": "One global risk threshold per method/role/component/constraint. Second scope is the max of group-specific first-retention thresholds, reused across all groups. Per-group capacity is diagnostic only, never domain/video routing.",
+  "comparisons": "Frozen raw, score-only and simple; whole-tie complete curves; image-ordered label-free exact-count score control with tie bounds; keep FR, FA, ED, CR, accepted risk and all-frame coverage distinct.",
+  "continuity": "At frozen and global diagnostic points, missing outputs unavailable, sequence/frame gaps reset runs. Report observed consecutive unavailable length and switches, not wall-clock outage duration. Direction assessed only on saved GT aspect>=1.2; all-frame online flag coverage separately.",
+  "decision": "No new score/head/threshold training. Assess whether current rankings have a useful FA/CR tradeoff; do not claim an operational optimum without application risk requirement. No automatic promotion or follow-up training.",
+  "limitations": [
+    "TRAIN in-sample; VAL previously used for development/calibration; no independent confirmation.",
+    "Correlated adjacent frames; empirical risks are descriptive, not mechanical safety or distribution-free guarantees.",
+    "TEST is not read. No new geometry, reliability or depth improvement is measured by merely sweeping cutoffs."
+  ]
+}

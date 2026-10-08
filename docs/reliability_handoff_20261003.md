@@ -1,5 +1,7 @@
 # SymEOOD 分量可靠性交接：保留midpoint23比较基线；σ1.5／epoch03三标志迁移
 
+**2026-10-08当前入口：用户已授权固定M/simple的TRAIN／VAL取舍分析、Git同步、服务器CPU运行及回传分析，并明确主约束为正确保留率≥95%（另报90%／99%）。本轮进度和运行入口见第27节；不训练模型或重拟合policy，不读TEST。尺寸修框／方向平衡与深度优化继续封存。当前前端为B24＋σ1.5／epoch03＋cachefix1 simple，旧σ1／epoch23保持历史身份；问题梳理见第26节。**
+
 **2026-10-06执行入口：用户已授权将可靠性前端迁移至B24＋midpoint σ1.5／head_epoch03，继续simple三分量判断。先读第24节，最新服务器结果见24.6，修复与命令保留24.5。cachefix1的check／collect／fit／全887帧原生VAL verify均已完成，服务器20项测试通过；新simple尺寸／方向各接受843帧，Real尺寸FA144、FR10，Sim尺寸FA46、FR0。分域同接受数尺寸与score相同，seq07局部较score少5个FA；总体迁移收益含检测几何变更，尚不能称可靠性机制创新。σ1／epoch23及下述已完成TEST成绩仍保留原比较基线身份，不能写成新前端成绩。本次没有检测／midpoint／图像参考训练或TEST访问。**
 
 **结果文档入口：[可靠性实验主要结果与对比分析](obb/可靠性实验主要结果与对比分析_20261006.md)。实验主表、前端配对比较及与深度问题的分析集中在那里；本交接保留执行、来源、修复和决定记录。**
@@ -1360,4 +1362,84 @@ tar -czf work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/analysis_20261
 
 用户要求结果集中放入独立结果文档，交接仅存记录。本轮撤回此处原第25节的实验主表及写作分析，完整迁入[可靠性实验主要结果与对比分析](obb/可靠性实验主要结果与对比分析_20261006.md)第1—5节；24.6的完整核验与性能表迁至该文档第6节，本处保留执行来源。该文档第7节只读引用现有Webots证据，区分共同尺寸瓶颈、可靠性覆盖／排序限制与深度公式敏感性。
 
+## 26. 可靠性主线恢复与尺寸实验暂时封存（2026-10-07）
+
+### 当前范围与进度（事实）
+
+目标改为：固定最终原图框，优先改善尺寸标志对错误的识别与正确观测的保留；中心继续保留有效输出，方向按现有证据单独推进。深度数值优化与尺寸修框暂时退出当前主线，不把两项下游共同成功设为本轮验收条件。
+
+- 当前版本：B24＋σ1.5／epoch03，头SHA `16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7`；simple policy SHA `38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f`。第24节check／collect／fit／原生VAL verify及结果文档第8节冻结TEST已完成，没有未完成的旧迁移任务。
+- TRAIN2558仅拟合两组四系数线性风险；VAL887以原pooled95%全帧覆盖规则固定门限。TEST1440为已多次暴露的冻结报告，不是新选择集或未接触的独立确认。
+- 当前TEST尺寸simple `FA/FR/ED/CR=275/34/67/1055`，同数score为`297/56/45/1033`；方向为`145/41/31/1214`，同数score为`157/53/19/1202`。simple有总体增量，但不是逐视频稳定优势。中心输出1431/1440、仅输出命中1430/1431、全帧中心正确覆盖1430/1440；中心不是新增错误判断器。
+- 历史普通ROI／structure、Gaussian二阶矩参考、半峰读取、曲率v2、范围v3及残差分布v4均已完成相应有限验证，尚未形成一致判断优势，不进入现simple，不默认重开。v2—v4基于旧σ1／epoch23，不能直接写成当前σ1.5的候选结果；原身份见结果文档第2—3节。
+
+### 已确认的问题与未确认原因
+
+| 已确认限制 | 直接证据 | 对下一项的含义 |
+|---|---|---|
+| 输入主要是统计代理，缺少框与图像是否一致的直接核对 | simple只有score logit、相对几何尺寸、长宽比；固定两边与score而改变角度，descriptor精确不变 | 特别不能称方向评分已建立方向一致性；增加图像证据仍需真实判别收益，不能预设有效 |
+| 错误排序跨视频不稳定 | 当前TEST尺寸seq03的FA59对同数score75；seq04为194对191；Sim全接受，22个尺寸错误均未检出 | pooled少22个FA不能代表逐视频一致；只调门限不等于排序增强 |
+| 95%工作点与降低FA存在硬取舍 | 当前VAL seq07正确63、接受193，任意排序至少FA130，实际132；当前TEST正确1089、接受1330，下界FA241、实际275 | 应分开评价排序与使用点；下界仅由同一固定框、正确标签及接受数量定义，不是可部署GT规则或已达到的能力 |
+| 风险分布和错误支持跨角色失配 | 当前TRAIN尺寸错误71/2558（Real70、Sim1），VAL Real175/374；旧v4实际fit只有8个错误、留出4个 | 全TRAIN数量不代替实际拟合曝光；类平衡不增加错误类型/场景，不据此要求新视频或认定唯一根因 |
+| 参考精度/分布loss未转化为稳定判别 | 历史参考候选局部变准仍未通过判断门槛；v4 VAL过度自信且FA/FR增加 | 不以参考MAE、loss或输出概率替代正确/错误排序与四状态评价 |
+
+当前VAL门限直接回放到TRAIN，尺寸接受1463/2558、FA13、FR1037、ED58、CR1450；其中Real接受715/1810、FR1037，Sim全接受。此为既有`fit_report.json`的**拟合内描述**，不是新TRAIN选择点、训练失败结论或泛化估计；与VAL843接受/FR10差异说明单一覆盖门限不能被当作所有角色均95%覆盖或普适判断准确性保证。不能据此在TRAIN/TEST反选新门限。
+
+**尚未查明的原因：** 错误样本独立事件支持、共享特征信息上限、参考与检测误差是否同向、监督/标注影响和天气因果均未隔离。原框尺寸错决定可保留正确观测的上限，但修框不是本轮判断器任务；目前最核心的可操作问题是稳定的错误排序及正确保留—错误接受取舍，没有唯一已证明的训练根因。
+
+### 下一步建议（待设计，不自动实现/训练）
+
+先制定一项**尺寸可靠性验收合同**，而非立即选新头：保持当前前端与旧policy，复用已有TRAIN／VAL风险与正确性标签，区分①同接受数量下能否同时减少FA/FR，②同正确保留或预先规定的FR约束下能否减少FA及代价。报告raw／score／simple、原95%点及固定规则的完整排序曲线，按域/视频报告，保留缺失、参考不可用与中心覆盖；分组GT只能离线评价，不进入推理或在线路由。候选工作点职责/允许代价应在拟合前明确，不能依据暴露TEST或看完VAL后反复选最优。
+
+若控制评分有可用排序而现点仅取舍不合适，下一项应是明确使用点职责的有限对照，不能称判断器增强；若排序本身不稳定，再设计有明确新增辨识证据的尺寸候选，并固定单因素及预算。当前不预定新结构、不重开旧参考、不把大量拒绝称改进，也不强迫中心/方向各训练一个新模型。TEST只承担冻结报告。模型、policy及阈值修改另需明确授权；本轮授权仅整理进度和封存。
+
+小论文可继续整理已成立的检测/midpoint与可靠性基线内容；新的可靠性增强成果仍需实测，不能将“有三个标志”或前端更准写成判断机制全面改善。深度不作为当前小论文新优化成果，实际论文正文未改。
+
+### 相近论文与可借鉴内容（2026-10-07，检索核验，未实施）
+
+用户要求查找可靠性/安全相关研究，解释多轮修改未获稳定收益后应该借鉴什么。本次采用文献综述/验证流程；核对以下会议/作者原文及SAOD、检测校准官方代码入口。此表是来源—论点映射，不是本项目方法已采用或效果已成立的记录；未来引用位置统一为小论文相关工作“观测可靠性与选择性输出”，不同方法限制应保留。
+
+| 来源与身份 | 原文支持的论点 | 对本项目的借鉴与边界 |
+|---|---|---|
+| R1：[Oksuz等，Towards Building Self-Aware Object Detectors via Reliable Uncertainty Quantification and Calibration，CVPR2023](https://openaccess.thecvf.com/content/CVPR2023/html/Oksuz_Towards_Building_Self-Aware_Object_Detectors_via_Reliable_Uncertainty_Quantification_and_CVPR_2023_paper.html) | 自感知检测需联合考察分布偏移、场景不确定性及包含定位质量的检测校准 | 最接近总体任务定位；借鉴分层评价，不照搬整图拒绝而删除可用中心，不把自感知称机械安全保证；[官方代码](https://github.com/fiveai/saod) |
+| R2：[Geifman/El-Yaniv，Selective Classification for Deep Neural Networks，NeurIPS2017](https://papers.nips.cc/paper_files/paper/2017/file/4a8423d5e91fda00bb7e46540e2b0cf1-Paper.pdf) | 固定预测器及置信排序，通过拒绝在风险和覆盖间取舍；SGR在相应i.i.d.条件下控制选择风险 | 优先借鉴风险—覆盖/正确保留评价，不能将相邻视频帧直接当独立样本继承保证；目标不可行时可能零覆盖 |
+| R3：[Geifman/El-Yaniv，SelectiveNet，ICML2019](https://proceedings.mlr.press/v97/geifman19a.html) | 端到端联合学习预测和拒绝以优化指定覆盖区域 | 是任务目标参考，不是当前冻结前端上的直接控制；本轮不联合重训检测器 |
+| R4：[Kuzucu等，On Calibration of Object Detectors: Pitfalls, Evaluation and Baselines，ECCV2024](https://www.ecva.net/papers/eccv_2024/papers_ECCV/papers/03148.pdf) | 检测校准评价/工作门限存在陷阱；正确设计的Platt/Isotonic后处理可成为强校准基线 | 可借鉴低成本校准控制及同一使用集合上的联合评价；严格单调变换不改变排序，同数FA不能因此自动改善；Isotonic可合并ties；[官方代码](https://github.com/fiveai/detection_calibration) |
+| R5：[Jiang等，Acquisition of Localization Confidence for Accurate Object Detection（IoU-Net），ECCV2018](https://www.ecva.net/papers/eccv_2018/papers_ECCV/html/Borui_Jiang_Acquisition_of_Localization_ECCV_2018_paper.php) | 类别置信与定位质量不等价，可另学定位质量 | 借鉴直接监督最终框分量质量，而非必须先重建参考框；IoU不等于双边≤10%，旧ROI质量路线已有失败，必须明确实质增量才另立候选，不默认重启 |
+| R6：[Li等，Generalized Focal Loss V2，CVPR2021](https://openaccess.thecvf.com/content/CVPR2021/papers/Li_Generalized_Focal_Loss_V2_Learning_Reliable_Localization_Quality_Estimation_for_CVPR_2021_paper.pdf) | 用边界回归分布统计构建定位质量预测器DGQP | 提示中间分布可能提供质量证据，但代理Gaussian中点热图不等于真实误差分布；不重新开放失败尺寸桶头、不从低entropy预设可靠 |
+| R7：[Andeol等，Confident Object Detection via Conformal Prediction and Conformal Risk Control: an Application to Railway Signaling，COPA2023/PMLR204](https://proceedings.mlr.press/v204/andeol23a.html) | 以铁路信号为应用，通过预测集合/风险校准处理检测不确定性 | 应用背景接近安全相关感知，但全文第4.2节明确不控制false positive；其扩框/真值覆盖主要针对漏检，不能作为当前错误尺寸接受的解决方案 |
+| R8：[Angelopoulos等，Conformal Risk Control，ICLR2024](https://research.google/pubs/conformal-risk-control/) | 在交换性及有界单调损失等条件下控制期望风险 | 理论边界参考；接受后错误比例不一般满足该单调损失合同，不能直接套阈值宣称FA风险保证；期望控制不等于每视频/每帧保证；[核验全文](https://arxiv.org/pdf/2208.02814) |
+
+**概念与推断。** 当前三标志是视觉观测能否使用的判据，具有安全相关应用动机；它既不是机械危险状态标签，也没有故障率、系统级危害/控制闭环证据。多轮失败不能从文献反推出唯一根因。研究启示是分开“连续误差/参考重建”“正确错误排序”“分数概率校准”“工作点/风险控制”：后三者也不能互相替代。IoU/预测集合覆盖与本项目中心<15px、双边≤10%、角度≤3°合同不相同。
+
+**当前采用顺序（建议，未实现）。** 先采用R1/R2的任务与评价思想：固定M及原policy，利用既有TRAIN/VAL分量标签报告`接受后错误比例=FA/(FA+CR)`、全帧接受覆盖、`正确保留率=CR/(CR+FR)`与CR/N，空接受风险记不可评价而不是0；检验score/simple是否存在可用的低风险且保留正确观测的区域，不另跑检测或尺寸训练。校准误差仅作补充，不能替代同接受数/同正确保留下的FA/FR。若有可用排序，再另立合法校准/使用点对照；若没有，则单调校准不足以解决，只有明确新增分量辨识证据和有效真实错误监督的候选才值得实施。R5/R6只是条件性候选依据，当前不选新头；R7/R8不能在事件独立性和分布合同未成立时宣称正式安全/风险保证。TEST不参与上述选择，尺寸方向平衡保持封存。
+
+本次只进行文献核验与执行交接补充，不修改模型、policy、结果文件或论文正文，不运行训练/推理。
+
+### 封存与本轮检查
+
+尺寸方向平衡版本保留本机Git `9042033`的源码、协议、曝光表、来源闭包和15项本地测试，以及本地check／prepare；尚无真实GPU smoke／finite／VAL成绩。原失败连续尺寸C及其下游负结果、权重、缓存完整保留。封存只改变推进状态，不删除/移动证据或修改算法；历史命令保留在[尺寸统一运行说明](detection/尺寸诊断与有限对照_v1_运行说明_20261006.md)，恢复须用户明确授权。本轮未核验远端同步或进程，不声称已经停止远程作业。
+
+本轮只读核对当前源码、policy字节SHA、既有fit与TEST报告；从1440帧保存的错误量与冻结标志复算上述四状态和接受数下界，与原报告一致，并验证角度变化不改变三特征。没有重新推理、拟合、选择门限或生成结果副本。仅更新本交接、尺寸运行说明及旧OBB文档身份提示；旧σ1／epoch23、当前σ1.5模型/policy/数值与论文均未修改。
+
 未改变既有实验结论、原policy／权重／门限／结果身份，未新增回传结果副本；未修改算法、几何或深度窗口、论文，未启动训练／推理、连接服务器或访问TEST。后续新增主表／分析更新结果文档，过程和决定继续记入本交接。
+
+## 27. 固定M与simple的正确保留—接受风险诊断（2026-10-08）
+
+**范围与预先合同。** 用户授权实现、Git提交/推送、服务器拉取CPU运行、压缩回传、分析记录后删除本次压缩包；已明确主目标为尺寸正确保留率≥95%，另完整报告90%和99%。这是现评分的取舍/排序容量诊断，不是模型性能改进实验；不生成新policy，不选择可部署门限，不访问TEST，不恢复封存的尺寸头或深度路线。
+
+**实现。** `crane_project/tools/analyze_port_reliability_tradeoff_v1.py`绑定原cachefix1的3445行最终M预测、fit/policy、保存VAL标志及完成回执的精确SHA；复用已有NumPy排序/混淆工具。whole-tie完整曲线含空接受点；按`ceil(target×原本正确输出数)`找首个满足点。GT只描述排序容量，诊断点不得直接在线使用。pooled约束和各域/各视频同时满足约束分别使用一个全局点，不按视频部署不同门限。固定policy、same-count score、方向资格及全帧在线标志分母分别报告。中心只用输出统计命中，另报输出覆盖及全帧正确覆盖。固定与诊断点的不可用连续段包含漏检，采样帧号间隔断开，不宣称实际停用时长。
+
+**代码与检查状态。** 新增utility、runner、protocol/source manifest、11项针对性数值/身份测试及单一运行脚本；旧模型/policy/评分/原实验源码不变。本地系统Python缺NumPy，改用已有Codex依赖Python，无安装；11项通过、Python3.8 AST与bash语法通过。提交前还核对固定输入完整路径、SHA及原VAL回放。服务器已有未提交/已暂存历史改动，保留其worktree/index摘要；同步只作快进，不stash/reset/清理。
+
+**服务器入口（CPU，无需显卡）。** 在项目根目录、既有mmrotljj环境运行：
+
+```bash
+bash tools/run_port_reliability_tradeoff_v1.sh \
+  work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1 \
+  20261008_retention95_v1
+```
+
+所有本轮运行产物统一在`work_dirs/port_reliability_tradeoff_v1/<run_id>/`，包含测试、运行日志、report、完整压缩曲线及完成回执；压缩包位于`work_dirs`根目录。源码/协议/运行说明通过Git，数值输入复用服务器原产物，不把权重打包。脚本拒绝覆盖并比较运行前后暂存/工作区diff摘要。
+
+**当前待办。** 固定输入预检→提交/服务器快进→运行回传→独立核验与有用结论写入结果文档→删除仅本次新压缩包。原输入archive、服务器原结果及本地分析文件保留。完成后用结果和实际状态替换本段待办。
