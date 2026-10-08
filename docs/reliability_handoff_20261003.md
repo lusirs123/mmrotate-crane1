@@ -1,5 +1,7 @@
 # SymEOOD 分量可靠性交接：保留midpoint23比较基线；σ1.5／epoch03三标志迁移
 
+**2026-10-08最新：第34节ReDC启发的两臂完整TRAIN／VAL已完成并独立复核，VAL_FAILED_STOP，不采用、不进入TEST；正式M/simple保持。**
+
 **2026-10-08当前入口：用户授权第33节“冻结VAL补评”，完整评价887帧VAL，复用第32节模型/特征和历史fit门限，不重新拟合/重定点。第32节probe失败与旧合同仍保留；补评不能追溯改为原合同通过。本地/服务器9项新增测试及887帧独立复核通过；同CR663下对边FA221、simple208，完整VAL未建立稳定增量，结束本项对边方案。正式M/simple/policy不变，未读TEST，结果与清理见33.3。**
 
 **后续可靠性候选统一协议（用户明确，2026-10-08）：仅使用现有TRAIN／VAL／TEST，不再为每个候选新增fit/probe/legacy/purged等数据角色。完整TRAIN拟合候选及公平控制、标准化；完整VAL分域/逐视频评价同接受数/同正确保留下的FA/FR/ED/CR、覆盖与连续FR，并按预定要求确定使用门限；候选及门限冻结后TEST报告，已多次暴露TEST不调参/重选。固定中心、方向、框、score和输出/漏检身份。历史实验按其原角色和预算解释，不合并重算成新协议。当前这一次只做冻结VAL补评，不改历史训练集或工作门限。**
@@ -1840,11 +1842,11 @@ Real总体AUROC相对simple略增，不能抵消同CR FA退化、seq07及Sim排�
 
 实现入口`crane_project/tools/run_port_reliability_redc_size_v1.py`；公式/线上decision在`utils/port_reliability_redc_size_v1.py`，Torch头/梯度在`utils/port_reliability_redc_size_v1_torch.py`。独立source/contract SHA清单封存上述设定及全部依赖。所有产物放`work_dirs/port_reliability_redc_size_v1/RUN_ID`，分析包仅一个在work_dirs根目录；分析/核验/记录同步后仅清理本次两端包，完整结果、权重、缓存保持。
 
-### 34.2 执行记录（待运行）
+### 34.2 执行记录（已完成运行）
 
 本地18项数值/接口检查通过，8项Torch检查因本地缺Torch未执行，必须在服务器真实Torch环境全部执行；Python编译、shell语法和来源清单检查通过。服务器已只读核实路径`/media/omnisky/personal_files/ljj/symEOOD`、origin`https://github.com/lusirs123/mmrotate-crane1.git`，两端起始main96ca7dd。服务器既有工作区/index指纹b48cc0…/d54105…已保存并将核对保持；本地已有7份删除文档和未跟踪检索词文件不纳入本次提交。GPU2/3均空闲，优先GPU2。尚无真实性能收益结论。
 
-授权运行入口（实施完成后更新实际状态）：
+实际已在GPU2完成的运行入口（存档，无需补跑）：
 ```bash
 cd /media/omnisky/personal_files/ljj/symEOOD
 source /media/omnisky/4435947f-033c-4e45-904d-f2c4d0bfbf70/Anaconda3/etc/profile.d/conda.sh
@@ -1852,3 +1854,39 @@ conda activate mmrotljj
 git pull --ff-only
 CUDA_VISIBLE_DEVICES=2 bash tools/run_port_reliability_redc_size_v1.sh 20261008_redc_v1
 ```
+
+
+### 34.3 实测、独立复核与决定
+
+**执行事实。** 新源码021df7b在本地/服务器main同步。Git初次push审批因远端归属不明拒绝；只读gh核验登录lusirs123、仓库lusirs123/mmrotate-crane1的ADMIN权限、PUBLIC可见性与默认main后，同一动作获准推送。服务器原127.0.0.1:17890代理未连接，通过临时SSH loopback17890→本机Clash7890恢复git pull，无持久代理修改。第一次临时转发审批超时未执行，按允许重试一次后成功。服务器既有工作区/index指纹b48cc0…/d54105…保持。用户既有本地删除文件未纳入本次提交。
+
+服务器Python3.8.20、Torch1.13.1+cu117、NumPy1.24.4、物理GPU2 GTX1080。26项服务器测试全部通过，无跳过；独立两步smoke丢弃。完整TRAIN2558输出、71错误（Real70/Sim1）；两臂各100轮×10批=1000更新，总2000。唯一末态epoch100，没有VAL选择epoch、无追加训练。完整VAL887帧/886输出、663正确/223错误，1漏检不进入FA/FR。实际冻结M全六字段重放差均0，GT TRAIN周期角舍入最大1.78814e-7rad保持原标签；无B/几何头更新或新检测推理。Torch/NumPy最终risk最大差linear1.70e-7、redc2.44e-7，完整原框、score、中心/方向标志保持。
+
+**预定工作点（不同方法门限不可直接当等接受数比较）。** 各域/视频正确保留>=95%的单一全局VAL门限：redc risk<=0.8828651140369607，linear<=0.7000301508590092。redc接受861、FA201/FR3/ED22/CR660，接受风险23.3449%，正确保留660/663=99.5475%；seq07正确保留60/63=95.2381%。linear接受857、FA206/FR12/ED17/CR651；simple同要求的全局点为856接受、FA200/FR7/ED23/CR656；score861接受、FA201/FR3/ED22/CR660。redc与score在这个点的逐帧接受集合完全相同，不称“新增检出收益”。原正式simple仍843接受、FA190/FR10/ED33/CR653，接受数/正确保留不同，不能直接用201与190比较判优劣。
+
+| 完整VAL同861接受 | FA | FR | ED | CR |
+|---|---:|---:|---:|---:|
+| redc候选 | 201 | 3 | 22 | 660 |
+| 同输入linear控制 | 208 | 10 | 15 | 653 |
+| 冻结simple评分 | 202 | 4 | 21 | 659 |
+| score | 201 | 3 | 22 | 660 |
+
+| 同正确保留参照 | 候选FA | simple FA | score FA | linear FA |
+|---|---:|---:|---:|---:|
+| 全VAL CR660 | 201 | 202 | 201 | 215 |
+| Real CR196 | 157 | 156 | 157 | 167 |
+| Sim CR464 | 44 | 45 | 44 | 48 |
+| seq07 CR60 | 144 | 130 | 144 | 147 |
+| seq14 CR136 | 13 | 13 | 13 | 13 |
+
+同CR是每个报告组分别取控制的最小整tie集合，仅用于离线公平排序，不是重新定义线上门限或按视频部署。seq07同204接受数时candidateFA144、simple141、score144、linear145；同CR60更清楚地显示对simple多14FA。各组最长FR均满足本轮同CR保护，没有把连续ED算为FR。5项失败为：总体同数/同CR对score严格增益未成立、Real同CR相对simple退化、seq07同数/同CR相对simple退化；它们不是5个独立错误事件。没有保留率、连续FR或工程失败，不能再把未采用原因写成“评价把拒错误算为误拒”。
+
+错误AUROC：全VAL redc0.667519、linear0.608607、simple0.785635、score0.684385；Real redc0.654673，seq07 redc0.471389，Sim redc0.696929。TRAIN类平衡末态loss从score初始化0.913548降至redc0.475896、linear0.370829；TRAIN错误AUROC分别0.850864/0.918698。loss下降、优于新linear控制不等于优于已保留simple/score，也没有稳定跨视频收益。
+
+**机制事实与推断。** 学到β=-0.476239。TRAIN2049/2558、VAL749/886输出的第二个ReLU隐层8个激活全部为0，因此它们的温度完全相同0.778454；该子集的risk是score统一单调变换，不能通过内部特征改变子集内部排序。其余样本仍有不同温度，不能把整个网络说成完全没用特征。smoke第二步首层grad_norm0.05117非零，说明图像特征路径连接成立；大量末态零激活是本版本表达/拟合的限制线索，不是已经证明唯一根因或整个ReDC无效。不追加epoch、改激活/容量/特征/权重或另选linear。
+
+**覆盖及核验。** 中心输出帧命中874/886=98.6456%，输出覆盖886/887=99.8873%，全帧中心正确覆盖874/887=98.5344%，拒尺寸不删中心。完整TRAIN/VAL3445行独立NumPy网络重放、210组四状态/同数/同CR参照、120个成对AUROC、全部门限及2000更新/批次次序复算一致，risk最大差1.03e-15。审查器新增7项数值测试通过；没有重新拟合或改变阈值。
+
+**决定。** status=VAL_FAILED_STOP，未通过预先合同，不采用本次ReDC启发版本，原M/simple/policy保持。完整VAL已完成，没有TEST访问、选权或门限调整；失败仅写本运行记录，不写主要结果或论文新成果。本结果限定于本项目本次特征/目标/结构/预算，不构成对ReDC原论文的复现失败结论。
+
+产物统一位于`work_dirs/port_reliability_redc_size_v1/20261008_redc_v1/result`；包含models.json/final_heads.pth、train/val_features.npz、逐帧scored_TRAIN/VAL、train_log、smoke/report/cutoffs/completion及local_review。唯一回传包`work_dirs/port_reliability_redc_size_v1_20261008_redc_v1.tar.gz` SHA07a027d4a1122f5af03b02ae4ef835c7d2e4ffe0faad8ffb6ad377245261ceef，路径/类型和完整产物SHA核验通过。report SHAe18466a22f053501db264a8201421c0ffdcdcb519ac5978bf287b91e3ef981f8，models SHA1e648ace3f2f350c284dc27a61f8a356f366f95a088b8569900492a71c1c4417。清理状态待分析记录同步后更新；只允许删除本次两端压缩包，保留全部结果与权重/原缓存。
