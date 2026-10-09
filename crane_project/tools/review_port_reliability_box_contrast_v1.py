@@ -57,7 +57,10 @@ def audit(directory):
     assert report['contract']==json.loads(run.PROTOCOL.read_text()) and report['input_sha256']==run.PINS
     if report.get('reporting_recovery'):
         recovery=report['reporting_recovery'];assert recovery['training_updates_added']==0 and recovery['detector_inferences_added']==0
-        for name,pin in recovery['original_outputs_sha256'].items():assert digest(directory/name)==pin
+        for name,pin in recovery['original_outputs_sha256'].items():
+            if name in excluded:
+                assert receipt['artifacts'][name]==pin;continue
+            assert digest(directory/name)==pin
         for name,pin in report['reporting_sources']['sources'].items():
             assert hashlib.sha256(subprocess.check_output(['git','show',recovery['reporting_commit']+':'+name],cwd=str(ROOT))).hexdigest()==pin
         extra='crane_project/tools/finalize_port_reliability_box_contrast_v1.py'
@@ -136,7 +139,7 @@ def audit(directory):
             for image,value in zip(ids,risk):
                 error=abs(float(value)-by_id[image]['experiment_risks'][arm]);maximum=max(maximum,error);assert error<1e-12
             if role=='TRAIN':
-                yy=labels[:,0];w=np.where(yy==1,len(yy)/(2*yy.sum()),len(yy)/(2*(len(yy)-yy.sum())))
+                yy=labels[:,0].astype(np.float64);w=np.where(yy==1,len(yy)/(2*yy.sum()),len(yy)/(2*(len(yy)-yy.sum())))
                 real=float(np.mean((np.logaddexp(0.,logits[:,0])-yy*logits[:,0])*w))
                 aux_values=np.where(mask[:,1:],np.logaddexp(0.,logits[:,1:])-labels[:,1:]*logits[:,1:],0.)
                 aux=float(.25*np.mean(aux_values.sum(1)/np.maximum(mask[:,1:].sum(1),1)))
@@ -236,6 +239,8 @@ def audit(directory):
         pca_normalizer_fitted_only_original_TRAIN=True,original_M_simple_policy_preserved=True,
         checkpoint_excluded_from_return_archive=excluded,report_sha256=digest(directory/'report.json'),
         frozen_checkpoints_not_copied_locally=unavailable_pins,
+        reviewer_source_sha256=digest(Path(__file__)),reviewer_sources=run.checked_sources()[1],
+        reviewer_git_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=str(ROOT),text=True).strip(),
         models_sha256=digest(directory/'models.json'),TEST_read=False)
 
 
