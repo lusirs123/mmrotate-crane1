@@ -2035,3 +2035,18 @@ residual相对正式policy多接受24帧，其中多保留16正确、也多接�
 **决定与建议。** 保留正式M/simple/policy，两臂仍不采用，原VAL失败不撤销。此次TEST补评证明跨score修正有局部作用，但没有形成超过simple的稳定跨域、逐视频及连续性优势；不是原ReDC论文无效的结论。建议收束当前两臂，不追加轮数/调门限/换激活或按TEST改选；可继续整理已有正式检测与三分量可靠性成果及这些负结果的适用边界。失败候选只记运行记录，不写成论文正式提升。完整结果保留，压缩包在分析记录同步与产物复核后按既有约定仅清理本次两端包，清理回执另记。
 
 **分析同步与清理完成。** 分析提交 `52ba255` 已推送并在服务器快进拉取；同步时GitHub直连超时，临时SSH仅绑定服务器回环17890转发至本机Clash7890完成拉取，连接结束即撤销，不改持久配置。两端report/mac_review/诊断分析与复核SHA一致。原完整结果、两臂模型、门限、原policy、TEST ROI与σ1.5/ep03权重核验保留后，仅删除本次两端 `port_reliability_readout_test_v1_20261009_frozen_test_v1.tar.gz`，其他文件与归档未删除。服务器清理回执已回传至同一RUN_ID的 `archive_cleanup.json`；原工作区/暂存指纹保持。
+
+
+## 37. 固定特征来源对照（2026-10-09，新授权；运行待核验）
+
+用户授权按已同意设计完成本地实现、必要检查、Git同步、原服务器工作目录运行、回传独立核验、结果记录及仅清理本次压缩包。本项只优化尺寸可靠性，不修框、不扩展深度/几何路线；正式M、simple、原policy与历史实验身份保持。
+
+**唯一处理是特征来源。** A为原midpoint stem32×9×9的3×3平均池化288维；B为B原生Top-1实际选中层/位置/anchor处、进入retina_reg的256×3×3局部特征2304维，零填充与真实卷积一致。通过只读Python返回事件追踪原 `_get_bboxes_single` 的实际 `topk_inds`，不改变原方法、不重新topk、不做最近框匹配；另外重放局部回归卷积、原B框及冻结state，记录索引、tie、坐标scale与patchSHA。B的FPN被分类/回归共享，没有独立回归塔；监督目标是最终M尺寸质量，B特征未必解释midpoint额外误差。
+
+两臂分别只以完整TRAIN拟合无标签中心化PCA，固定256维、不白化、不搜维数，再各以TRAIN均值/标准差规范化。共同M相对尺寸/比例2维+PCA256维进入258→16→8→1 ReLU网络，另接score logit与beta；各4290参数，同seed1701初始化，末层与beta为0，风险为sigmoid(-z+a(h)+beta)。因此A必须重新训练，旧4802参数版本只作历史结果，不冒充公平控制。
+
+完整TRAIN2558输出、71个真实尺寸错误；标签为最终M与GT规范长短边最大相对误差>10%。相同100epochs/1000updates、batch256、seed1701顺序、N/(2Nclass)平衡BCE、AdamW .001、仅weight decay1e-4、clip5。两步smoke丢弃，正式重新初始化，固定epoch100，不选权重/增预算/改激活。
+
+完整TRAIN拟合→完整VAL887开发/门限→候选冻结后TEST报告；不新增fit/probe角色。VAL只选一个全局整tie最小门限，保护每域/每视频正确保留>=95%。仅native可晋级：总体同接受数、同CR均严格少于重新训练的midpoint、冻结simple与score；逐组FA不增、同CR连续FR最长不增、tie保守处理。失败停止，不换超参再试，不读TEST；TEST反复暴露，永不用于选择。原policy点单列，中心输出帧正确率/输出覆盖/全帧正确覆盖分别报告。
+
+新入口 `tools/run_port_reliability_feature_source_v1.sh`；数据/模型/审查/日志统一在 `work_dirs/port_reliability_feature_source_v1/RUN_ID/`，唯一结果回传包在work_dirs根目录。实现/协议/来源SHA为新文件，不修改旧实现与来源清单。已完成本地数值检查；Torch在本地缺失，对应检查留给服务器实际执行。这里尚无GPU训练或性能收益结论。

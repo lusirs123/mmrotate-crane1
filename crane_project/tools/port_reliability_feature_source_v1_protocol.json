@@ -1,0 +1,52 @@
+{
+  "protocol": "port_reliability_feature_source_v1",
+  "settings": {
+    "seed": 1701,
+    "epochs": 100,
+    "batch_size": 256,
+    "lr": 0.001,
+    "weight_decay": 0.0001,
+    "clip_norm": 5.0,
+    "pca_dimensions": 256,
+    "hidden": [
+      16,
+      8
+    ],
+    "correct_retention": 0.95,
+    "parameter_count": 4290
+  },
+  "input_pins": {
+    "work_dirs/port_reliability_feature_ablation_v1/20261008_size_features_v1/fit/scored_TRAIN_VAL.jsonl.gz": "e804241c2b7d529ed816f9d2f33dedad1e2961a5b132426bc816777b324c03b4",
+    "work_dirs/crane_symeood_k1_port_day2night_midpoint_sigma_v1/sigma_1p5/head_epoch_03.pth": "16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7",
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f",
+    "work_dirs/port_results/geometry/port_geometry_midpoint_formal_v1_roi_cache/cache_manifest.json": "046c5998dee0ba3703f1ae4e08fc6a02e9804d216ea12241357f69f2a4afd1e3",
+    "work_dirs/port_results/geometry/port_geometry_midpoint_formal_v1_roi_cache/train_s1.pt": "903ae2a2146665e6caa557fee6bed4cd6cadd51f842e6ee9e13bf82482976ec0",
+    "work_dirs/port_results/geometry/port_geometry_midpoint_formal_v1_roi_cache/val_s1.pt": "88a189cd707e2406acafbfabb198cbb71d72e118617a2cb1ed93702fff1c70db",
+    "work_dirs/port_reliability_redc_size_v1/20261008_redc_v1/result/completion.json": "faebcd5ef0b64bbe86ebc86027eb2503aea7fa25969da06b99c895131f122880",
+    "work_dirs/port_reliability_redc_size_v1/20261008_redc_v1/result/report.json": "e18466a22f053501db264a8201421c0ffdcdcb519ac5978bf287b91e3ef981f8",
+    "work_dirs/port_reliability_redc_size_v1/20261008_redc_v1/result/models.json": "1e648ace3f2f350c284dc27a61f8a356f366f95a088b8569900492a71c1c4417",
+    "work_dirs/port_reliability_redc_size_v1/20261008_redc_v1/result/train_features.npz": "1d4a0b5e127f7f674bc18e881a49343c0b7277ed0c679bfdb2245c19511350b9",
+    "work_dirs/port_reliability_redc_size_v1/20261008_redc_v1/result/val_features.npz": "801d4c4ee44af61797ff326e495800f1a427b65d7b30c9e0f44bf9a926e19fef",
+    "work_dirs/port_reliability_redc_size_v1/20261008_redc_v1/result/scored_TRAIN.jsonl.gz": "dc1c4ebeafee9ade68594e87ca4b213bf8a5a2345196673e93f297a77ea362f9",
+    "work_dirs/port_reliability_redc_size_v1/20261008_redc_v1/result/scored_VAL.jsonl.gz": "4ca676dfdcc06bddff8dfcae808f947b2f9c4492de81e029e6ddaec720fc6dad",
+    "work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/epoch_24.pth": "8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23"
+  },
+  "frontend": "Frozen B24+midpoint sigma1.5/epoch03",
+  "sources": {
+    "midpoint": "Byte-pinned stem32x9x9 -> channel-major3x3 means288",
+    "native": "Actual native B winning FPN level/cell/anchor, retina_reg input256x3x3 including convolution zeros2304"
+  },
+  "trace": "Read original _get_bboxes_single return locals and actual topk_inds, reconstruct masks; no new topk, nearest match or altered forward. Replay regression patch and original B output, frozen detector state.",
+  "source_scope": "B FPN is shared classification/regression, no separate regression tower; native B feature is supervised against final M box, not B correctness.",
+  "transform": "Separate centered raw full-TRAIN PCA, deterministic sign, fixed256, no whitening; then TRAIN-only mean/std; no VAL fitting or dimension selection.",
+  "capacity": "Each score logit separate; PCA256 + final M relative size/aspect2 ->258->16->8->1 ReLU plus beta,4290 parameters.",
+  "objective": "Size max canonical relative long/short error>.10 against offline GT; full TRAIN2558,71 bad; balanced BCE N/(2*Nclass), AdamW.001 weights decay1e-4 clip5.",
+  "initialization": "Same seed1701 full hidden weights; final weight/bias and beta zero, exact neutral -z. Two smoke steps discarded, fresh initialization.",
+  "budget": "Each final epoch100,1000 updates, batch256 same seed1701 permutations. No epoch, capacity, PCA or activation search.",
+  "roles": "Complete TRAIN fitting -> complete VAL development/threshold -> frozen exposed TEST only after VAL pass. No new roles or performance probe.",
+  "threshold": "One global minimum whole-tie VAL cutoff protecting >=95% correct retention for every domain/video; original policy point separately.",
+  "gate": "Only native may advance: strict overall same-count and same-CR FA gains over newly retrained midpoint,full_simple,score; group FA nonincrease; same-CR longest FR nonincrease; ties conservative. Failure stops.",
+  "safety": "GT offline only; boxes, score, output/missing, center/angle flags and old policy frozen. No depth or geometry changes. TEST repeatedly exposed, never selection.",
+  "review": "Independently replay PCA/normalization/network, per-frame identities, four states/missing, same-count/CR, ties, ranks, thresholds, update budget.",
+  "changes": "Only feature source with shared PCA recipe and head capacity; old4802-param head is historical, not fair control."
+}
