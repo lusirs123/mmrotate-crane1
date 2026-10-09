@@ -109,7 +109,7 @@ class TorchTests(unittest.TestCase):
         torch.manual_seed(83)
         self.x=torch.randn(4,259);self.z=torch.tensor([-.5,.5,1.,2.])
         self.y=torch.tensor([0.,1.,0.,1.]);self.w=torch.ones(4)
-        self.ax=torch.randn(4,12,259);self.az=self.z[:,None].expand(4,12)
+        self.ax=torch.randn(4,12,259);self.az=self.z[:,None].expand(4,12).clone()
         self.ay=torch.tensor([[0.,1.]*6]*4);self.mask=torch.ones(4,12,dtype=torch.bool)
 
     def terms(self,arm):
