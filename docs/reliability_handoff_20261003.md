@@ -2058,7 +2058,7 @@ residual相对正式policy多接受24帧，其中多保留16正确、也多接�
 
 ### 37.1 完整TRAIN/VAL实测、回传独立核验与决定
 
-**运行身份与合同。** 服务器原目录 `/media/omnisky/personal_files/ljj/symEOOD`、mmrotljj、物理GPU2（GTX1080），运行源码提交 `fa1ab31`。服务器15项测试全通过；本地11项数值检查通过、4项Torch缺失跳过，Torch实际由服务器执行。完整TRAIN2558帧/71尺寸错误，两臂各100epoch/1000updates、相同顺序、4290参数；两步smoke丢弃、正式重新初始化，初始风险精确等于score风险。PCA只拟合TRAIN，固定256维，A保留方差100%、native92.1618%；PCA阶段不白化，后续逐维TRAIN标准化会重标度主成分，两步要一起描述。原B完整TRAIN及VAL原图框/score重放6项最大差全部0；状态digest保持；M与原标志/标签按原证据保留，不修框。
+**运行身份与合同。** 服务器原目录 `/media/omnisky/personal_files/ljj/symEOOD`、mmrotljj、物理GPU2（GTX1080），运行源码提交 `fa1ab31`。服务器15项测试全通过；本地11项数值检查通过、4项Torch缺失跳过，Torch实际由服务器执行。完整TRAIN2558帧/71尺寸错误，两臂各100epoch/1000updates、相同顺序、4290参数；两步smoke丢弃、正式重新初始化，中性初始logit精确为-z（沿用原score logit的数值截断约定），不宣称浮点风险与1-score逐位相等。PCA只拟合TRAIN，固定256维，A保留方差100%、native92.1618%；PCA阶段不白化，后续逐维TRAIN标准化会重标度主成分，两步要一起描述。原B完整TRAIN及VAL原图框/score重放6项最大差全部0；状态digest保持；M与原标志/标签按原证据保留，不修框。
 
 **总体公平比较，完整VAL887帧、886输出、663正确/223错误/1缺失。** 下表第一列为同836个接受数的离线排序参照，最后一列为各方法整tie最小门限保留同653正确的离线参照；均不作为新的在线分域/分视频门限。
 
