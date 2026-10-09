@@ -1,0 +1,52 @@
+{
+  "protocol": "port_reliability_spatial_axis_v1",
+  "settings": {
+    "seed": 1701,
+    "epochs": 100,
+    "batch_size": 256,
+    "lr": 0.001,
+    "weight_decay": 0.0001,
+    "clip_norm": 5.0,
+    "residual_bound": 0.5,
+    "auxiliary_weight": 0.25,
+    "smooth_l1_beta": 1.0,
+    "axis_unit": 0.1,
+    "roi_size": 9,
+    "context_multiplier": 1.5,
+    "min_context_model_px": 16,
+    "channels": 256,
+    "stem_channels": 8,
+    "hidden": 16,
+    "parameter_count": 13115,
+    "correct_retention": 0.95,
+    "spatial_dtype": "float32",
+    "risk_loss_dtype": "float64",
+    "normalization": "TRAIN-only channel moments on support>0"
+  },
+  "input_pins": {
+    "work_dirs/port_reliability_feature_ablation_v1/20261008_size_features_v1/fit/scored_TRAIN_VAL.jsonl.gz": "e804241c2b7d529ed816f9d2f33dedad1e2961a5b132426bc816777b324c03b4",
+    "work_dirs/crane_symeood_k1_port_day2night_midpoint_sigma_v1/sigma_1p5/head_epoch_03.pth": "16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7",
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f",
+    "work_dirs/port_results/geometry/port_geometry_midpoint_formal_v1_roi_cache/cache_manifest.json": "046c5998dee0ba3703f1ae4e08fc6a02e9804d216ea12241357f69f2a4afd1e3",
+    "work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/epoch_24.pth": "8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23"
+  },
+  "frontend": "Frozen B24+midpoint sigma1.5/epoch03",
+  "architecture": "257->8 conv1x1;8->8 conv3x3;flatten648+2->16 ReLU; risk1 and axis2 heads,13115params",
+  "precision": "Shared convolution/hidden FP32, risk/logit/BCE/axis loss FP64, TF32 off, deterministic; all arms identical",
+  "sampling": "Stored final M mapped with actual native sx/sy then canonical aligned9x9,1.5 context,min16 model pixels, frozen P3; no GT online",
+  "normalization": "Fit full TRAIN channel moments support>0, unsupported standardized pixels zero, support channel same across arms; TRAIN-only descriptors2 standardization",
+  "arms": {
+    "coarse_bce": "A: standardized map avgpool3x3 stride3 then nearest repeat9x9; BCE only",
+    "spatial_bce": "B: standard9x9; BCE only",
+    "spatial_axis": "C: same B +.25 mean SmoothL1 signed relative long/short error divided by.1, beta1"
+  },
+  "objective": "Original full TRAIN class-balanced BCE N/(2Nclass), auxiliary unweighted per frame/axis mean; diagnostic aux in controls never backward; no synthetic boxes/ranking/augmentation",
+  "initialization": "Seed1701 FP32 standard init shared deepcopies; risk head zero; axis weights N(0,.001) bias0; discarded two-step smoke then reset",
+  "budget": "100epoch,256batch,1000updates each,total3000,seed1701 same original order; finalepoch100 only, no reselect",
+  "gate": "Only C may advance: strict overall same-count and same-CR FA gains vs B/simple/score, everydomain/video FA nonincrease, exact whole ties, longest correct FR protection, one Real video sameCR FA simple gain and AUROC better B/simple",
+  "roles": "Complete TRAIN -> complete VAL single global whole-tie threshold >=95% good retention every domain/video/all -> frozen repeatedly exposed TEST pending only after pass",
+  "failure": "Keep M/simple, no A/B reselect, no extra budget or coefficient/activation/capacity/threshold searches",
+  "outputs": "Size risk/flag only, no prediction/score/count/center/angle change, missing no judgement; auxiliary never used to correct boxes or threshold flags",
+  "references": "ReDC coordinate quality motivation; project-specific signed OBB axis auxiliary not original ReDC reproduction",
+  "archive": "This RUN_ID only, new raw spatial maps included for full independent NumPy replay; no weights or historical caches"
+}
