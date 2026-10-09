@@ -29,11 +29,13 @@ def audit(directory):
     # Bind its original complete source closure to the recorded Git commit;
     # do not rewrite the report/checkpoint/source receipt to current bytes.
     commit=report['git_commit'];assert re.fullmatch('[0-9a-f]{40}',commit)
+    assert set(report['sources']['sources'])==set(run.SOURCE_FILES)
     for name,pin in report['sources']['sources'].items():
         content=subprocess.check_output(['git','show',commit+':'+name],cwd=str(ROOT))
         assert hashlib.sha256(content).hexdigest()==pin
     manifest=subprocess.check_output(['git','show',commit+':'+str(run.SOURCES.relative_to(ROOT))],cwd=str(ROOT))
     assert hashlib.sha256(manifest).hexdigest()==report['sources']['manifest_sha256']
+    assert json.loads(manifest)==dict(protocol=run.core.VERSION,sources=report['sources']['sources'])
     assert report['contract']==json.loads(run.PROTOCOL.read_text())
     assert report['input_sha256']==run.PINS and report['boxes_scores_output_center_angle_unchanged'] and not report['TEST_read']
     parts = {}; maximum = 0.; checks = 0; ranks = 0; failures = []; training = {}
