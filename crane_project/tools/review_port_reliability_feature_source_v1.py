@@ -40,6 +40,7 @@ def audit(directory):
     assert report['input_sha256']==run.PINS and report['boxes_scores_output_center_angle_unchanged'] and not report['TEST_read']
     parts = {}; maximum = 0.; checks = 0; ranks = 0; failures = []; training = {}
     for role,expected in (('TRAIN',2558),('VAL',887)):
+        print('Independent review',role,'source pairing',flush=True)
         rows = [json.loads(s) for s in gzip.open(directory/('scored_'+role+'.jsonl.gz'),'rt')]; parts[role] = rows
         assert len(rows)==expected and all(r['reliability_role']==role.lower() for r in rows)
         originals,source,ids = run.parent.checked_feature_rows(role,[{k:r[k] for k in run.prior.FIELDS} for r in rows])
@@ -60,6 +61,7 @@ def audit(directory):
             assert 0<=trace['selected_surviving_index']<trace['surviving'] and trace['regression_max_replay_difference']<.01
         matrices = {}
         for arm,raw in (('midpoint',source[:,3:]),('native',native['features'])):
+            print('Independent review',role,arm,'PCA/network',flush=True)
             raw=np.asarray(raw,dtype=np.float64)  # Match the fitted float64 PCA, not float32 np.mean.
             p = pcas[arm]; mean = np.asarray(p['mean']); components = np.asarray(p['components'])
             assert p['train_count']==2558 and p['dimensions']==256 and not p['whiten']
@@ -99,6 +101,7 @@ def audit(directory):
                 assert r['experiment_risks']['full_simple']==r['size_risks']['full_simple']
                 assert r['experiment_risks']['score_only']==(None if r['pred'] is None else 1-r['pred'][5])
         stats = report['train_statistics'] if role=='TRAIN' else report['VAL_statistics']
+        print('Independent review',role,'states/ranks/matched controls',flush=True)
         for arm in run.core.ARMS:
             for name,group in grouped(rows).items():
                 out=[r for r in group if r['pred'] is not None];point=stats[arm][name]
