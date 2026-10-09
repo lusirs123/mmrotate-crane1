@@ -2033,3 +2033,5 @@ residual相对正式policy多接受24帧，其中多保留16正确、也多接�
 结果统一在 `work_dirs/port_reliability_readout_test_v1/20261009_frozen_test_v1/result`；服务器 `independent_review.json` 与本地 `mac_review.json` 分开保留，两端共享 `diagnostic_analysis.json`、`analysis_independent_review.json`。唯一回传包 `work_dirs/port_reliability_readout_test_v1_20261009_frozen_test_v1.tar.gz`，2284666字节、26成员，SHA `34d053eedfd41e7a5ba80cb02e1326e3c83343fb9a3f639c8c26528914539626`；路径/类型/原产物回执全部核验。report SHA `1a432a20042d94f4439e19338d10519d62128a8b310647750aa311fb5072b2bd`，模型/门限/原policy字节不变；服务器工作区与暂存指纹前后仍为 `b48cc0…`／`d54105…`。
 
 **决定与建议。** 保留正式M/simple/policy，两臂仍不采用，原VAL失败不撤销。此次TEST补评证明跨score修正有局部作用，但没有形成超过simple的稳定跨域、逐视频及连续性优势；不是原ReDC论文无效的结论。建议收束当前两臂，不追加轮数/调门限/换激活或按TEST改选；可继续整理已有正式检测与三分量可靠性成果及这些负结果的适用边界。失败候选只记运行记录，不写成论文正式提升。完整结果保留，压缩包在分析记录同步与产物复核后按既有约定仅清理本次两端包，清理回执另记。
+
+**分析同步与清理完成。** 分析提交 `52ba255` 已推送并在服务器快进拉取；同步时GitHub直连超时，临时SSH仅绑定服务器回环17890转发至本机Clash7890完成拉取，连接结束即撤销，不改持久配置。两端report/mac_review/诊断分析与复核SHA一致。原完整结果、两臂模型、门限、原policy、TEST ROI与σ1.5/ep03权重核验保留后，仅删除本次两端 `port_reliability_readout_test_v1_20261009_frozen_test_v1.tar.gz`，其他文件与归档未删除。服务器清理回执已回传至同一RUN_ID的 `archive_cleanup.json`；原工作区/暂存指纹保持。
