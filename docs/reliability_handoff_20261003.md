@@ -2113,3 +2113,5 @@ native第二隐层全零：TRAIN2142/2558、错误0/71；VAL701/886、错误157/
 唯一回传包位于work_dirs根目录：`port_reliability_feature_source_v1_20261009_source_v1.tar.gz`，51720036字节、36成员（34文件），SHA `f61d76a2d451ea9a8de7da05ab4d678d84b6bde70d92f83af0405a05857ec9fe`。加入修正审查后重打包，原30文件全部逐成员字节核对保留；原归档SHA/退出状态记在 `archive_update.json`。本地SHA、成员路径/类型/体积及原产物回执核验，未覆盖已有目录。追加诊断/本地复核小文件随后同步在同一目录，没有新增本地结果副本。服务器已有工作区/暂存指纹保持b48cc0…/d54105…。分析记录同步后仅清理本次两端压缩包，完整结果保留，清理回执另记。
 
 **决定。** 保留正式M/simple/policy，此candidate有总体高正确保留点与Real局部增量，但未形成超过simple的稳定逐域/逐视频优势，封存。它检验了规定的特征来源适配，不是完整ReDC复现，也不能据此否定原论文。后续不直接进入TEST或扩容/换激活再搜；可以先整理正式可靠性结果及这一有限对照的适用边界。如继续优化，需要能解释Sim退化和交付M质量的新证据/新合同，不能仅凭训练拟合或总体FA下降启动下一版。失败候选只写运行记录，不写为论文正式性能提升。
+
+**分析同步与清理完成。** 分析提交 `dec7db3` 已在两端main同步。两端report/models/final_heads/PCA及诊断/复核SHA一致；在完整产物和原B24/σ1.5ep03/policy核验保留后，仅删除本次两端 `port_reliability_feature_source_v1_20261009_source_v1.tar.gz`。完整结果未删、未新增本地回传副本；两端同一RUN_ID内保留 `archive_cleanup_local.json`、`archive_cleanup_server.json`。服务器已有工作区/暂存指纹仍为b48cc0…/d54105…。新版本仅为审查器工程修正与记录，原训练提交fa1ab31/权重/门限/report身份保持，不补跑训练或TEST。
