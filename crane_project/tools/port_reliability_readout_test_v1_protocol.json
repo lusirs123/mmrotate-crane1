@@ -1,0 +1,201 @@
+{
+  "protocol": "port_reliability_readout_test_v1",
+  "input_pins": {
+    "work_dirs/port_reliability_readout_compare_v1/20261008_readout_v1/result/completion.json": "fcdd32e756a7d9292b28c5cc4f2c3e0756f69c71fb75ab42541a2605026cac58",
+    "work_dirs/port_reliability_readout_compare_v1/20261008_readout_v1/result/report.json": "382f5c94ea636c1ca1a4ea6c0f63a57122f950f6be03de10f3e123e6a510a673",
+    "work_dirs/port_reliability_readout_compare_v1/20261008_readout_v1/result/models.json": "b49cc7c69ba8285cfc6f137c56b992bdc157410c070bbdbe0e7eb736922f41aa",
+    "work_dirs/port_reliability_readout_compare_v1/20261008_readout_v1/result/cutoffs.json": "208131d7afc1565e752a9e54c043accebf732d98338b2af9cb90f2401cdd8ef0",
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/frozen_test_20261007_163625_1260566/completion.json": "bc4f9ea6af189987a1a8b37a72ba3cb54763a039b916811e1cd0206729e1ee48",
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/frozen_test_20261007_163625_1260566/summary.json": "152cf0b32eff0ed0117bb1a97ba23a35f4cbbd355d33758c109a6bfff97bbe94",
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/frozen_test_20261007_163625_1260566/test_decisions.jsonl": "8d6755cc73f5e849b0dadc288bc0588878c9b6b835b7361406fe80f1610c6520",
+    "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/collect/completion.json": "9a308449444fd35a60e9595a4b73b1c7c1502ba2d6a39f1e8090389a9f45e661",
+    "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/collect/port_test/predictions.jsonl": "f39d60b35f6628cd1142299cb55d81a33b53ece3fc8607bd6142379aba3efb93",
+    "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/collect/port_test/roi.pt": "a0a1cb1f4245238b90f409f5e8a6ed5b306f8ae07dbfb06f1c8377891371003d",
+    "work_dirs/crane_symeood_k1_port_day2night_midpoint_sigma_v1/sigma_1p5/head_epoch_03.pth": "16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7",
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f"
+  },
+  "counts": {
+    "real_seq03": 200,
+    "real_seq04": 668,
+    "sim_seq09": 572
+  },
+  "training": false,
+  "threshold_updates": 0,
+  "automatic_promotion": false,
+  "authorization": "2026-10-09 local implementation only; later frozen TEST diagnostic explicitly requested despite prior VAL failure; no server execution now",
+  "parent_status": "VAL_FAILED_STOP preserved; separate supplement never changes parent gate or promotes a head",
+  "frontend": "Frozen B24+sigma1.5/epoch03; exact delivered M and baseline original three flags",
+  "models": "Two final epoch100/1000-update temperature and residual JSON heads, TRAIN-only normalizer; no checkpoint selection or refit",
+  "frozen_VAL_cutoffs": {
+    "temperature": {
+      "risk_le": 0.8828651140369607,
+      "good_retention_target": 0.95,
+      "requirements": {
+        "all": {
+          "good_outputs": 663,
+          "required_good": 630,
+          "first_whole_tie_risk_le": 0.7733003243781821
+        },
+        "domain:real": {
+          "good_outputs": 199,
+          "required_good": 190,
+          "first_whole_tie_risk_le": 0.8120526499683642
+        },
+        "domain:sim": {
+          "good_outputs": 464,
+          "required_good": 441,
+          "first_whole_tie_risk_le": 0.7247948274988704
+        },
+        "sequence:real_seq07": {
+          "good_outputs": 63,
+          "required_good": 60,
+          "first_whole_tie_risk_le": 0.8828651140369607
+        },
+        "sequence:real_seq14": {
+          "good_outputs": 136,
+          "required_good": 130,
+          "first_whole_tie_risk_le": 0.6977829246031899
+        },
+        "sequence:sim_seq10": {
+          "good_outputs": 464,
+          "required_good": 441,
+          "first_whole_tie_risk_le": 0.7247948274988704
+        }
+      },
+      "uses_VAL_GT": true,
+      "single_global_cutoff": true,
+      "calibration_not_independent_validation": true,
+      "tie_policy": "accept_entire_cutoff_tie"
+    },
+    "residual": {
+      "risk_le": 0.9855444386015616,
+      "good_retention_target": 0.95,
+      "requirements": {
+        "all": {
+          "good_outputs": 663,
+          "required_good": 630,
+          "first_whole_tie_risk_le": 0.9651113161714067
+        },
+        "domain:real": {
+          "good_outputs": 199,
+          "required_good": 190,
+          "first_whole_tie_risk_le": 0.6399844296604292
+        },
+        "domain:sim": {
+          "good_outputs": 464,
+          "required_good": 441,
+          "first_whole_tie_risk_le": 0.9855444386015616
+        },
+        "sequence:real_seq07": {
+          "good_outputs": 63,
+          "required_good": 60,
+          "first_whole_tie_risk_le": 0.807057474325259
+        },
+        "sequence:real_seq14": {
+          "good_outputs": 136,
+          "required_good": 130,
+          "first_whole_tie_risk_le": 0.5847667664432364
+        },
+        "sequence:sim_seq10": {
+          "good_outputs": 464,
+          "required_good": 441,
+          "first_whole_tie_risk_le": 0.9855444386015616
+        }
+      },
+      "uses_VAL_GT": true,
+      "single_global_cutoff": true,
+      "calibration_not_independent_validation": true,
+      "tie_policy": "accept_entire_cutoff_tie"
+    },
+    "full_simple": {
+      "risk_le": 0.43131551898452714,
+      "good_retention_target": 0.95,
+      "requirements": {
+        "all": {
+          "good_outputs": 663,
+          "required_good": 630,
+          "first_whole_tie_risk_le": 0.39550442105329703
+        },
+        "domain:real": {
+          "good_outputs": 199,
+          "required_good": 190,
+          "first_whole_tie_risk_le": 0.4288095145292058
+        },
+        "domain:sim": {
+          "good_outputs": 464,
+          "required_good": 441,
+          "first_whole_tie_risk_le": 0.291910093534956
+        },
+        "sequence:real_seq07": {
+          "good_outputs": 63,
+          "required_good": 60,
+          "first_whole_tie_risk_le": 0.41383088637412374
+        },
+        "sequence:real_seq14": {
+          "good_outputs": 136,
+          "required_good": 130,
+          "first_whole_tie_risk_le": 0.43131551898452714
+        },
+        "sequence:sim_seq10": {
+          "good_outputs": 464,
+          "required_good": 441,
+          "first_whole_tie_risk_le": 0.291910093534956
+        }
+      },
+      "uses_VAL_GT": true,
+      "single_global_cutoff": true,
+      "calibration_not_independent_validation": true,
+      "tie_policy": "accept_entire_cutoff_tie"
+    },
+    "score_only": {
+      "risk_le": 0.7688139975070953,
+      "good_retention_target": 0.95,
+      "requirements": {
+        "all": {
+          "good_outputs": 663,
+          "required_good": 630,
+          "first_whole_tie_risk_le": 0.6560133099555969
+        },
+        "domain:real": {
+          "good_outputs": 199,
+          "required_good": 190,
+          "first_whole_tie_risk_le": 0.6831879615783691
+        },
+        "domain:sim": {
+          "good_outputs": 464,
+          "required_good": 441,
+          "first_whole_tie_risk_le": 0.6121653318405151
+        },
+        "sequence:real_seq07": {
+          "good_outputs": 63,
+          "required_good": 60,
+          "first_whole_tie_risk_le": 0.7688139975070953
+        },
+        "sequence:real_seq14": {
+          "good_outputs": 136,
+          "required_good": 130,
+          "first_whole_tie_risk_le": 0.5697056949138641
+        },
+        "sequence:sim_seq10": {
+          "good_outputs": 464,
+          "required_good": 441,
+          "first_whole_tie_risk_le": 0.6121653318405151
+        }
+      },
+      "uses_VAL_GT": true,
+      "single_global_cutoff": true,
+      "calibration_not_independent_validation": true,
+      "tie_policy": "accept_entire_cutoff_tie"
+    }
+  },
+  "baseline": "Original formal simple policy point reported separately from simple scoring at frozen VAL95 cutoff",
+  "cache": "Reuse SHA-pinned GT-free historical port_test ROI collection only; do not load its geometry size candidate; no cache regeneration or detector inference",
+  "feature": "Actual frozen midpoint stem 32x9x9 -> channel-major3x3 average pool288 + original delivered M descriptors3; replay decoded M only checks provenance, never replaces boxes",
+  "transforms": "Keep actual sx/sy and original-coordinate box identity, long/short canonical ordering and pi-periodic direction; no depth or geometry changes",
+  "online": "No GT/labels/offline errors/domain/video supplied to head, descriptor, risk or decision functions; only size risk and size flag may change",
+  "missing": "No quality feature or judgement when output is absent; MISSING separate from FA/FR/ED/CR; center reports hit rate on outputs, output coverage and all-frame correct coverage",
+  "evaluation": "Complete original1440 TEST; all/domain/video FA FR ED CR, accepted risk, correct retention/coverage, error AUROC, continuous FR separate from ED, fixed-cutoff four methods and original policy; same-count and whole-tie same-CR offline controls with tie bounds",
+  "TEST": "Repeatedly exposed frozen diagnostic, not untouched independent evidence; no TEST threshold/model/architecture selection, automatic adoption or claim of 95% guarantee",
+  "artifact_availability": "Exact original ROI/checkpoint bytes mandatory for evaluation; static check may report those two missing, never infer remote existence",
+  "output": "One work_dirs/port_reliability_readout_test_v1/RUN_ID folder; one archive at work_dirs root excluding old ROI and weight copies; archive cleanup only after later analysis authorization"
+}

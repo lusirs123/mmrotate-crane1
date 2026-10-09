@@ -1,6 +1,8 @@
 # SymEOOD 分量可靠性交接：保留midpoint23比较基线；σ1.5／epoch03三标志迁移
 
-**2026-10-08最新：第35节温度／有符号修正的有限对照已完成并独立复核，VAL_FAILED_STOP，不采用、不进入TEST；温度控制精确重现第34节，解除公式约束未解决泛化，正式M/simple保持。**
+**2026-10-09当前：用户另行授权第35节失败候选的冻结TEST补评，本地代码与检查已完成（第36节），暂不连接服务器、不提交/推送、不运行实际TEST。保留两臂末态权重、TRAIN标准化与VAL门限，不撤销原VAL失败、不据TEST重选或自动采用。**
+
+**2026-10-08最后实测：第35节温度／有符号修正的有限对照已完成并独立复核，VAL_FAILED_STOP，不采用、不进入TEST；温度控制精确重现第34节，解除公式约束未解决泛化，正式M/simple保持。**
 
 **2026-10-08当前入口：用户授权第33节“冻结VAL补评”，完整评价887帧VAL，复用第32节模型/特征和历史fit门限，不重新拟合/重定点。第32节probe失败与旧合同仍保留；补评不能追溯改为原合同通过。本地/服务器9项新增测试及887帧独立复核通过；同CR663下对边FA221、simple208，完整VAL未建立稳定增量，结束本项对边方案。正式M/simple/policy不变，未读TEST，结果与清理见33.3。**
 
@@ -1958,3 +1960,38 @@ CUDA_VISIBLE_DEVICES=2 bash tools/run_port_reliability_redc_size_v1.sh 20261008_
 产物统一`work_dirs/port_reliability_readout_compare_v1/20261008_readout_v1/result`，原特征引用第34节，未拷旧缓存。唯一包`work_dirs/port_reliability_readout_compare_v1_20261008_readout_v1.tar.gz` SHA4fcf151ca6f967a145d73c76aec1d227b7b42f07285a49b3fc673dc7b508c53c，路径/类型/完整回执核验通过；report SHA382f5c94ea636c1ca1a4ea6c0f63a57122f950f6be03de10f3e123e6a510a673，models SHAb49cc7c69ba8285cfc6f137c56b992bdc157410c070bbdbe0e7eb736922f41aa。服务器工作区/暂存SHA前后仍b48cc0…/d54105…，退出码0。
 
 **分析同步与清理已完成。** 分析提交bd93336推送并在服务器快进拉取；本地`mac_review.json`同步到服务器同目录，SHA62ed817e4365c55a8cac7907d03314552e0f051912d4d54f2fccf2cbbed695b2，两端一致。确认记录已同步、完整结果与权重存在且原工作区/暂存SHA保持后，两端仅删除上述本次tar.gz；全部结果、权重、原特征及其他归档保留。没有停止其他作业或改正式policy。
+
+
+## 36. 第35节两臂的冻结TEST补评入口（2026-10-09，本地实现，尚未实测）
+
+### 36.1 授权与证据身份
+
+用户在第35节失败后明确要求补齐TEST，以了解现有两臂在不同分布上的固定表现。本轮最新授权仅限本地修改与检查，服务器暂不可连接。因此这是独立的**冻结TEST诊断入口**，不是改写第35节合同：历史VAL_FAILED_STOP、未采用、当时未读TEST的事实保持；本轮也未运行实际TEST、未提交/推送Git、未连接服务器。TEST已多次暴露，不能称未接触的独立测试，更不能依据此次表现重新拟合、调整门限、挑选权重/结构或自动晋级。
+
+两臂固定第35节最终epoch100，各1000更新；`models.json` SHA `b49cc7c69ba8285cfc6f137c56b992bdc157410c070bbdbe0e7eb736922f41aa`，标准化仍为完整TRAIN拟合所得。四种评分使用原VAL单一全局risk_le：temperature `0.8828651140369607`、residual `0.9855444386015616`、full_simple `0.43131551898452714`、score_only `0.7688139975070953`。这些门限在TEST上的正确保留并不保证达到95%，需如实报告实际值。原正式simple policy使用点单独报告，不能与VAL95参照混为一谈。
+
+### 36.2 实现与保护
+
+新增独立入口 `crane_project/tools/eval_port_reliability_readout_test_v1.py`（check/evaluate）、独立CPU审查器 `review_port_reliability_readout_test_v1.py`、两个同名utils、固定protocol/sources、单测和 `tools/run_port_reliability_readout_test_v1.sh`。旧TRAIN/VAL入口、拒绝TEST的连续性统计限制、来源清单、模型、门限和结果均未修改。TEST统计实现沿用原四状态与断帧重置口径，单独验证TEST身份；合成样例已确认与旧统计合同一致。
+
+引用原1440帧港口TEST（real_seq03 200、real_seq04 668、sim_seq09 572）和历史GT-free ROI收集：`work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/collect/port_test/roi.pt`，SHA `a0a1cb1f4245238b90f409f5e8a6ed5b306f8ae07dbfb06f1c8377891371003d`。仅使用该收集中的B/M、ROI及实际sx/sy，不加载其尺寸候选权重、不重启修框或深度优化。冻结σ1.5/ep03几何头提取实际32×9×9 stem，3×3平均池化288维，加交付M描述符3维。重放头输出只做来源核对，不替换已交付框。
+
+输入逐文件SHA、图像/帧/坐标/score/输出身份、冻结头状态及原simple三标志均核对；线上传入的字段白名单排除GT/标签/离线误差/域/视频。只允许尺寸risk与size_accept变化，中心、方向、框、score和漏检保持。无框时不产生质量特征或判断，MISSING单列。结果拒绝覆盖旧目录，包括拒绝覆盖时也不往历史目录写failure文件。
+
+完整TEST分域/逐视频报告固定门限FA/FR/ED/CR、接受覆盖、正确保留及全帧正确覆盖、接受后错误比例、错误AUROC及连续FR；另报同接受数score/simple/另一臂对照、整tie同CR参照与同数tie上下界。上述匹配只为离线比较，不生成TEST部署门限；连续拒绝错误与连续误拒正确分开。中心分别报告输出帧命中率、输出覆盖率及全帧中心正确覆盖。独立审查器重放JSON网络、逐帧风险/三标志、四状态、同数/同CR、tie上下界和AUROC。
+
+### 36.3 本地检查与待运行项
+
+**事实：** 新增21项测试中18项通过、3项Torch测试因本地无Torch跳过；原第35节回归22项中15项数值/来源/接口通过，7项Torch在本地跳过（其历史服务器通过记录仍见35.3）。新增Python3.8语法/编译与shell语法检查通过；新旧来源闭包、末态模型/门限及已有文本证据SHA核验通过。仅以合成数据验证新评分/评价/独立审查的逻辑，没有对真实TEST计算候选分数或指标。
+
+本地未保存上述TEST ROI与原σ1.5/ep03权重，check模式明确列为缺失；evaluate必须找到并核对原SHA，否则停止，不自动生成新缓存，也不从记录推断服务器文件仍然存在。真实Torch特征重放、服务器环境及完整TEST表现均待运行，因此目前没有新性能收益或失败结论。
+
+### 36.4 服务器恢复后的入口（本轮未执行）
+
+源码目前未提交/推送。后续通过Git同步本轮新增文件后，在服务器原项目目录及mmrotljj环境运行以下单行入口：
+
+```bash
+bash tools/run_port_reliability_readout_test_v1.sh 20261009_frozen_test_v1
+```
+
+脚本默认仅在物理GPU2/3选择空闲卡；若两卡忙则停止，显式CUDA_VISIBLE_DEVICES可指定卡。自动执行单测、静态check、冻结evaluate和独立review，不训练、不改门限、不连接其他目录。一个运行的日志与结果集中于 `work_dirs/port_reliability_readout_test_v1/20261009_frozen_test_v1/`；退出时生成唯一 `work_dirs/port_reliability_readout_test_v1_20261009_frozen_test_v1.tar.gz`，包含结果/特征/日志，不另复制旧ROI或权重。原ROI或权重缺失时应先解决原产物可用性，不能重跑旧候选替代。本轮未生成、传回或删除压缩包。
