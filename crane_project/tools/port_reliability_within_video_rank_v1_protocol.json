@@ -1,0 +1,105 @@
+{
+  "GT_online": false,
+  "TEST_read": false,
+  "TEST_repeatedly_exposed": true,
+  "anchors": {
+    "bce_control": "saved frozen simple size risk",
+    "within_video_rank": "saved frozen simple size risk"
+  },
+  "budget": "Both arms 100epochs, batch256 BCE, 1000updates each. Each update forwards all 2558 cached rows and evaluates all 32437 same-video pairs; A rank is diagnostic only, B differentiates it. Same updates, not identical backward cost.",
+  "gate": "VAL single global whole-tie cutoff >=95% correct retention each domain/video/all; B same-count and exact same-CR FA nonincrease vs A/simple/score each group, strict overall gains; correct FR run nonincrease; at least one Real video strict same-CR simple FA gain and strictly better error AUROC than both A and simple.",
+  "historical_features": "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result",
+  "initialization": "Torch seed1701 standard FP32 initialization cast to common FP64; deepcopy; last weight/bias and beta zero; smoke discarded.",
+  "input_pins": {
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f",
+    "work_dirs/port_reliability_feature_ablation_v1/20261008_size_features_v1/fit/scored_TRAIN_VAL.jsonl.gz": "e804241c2b7d529ed816f9d2f33dedad1e2961a5b132426bc816777b324c03b4",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/completion.json": "d0e8117b1845b2a626a73758be81fffe1fec8f589de0856ab9ad4e7864648f5c",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/models.json": "338b7d514135a1e66dc371829ac5b2c8c060fd7ae0347c35174266d2de5b2851",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/pca.json": "2c7c690e29828b3599acf468f54e6da231e9a88d2297e7ffd0083bb67daa539d",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/report.json": "9231b9344c3aa7665479f2ae2e0fcbd4df3a3678815c139fbae6d42e966c4203",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/scored_TRAIN.jsonl.gz": "f702b6bca6e1bda7168000d67fb157515e9caa5a26b1fa680aad2e86a26eb236",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/scored_VAL.jsonl.gz": "040f1a59448573968a2fb71513ab05cb4ad581aecc2eb321110607b06356ee65",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/train_native_projected.npz": "909e0831a5e3ca926238bd773172a89c8d4143f9611f77c4bc1ed0756cb35a67",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/val_native_projected.npz": "de5d8d24e269ed593f1d5f4e4e192efca4eb1cdc2b14db7356a4d11c1ca03659"
+  },
+  "loss": "A: full-TRAIN-class-balanced genuine size BCE. B: same BCE + 0.25 within-video genuine bad/good full Cartesian ranking loss, per-video means then equal video mean.",
+  "normalization": "Reuse historical TRAIN-only native PCA256 and TRAIN259D moments. No trained neural head/risks as inputs; only frozen formal simple anchor.",
+  "pair_construction": "All genuine TRAIN bad x good within identical sequence, sorted image identity; no synthetic boxes, score mining, cross-video pairs, pair sampling or new splits. 32437 pairs from 71 bad frames, not independent events.",
+  "pair_counts": {
+    "real_seq01": {
+      "bad": 1,
+      "good": 338,
+      "pairs": 338
+    },
+    "real_seq05": {
+      "bad": 44,
+      "good": 516,
+      "pairs": 22704
+    },
+    "real_seq06": {
+      "bad": 13,
+      "good": 453,
+      "pairs": 5889
+    },
+    "real_seq12": {
+      "bad": 5,
+      "good": 136,
+      "pairs": 680
+    },
+    "real_seq13": {
+      "bad": 7,
+      "good": 297,
+      "pairs": 2079
+    },
+    "sim_seq08": {
+      "bad": 1,
+      "good": 747,
+      "pairs": 747
+    }
+  },
+  "policy": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json",
+  "primary_rows": "work_dirs/port_reliability_feature_ablation_v1/20261008_size_features_v1/fit/scored_TRAIN_VAL.jsonl.gz",
+  "protocol": "port_reliability_within_video_rank_v1",
+  "readout": "sigmoid(logit(anchor)+0.5*tanh(g(x))); exact-neutral expm1 equivalent for risk; BCE uses logit form",
+  "role_counts": {
+    "TRAIN": {
+      "bad": 71,
+      "domains": {
+        "real": 1810,
+        "sim": 748
+      },
+      "frames": 2558,
+      "outputs": 2558
+    },
+    "VAL": {
+      "bad": 223,
+      "domains": {
+        "real": 375,
+        "sim": 512
+      },
+      "frames": 887,
+      "outputs": 886
+    }
+  },
+  "scope": "Frozen delivered M B24+sigma1.5 epoch03; replace only size risk/flag. No new detector/feature forward, synthetic boxes, new data roles or historical head reuse.",
+  "settings": {
+    "batch_size": 256,
+    "clip_norm": 5.0,
+    "correct_retention": 0.95,
+    "dtype": "float64",
+    "epochs": 100,
+    "feature_dimensions": 259,
+    "hidden": [
+      16,
+      8
+    ],
+    "lr": 0.001,
+    "parameter_count": 4290,
+    "rank_weight": 0.25,
+    "residual_bound": 0.5,
+    "residual_input_dimensions": 258,
+    "seed": 1701,
+    "weight_decay": 0.0001
+  },
+  "stop": "Fail any gate: keep original M/simple, no TEST, no coefficient/capacity/activation/epoch/threshold search or A reselection."
+}

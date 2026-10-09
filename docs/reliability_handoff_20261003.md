@@ -2360,3 +2360,55 @@ bash tools/run_port_reliability_box_contrast_v1.sh
 独立分析interpretation.md/json、mac_review及安全回传回执均已传回同一服务器result目录并核对SHA；两端完整结果保留，服务器唯一末轮.pth保留。本机与服务器仅删除本次结果包SHA`9c6760…`及代码同步bundle SHA`db1d03…`，两份精确清理回执已互传。原policy/投影/PCA/历史输入的SHA经双端审查保持，原工作区与暂存指纹保持。候选状态仍`VAL_FAILED_STOP`，未用TEST、没有采用新policy或反选控制A。
 
 分析记录另作Git提交推送并快进同步，不重跑训练或评价；最后记录同步bundle在两端确认HEAD/文档SHA一致后删除，另存回执至本项result。所有本项文件集中在一个版本/RUN_ID，未新增本地历史结果副本或论文正式成果记录。
+
+## 42. 同视频真实尺寸错误排序有限对照：设计与本地实现（2026-10-09）
+
+### 42.1 范围、依据与冻结合同
+
+**状态：已实现并完成本地静态/NumPy验证，未提交Git、未推送、未连接服务器、未进行Torch实际训练，尚无性能结论。** 用户本轮授权按已认可设计修改代码；本节是新版本合同，不改变第41节失败事实，不续训其权重。主线仍为固定M上的尺寸可靠性判断，其他两个使用标志保留。
+
+**事实与假设分开。** 第40/41节显示Real pooled排序不能代替视频内辨识，受限残差在VAL主要降低risk。新版本只检验同视频真实正确/错误之间的排序监督是否提供增量；尚未认定BCE是唯一根因，不保证泛化、消除饱和或补足Sim错误支持。文献依据为[NeurIPS 2025选择性预测分析](https://proceedings.neurips.cc/paper_files/paper/2025/file/71460926102fade443ea7ec89ae8a73a-Paper-Conference.pdf)和[2025可微AURC预印本](https://arxiv.org/abs/2505.23463)。下述视频内softplus损失属于项目适配，非两文原方法完整复现，未实现SoftRank，不继承其结果或统计保证。
+
+保持M=B24＋midpoint sigma1.5/epoch03及匹配正式simple/policy。仅新增候选尺寸risk/flag，不修框、改score或输出数量，不删除可用中心、不更改方向，不恢复几何/深度、跨尺度、合成尺寸框或新特征提取。无检测框不作判断，risk=None；MISSING不计FA/FR/ED/CR。
+
+两臂共同复用第37节已核验B原生实际回归输入patch、TRAIN-only PCA256与259维标准化；排除score descriptor后的258维（PCA256＋M相对尺寸/比例）进入258→16→8→1 ReLU＋beta，共4290参数。只复用缓存/PCA/矩，不复用历史神经头权重或评分；锚点均为正式simple尺寸risk。共同logit为`logit(r_simple)+0.5*tanh(g(x))`，risk仍用精确中性可微expm1式。FP64，seed1701，Torch标准初始化后转FP64并deepcopy；末层及beta为零。固定0.5，不按新结果放宽。
+
+真实标签保持：最终交付M的规范长短边与GT中任一相对误差>10%为错误。GT、标签、video索引仅离线监督/评价，在线函数不接GT/域/video。完整TRAIN2558输出/71错误/2487正确；完整VAL887帧/886输出/663正确/223错误/1缺失。保持完整TRAIN→完整VAL→冻结TEST，不新增fit/probe等角色。
+
+### 42.2 配对、损失、预算与工程检查
+
+所有配对均为同一TRAIN视频内真实错误集合B_v与真实正确集合G_v的完整笛卡尔积，不跨视频、不按分数挖掘、不采样、不生成辅助框。输入按冻结image身份排序，索引和计数写入pair_manifest.json。
+
+| TRAIN视频 | 错误帧 | 正确帧 | 同视频配对 |
+|---|---:|---:|---:|
+| real_seq01 |1|338|338|
+| real_seq05 |44|516|22704|
+| real_seq06 |13|453|5889|
+| real_seq12 |5|136|680|
+| real_seq13 |7|297|2079|
+| sim_seq08 |1|747|747|
+| 总计 |71|2487|32437|
+
+32,437配对仍只来自71个错误帧，不是新增独立场景/错误事件。Sim及real_seq01各只有1个错误，按视频均值可能过拟合这些单个错误，必须披露并保护VAL Sim。静态检查：simple中12,037个反序/并列配对，只有1个在理想±0.5残差的最大两样本差<1限制下无法翻转；这只是逐对理想可行性，不保证共享网络能同时翻转其余配对。
+
+`L_rank = mean_v mean_(b,g in B_v×G_v) softplus(s_g-s_b)`，s为最终风险logit。A=`bce_control`，仅原完整TRAIN类平衡真实BCE（N/(2N_class)）；B=`within_video_rank`，同BCE＋固定0.25 L_rank。各视频内平均，再6视频等权平均，不按配对数量平均。统一平移所有s不会改善rank项；仍不保证BCE不会驱动偏移、tanh不会饱和。
+
+每臂100epoch、batch256的BCE、1000更新（总2000），相同seed1701真实帧顺序，每epoch最后BCE批254帧；AdamW lr .001、weights wd1e-4、bias/beta无衰减，clip5。每步两臂在全部2558缓存行做相同头部前向并计算全部32437配对；A仅记录rank，不参与正式更新，B反传0.25 rank。相同正式更新数和头部前向，不声称相同反向计算成本；没有新增检测/冻结图像特征前向。只选最终epoch100，无最佳epoch选择。两步独立smoke均丢弃，再重建同初始化/空优化器。
+
+预检包括标签/配对身份、排序梯度方向、常量偏移不变性、完整头部有限差分、控制臂无rank梯度、候选BCE＋0.25rank实际更新、二步隐藏层梯度、中性精确还原、保存重载及Torch/NumPy重放。每epoch首批分别记录BCE与加权rank参数梯度范数、相对强度、余弦、分参数梯度及同一clip对两分项的共同缩放；每步记录总梯度裁剪前后、各视频rank、残差饱和、完整前向行数及rank是否参加更新。系数不据loss数值认定合适，也不因新梯度结果现场调参。
+
+### 42.3 VAL验收、输出和停止条件
+
+固定末态保存/重载完成后才在训练入口加载VAL特征进行评价。prepare可只读检查完整输入配对/来源/中性标志，不参与拟合。一次全局whole-tie门限，使总体、两域、每视频正确保留≥95%；原正式policy/原95%全帧覆盖点另报。不为各视频部署不同门限。
+
+B必须：总体同接受数和精确同CR的FA均严格少于A/simple/score；各域/视频同数保守并列下限及同CR FA不增；最长连续正确FR不增；至少一个Real视频同CR严格减少simple FA，且该视频错误AUROC严格优于A及simple。仅同CR FA改善而视频内排序不改善不能通过新增机制门槛。并列无法精确匹配时记录不确定，不能用GT挑选并列成员；各组独立参照不可相加。
+
+完整报告包含FA/FR/ED/CR/MISSING、输出/接受/正确全帧覆盖、正确保留及接受错误比例、分域逐视频AUROC、视频内宏平均与配对加权AUROC、pooled AUROC、连续正确FR、正式policy点。中心仅统计输出帧命中，另报输出覆盖与全帧中心正确覆盖。连续拒绝错误不计正确FR。TRAIN拟合不是泛化证明，VAL已反复开发暴露；TEST已多次暴露，仅冻结报告，不用于改合同、选权或门限。
+
+失败状态VAL_FAILED_STOP：不采用、不反选A、不追加预算/改0.25/0.5/激活/容量，不自动进入TEST。全部通过才记VAL_PASS_FROZEN_TEST_PENDING，不自动替换正式policy。失败候选只记运行记录，不写主要成果。
+
+新增统一入口`crane_project/tools/run_port_reliability_within_video_rank_v1.py`、独立review、协议/来源JSON、NumPy与Torch核心、测试；脚本`tools/run_port_reliability_within_video_rank_v1.sh`。后续获授权Git同步后，在项目根目录/mmrotljj执行`bash tools/run_port_reliability_within_video_rank_v1.sh RUN_ID`。脚本GPU3优先、其次2，两卡忙则停止；训练源码必须与HEAD/source SHA一致，避免结果绑定未提交代码，其他既有改动保留。该指令尚未执行。
+
+日志和结果集中`work_dirs/port_reliability_within_video_rank_v1/RUN_ID`，候选result含配对清单、模型JSON、末态权重、逐帧风险、统计、训练梯度日志及独立审查。退出时仅压缩本RUN_ID到work_dirs根目录，不含.pth或旧特征/ROI缓存；本轮没有生成结果包或训练结果目录。
+
+**本地实际验证：** 29项NumPy/来源/实际3445帧标签独立一致性/完整配对标量复算/评价与接口测试通过；9项Torch检查因本地无Torch明确跳过，服务器训练前必须全部通过。prepare验证2558 TRAIN＋887 VAL来源及缓存配对、32437配对支持、3444输出中性risk和3445帧原标志保持；无训练、无TEST。Python语法、shell语法和diff检查通过。实际GPU梯度、训练、保存重载及性能仍未执行，不能写成收益成立。

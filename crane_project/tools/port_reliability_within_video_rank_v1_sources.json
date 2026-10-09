@@ -1,0 +1,16 @@
+{
+  "protocol": "port_reliability_within_video_rank_v1",
+  "sources": {
+    "crane_project/tools/port_reliability_within_video_rank_v1_protocol.json": "04395590cc38903216eb368374784bc81cba64b765d583cec9e83da5adf96d0a",
+    "crane_project/tools/review_port_reliability_within_video_rank_v1.py": "88b62c3556f86b065c926e348668d1a66a5e244bdd874897b761e814e60b12f8",
+    "crane_project/tools/run_port_reliability_within_video_rank_v1.py": "e2a1c8854f74bdb7e433784c92ba24f68fec0f007b171c039c1835d84a131c86",
+    "crane_project/utils/port_reliability_complementarity_v1.py": "a296d1fa13b514c3f299cd72af75103f84eb06eb9a198bc2203ae5c46286175c",
+    "crane_project/utils/port_reliability_state_continuity_v1.py": "443efc73e7e6069a960f81962d4dea032bedadd0901943284e6647b29f138c9c",
+    "crane_project/utils/port_reliability_within_video_rank_v1.py": "711b338b40f27dd680debaa624d4e1cbf417def2f73f47903a0c12b9a6799c89",
+    "crane_project/utils/port_reliability_within_video_rank_v1_torch.py": "1b9ef9523eaa0388bb3029ab73bdffe28e5b4910072e909de2550d5faebf4b38",
+    "crane_project/utils/port_simple_component_reliability_v1.py": "05cb0fb1f59fd353725134471bc98bc0026d5beb789526618add08eb46837309",
+    "tests/test_port_reliability_within_video_rank_v1.py": "baf36f7a3a0195da5e2e6a8fcc44d98f343e4508f3d38072ceaf109929ff0c97",
+    "tests/test_port_reliability_within_video_rank_v1_torch.py": "7fb838f66a6474e72b116ff2087a8fc0051ed4a3fe8e77096a00a65d35e65a42",
+    "tools/run_port_reliability_within_video_rank_v1.sh": "e682d45623d1f22794a0a588616d4d53ea64bc11df8f76da175c048012ae21f4"
+  }
+}
