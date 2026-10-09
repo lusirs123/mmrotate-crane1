@@ -2115,3 +2115,17 @@ native第二隐层全零：TRAIN2142/2558、错误0/71；VAL701/886、错误157/
 **决定。** 保留正式M/simple/policy，此candidate有总体高正确保留点与Real局部增量，但未形成超过simple的稳定逐域/逐视频优势，封存。它检验了规定的特征来源适配，不是完整ReDC复现，也不能据此否定原论文。后续不直接进入TEST或扩容/换激活再搜；可以先整理正式可靠性结果及这一有限对照的适用边界。如继续优化，需要能解释Sim退化和交付M质量的新证据/新合同，不能仅凭训练拟合或总体FA下降启动下一版。失败候选只写运行记录，不写为论文正式性能提升。
 
 **分析同步与清理完成。** 分析提交 `dec7db3` 已在两端main同步。两端report/models/final_heads/PCA及诊断/复核SHA一致；在完整产物和原B24/σ1.5ep03/policy核验保留后，仅删除本次两端 `port_reliability_feature_source_v1_20261009_source_v1.tar.gz`。完整结果未删、未新增本地回传副本；两端同一RUN_ID内保留 `archive_cleanup_local.json`、`archive_cleanup_server.json`。服务器已有工作区/暂存指纹仍为b48cc0…/d54105…。新版本仅为审查器工程修正与记录，原训练提交fa1ab31/权重/门限/report身份保持，不补跑训练或TEST。
+
+## 38. 第37节原生特征候选的冻结TEST补评（2026-10-09）
+
+### 38.1 授权、实现及固定合同
+
+用户在明确第37节总体高正确保留点改善、Sim局部退化之后，明确授权补齐TEST，沿用本地修改/检查、Git同步、指定服务器目录运行、回传独立审查、分析记录同步与本次压缩包清理流程。本项是另立的冻结诊断补评，不撤回第37节VAL_FAILED_STOP，不用TEST调参、选权、重选特征或自动采用；已暴露TEST不是未接触独立证据。
+
+原生native与同容量midpoint控制均保留原epoch100/每臂1000updates，原TRAIN-only PCA256、标准化和四种原VAL单一全局整tie门限固定。原正式M=B24+σ1.5/epoch03、原policy及三标志身份保持；仅实验尺寸risk/flag可变化。不训练、不修框、不改变score、数量、中心或方向，不恢复深度/几何支路。
+
+新增独立入口`eval_port_reliability_feature_source_test_v1.py`及CPU独立审查、固定protocol/sources、单测、`tools/run_port_reliability_feature_source_test_v1.sh`。旧TRAIN/VAL入口及其拒绝TEST角色的保护未改。新native特征通过原实际topk只读追踪完整TEST1440帧取得，核对真实retina_reg卷积、原B框/score与状态digest；midpoint特征复用第36节已审查且SHA固定的TEST stem288，与当前交付M描述量配对，使用第37节冻结PCA与网络。旧ROI、权重和TRAIN/VAL来源不复制到结果目录。
+
+完整TEST按总体/域/视频报告FA、FR、ED、CR、MISSING、接受后错误比例、正确保留及全帧正确覆盖，同接受数score/simple/旧特征控制及同CR整tie参照、错误AUROC、连续FR与ED；各组离线匹配不能汇总成总体参照，也不生成线上TEST门限。中心只对有输出统计命中，另报输出覆盖与全帧正确覆盖。缺失帧无特征或尺寸判断，GT仅用于离线标签、身份核验和评价。
+
+本地8项新增合同/数值检查、Python与shell语法通过；原特征来源15项单测在服务器一并运行，包含本地缺Torch未能执行的实际Torch检查。结果集中`work_dirs/port_reliability_feature_source_test_v1/RUN_ID/`，一个回传包在work_dirs根目录；结果分析与记录同步后仅删除本次两端包。初始实现尚无TEST数值，后续实测原位追加于本节。

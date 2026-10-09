@@ -1,0 +1,201 @@
+{
+  "protocol": "port_reliability_feature_source_test_v1",
+  "input_pins": {
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/frozen_test_20261007_163625_1260566/completion.json": "bc4f9ea6af189987a1a8b37a72ba3cb54763a039b916811e1cd0206729e1ee48",
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/frozen_test_20261007_163625_1260566/summary.json": "152cf0b32eff0ed0117bb1a97ba23a35f4cbbd355d33758c109a6bfff97bbe94",
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/frozen_test_20261007_163625_1260566/test_decisions.jsonl": "8d6755cc73f5e849b0dadc288bc0588878c9b6b835b7361406fe80f1610c6520",
+    "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/collect/completion.json": "9a308449444fd35a60e9595a4b73b1c7c1502ba2d6a39f1e8090389a9f45e661",
+    "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/collect/port_test/predictions.jsonl": "f39d60b35f6628cd1142299cb55d81a33b53ece3fc8607bd6142379aba3efb93",
+    "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/collect/port_test/roi.pt": "a0a1cb1f4245238b90f409f5e8a6ed5b306f8ae07dbfb06f1c8377891371003d",
+    "work_dirs/crane_symeood_k1_port_day2night_midpoint_sigma_v1/sigma_1p5/head_epoch_03.pth": "16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7",
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/models.json": "338b7d514135a1e66dc371829ac5b2c8c060fd7ae0347c35174266d2de5b2851",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/pca.json": "2c7c690e29828b3599acf468f54e6da231e9a88d2297e7ffd0083bb67daa539d",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/cutoffs.json": "8a500768076d50b29282fcbf5a6012708365d46273307117a74048daf2e4acab",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/report.json": "9231b9344c3aa7665479f2ae2e0fcbd4df3a3678815c139fbae6d42e966c4203",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/completion.json": "d0e8117b1845b2a626a73758be81fffe1fec8f589de0856ab9ad4e7864648f5c",
+    "work_dirs/port_reliability_readout_test_v1/20261009_frozen_test_v1/result/report.json": "1a432a20042d94f4439e19338d10519d62128a8b310647750aa311fb5072b2bd",
+    "work_dirs/port_reliability_readout_test_v1/20261009_frozen_test_v1/result/completion.json": "8c3f123896579837f2cab57773074e5be1791aa23d8b119a229d0d1d356178de",
+    "work_dirs/port_reliability_readout_test_v1/20261009_frozen_test_v1/result/test_features.npz": "e2d09791d97939b962f5740d8200dfd168fb7da0946396f529b07b03f8c4667f",
+    "work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/epoch_24.pth": "8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23"
+  },
+  "counts": {
+    "real_seq03": 200,
+    "real_seq04": 668,
+    "sim_seq09": 572
+  },
+  "training": false,
+  "threshold_updates": 0,
+  "automatic_promotion": false,
+  "authorization": "2026-10-09 explicit frozen TEST supplement after VAL failure; local edits/Git/server/workdir/result review/archive cleanup authorized",
+  "parent_status": "VAL_FAILED_STOP preserved; TEST never retracts gate failure",
+  "models": "Frozen final epoch100/1000 updates per arm, full TRAIN-only PCA256/normalizers; no refit or model selection",
+  "frozen_VAL_cutoffs": {
+    "midpoint": {
+      "risk_le": 0.9797210788609376,
+      "good_retention_target": 0.95,
+      "requirements": {
+        "all": {
+          "good_outputs": 663,
+          "required_good": 630,
+          "first_whole_tie_risk_le": 0.7482911035822187
+        },
+        "domain:real": {
+          "good_outputs": 199,
+          "required_good": 190,
+          "first_whole_tie_risk_le": 0.9353973754196624
+        },
+        "domain:sim": {
+          "good_outputs": 464,
+          "required_good": 441,
+          "first_whole_tie_risk_le": 0.5977826291631976
+        },
+        "sequence:real_seq07": {
+          "good_outputs": 63,
+          "required_good": 60,
+          "first_whole_tie_risk_le": 0.9797210788609376
+        },
+        "sequence:real_seq14": {
+          "good_outputs": 136,
+          "required_good": 130,
+          "first_whole_tie_risk_le": 0.41882291155829754
+        },
+        "sequence:sim_seq10": {
+          "good_outputs": 464,
+          "required_good": 441,
+          "first_whole_tie_risk_le": 0.5977826291631976
+        }
+      },
+      "uses_VAL_GT": true,
+      "single_global_cutoff": true,
+      "calibration_not_independent_validation": true,
+      "tie_policy": "accept_entire_cutoff_tie"
+    },
+    "native": {
+      "risk_le": 0.5361259910005223,
+      "good_retention_target": 0.95,
+      "requirements": {
+        "all": {
+          "good_outputs": 663,
+          "required_good": 630,
+          "first_whole_tie_risk_le": 0.42048370562783716
+        },
+        "domain:real": {
+          "good_outputs": 199,
+          "required_good": 190,
+          "first_whole_tie_risk_le": 0.4634521214129481
+        },
+        "domain:sim": {
+          "good_outputs": 464,
+          "required_good": 441,
+          "first_whole_tie_risk_le": 0.39967500702496633
+        },
+        "sequence:real_seq07": {
+          "good_outputs": 63,
+          "required_good": 60,
+          "first_whole_tie_risk_le": 0.5361259910005223
+        },
+        "sequence:real_seq14": {
+          "good_outputs": 136,
+          "required_good": 130,
+          "first_whole_tie_risk_le": 0.3139595924384004
+        },
+        "sequence:sim_seq10": {
+          "good_outputs": 464,
+          "required_good": 441,
+          "first_whole_tie_risk_le": 0.39967500702496633
+        }
+      },
+      "uses_VAL_GT": true,
+      "single_global_cutoff": true,
+      "calibration_not_independent_validation": true,
+      "tie_policy": "accept_entire_cutoff_tie"
+    },
+    "full_simple": {
+      "risk_le": 0.43131551898452714,
+      "good_retention_target": 0.95,
+      "requirements": {
+        "all": {
+          "good_outputs": 663,
+          "required_good": 630,
+          "first_whole_tie_risk_le": 0.39550442105329703
+        },
+        "domain:real": {
+          "good_outputs": 199,
+          "required_good": 190,
+          "first_whole_tie_risk_le": 0.4288095145292058
+        },
+        "domain:sim": {
+          "good_outputs": 464,
+          "required_good": 441,
+          "first_whole_tie_risk_le": 0.291910093534956
+        },
+        "sequence:real_seq07": {
+          "good_outputs": 63,
+          "required_good": 60,
+          "first_whole_tie_risk_le": 0.41383088637412374
+        },
+        "sequence:real_seq14": {
+          "good_outputs": 136,
+          "required_good": 130,
+          "first_whole_tie_risk_le": 0.43131551898452714
+        },
+        "sequence:sim_seq10": {
+          "good_outputs": 464,
+          "required_good": 441,
+          "first_whole_tie_risk_le": 0.291910093534956
+        }
+      },
+      "uses_VAL_GT": true,
+      "single_global_cutoff": true,
+      "calibration_not_independent_validation": true,
+      "tie_policy": "accept_entire_cutoff_tie"
+    },
+    "score_only": {
+      "risk_le": 0.7688139975070953,
+      "good_retention_target": 0.95,
+      "requirements": {
+        "all": {
+          "good_outputs": 663,
+          "required_good": 630,
+          "first_whole_tie_risk_le": 0.6560133099555969
+        },
+        "domain:real": {
+          "good_outputs": 199,
+          "required_good": 190,
+          "first_whole_tie_risk_le": 0.6831879615783691
+        },
+        "domain:sim": {
+          "good_outputs": 464,
+          "required_good": 441,
+          "first_whole_tie_risk_le": 0.6121653318405151
+        },
+        "sequence:real_seq07": {
+          "good_outputs": 63,
+          "required_good": 60,
+          "first_whole_tie_risk_le": 0.7688139975070953
+        },
+        "sequence:real_seq14": {
+          "good_outputs": 136,
+          "required_good": 130,
+          "first_whole_tie_risk_le": 0.5697056949138641
+        },
+        "sequence:sim_seq10": {
+          "good_outputs": 464,
+          "required_good": 441,
+          "first_whole_tie_risk_le": 0.6121653318405151
+        }
+      },
+      "uses_VAL_GT": true,
+      "single_global_cutoff": true,
+      "calibration_not_independent_validation": true,
+      "tie_policy": "accept_entire_cutoff_tie"
+    }
+  },
+  "native": "Same original B winning retina_reg input256x3x3 via unmodified trace; exact B box/score replay and state digest",
+  "midpoint": "Reuse SHA-pinned previously audited TEST stem288, same delivered M descriptors; no new stem or ROI training",
+  "online": "No GT/labels/offline errors/domain/video supplied to quality scoring. Only size risk/flag change; center/angle boxes score missing preserved",
+  "evaluation": "Complete1440 exposed TEST; domain/video FA FR ED CR MISSING, correct retention/coverage, acceptance coverage/error fraction, same-count/simple/score and same-CR/tie/continuous-FR comparisons, AUROC, center three denominators",
+  "TEST": "Repeatedly exposed frozen diagnosis, not selection/untouched evidence or automatic adoption; keep original policy point distinct",
+  "output": "One work_dirs/port_reliability_feature_source_test_v1/RUN_ID directory; one work_dirs-root archive excludes model/ROI copies; only this archive cleaned after review and record synchronization"
+}
