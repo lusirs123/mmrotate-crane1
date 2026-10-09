@@ -2325,3 +2325,38 @@ bash tools/run_port_reliability_box_contrast_v1.sh
 入口`crane_project/tools/run_port_reliability_simple_anchor_v1.py`及同前缀独立审查/合同/来源JSON；统一命令`bash tools/run_port_reliability_simple_anchor_v1.sh RUN_ID`。GPU3优先、其次2，均忙即停止。所有日志/结果集中`work_dirs/port_reliability_simple_anchor_v1/RUN_ID`，仅本次结果包置work_dirs根，不含.pth或旧ROI/投影缓存。
 
 **已完成本地检查，尚未运行服务器。** 17项NumPy/接口/门槛检查通过；5项Torch梯度/等价读出/同初始化检查因本地无Torch明确跳过，服务器必须全通过。完整3445帧来源/标签角色、投影配对、TRAIN矩及policy复现、所有实际锚点有效及脚本语法预检通过。服务器工程及性能结果在41.2追加。
+
+### 41.2 完整TRAIN/VAL运行、发现与决定
+
+**两臂已运行、双端独立复算通过，预定simple锚点候选失败，不采用、不进入TEST。** 执行提交`ec990da5753e71cb37d826c9fa2d17d83ea136b5`，服务器原工作目录/mmrotljj/Python3.8.20/Torch1.13.1+cu117/NumPy1.24.4、物理GPU3。22项服务器检查、两步discarded smoke通过，两臂各100epoch/1000更新，共2000；同FP64、初始化、曝光和预算。0检测推理/0新特征前向/0新PCA/无新数据角色。工程状态与性能`VAL_FAILED_STOP`分开。
+
+完整VAL887帧/886输出/663正确/223错误/1缺失。各评分一次全局正确保留95%工作点：A(score锚点)FA202/FR4/ED21/CR659，接受861；B(simple锚点)FA190/FR11/ED33/CR652，接受842；simple FA200/FR7/ED23/CR656，接受856；score FA201/FR3/ED22/CR660，接受861。原正式policy原点另为843接受、FA190/FR10/ED33/CR653，保持原门限身份。不同接受数下200→190不是排序改善证明。
+
+| 公平总体参照 | B simple锚点 | A score锚点 | simple | score |
+|---|---:|---:|---:|---:|
+| 同842接受FA |190|193|190|193|
+| 同CR652 FA |190|195|190|196|
+| 错误AUROC |0.786032|0.695033|0.785626|0.684394|
+
+| 分组独立同CR | CR | B FA | A FA | simple FA | score FA |
+|---|---:|---:|---:|---:|---:|
+| Real |191|144|151|154|144|
+| Sim/seq10 |461|46|44|40|44|
+| real_seq07 |61|131|147|131|144|
+| real_seq14 |130|13|13|13|13|
+
+各组正确保留≥95%及连续正确FR最长1帧通过，但总体未严格优于simple，Sim同数/同CR比A/simple/score更差，两个Real视频均无同CR增量。Real pooled比simple少10FA不能视作视频内改善；组内参照不可相加。15项关联门槛失败包含Sim与seq10重复，不是15个独立问题。seq07 AUROC .539193→.561434，seq14 .415158→.403281，Sim .693382→.681618，不能以微小总体AUROC变化声称收益。
+
+**新增事实。** B TRAIN错误AUROC .956823（simple .801752），A .767507（score .556528），梯度连通/真实TRAIN学习生效。两臂0次clip5，最大梯度0.80953/0.36403。B TRAIN2521/2558=98.55%达到abs(delta)>.49；VAL740/886=83.52%达到负向delta<−.49，874个输出降risk、12个升risk；223个错误中216降risk、仅7升risk。正确/错误VAL delta中位−.498405/−.497307。TRAIN实际B FA0/FR995是应用VAL门限的拟合诊断，不是可靠性成功，也不能忽略排序改善直接称TRAIN拟合失败。
+
+**推断及限制。** 受限残差在VAL主要近似统一降低risk，未稳定识别实际错误；simple排序基础大致保持，未取得跨域和视频内所需增量。BCE与固定有界读出的饱和是本合同限制线索，尚不是唯一根因，不能据此改.5、损失/激活/容量或追加预算。不能宣布图像信息一般无用或ReDC原方法不适用。下一步保持正式版本，收束本受限残差候选，不自动重开旧支路；论文可整理正式结果和真实边界。
+
+**核验、保护及回传。** 3445帧来源/中性风险及标志精确保持；双端独立复算3445行、435项实际/匹配汇总、60个AUROC和所有门槛一致。NumPy重放最大差服务器2.22e-16/本机2.78e-16，保存重载一致；report SHA`279545ab058397707def9a44e80d754ff0c3807d697e77dfc6e98af36b4ddcdc`，服务器末轮.pth SHA`eb1db7231db99ac9491662f7164cec39e35d12cdc128cac65c862b11385724e7`。框/score/数量/中心和方向/缺失身份保持；VAL中心874/886命中、886/887输出覆盖、874/887全帧正确覆盖。无GT在线/TEST/深度或几何修改，无新policy采用。
+
+所有证据集中`work_dirs/port_reliability_simple_anchor_v1/20261009_simple_anchor_v1/result`，analysis.md为冻结报告生成、interpretation.md/json为事后解释、两端review及转移核验回执分开。唯一包2320698字节/24成员、SHA`9c676034b575f35676a18a384e353b7122c6d49f9086d7f64893439b7a29cf95`，安全路径/类型/SHA验证通过，只有本次评分/模型JSON/日志，不含.pth、旧投影或ROI缓存。未改论文主要结果。服务器GitHub不可达沿用单提交Git bundle快进，不改代理；原工作区/暂存指纹保持`b48cc0…`/`d54105…`。完整结果与服务器权重保留，包/bundle清理回执及最终Git同步后追加。
+
+### 41.3 回传解释及清理收尾
+
+独立分析interpretation.md/json、mac_review及安全回传回执均已传回同一服务器result目录并核对SHA；两端完整结果保留，服务器唯一末轮.pth保留。本机与服务器仅删除本次结果包SHA`9c6760…`及代码同步bundle SHA`db1d03…`，两份精确清理回执已互传。原policy/投影/PCA/历史输入的SHA经双端审查保持，原工作区与暂存指纹保持。候选状态仍`VAL_FAILED_STOP`，未用TEST、没有采用新policy或反选控制A。
+
+分析记录另作Git提交推送并快进同步，不重跑训练或评价；最后记录同步bundle在两端确认HEAD/文档SHA一致后删除，另存回执至本项result。所有本项文件集中在一个版本/RUN_ID，未新增本地历史结果副本或论文正式成果记录。
