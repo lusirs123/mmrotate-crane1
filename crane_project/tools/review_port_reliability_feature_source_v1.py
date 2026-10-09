@@ -46,21 +46,22 @@ def audit(directory):
         originals,source,ids = run.parent.checked_feature_rows(role,[{k:r[k] for k in run.prior.FIELDS} for r in rows])
         assert simple.fingerprint(originals)==simple.fingerprint([{k:r[k] for k in run.prior.FIELDS} for r in rows])
         native = np.load(directory/(role.lower()+'_native_raw.npz'),allow_pickle=False)
-        assert native['images'].tolist()==ids and native['features'].shape==(len(ids),2304)
+        native_raw = native['features']  # NPZ indexing decompresses the entire member; load once.
+        assert native['images'].tolist()==ids and native_raw.shape==(len(ids),2304)
         traces = [json.loads(s) for s in gzip.open(directory/(role.lower()+'_native_trace.jsonl.gz'),'rt')]
         assert [r['image'] for r in traces]==[r['image'] for r in originals]
         idx = {image:i for i,image in enumerate(ids)}
         for trace in traces:
             assert trace['role']==role and not trace.get('GT_online',False)
             if not trace['present']: assert trace['image'] not in idx; continue
-            value = native['features'][idx[trace['image']]]
+            value = native_raw[idx[trace['image']]]
             assert digest_bytes(value.astype('<f4').tobytes())==trace['patch_sha256']
             assert trace['actual_topk_observed'] and trace['feature_shape'][1]==256
             anchors = 3; width = trace['feature_shape'][3]
             assert trace['flat_anchor_index']==(trace['y']*width+trace['x'])*anchors+trace['anchor']
             assert 0<=trace['selected_surviving_index']<trace['surviving'] and trace['regression_max_replay_difference']<.01
         matrices = {}
-        for arm,raw in (('midpoint',source[:,3:]),('native',native['features'])):
+        for arm,raw in (('midpoint',source[:,3:]),('native',native_raw)):
             print('Independent review',role,arm,'PCA/network',flush=True)
             raw=np.asarray(raw,dtype=np.float64)  # Match the fitted float64 PCA, not float32 np.mean.
             p = pcas[arm]; mean = np.asarray(p['mean']); components = np.asarray(p['components'])

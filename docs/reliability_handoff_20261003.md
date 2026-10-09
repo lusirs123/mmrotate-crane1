@@ -2052,3 +2052,5 @@ residual相对正式policy多接受24帧，其中多保留16正确、也多接�
 新入口 `tools/run_port_reliability_feature_source_v1.sh`；数据/模型/审查/日志统一在 `work_dirs/port_reliability_feature_source_v1/RUN_ID/`，唯一结果回传包在work_dirs根目录。实现/协议/来源SHA为新文件，不修改旧实现与来源清单。已完成本地数值检查；Torch在本地缺失，对应检查留给服务器实际执行。这里尚无GPU训练或性能收益结论。
 
 **审查器工程修正（运行权重/合同不变）。** 静态复核发现native原始NPZ为float32，而PCA在float64拟合；审查中的均值也应先转float64，不能把float32求和舍入差当拟合错误。审查器已修正并改为逐项核对report记录的原Git提交/源码闭包，保持原运行来源身份。训练运行在提交 `fa1ab31`，不因审查器修正重跑训练、改参数/门限或重写report；修正版审查将单独执行。
+
+**审查耗时定位。** 已完成TRAIN/VAL后，只结束了本次旧审查进程（核对PID命令与cwd后SIGINT，未中断训练/更改结果）。栈显示逐帧 `native[features]` 会重复解压整个NPZ成员；修正为一次载入后逐行核对patchSHA。连同float64均值修正单独重跑独立审查，原脚本退出状态/旧日志保留，不能将其称为模型训练失败或额外训练。
