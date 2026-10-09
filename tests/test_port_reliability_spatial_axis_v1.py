@@ -45,6 +45,14 @@ class SpatialTests(unittest.TestCase):
     def test_real_labels(self):
         from crane_project.tools.run_port_reliability_spatial_axis_v1 import parts
         rows,_=parts();t=c.targets(rows['TRAIN']);self.assertEqual(int((np.abs(t).max(1)>1).sum()),71)
+    def test_collector_global_names_resolve(self):
+        import builtins,symtable
+        from pathlib import Path
+        from crane_project.tools import run_port_reliability_spatial_axis_v1 as run
+        code=Path(run.__file__).read_text();table=symtable.symtable(code,run.__file__,'exec')
+        collect=next(t for t in table.get_children() if t.get_name()=='collect')
+        unresolved=[s.get_name() for s in collect.get_symbols() if s.is_global() and s.is_referenced() and s.get_name() not in vars(run) and not hasattr(builtins,s.get_name())]
+        self.assertEqual(unresolved,[])
     def test_frozen_B_source_reference(self):
         from crane_project.tools.run_port_reliability_spatial_axis_v1 import historical
         self.assertEqual(historical.PINS[historical.historical.B_PATH],'8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23')

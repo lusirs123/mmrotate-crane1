@@ -2479,3 +2479,5 @@ VAL每方法一个全局整tie最小门限，使总体/每域/每视频正确保
 此处为运行前合同，尚无本候选性能结果；实际服务器运行与分析在43.4追加。运行入口：`bash tools/run_port_reliability_spatial_axis_v1.sh RUN_ID`。
 
 **首次服务器工程停止（保留）：** 源码4c304a1，RUN_ID=20261009_spatial_axis_v1；25项检查及全输入哈希通过，建立冻结检测器后、第一帧特征提取之前因迁移采集代码的`historical.B_PATH`层级引用错误停止，训练0更新、VAL未读取。修正为`historical.historical.B_PATH`并补来源引用检查，合同/模型/数据/预算不变；保留failure.json/日志，不覆盖旧目录。首次包SHA6be11c…保留到最终收尾时精确清理。修正版另RUN_ID执行，不将此次工程失败写成候选性能失败。
+
+**第二次工程停止（保留）：** 修复来源3a8fc1b，RUN_ID=20261009_spatial_axis_v1_fix1；26项检查与来源预检通过，在第一帧B/M重放后的尺寸标签保护处发现原采集函数迁移遗漏`ab`名称，训练仍0更新、VAL未读。改用相同定义的metrics.bad，并用符号表检查采集函数所有全局引用均可解析；不改变标签合同或损失。第二次包SHA8afa1a…，旧目录/failure.json保留，下一次以fix2目录执行。

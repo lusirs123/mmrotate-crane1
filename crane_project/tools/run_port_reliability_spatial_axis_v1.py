@@ -99,7 +99,7 @@ def collect(rows, role, gpu, out):
                 maximum_m = np.maximum(maximum_m, delta)
                 if (not np.allclose(decoded[:4], stored_m[:4], atol=5e-4, rtol=2e-5)
                         or delta[4] > 2e-6 or decoded[5] != stored_m[5]): raise ValueError('Original M replay differs: '+name)
-                if ab.size_bad(dict(row, pred=decoded.tolist())) != ab.size_bad(row):
+                if metrics.bad(dict(row, pred=decoded.tolist())) != metrics.bad(row):
                     raise ValueError('Replay changes size label')
                 # Always sample STORED M; frozen replays above never replace it.
                 # Sample STORED final M only, never a GT-conditioned or synthetic box.
