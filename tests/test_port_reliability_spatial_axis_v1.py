@@ -45,6 +45,9 @@ class SpatialTests(unittest.TestCase):
     def test_real_labels(self):
         from crane_project.tools.run_port_reliability_spatial_axis_v1 import parts
         rows,_=parts();t=c.targets(rows['TRAIN']);self.assertEqual(int((np.abs(t).max(1)>1).sum()),71)
+    def test_frozen_B_source_reference(self):
+        from crane_project.tools.run_port_reliability_spatial_axis_v1 import historical
+        self.assertEqual(historical.PINS[historical.historical.B_PATH],'8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23')
     def test_aux_threshold_contract(self):
         self.assertEqual(c.SETTINGS['auxiliary_weight'],.25);self.assertEqual(c.SETTINGS['parameter_count'],13115)
 

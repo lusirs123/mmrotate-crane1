@@ -56,7 +56,7 @@ def collect(rows, role, gpu, out):
     head = SigmaMidpointHead(1.5).cuda(gpu)
     payload = prior.load_trusted(ROOT/prior.HEAD)
     if (payload['sigma_cells'] != 1.5 or payload['epoch'] != 3 or payload['updates'] != 2706
-            or payload['frozen_b']['checkpoint_sha256'] != historical.PINS[historical.B_PATH]):
+            or payload['frozen_b']['checkpoint_sha256'] != historical.PINS[historical.historical.B_PATH]):
         raise ValueError('Wrong frozen midpoint identity')
     head.load_state_dict(payload['head_state'], strict=True); head.eval(); head.requires_grad_(False)
     head_before = {k:v.detach().cpu().clone() for k,v in head.state_dict().items()}

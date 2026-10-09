@@ -2477,3 +2477,5 @@ VAL每方法一个全局整tie最小门限，使总体/每域/每视频正确保
 运行统一目录`work_dirs/port_reliability_spatial_axis_v1/RUN_ID`。脚本GPU3优先、其次2（显存<200MiB且util<5%），服务器原项目与mmrotljj，保留工作区/暂存指纹。包在work_dirs根目录，只含本RUN_ID，排除.pth；本项新原始空间NPZ保留并回传用于全3445行独立卷积重放，不带历史缓存。双端结果/权重保留后仅清理本次包。
 
 此处为运行前合同，尚无本候选性能结果；实际服务器运行与分析在43.4追加。运行入口：`bash tools/run_port_reliability_spatial_axis_v1.sh RUN_ID`。
+
+**首次服务器工程停止（保留）：** 源码4c304a1，RUN_ID=20261009_spatial_axis_v1；25项检查及全输入哈希通过，建立冻结检测器后、第一帧特征提取之前因迁移采集代码的`historical.B_PATH`层级引用错误停止，训练0更新、VAL未读取。修正为`historical.historical.B_PATH`并补来源引用检查，合同/模型/数据/预算不变；保留failure.json/日志，不覆盖旧目录。首次包SHA6be11c…保留到最终收尾时精确清理。修正版另RUN_ID执行，不将此次工程失败写成候选性能失败。
