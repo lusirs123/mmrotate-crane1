@@ -2303,3 +2303,25 @@ bash tools/run_port_reliability_box_contrast_v1.sh
 `interpretation.md`/来源JSON、两端审查、回传安全核验及两端清理回执全部集中在唯一RUN_ID/result，两端已互传。结果原包4882185字节、17成员、安全路径/文件类型/SHA核验通过；只有合并评分/统计/日志，无权重或旧ROI缓存。本次结果压缩包及首个临时Git同步bundle两端均核验精确SHA后删除，完整result/日志保留，原TRAIN/VAL评分、policy及历史模型输入SHA再次核对保持。`mac_cleanup.json`、`server_cleanup.json`记录精确文件清单；不清理其他包或旧证据。
 
 最终运行状态`NO_STABLE_FROZEN_OVERLAY_KEEP_SIMPLE`、工程审查通过、六个必要证据门槛均失败（重复/关联条件不是独立失败个数）。正式M/simple/三标志保持，未拟合/采用融合policy，未进入TEST，未改论文主要结果文件。记录同步是Git快进传输，不重复运行核对；GitHub网络故障下使用Git bundle，不改服务器代理。临时记录同步bundle在完成身份验证后清理，回执另保存在同一结果目录。负结果不抹除原生分支Real局部互补信号，也不证明其他融合机制必然无效。
+
+## 41. 受限图像残差的锚点对照（2026-10-09）
+
+### 41.1 授权范围与运行前冻结合同
+
+用户授权沿用本地修改/验证→Git提交同步→服务器原工作目录/mmrotljj→后两张空闲GPU→回传独立复算→运行记录→仅清理本次压缩包的流程。目标仍为冻结M上的尺寸可靠性；不修框、不改score/输出数量/中心与方向，不重启深度或旧特征路线。本实验不是第40节AND规则采用，亦不读取旧训练神经头评分作融合输入。
+
+**依据与待验证机制。** 第40节原生特征对simple有Real局部互补，但交集在Sim公平比较退化；Real pooled条件AUROC改善不代表视频内有效。本项仅检验：将图像残差限制在simple附近，能否保留原评分基础并获得真实错误辨识增量。尚未认定该机制有效或已查明唯一根因。
+
+两臂A=`score_anchor`、B=`simple_anchor`，分别以`1-delivered_M_score`及保存的正式simple尺寸risk为锚点；相同原生B回归输入patch/PCA256、259维TRAIN标准化参数，排除score descriptor后的258→16→8→1 ReLU+beta，共4290参数。只复用第37节已核验原生投影缓存、TRAIN-only PCA及标准化，不重新检测/提特征、拟合PCA，不复用历史神经头权重。特征/历史来源/原始2558+887帧表/policy全部SHA绑定。
+
+共同读出`sigmoid(logit(r0)+0.5*tanh(g(x)))`，0.5预先固定，两组均为受限残差；只有锚点不同。为精确保持保存的FP64 simple基准，两组head/输入/锚点/损失统一FP64，与历史FP32自由残差另保留身份，不声称逐位复现历史训练。中性风险用可微等价式`r0*(1+expm1(delta))/(1+r0*expm1(delta))`；不使用零值分支截断梯度。实际锚点严格(0,1)，不临时clip。Torch种子1701标准初始化后转FP64、deepcopy；输出weight/bias和beta为零，discarded两步smoke后重建同初始化，验证全TRAIN/VAL零risk与正式simple原标志精确保持。
+
+完整真实TRAIN2558输出/71错误，100epoch、batch256、每臂1000更新/共2000；同顺序种子1701。仅原class-balanced genuine size BCE，AdamW .001、权重wd1e-4、bias/beta无wd、clip5；不加合成框/辅助或pairwise目标/视频域权重/采样变化。记录每步loss、分参数梯度、clip前后及有界残差/饱和比例。只评价最终epoch100，无epoch选择；VAL特征在最终head冻结后加载。TRAIN是拟合诊断，VAL多次开发暴露，不能称独立泛化。
+
+完整VAL887帧/886输出/663正确/223错误/1缺失，按各评分分别一次全局whole-tie门限，使总体/两域/每视频正确保留≥95%；原正式95%全帧覆盖点单列。B必须在总体同接受数、精确同CR均严格优于A/simple/score；逐域/视频同数保守并列下限及同CR FA不增、最长连续正确FR不增；至少一个Real视频同CR严格优于simple。分域逐视频FA/FR/ED/CR/MISSING、接受/正确覆盖、正确保留、错误比例、AUROC及连续FR均报告。组内参照不相加；拒绝连续错误不计连续正确FR。无框不作判断，中心另报输出帧命中/输出覆盖/全帧正确覆盖。
+
+失败即`VAL_FAILED_STOP`，保持正式M/simple，不反选A、不追加预算/改.5或门限/扩容量/改激活、不进入TEST；只有预定B全部通过才允许冻结TEST报告，TEST已多次暴露且不用于候选选择。在线接口不接GT/视频/域；GT仅监督/离线评价。未采用实验只记本运行记录，不写论文主要结果。
+
+入口`crane_project/tools/run_port_reliability_simple_anchor_v1.py`及同前缀独立审查/合同/来源JSON；统一命令`bash tools/run_port_reliability_simple_anchor_v1.sh RUN_ID`。GPU3优先、其次2，均忙即停止。所有日志/结果集中`work_dirs/port_reliability_simple_anchor_v1/RUN_ID`，仅本次结果包置work_dirs根，不含.pth或旧ROI/投影缓存。
+
+**已完成本地检查，尚未运行服务器。** 17项NumPy/接口/门槛检查通过；5项Torch梯度/等价读出/同初始化检查因本地无Torch明确跳过，服务器必须全通过。完整3445帧来源/标签角色、投影配对、TRAIN矩及policy复现、所有实际锚点有效及脚本语法预检通过。服务器工程及性能结果在41.2追加。

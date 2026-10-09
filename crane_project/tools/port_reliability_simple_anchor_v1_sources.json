@@ -1,0 +1,16 @@
+{
+  "protocol": "port_reliability_simple_anchor_v1",
+  "sources": {
+    "crane_project/tools/port_reliability_simple_anchor_v1_protocol.json": "97668e4a68ac9e4bdb52b1863578ca66a0c2dc58eec44706a5866cbed542461b",
+    "crane_project/tools/review_port_reliability_simple_anchor_v1.py": "e9a4f1d51e4ef9884b30dc4889f1ac817014223b35974751e56028baf10dd177",
+    "crane_project/tools/run_port_reliability_simple_anchor_v1.py": "e9e62da188e5a8b81dc3115f8d117da3788a6d1fad7b12b27395b7bdd271c95b",
+    "crane_project/utils/port_reliability_complementarity_v1.py": "a296d1fa13b514c3f299cd72af75103f84eb06eb9a198bc2203ae5c46286175c",
+    "crane_project/utils/port_reliability_simple_anchor_v1.py": "6ac15f9d72d3c5c723d287091bc0c617582f044447e8b94a1517d2f16d285460",
+    "crane_project/utils/port_reliability_simple_anchor_v1_torch.py": "467e0b0f05ec93fc54787124ef1862dd6477a671434c69f551da7df53d7a97d7",
+    "crane_project/utils/port_reliability_state_continuity_v1.py": "443efc73e7e6069a960f81962d4dea032bedadd0901943284e6647b29f138c9c",
+    "crane_project/utils/port_simple_component_reliability_v1.py": "05cb0fb1f59fd353725134471bc98bc0026d5beb789526618add08eb46837309",
+    "tests/test_port_reliability_simple_anchor_v1.py": "e3b632b95b2b58f80a9b42d9144e9288991bf6b1b42099461593b8e35f56f8ef",
+    "tests/test_port_reliability_simple_anchor_v1_torch.py": "c22ef64f2d06a6387585fec30ea26b3100e0a9d38f7b8fb1b4643e01b293e5ed",
+    "tools/run_port_reliability_simple_anchor_v1.sh": "1996fea949e512f640555451e1a065c18a748f2d3ded780a294ec973dad011ab"
+  }
+}
