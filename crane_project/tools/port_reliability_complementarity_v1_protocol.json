@@ -1,0 +1,94 @@
+{
+  "protocol": "port_reliability_complementarity_v1",
+  "primary_rows": "work_dirs/port_reliability_feature_ablation_v1/20261008_size_features_v1/fit/scored_TRAIN_VAL.jsonl.gz",
+  "policy": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json",
+  "experiments": [
+    {
+      "name": "readout",
+      "directory": "work_dirs/port_reliability_readout_compare_v1/20261008_readout_v1/result",
+      "methods": {
+        "readout_temperature": "temperature",
+        "readout_residual": "residual"
+      }
+    },
+    {
+      "name": "feature_source",
+      "directory": "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result",
+      "methods": {
+        "source_midpoint": "midpoint",
+        "source_native": "native"
+      }
+    },
+    {
+      "name": "box_contrast",
+      "directory": "work_dirs/port_reliability_box_contrast_v1/20261009_box_contrast_v1_fix1/result",
+      "methods": {
+        "box_original": "original",
+        "box_contrast": "contrast"
+      }
+    }
+  ],
+  "methods": [
+    "readout_temperature",
+    "readout_residual",
+    "source_midpoint",
+    "source_native",
+    "box_original",
+    "box_contrast"
+  ],
+  "input_pins": {
+    "work_dirs/port_reliability_feature_ablation_v1/20261008_size_features_v1/fit/scored_TRAIN_VAL.jsonl.gz": "e804241c2b7d529ed816f9d2f33dedad1e2961a5b132426bc816777b324c03b4",
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f",
+    "work_dirs/port_reliability_readout_compare_v1/20261008_readout_v1/result/report.json": "382f5c94ea636c1ca1a4ea6c0f63a57122f950f6be03de10f3e123e6a510a673",
+    "work_dirs/port_reliability_readout_compare_v1/20261008_readout_v1/result/completion.json": "fcdd32e756a7d9292b28c5cc4f2c3e0756f69c71fb75ab42541a2605026cac58",
+    "work_dirs/port_reliability_readout_compare_v1/20261008_readout_v1/result/models.json": "b49cc7c69ba8285cfc6f137c56b992bdc157410c070bbdbe0e7eb736922f41aa",
+    "work_dirs/port_reliability_readout_compare_v1/20261008_readout_v1/result/scored_TRAIN.jsonl.gz": "796092e6f4d5a4d6d7cca2ebc81f4a2e6c4409e63b190b18651075b39a13a5b5",
+    "work_dirs/port_reliability_readout_compare_v1/20261008_readout_v1/result/scored_VAL.jsonl.gz": "ca10045864d121c3e567502704e1058a1709951be8b56fa15b53de36f613ae84",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/report.json": "9231b9344c3aa7665479f2ae2e0fcbd4df3a3678815c139fbae6d42e966c4203",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/completion.json": "d0e8117b1845b2a626a73758be81fffe1fec8f589de0856ab9ad4e7864648f5c",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/models.json": "338b7d514135a1e66dc371829ac5b2c8c060fd7ae0347c35174266d2de5b2851",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/scored_TRAIN.jsonl.gz": "f702b6bca6e1bda7168000d67fb157515e9caa5a26b1fa680aad2e86a26eb236",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/scored_VAL.jsonl.gz": "040f1a59448573968a2fb71513ab05cb4ad581aecc2eb321110607b06356ee65",
+    "work_dirs/port_reliability_box_contrast_v1/20261009_box_contrast_v1_fix1/result/report.json": "ee86076634f177a29ff2e6a1019950c72134930a3b2e24aef3003e7a1c145b95",
+    "work_dirs/port_reliability_box_contrast_v1/20261009_box_contrast_v1_fix1/result/completion.json": "6e4dbe9a26d0934d3ee74884466e8375e15ba64d0f8c6213d4db7f3baee366b5",
+    "work_dirs/port_reliability_box_contrast_v1/20261009_box_contrast_v1_fix1/result/models.json": "5f9b7cbf400bf223a12107f7726f4fdc3441d795e8972c5bea42a8553d5d09ca",
+    "work_dirs/port_reliability_box_contrast_v1/20261009_box_contrast_v1_fix1/result/scored_TRAIN.jsonl.gz": "4ca51e2788a551e8c5b98c51655b591c9a7bdb26bbca947e63b995bafdfa501e",
+    "work_dirs/port_reliability_box_contrast_v1/20261009_box_contrast_v1_fix1/result/scored_VAL.jsonl.gz": "b5eaa00c8f23a36dab2a0e7188d03df148976dcc4cf04ec68039d5ee04f78373"
+  },
+  "role_counts": {
+    "TRAIN": {
+      "frames": 2558,
+      "bad": 71,
+      "domains": {
+        "real": 1810,
+        "sim": 748
+      }
+    },
+    "VAL": {
+      "frames": 887,
+      "bad": 223,
+      "domains": {
+        "real": 375,
+        "sim": 512
+      }
+    }
+  },
+  "scope": "Offline fixed-score complementarity only; no model adoption, fitted combination, threshold sweep or new roles.",
+  "references": [
+    "formal_simple_original_cutoff",
+    "historical_simple_retention95_global_cutoff"
+  ],
+  "thresholds": "Reuse every arm saved global VAL cutoff; apply unchanged to full TRAIN and VAL. Do not refit.",
+  "comparisons": "Whole-tie same-CR and label-free image-order same-count controls; boundary tie min/max reported. Groups independent, not additive.",
+  "candidate_overlay": "Offline reject-only intersection of frozen simple and frozen arm, not an online deployment.",
+  "conditional": "Error AUROC restricted to simple-accepted outputs, compare against simple and score there.",
+  "oracle": "GT selects beneficial changes only; descriptive upper bound, never executable policy or continuation evidence.",
+  "continue_condition": "Necessary evidence only: fixed AND at simple95 reference preserves >=95% correct retention for all/domain/video; same-count and exact same-CR FA nonincrease versus simple and score, strict overall improvements; longest correct-FR run nonincrease. TRAIN in-sample diagnostic, gate on exposed developmental VAL only. No automatic new training even if any gate passes.",
+  "stop_condition": "No passing frozen overlay: keep formal M/simple, no automatic fusion-head training or TEST.",
+  "training_updates_added": 0,
+  "detector_inferences_added": 0,
+  "feature_forwards_added": 0,
+  "thresholds_fitted": 0,
+  "TEST_read": false,
+  "TEST_repeatedly_exposed": true
+}

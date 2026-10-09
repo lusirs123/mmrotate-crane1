@@ -2248,3 +2248,20 @@ bash tools/run_port_reliability_box_contrast_v1.sh
 详细分析集中`work_dirs/port_reliability_box_contrast_v1/20261009_box_contrast_v1_fix1/result/analysis.md`及`analysis.json`。**决定：本候选不采用、VAL_FAILED_STOP，不进入TEST，不反选A；正式M/simple/policy保持。** 失败只记运行记录，未改论文正式结果。后续先整理已有正式可靠性成果及负结果边界，不自动启动新候选。Git分析同步、当前审查器双端复核及本次压缩包清理回执后续追加。
 
 **分析同步、当前复核和清理已完成。** 两端main在`744a378`同步分析及当前审查器，双端当前复算3445行/30370对照/2000更新、210组状态/120个AUROC及全部27项门槛失败完全一致。`mac_review_current.json` SHA`0420cca3015e70fd275ab12d02edbe7c1ff6da910c8777247038d26066d3d16a`、`server_review_current.json` SHA`fab1c5295f9468e620499f0d1b418df4499e633630dd72e1fb6113ce02100af6`；analysis JSON SHA`03864c5ba103fa2fc7e1347bfbc541ecd98fa3512eef082958f26188d00762d1`。服务器仅删本次初始单测失败包、报告失败包和最终回传包三个精确SHA文件；本机仅删唯一最终回传包。所有结果/原失败日志、服务器末轮.pth、PCA/模型JSON、原M/simple/policy均保留，server/local清理回执已互传至同一result目录。原工作区和暂存指纹仍`b48cc0…`/`d54105…`；本机原有无关删除/未跟踪文件未纳入任何提交。后续仅同步此收尾记录，不需再运行训练或评价。
+
+
+## 40. 冻结图像评分对simple的互补性核对（2026-10-09）
+
+### 40.1 范围与预定合同
+
+用户授权沿用本地代码/检查→Git同步→服务器原工作目录运行→回传独立复算→记录→清理本次压缩包的流程。此项只核对历史评分，不训练/重新推理/提取特征，不读取TEST，不拟合融合器或搜索门限；正式M、simple及三个分量接口保持。各失败候选原状态和身份保持，不因本次离线交集反向采用。
+
+复用第35、37、39节六个固定评分（readout_temperature/readout_residual、source_midpoint/source_native、box_original/box_contrast），原完整TRAIN2558帧/71错误及VAL887帧/886输出/663正确尺寸/223错误尺寸/1缺失。每个历史分支都保留，既有report、models、completion、逐帧评分、原始TRAIN/VAL表和正式policy以SHA绑定。主要基准为各历史报告共同保存的simple各组正确保留≥95%单一VAL门限，正式policy原门限另列；所有历史门限原样应用，不重新标定。
+
+逐域/视频报告FA/FR/ED/CR/MISSING、接受与正确覆盖、连续正确FR，并分解：simple接受错误而候选拒绝的补充检出、simple保留正确而候选拒绝的新增FR、恢复CR及新增FA。报告simple已接受集合内的条件错误AUROC，与同集合simple/score比较。既有两规则交集（AND）仅作冻结的额外拒绝诊断，完整报告同接受数、同CR simple/score及边界并列风险上下限；GT可挑出的单支/六支联合互补上限单列，不是在线规则或性能收益，各组结果不可相加作为总体。
+
+**必要继续证据（不是模型采用）：** 在simple正确保留95%基准上，固定AND必须同时满足VAL总体、各域、各视频正确保留≥95%；同接受数及精确同CR FA不劣于simple/score且总体严格改善；连续正确FR不劣于同CR对照。完整TRAIN仅为已拟合样本诊断，不算独立验证。VAL已多次开发暴露，本项不声称独立泛化或统计风险保证；即使存在通过项也只支持后续设计，不自动训练/采用。若无通过项，正式M/simple保持，不自动训练融合头或进入TEST；局部互补事实和保护代价仍须保留，不能宣布所有图像信息或融合均无效。
+
+实现入口`crane_project/tools/audit_port_reliability_complementarity_v1.py`，独立标量/配对AUROC复算`review_port_reliability_complementarity_v1.py`，合同/来源清单同前缀JSON。统一运行`bash tools/run_port_reliability_complementarity_v1.sh RUN_ID`，纯CPU、不占GPU；原服务器路径和mmrotljj环境。全部新日志/结果位于`work_dirs/port_reliability_complementarity_v1/RUN_ID`，只打包本次运行至work_dirs根目录，不带旧缓存或权重。
+
+本地15项针对性测试、脚本语法、输入SHA/完整3445帧身份及统计逻辑预检通过；此处尚无服务器执行或独立审查完成声明。结果及最终决定在40.2追加。未改论文主要结果文件。

@@ -1,0 +1,12 @@
+{
+  "protocol": "port_reliability_complementarity_v1",
+  "sources": {
+    "crane_project/utils/port_reliability_complementarity_v1.py": "a296d1fa13b514c3f299cd72af75103f84eb06eb9a198bc2203ae5c46286175c",
+    "crane_project/utils/port_reliability_state_continuity_v1.py": "443efc73e7e6069a960f81962d4dea032bedadd0901943284e6647b29f138c9c",
+    "crane_project/tools/audit_port_reliability_complementarity_v1.py": "e106feb695cbbe9557699795a1492175754d65032648dd587a528d97cc17ed82",
+    "crane_project/tools/review_port_reliability_complementarity_v1.py": "bb530c6cfba69a3a8fb6c6958317f6ecad47612aab6d6d8dd3cf5c605aeba8de",
+    "crane_project/tools/port_reliability_complementarity_v1_protocol.json": "17d2c2837953c096ca27cafd8eab955f16c2520bf4e798f8585a4f67463197e8",
+    "tests/test_port_reliability_complementarity_v1.py": "a53118b9c22629e25cd197315e46eb4052aab27bf12c376ce715c72a6f9953da",
+    "tools/run_port_reliability_complementarity_v1.sh": "affe750a7e471236c0a99984beb03bd1e69746b59136abaa73c4612ad9f82f3c"
+  }
+}
