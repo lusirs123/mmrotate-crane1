@@ -55,6 +55,13 @@ def audit(directory):
     source_bytes=subprocess.check_output(['git','show',commit+':'+str(run.SOURCES.relative_to(ROOT))],cwd=str(ROOT))
     assert hashlib.sha256(source_bytes).hexdigest()==report['sources']['manifest_sha256']
     assert report['contract']==json.loads(run.PROTOCOL.read_text()) and report['input_sha256']==run.PINS
+    if report.get('reporting_recovery'):
+        recovery=report['reporting_recovery'];assert recovery['training_updates_added']==0 and recovery['detector_inferences_added']==0
+        for name,pin in recovery['original_outputs_sha256'].items():assert digest(directory/name)==pin
+        for name,pin in report['reporting_sources']['sources'].items():
+            assert hashlib.sha256(subprocess.check_output(['git','show',recovery['reporting_commit']+':'+name],cwd=str(ROOT))).hexdigest()==pin
+        extra='crane_project/tools/finalize_port_reliability_box_contrast_v1.py'
+        assert hashlib.sha256(subprocess.check_output(['git','show',recovery['reporting_commit']+':'+extra],cwd=str(ROOT))).hexdigest()==recovery['reporting_source_sha256']
     unavailable_pins=[]
     for name,pin in run.PINS.items():
         if not (ROOT/name).exists() and name.endswith('.pth'):

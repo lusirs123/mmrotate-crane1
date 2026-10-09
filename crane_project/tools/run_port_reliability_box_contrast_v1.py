@@ -18,7 +18,6 @@ from crane_project.utils import port_reliability_box_contrast_v1 as core
 from crane_project.utils import port_simple_component_reliability_v1 as simple
 from crane_project.utils import port_reliability_feature_ablation_v1 as ab
 from crane_project.utils import port_reliability_state_continuity_v1 as states
-from crane_project.utils import port_reliability_readout_compare_v1 as readout
 from crane_project.tools import run_port_reliability_feature_source_v1 as historical
 prior = historical.prior
 sha, write = prior.sha, prior.write
@@ -282,7 +281,7 @@ def run(args):
     gate=core.gate(vstats['contrast'])
     save_scored(args.out/'scored_TRAIN.jsonl.gz',train,tscores,cutoffs)
     save_scored(args.out/'scored_VAL.jsonl.gz',val,vscores,cutoffs); write(args.out/'cutoffs.json',cutoffs)
-    diagnostics={role:{a:readout.hidden_diagnostic(part,identities,m,exported[a],normalizer) for a in core.ARMS}
+    diagnostics={role:{a:core.hidden_diagnostic(part,identities,m,exported[a],normalizer) for a in core.ARMS}
                  for role,part,identities,m in [('TRAIN',train,ids,matrix[:,0]),('VAL',val,vids,vmat)]}
     contrast_checks={a:core.contrast_diagnostic(core.numpy_logits(exported[a],matrix.reshape(-1,259),normalizer).reshape(mask.shape),labels,mask) for a in core.ARMS}
     fixed={name:{a:states.summarize(group,{r['image'] for r in group if r['pred'] is not None and vscores[a][r['image']]<=cutoffs[a]['risk_le']}) for a in vscores} for name,group in ab.groups(val).items()}

@@ -4,6 +4,7 @@ import numpy as np
 from crane_project.utils import port_simple_component_reliability_v1 as simple
 from crane_project.utils import port_reliability_feature_source_v1 as source
 from crane_project.utils import port_reliability_readout_compare_v1 as previous
+from crane_project.utils import port_reliability_feature_ablation_v1 as ab
 
 VERSION = 'port_reliability_box_contrast_v1'
 ARMS = ('original', 'contrast')
@@ -85,3 +86,20 @@ def contrast_diagnostic(logits, labels, mask):
     return dict(frames_with_both_classes=frames, pairs=int(pairs), correctly_ordered=correct,
                 ties=ties, pair_AUROC=(correct+.5*ties)/pairs if pairs else None,
                 synthetic_mechanism_only=True)
+
+
+def hidden_diagnostic(rows, ids, matrix, model, normalizer):
+    """Use this head's 259-dimensional normalization, not old 291-D stem."""
+    hidden=normalize(matrix,normalizer)[:,1:]
+    for layer in (0,2):
+        hidden=np.maximum(hidden@np.asarray(model['network.%d.weight'%layer]).T+model['network.%d.bias'%layer],0.)
+    output=(hidden@np.asarray(model['network.4.weight']).T+model['network.4.bias'])[:,0]
+    zero=np.all(hidden==0,axis=1);lookup={r['image']:r for r in rows};indices={name:i for i,name in enumerate(ids)}
+    result={}
+    for name,group in ab.groups(rows).items():
+        selected=[indices[r['image']] for r in group if r['pred'] is not None]
+        result[name]=dict(outputs=len(selected),bad=sum(ab.size_bad(lookup[ids[i]]) for i in selected),
+            second_hidden_all_zero=int(zero[selected].sum()),
+            zero_bad=sum(bool(zero[i]) and ab.size_bad(lookup[ids[i]]) for i in selected),
+            raw_output_range=[float(output[selected].min()),float(output[selected].max())] if selected else None)
+    return result

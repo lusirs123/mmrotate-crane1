@@ -100,6 +100,15 @@ class NumericTests(unittest.TestCase):
         self.assertEqual(core.decide(d,None,.5),d)
         with self.assertRaises(ValueError):core.decide(d,.1,.5)
 
+    def test_hidden_diagnostic_uses_259_dimension_contract(self):
+        rows=[dict(image='a',pred=self.box,gt=self.box[:5],domain='real',sequence='seq01')]
+        model={'network.0.weight':np.zeros((16,258)), 'network.0.bias':np.zeros(16),
+               'network.2.weight':np.zeros((8,16)), 'network.2.bias':np.zeros(8),
+               'network.4.weight':np.zeros((1,8)), 'network.4.bias':np.zeros(1)}
+        value=core.hidden_diagnostic(rows,['a'],np.ones((1,259)),model,dict(mean=[0.]*259,scale=[1.]*259))
+        self.assertEqual(value['all']['second_hidden_all_zero'],1)
+        self.assertEqual(value['all']['zero_bad'],0)
+
 
 @unittest.skipIf(torch is None,'Torch tests execute in server mmrotljj')
 class TorchTests(unittest.TestCase):
