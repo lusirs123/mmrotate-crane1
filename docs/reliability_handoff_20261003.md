@@ -2050,3 +2050,5 @@ residual相对正式policy多接受24帧，其中多保留16正确、也多接�
 完整TRAIN拟合→完整VAL887开发/门限→候选冻结后TEST报告；不新增fit/probe角色。VAL只选一个全局整tie最小门限，保护每域/每视频正确保留>=95%。仅native可晋级：总体同接受数、同CR均严格少于重新训练的midpoint、冻结simple与score；逐组FA不增、同CR连续FR最长不增、tie保守处理。失败停止，不换超参再试，不读TEST；TEST反复暴露，永不用于选择。原policy点单列，中心输出帧正确率/输出覆盖/全帧正确覆盖分别报告。
 
 新入口 `tools/run_port_reliability_feature_source_v1.sh`；数据/模型/审查/日志统一在 `work_dirs/port_reliability_feature_source_v1/RUN_ID/`，唯一结果回传包在work_dirs根目录。实现/协议/来源SHA为新文件，不修改旧实现与来源清单。已完成本地数值检查；Torch在本地缺失，对应检查留给服务器实际执行。这里尚无GPU训练或性能收益结论。
+
+**审查器工程修正（运行权重/合同不变）。** 静态复核发现native原始NPZ为float32，而PCA在float64拟合；审查中的均值也应先转float64，不能把float32求和舍入差当拟合错误。审查器已修正并改为逐项核对report记录的原Git提交/源码闭包，保持原运行来源身份。训练运行在提交 `fa1ab31`，不因审查器修正重跑训练、改参数/门限或重写report；修正版审查将单独执行。

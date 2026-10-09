@@ -8,6 +8,8 @@ import hashlib
 import json
 from pathlib import Path
 import sys
+import subprocess
+import re
 import numpy as np
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT))
@@ -23,7 +25,16 @@ def audit(directory):
     report = json.loads((directory/'report.json').read_text()); saved = json.loads((directory/'models.json').read_text())
     pcas = json.loads((directory/'pca.json').read_text()); initial = json.loads((directory/'initial_heads.json').read_text())
     assert initial['native']==initial['midpoint']
-    assert report['sources']==run.checked_sources()[1] and report['contract']==json.loads(run.PROTOCOL.read_text())
+    # A reviewer-only engineering correction may follow an immutable run.
+    # Bind its original complete source closure to the recorded Git commit;
+    # do not rewrite the report/checkpoint/source receipt to current bytes.
+    commit=report['git_commit'];assert re.fullmatch('[0-9a-f]{40}',commit)
+    for name,pin in report['sources']['sources'].items():
+        content=subprocess.check_output(['git','show',commit+':'+name],cwd=str(ROOT))
+        assert hashlib.sha256(content).hexdigest()==pin
+    manifest=subprocess.check_output(['git','show',commit+':'+str(run.SOURCES.relative_to(ROOT))],cwd=str(ROOT))
+    assert hashlib.sha256(manifest).hexdigest()==report['sources']['manifest_sha256']
+    assert report['contract']==json.loads(run.PROTOCOL.read_text())
     assert report['input_sha256']==run.PINS and report['boxes_scores_output_center_angle_unchanged'] and not report['TEST_read']
     parts = {}; maximum = 0.; checks = 0; ranks = 0; failures = []; training = {}
     for role,expected in (('TRAIN',2558),('VAL',887)):
@@ -47,6 +58,7 @@ def audit(directory):
             assert 0<=trace['selected_surviving_index']<trace['surviving'] and trace['regression_max_replay_difference']<.01
         matrices = {}
         for arm,raw in (('midpoint',source[:,3:]),('native',native['features'])):
+            raw=np.asarray(raw,dtype=np.float64)  # Match the fitted float64 PCA, not float32 np.mean.
             p = pcas[arm]; mean = np.asarray(p['mean']); components = np.asarray(p['components'])
             assert p['train_count']==2558 and p['dimensions']==256 and not p['whiten']
             np.testing.assert_allclose(components@components.T,np.eye(256),atol=1e-10,rtol=0)
