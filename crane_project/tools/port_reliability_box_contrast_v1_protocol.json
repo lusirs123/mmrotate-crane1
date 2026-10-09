@@ -1,0 +1,56 @@
+{
+  "protocol": "port_reliability_box_contrast_v1",
+  "settings": {
+    "seed": 1701,
+    "epochs": 100,
+    "batch_size": 256,
+    "lr": 0.001,
+    "weight_decay": 0.0001,
+    "clip_norm": 5.0,
+    "pca_dimensions": 256,
+    "hidden": [
+      16,
+      8
+    ],
+    "correct_retention": 0.95,
+    "parameter_count": 4290,
+    "auxiliary_weight": 0.25,
+    "multipliers": [
+      0.85,
+      0.95,
+      1.05,
+      1.15
+    ],
+    "modes": [
+      "long",
+      "short",
+      "both"
+    ],
+    "roi_size": 9,
+    "context_multiplier": 1.5,
+    "feature_channels": 256,
+    "raw_dimensions": 2304,
+    "maximum_contrasts": 12
+  },
+  "input_pins": {
+    "work_dirs/port_reliability_feature_ablation_v1/20261008_size_features_v1/fit/scored_TRAIN_VAL.jsonl.gz": "e804241c2b7d529ed816f9d2f33dedad1e2961a5b132426bc816777b324c03b4",
+    "work_dirs/crane_symeood_k1_port_day2night_midpoint_sigma_v1/sigma_1p5/head_epoch_03.pth": "16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7",
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f",
+    "work_dirs/port_results/geometry/port_geometry_midpoint_formal_v1_roi_cache/cache_manifest.json": "046c5998dee0ba3703f1ae4e08fc6a02e9804d216ea12241357f69f2a4afd1e3",
+    "work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/epoch_24.pth": "8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23"
+  },
+  "frontend": "Frozen B24+midpoint sigma1.5/epoch03; original M always delivered",
+  "identity": "ReDC-inspired project size judgement, not original ReDC CR/DDE/CAR reproduction",
+  "sources": "Frozen P3 sampled at each judged box; aligned9x9 with1.5 context, channel-major3x3 pooling2304; original and contrast arms share input",
+  "variants": "TRAIN only: raw long/short/both times .85,.95,1.05,1.15; preserve center/raw angle/score, skip axis inversion; never GT-conditioned generation",
+  "transform": "Fit centered PCA256 and normalizer only on original full TRAIN M; one shared transform for both arms and all variants; no whitening",
+  "objective": "Original: full TRAIN balanced BCE. Contrast: same real objective + .25 unweighted auxiliary BCE, mean per valid variant then per image. GT offline labels only, max canonical relative edge error>.10.",
+  "capacity": "259 features; separate raw score logit;258->16->8->1 ReLU+beta4290; exact neutral -z, same seed1701 hidden initialization",
+  "budget": "100 epochs,1000 updates per arm,256 genuine images per batch; seed1701 identical order. Auxiliary samples add compute, not new scenes. No checkpoint or coefficient search",
+  "precheck": "Discard two smoke steps; actual separate real/weighted auxiliary gradient norms, strength ratio, sum gradient and pre/post clipping recorded; hidden gradient expected only after neutral output is updated",
+  "roles": "Full original TRAIN -> full original VAL and one global threshold -> frozen exposed TEST reporting only after pass. No fit/probe/other new roles",
+  "threshold": "Minimum one global whole-tie VAL cutoff for >=95% correct retention in every domain/video; old policy preserved separately",
+  "gate": "Only contrast may advance: strict overall same-count and same-CR FA gain over retrained original/full_simple/score, group FA nonincrease and longest correct-FR same-CR nonincrease; conservative ties. Failure stops",
+  "safety": "No box/score/count/missing/center/angle edits, no depth changes, no GT/domain/video online inputs. VAL has no synthetic boxes. TEST never selection; repeatedly exposed",
+  "review": "Raw feature bytes, independent candidate regeneration/labels, original-only PCA/normalization, NumPy logits, full states/coverage/ranking, matched counts and CR, threshold/budget/initialization and frozen input hashes"
+}

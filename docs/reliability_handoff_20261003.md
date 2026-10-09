@@ -2179,3 +2179,32 @@ native Real正确保留527/539=97.7737%、Sim529/550=96.1818%、seq03 87/91=95.6
 **决定。** 维持正式M/simple/policy，第37节候选仍不采用、VAL失败身份保持，不以TEST反选A或重调B。收束本次特征来源候选，不自动追加训练；本项失败诊断只记运行记录，不写为论文正式性能提升。已经完成的正式三分量成果可继续用于写作，但本候选不能称为稳定升级。本次冻结TEST补评退出码0，服务器原工作区/暂存指纹保持b48cc0…/d54105…。分析同步与本次两端压缩包清理回执随后追加。
 
 **分析同步与清理已完成。** 分析提交`b85a754`在两端main同步；服务器已核验全部原B24/σ1.5ep03/模型/PCA/policy/门限及原结果回执，mac_review SHA`01ae30ed4fe293a6f0d2925dee07b12dd02f291568c1600719858dd6c8042e43`、analysis SHA`04353d423c693581e8ebd27f4e5d19708fcd847677780bc5adb438db83cb700d`两端一致。仅删除上述本次两端唯一tar.gz，完整TEST结果、原模型及缓存保持；同一RUN_ID保存并互传`archive_cleanup_server.json`/`archive_cleanup_local.json`，原工作区/暂存指纹保持。本地已有无关删除/未跟踪文件未纳入本次提交，未修改正式成果或其他窗口。
+
+## 39. 同图尺寸框条件监督有限对照（2026-10-09）
+
+### 39.1 授权、固定设计及运行入口
+
+用户认可先前设计，授权本地实现、Git同步及在服务器`/media/omnisky/personal_files/ljj/symEOOD`使用后几张空闲卡运行、回传分析。原正式M=B24+σ1.5/epoch03和simple policy保持；主线是尺寸可靠性判断，不修框、不改score/输出/中心/角度，不恢复几何或深度训练。ReDC提供细分定位质量判断动机；本项同图尺寸对照监督属于项目适配，不是原ReDC CR/DDE/CAR复现。RARE只参考相对质量排序的评价思路；首轮不叠加其成对损失或候选检索。
+
+**两臂。** `original`仅真实完整TRAIN监督；`contrast`为相同真实损失加0.25辅助BCE。两臂都在被判断框自身提取冻结P3 aligned9x9 ROI，1.5上下文、channel-major3x3均值2304维；只用真实TRAIN M拟合共享PCA256及259维标准化，头均为258→16→8→1 ReLU+beta共4290参数，risk logit=-原score logit+残差。与第37节固定B winning cell/第36节midpoint stem的输入不同，旧候选仅历史参照；本项唯一两臂差别是辅助监督，不把与旧候选差异归因于这一因素。
+
+**对照框。** 原始TRAIN M之外，分别长边/短边/两边共同乘0.85、0.95、1.05、1.15，最多12个。生成API无GT，保留原raw w/h关联、中心/角度/score；导致长短轴次序反转或非有限/非正尺寸则跳过。GT随后离线计算每框双边相对误差是否均≤10%，不依据GT选择倍率或修成正确框；合成错误不等于新增真实场景或独立短边标注。辅助项不加类别权重，先按每图有效对照数平均，再按真实图数量平均；原项沿用完整TRAIN N/(2Nclass)权重。VAL不生成对照，最终只评价原M框。
+
+**预算及预检。** seed1701，同初始化、同真实图排列、batch256，各100epochs/1000updates，固定末轮权重。两步smoke丢弃；记录原项、0.25加权辅助项的梯度范数、比值、合梯度及裁剪前后变化，训练每epoch首batch同样记录。首步零末层会使早期层梯度为零，第二步必须有实际隐藏层和辅助梯度；不恢复旧逐元素严格梯度等式比较。辅助计算增加开销，同更新数不声称同FLOPs。不给网络GT、视频或域身份，不改变激活/PCA维数/权重/预算再搜索。
+
+**数据与继续条件。** 原完整TRAIN2558输出/71尺寸错误；完整VAL887帧/886输出。没有新增fit/probe等角色。VAL单一全局整tie门限保护各域及逐视频正确保留≥95%；`contrast`在总体同接受数及同CR均严格优于新`original`、simple与score，分组FA不增加、同CR连续正确FR不增加；保留FA/FR/ED/CR/MISSING、覆盖、AUROC和中心三口径。失败停止；成功才进入冻结已暴露TEST报告，不从TEST选方法或调参，不自动采用控制臂。
+
+**身份与审查。** 使用已有原始M逐帧记录及policy；在线特征采样无GT。服务器原B与M重放核验、状态digest、输入SHA前后保持，原M值不被重放值替换。CPU独立审查重新生成框/标签并复算PCA、网络、工作点、同数/同CR和2000条更新。跨NumPy/libm只容许policy风险≤1e-12的末位重放差，保存的风险与实际接受标志逐帧不变；检测框/分数及标志身份不放宽。回传只复制本项新池化特征、模型JSON、记录与报告，检测器/旧ROI缓存/.pth不进入包；小型原cache manifest快照保留供无本地权重审查。
+
+入口：`tools/run_port_reliability_box_contrast_v1.sh`，优先物理GPU3再GPU2，显存<200MiB且利用率<5%才启动；原工作区/暂存指纹保存。所有日志/结果集中`work_dirs/port_reliability_box_contrast_v1/RUN_ID/`，唯一归档在work_dirs根目录。mmrotljj环境运行：
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+git pull --ff-only
+source /media/omnisky/4435947f-033c-4e45-904d-f2c4d0bfbf70/Anaconda3/etc/profile.d/conda.sh
+conda activate mmrotljj
+unset CUDA_VISIBLE_DEVICES
+bash tools/run_port_reliability_box_contrast_v1.sh
+```
+
+实现阶段尚无性能结论；实际执行、独立审查和决定在本节后续追加。原未采用候选不写为论文正式收益。
