@@ -18,6 +18,11 @@ def read(path):
 
 def compare(a,b):
     if isinstance(a,dict):
+        # JSON object keys are strings; run-length histograms are rebuilt with
+        # integer keys. Normalize only keys, preserving values and comparisons.
+        if len({str(k) for k in a})!=len(a) or len({str(k) for k in b})!=len(b):
+            raise ValueError('Ambiguous report keys')
+        a={str(k):v for k,v in a.items()};b={str(k):v for k,v in b.items()}
         if set(a)!=set(b):raise ValueError('Report keys differ')
         for k in a:compare(a[k],b[k])
     elif isinstance(a,list):

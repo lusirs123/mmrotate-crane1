@@ -19,6 +19,32 @@ def rows():
 
 
 class ContractTests(unittest.TestCase):
+    def test_exported_candidate_replays_online_and_rejects_tampering(self):
+        import json,tempfile
+        from unittest.mock import patch
+        from crane_project.tools import run_port_reliability_oof_v1 as runner
+        from crane_project.tools import review_port_reliability_oof_v1 as reviewer
+        actual,policy=runner.original.load_rows()
+        # Synthetic OOF equal to original predictions: an engineering replay,
+        # not new experimental evidence or a passing candidate.
+        train=[r for r in actual if r['reliability_role']=='train']
+        with tempfile.TemporaryDirectory(dir=str(runner.ROOT/'work_dirs')) as tmp:
+            out=Path(tmp)
+            for fold,seqs in core.GROUPS.items():
+                (out/fold).mkdir()
+                aux=[dict(r,excluded_fold=fold) for r in train if r['sequence'] in seqs]
+                runner.dump_rows(out/fold/'oof_predictions.jsonl.gz',aux)
+            with patch.object(runner,'checked',return_value=(actual,policy,None,None,{})):
+                runner.assess(out)
+            reviewer.review(out,out/'receipt.json')
+            receipt=json.loads((out/'receipt.json').read_text())
+            self.assertTrue(receipt['exported_policy_online_decisions_replayed'])
+            self.assertEqual(receipt['status'],'VAL_FAILED_STOP')
+            candidate=json.loads((out/'candidate_policy.json').read_text())
+            candidate['simple_policy']['cutoffs']['simple']['size']['risk_le']=0.
+            (out/'candidate_policy.json').write_text(json.dumps(candidate))
+            with self.assertRaises(ValueError):reviewer.review(out,out/'tampered_receipt.json')
+
     def test_partial_fold_does_not_require_both_quality_classes(self):
         part=[r for r in rows() if r['sequence'] in core.GROUPS['A']]
         for r in part:r['pred'][2]=20.
