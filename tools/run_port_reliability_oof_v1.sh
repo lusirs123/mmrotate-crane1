@@ -43,6 +43,8 @@ printf 'Physical GPU=%s\n' "$gpu" | tee -a "$run_dir/gpu.log"
 python -c 'import sys,torch,numpy; print(sys.version,torch.__version__,numpy.__version__,torch.cuda.get_device_name(0))' | tee "$run_dir/runtime.log"
 python -m unittest discover -s tests -p 'test_port_reliability_oof_v1.py' -v 2>&1 | tee "$run_dir/tests.log"
 python -m unittest discover -s tests -p 'test_port_reliability_oof_training_v2.py' -v 2>&1 | tee "$run_dir/training_repair_tests.log"
+# NVML utilization is sampled over the preceding interval; let our finished tests drain.
+sleep 3
 check_idle_cards
 python crane_project/tools/run_port_reliability_oof_v1.py --mode all --gpu 0 --out "$run_dir/result" 2>&1 | tee "$run_dir/run.log"
 python crane_project/tools/review_port_reliability_oof_v1.py "$run_dir/result" --receipt "$run_dir/result/server_review.json" 2>&1 | tee "$run_dir/review.log"
