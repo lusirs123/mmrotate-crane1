@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT))
 from crane_project.utils import port_reliability_oof_v1 as core
 from crane_project.utils import port_simple_component_reliability_v1 as simple
 from crane_project.utils import port_reliability_complementarity_v1 as metrics
+from crane_project.utils import port_reliability_state_continuity_v1 as states
 from crane_project.utils import port_reliability_within_video_rank_v1 as ranking
 from crane_project.tools import run_port_reliability_box_contrast_v1 as original
 
@@ -376,6 +377,8 @@ def assess(out):
         ranking={m:ranking.ranking_summary(val,m) for m in core.METHODS},
         protections=protections, center=metrics.center(val), common_TRAIN_outputs=len(common),
         formal_policy_sha256=sha(ROOT/original.prior.POLICY), TEST_read=False, original_policy_replaced=False)
+    report['formal_policy_point']={g:states.summarize(part,{r['image'] for r in part if r['original_simple_decision']['size_accepted']})
+        for g,part in metrics.grouped(val).items()}
     write(out/'report.json', report); dump_rows(out/'scored_VAL.jsonl.gz', val)
     candidate_policy=deepcopy(policy)
     candidate_policy['simple_policy']['models']['size']=deepcopy(models['oof'])

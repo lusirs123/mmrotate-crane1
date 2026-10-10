@@ -49,6 +49,10 @@ def review(out,receipt):
     cutoffs={m:ranking.calibrate(val,m) for m in core.METHODS}
     stats=core.statistics(val,cutoffs)
     compare(cutoffs,report['cutoffs']);compare(stats,report['statistics']);compare(core.gate(stats),report['gate'])
+    from crane_project.utils import port_reliability_state_continuity_v1 as states
+    from crane_project.utils import port_reliability_complementarity_v1 as metrics
+    compare({g:states.summarize(part,{r['image'] for r in part if r['original_simple_decision']['size_accepted']})
+             for g,part in metrics.grouped(val).items()},report['formal_policy_point'])
     runner.write(receipt,dict(passed=True,TRAIN_rows=len(oof),VAL_rows=len(val),
         all_labels_models_scores_states_cutoffs_and_gate_recomputed=True,
         status=report['status'],report_sha256=runner.sha(out/'report.json'),TEST_read=False))
