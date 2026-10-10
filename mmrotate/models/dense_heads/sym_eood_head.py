@@ -82,8 +82,11 @@ class SymEOODHead(RotatedRetinaHead):
                  candidate_selection=None,
                  center_size_compensation=None,
                  shape_compensation=None,
+                 strict_training_checks=False,
                  **kwargs):
         super().__init__(*args, **kwargs)
+        self.strict_training_checks = bool(strict_training_checks)
+        self._nonfinite_training_events = 0
         # L_equi
         self.use_equi_loss = use_equi_loss
         self.equi_loss_weight = equi_loss_weight
@@ -377,6 +380,17 @@ class SymEOODHead(RotatedRetinaHead):
             losses_degraded_aux2_cls.append(lda)
 
         result = dict(loss_cls=losses_cls, loss_bbox=losses_bbox)
+        if self.strict_training_checks:
+            positive_per_image = sum(
+                ((label >= 0) & (label < self.num_classes)).reshape(num_imgs, -1).sum(1)
+                for label in labels_list)
+            result.update(
+                main_positive_count=positive_per_image.sum().detach().float(),
+                main_positive_per_image_min=positive_per_image.min().detach().float(),
+                main_positive_per_image_max=positive_per_image.max().detach().float(),
+                main_assignment_iter=cls_scores[0].new_tensor(
+                    self.assigner._local_call_count // num_imgs),
+                main_nonfinite_events=cls_scores[0].new_tensor(self._nonfinite_training_events))
         if self.center_size_compensation is not None:
             result['loss_center_size_compensation'] = losses_center_size
             result['center_size_positive_count'] = sum(
@@ -568,6 +582,11 @@ class SymEOODHead(RotatedRetinaHead):
         anchors = flat_anchors[inside_flags, :]
         cls_scores_valid = cls_scores[inside_flags, :]
         bbox_preds_valid = bbox_preds[inside_flags, :]
+        if self.strict_training_checks:
+            for value, stage in ((cls_scores_valid, 'assignment logits'),
+                                 (bbox_preds_valid, 'assignment deltas'),
+                                 (gt_bboxes, 'assignment GT')):
+                self._check_training_finite(value, stage)
 
         # 1. 解码预测框（分配器需要物理坐标）
         decoded_bboxes = self.bbox_coder.decode(anchors, bbox_preds_valid)
@@ -627,6 +646,12 @@ class SymEOODHead(RotatedRetinaHead):
         return (labels, label_weights, bbox_targets, bbox_weights, pos_inds,
                 neg_inds, sampling_result)
 
+    def _check_training_finite(self, value, stage):
+        if not torch.isfinite(value).all():
+            self._nonfinite_training_events += 1
+            raise FloatingPointError(
+                'Nonfinite SymEOOD %s; events=%d' % (stage, self._nonfinite_training_events))
+
     def loss_single(self, cls_score, bbox_pred, anchors, labels, label_weights,
                     bbox_targets, bbox_weights, num_total_samples,
                     decode_max_size=None,
@@ -649,6 +674,10 @@ class SymEOODHead(RotatedRetinaHead):
         H_feat = cls_score.size(2)   # input: (B, C_in, H_feat, W_feat)
         W_feat = cls_score.size(3)
         num_imgs_in = cls_score.size(0)
+        image_ids = None
+        if getattr(self.loss_cls, 'isolate_images', False):
+            per_image = cls_score[0].numel() // self.cls_out_channels
+            image_ids = torch.arange(num_imgs_in, device=cls_score.device).repeat_interleave(per_image)
 
         cls_score = cls_score.permute(0, 2, 3, 1).reshape(
             -1, self.cls_out_channels)
@@ -662,6 +691,9 @@ class SymEOODHead(RotatedRetinaHead):
         # 2. 物理框解码
         decoded_pred_bboxes = self.bbox_coder.decode(anchors, bbox_pred)
         decoded_gt_bboxes = self.bbox_coder.decode(anchors, bbox_targets)
+        if self.strict_training_checks:
+            self._check_training_finite(decoded_pred_bboxes, 'decoded predictions')
+            self._check_training_finite(decoded_gt_bboxes, 'decoded targets')
 
         if decode_max_size is not None:
             max_coord = float(decode_max_size - 1)
@@ -703,20 +735,24 @@ class SymEOODHead(RotatedRetinaHead):
         # 已经天然压制了远端背景的梯度贡献，不需要额外用 anchor 总数稀释。
         # =========================================================
         cls_avg_factor = max(float(num_total_samples), 1.0)
+        spatial_kwargs = {} if image_ids is None else dict(
+            pred_image_ids=image_ids, gt_image_ids=image_ids[pos_inds])
         loss_cls = self.loss_cls(
             cls_score,
             labels,
             pred_bboxes=decoded_pred_bboxes,
             gt_bboxes=pos_gt_bboxes,
             weight=label_weights,
-            avg_factor=cls_avg_factor)
+            avg_factor=cls_avg_factor, **spatial_kwargs)
 
         # [数值安全] 防止 NaN/Inf 传播导致整个训练崩溃
         if torch.isnan(loss_cls) or torch.isinf(loss_cls):
+            if self.strict_training_checks:
+                self._check_training_finite(loss_cls, 'classification loss')
             loss_cls = cls_score.sum() * 0.0
 
         # 5. SymKLD 回归损失（仅正样本）
-        if pos_inds.numel() > 0:
+        if pos_inds.any():
             pos_pred_bboxes = decoded_pred_bboxes[pos_inds]
             pos_gt_bboxes = decoded_gt_bboxes[pos_inds]
 
@@ -730,6 +766,8 @@ class SymEOODHead(RotatedRetinaHead):
                 avg_factor=num_total_samples)
             # [数值安全] 防止 NaN/Inf 传播
             if torch.isnan(loss_bbox) or torch.isinf(loss_bbox):
+                if self.strict_training_checks:
+                    self._check_training_finite(loss_bbox, 'regression loss')
                 loss_bbox = bbox_pred.sum() * 0.0
             # # ── 诊断探针 2：回归梯度断点截获 ─────────────────────────────
             # if getattr(self, '_diag_cnt', 0) <= 5 and pos_inds.sum().item() > 0:

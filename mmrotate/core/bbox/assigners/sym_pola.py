@@ -18,7 +18,8 @@ class SymPOLAAssigner(BaseAssigner):
                  eps: float = 1e-6,
                  topk: int = 6,
                  o2m_warmup_iters: int = 0,
-                 o2m_topk: int = 9):
+                 o2m_topk: int = 9,
+                 strict_finite: bool = False):
         super().__init__()
         self.cost_class = cost_class
         self.cost_reg = cost_reg
@@ -34,6 +35,7 @@ class SymPOLAAssigner(BaseAssigner):
         # [O2M 冷启动] 训练前 o2m_warmup_iters 步使用 O2M 分配，提供充足正样本
         self.o2m_warmup_iters = o2m_warmup_iters
         self.o2m_topk = o2m_topk
+        self.strict_finite = bool(strict_finite)
         
         # [降维改造] 0.x 无法获取全局 iter，使用内部计数器近似模拟
         # 注意：assign() 是逐图像调用的，若 batch_size=2，则每 2 次调用等于 1 个 iter
@@ -80,6 +82,9 @@ class SymPOLAAssigner(BaseAssigner):
         raw_cost_reg = sym_kld(pred_bboxes[:, None, :].expand(-1, num_gt, -1),
                                gt_bboxes[None, :, :].expand(num_bboxes, -1, -1),
                                eps=self.eps)
+        if self.strict_finite and (not torch.isfinite(pred_logits).all()
+                                  or not torch.isfinite(raw_cost_reg).all()):
+            raise FloatingPointError('Nonfinite SymPOLA logits or regression cost')
         # NaN/Inf 保护：用大值填充异常，不影响 argmin 排序
         raw_cost_reg = torch.nan_to_num(
             raw_cost_reg, nan=1e6, posinf=1e6, neginf=0.0)

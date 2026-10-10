@@ -29,6 +29,7 @@
   "protocol": "port_reliability_oof_v1",
   "selection": "Main OOF arm only. Common-membership arms diagnostic, no fallback adoption. Strict overall sameCR/same-count FA gains versus same-TRAIN simple/frozen simple/score, per-group nonincrease and correct-FR run protection.",
   "settings": {
+    "auxiliary_training_revision": "normalized_padding_per_image_gt_strict_v2",
     "auxiliary_weight_initialization": "ImageNet_only_no_port_task_checkpoint",
     "correct_retention": 0.95,
     "detector_batch": 2,
@@ -43,5 +44,28 @@
     "source_scope": "sequence_excluded_Real_only_not_independent_acquisition_events"
   },
   "source_limitations": "Legacy seq01/05/06 acquisition event independence unavailable; recorded whole sequences excluded, exact cross-group image duplicate check. seq12 linked segments remain one group.",
-  "training": "Two sequential auxiliary SymEOOD B24 plus own sigma1.5 midpoint ep03. ImageNet init only, no formal B/M warmstart. TRAIN permitted sequences only. No auxiliary VAL checkpoint selection. Sim kept in sample."
+  "training": "Two sequential auxiliary SymEOOD B24 plus own sigma1.5 midpoint ep03. ImageNet init only, no formal B/M warmstart. TRAIN permitted sequences only. No auxiliary VAL checkpoint selection. Sim kept in sample.",
+  "training_repair": {
+    "finite_checks": "Opt-in strict main/aux loss, assignment/regression distances and optimizer gradients; fail before update",
+    "logs": "Actual main positive count/per-image min/max and assignment iteration; pre/post clip norm and clip fraction; finite-event counters",
+    "padding": "TRAIN-only raw RGB114 converted using each pipeline mean/std after Normalize",
+    "restart": "Fresh ImageNet auxiliary A/B and own neutral midpoint; no resume or port warmstart; old run and formal models retained",
+    "revision": "normalized_padding_per_image_gt_strict_v2",
+    "selection": "Same final24/3 epochs, seeds, SGD/clip10, excluded sequences and source gate; no new tuning or VAL/TEST selection",
+    "spatial_scope": "Per image own-GT matching and top-K300 per image per FPN level (batch2 at most600; historical batch-pooled300 kept only in legacy configs)"
+  },
+  "runtime_resource_guard": {
+    "physical_gpu": 3,
+    "require_idle_before_start": [
+      2,
+      3
+    ],
+    "warmup_steps": 32,
+    "allocated_tolerance_bytes": 16777216,
+    "reserved_tolerance_bytes": 0,
+    "absolute_limit_bytes": 4294967296,
+    "discarded_memory_preflight_steps": 72,
+    "on_growth": "fail_stop_no_resume_no_batch_change",
+    "formal_training_budget_unchanged": true
+  }
 }

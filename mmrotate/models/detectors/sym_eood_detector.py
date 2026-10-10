@@ -77,6 +77,7 @@ class SymEOOD(SingleStageDetector):
                  pqa_dark_noise_std_range=(0.0, 10.0),
                  semantic_distillation=None,
                  object_background_relation=None,
+                 strict_training_checks=False,
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None,
@@ -91,6 +92,7 @@ class SymEOOD(SingleStageDetector):
             backbone, neck, bbox_head,
             train_cfg, test_cfg, pretrained, init_cfg
         )
+        self.strict_training_checks = bool(strict_training_checks)
 
         # Training-only teacher path.  A cached tensor is supplied by the
         # data pipeline; no DINO model is constructed by this detector and
@@ -709,6 +711,11 @@ class SymEOOD(SingleStageDetector):
                     aux_feats, img_metas, gt_bboxes, gt_labels,
                     gt_bboxes_ignore, **aux_kwargs)
                 for k, v in aux_losses.items():
+                    if self.strict_training_checks:
+                        items = v if isinstance(v, (list, tuple)) else [v]
+                        if any(isinstance(item, torch.Tensor) and not torch.isfinite(item).all()
+                               for item in items):
+                            raise FloatingPointError('Nonfinite auxiliary head %d %s' % (i, k))
                     if isinstance(v, torch.Tensor):
                         v = torch.nan_to_num(v, nan=0.0, posinf=0.0, neginf=0.0)
                     elif isinstance(v, list):

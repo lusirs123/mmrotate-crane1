@@ -32,7 +32,9 @@ class SymNFLLoss(nn.Module):
                  reduction='mean',
                  loss_weight=1.0,
                  kld_chunk_size=1024,
-                 use_quality_target=False):
+                 use_quality_target=False,
+                 isolate_images=False,
+                 strict_finite=False):
         super(SymNFLLoss, self).__init__()
         assert use_sigmoid is True, 'Only sigmoid focal loss is supported.'
         self.use_sigmoid = use_sigmoid
@@ -48,6 +50,10 @@ class SymNFLLoss(nn.Module):
         self.loss_weight = loss_weight
         self.kld_chunk_size = kld_chunk_size
         self.use_quality_target = use_quality_target
+        # Opt-in repair: historical configs keep batch-pooled computation
+        # and identical checkpoint state keys.
+        self.isolate_images = bool(isolate_images)
+        self.strict_finite = bool(strict_finite)
         
         # [降维改造] 注册不参与梯度的长整型 Buffer，使其随权重一起保存
         self.register_buffer('_local_iter', torch.tensor(0, dtype=torch.long))
@@ -92,6 +98,39 @@ class SymNFLLoss(nn.Module):
 
         return torch.cat(min_kld_chunks, dim=0)
 
+    def _image_spatial_weights(self, pred_bboxes, gt_bboxes,
+                               pred_image_ids, gt_image_ids, current_tau):
+        """Detached spatial top-K and geometry matching within each image."""
+        if pred_image_ids is None or gt_image_ids is None:
+            raise ValueError('Per-image SymNFL requires prediction and GT image IDs')
+        for ids, count in ((pred_image_ids, len(pred_bboxes)),
+                           (gt_image_ids, len(gt_bboxes))):
+            if ids.ndim != 1 or len(ids) != count or ids.dtype != torch.long:
+                raise ValueError('SymNFL image IDs must be aligned int64 vectors')
+            if ids.device != pred_bboxes.device or (ids < 0).any():
+                raise ValueError('Invalid SymNFL image ID device/range')
+        if not set(gt_image_ids.tolist()) <= set(pred_image_ids.tolist()):
+            raise ValueError('GT image has no predictions')
+        mu = pred_bboxes.new_ones(len(pred_bboxes))
+        quality = pred_bboxes.new_ones(len(pred_bboxes))
+        with torch.no_grad():
+            for image_id in torch.unique(pred_image_ids):
+                indices = torch.nonzero(pred_image_ids == image_id, as_tuple=False).flatten()
+                own_gt = gt_bboxes[gt_image_ids == image_id]
+                if not len(own_gt):
+                    continue
+                own_pred = pred_bboxes[indices].detach()
+                distance = ((own_pred[:, None, :2] - own_gt[None, :, :2]) ** 2).sum(-1).min(1)[0]
+                selected = indices[distance.topk(min(self.spatial_topk, len(indices)), largest=False)[1]]
+                kld = self._min_sym_kld(pred_bboxes[selected].detach(), own_gt.detach())
+                if self.strict_finite and not torch.isfinite(kld).all():
+                    raise FloatingPointError('Nonfinite per-image SymNFL KLD')
+                kld = torch.nan_to_num(kld, nan=1e4, posinf=1e4, neginf=0.)
+                response = torch.exp(-(kld / current_tau).clamp(min=-20., max=20.))
+                mu[selected] = 1. + response
+                quality[selected] = response
+        return mu, quality
+
     def forward(self,
                 pred_logits,
                 labels,
@@ -100,7 +139,9 @@ class SymNFLLoss(nn.Module):
                 weight=None,
                 avg_factor=None,
                 reduction_override=None,
-                advance_iter=True):
+                advance_iter=True,
+                pred_image_ids=None,
+                gt_image_ids=None):
         
         # 仅在训练模式下累加迭代步数
         if self.training and advance_iter:
@@ -120,7 +161,16 @@ class SymNFLLoss(nn.Module):
         # QFL 质量目标：默认 1.0（等价 binary target），top-K 区域由 KLD 覆写
         quality = pred_logits.new_ones(num_samples)
         
-        if gt_bboxes is not None and gt_bboxes.size(0) > 0:
+        if self.strict_finite:
+            for name, value in (('logits', pred_logits), ('boxes', pred_bboxes), ('GT', gt_bboxes)):
+                if value is not None and not torch.isfinite(value).all():
+                    raise FloatingPointError('Nonfinite SymNFL ' + name)
+        if self.isolate_images:
+            if gt_bboxes is None:
+                raise ValueError('Per-image SymNFL requires an explicit GT tensor (possibly empty)')
+            mu_sym, quality = self._image_spatial_weights(
+                pred_bboxes, gt_bboxes, pred_image_ids, gt_image_ids, self._get_current_tau())
+        elif gt_bboxes is not None and gt_bboxes.size(0) > 0:
             current_tau = self._get_current_tau()
 
             # ==============================================================
@@ -148,6 +198,8 @@ class SymNFLLoss(nn.Module):
             
             # 走 Chunking 安全通道计算 KLD
             min_kld = self._min_sym_kld(topk_pred, gt_bboxes)  # [K]
+            if self.strict_finite and not torch.isfinite(min_kld).all():
+                raise FloatingPointError('Nonfinite SymNFL KLD')
 
             # 应用指数核 (适配 1:2 顶梁场景)
             # clamp min_kld 防止极端负值或 NaN 导致 exp 爆炸

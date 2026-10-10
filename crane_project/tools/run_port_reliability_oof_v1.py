@@ -16,6 +16,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from crane_project.utils import port_reliability_oof_v1 as core
+from crane_project.utils import port_reliability_oof_training_v2 as training_repair
 from crane_project.utils import port_simple_component_reliability_v1 as simple
 from crane_project.utils import port_reliability_complementarity_v1 as metrics
 from crane_project.utils import port_reliability_state_continuity_v1 as states
@@ -94,6 +95,7 @@ def prepare(out):
                 src = DATA/record[field]['path']
                 (root/record['split']/field/src.name).symlink_to(src)
         cfg = Config.fromfile(str(CONFIG))
+        training_repair.repair_config(cfg)
         for spec, split in zip(cfg.data.train, ('train', 'train_sim')):
             spec.data_root = str(root.resolve())+'/'
             spec.ann_file = split+'/annfiles/'
@@ -114,6 +116,7 @@ def prepare(out):
         cfg.evaluation = None
         cfg.work_dir = str((folder/'detector').resolve())
         cfg.seed = core.SETTINGS['seed']
+        training_repair.validate_config(cfg)
         cfg.dump(str(folder/'detector_config.py'))
         specification = dict(specification, resolved_config_sha256=sha(folder/'detector_config.py'))
         write(folder/'membership.json', specification)
@@ -179,6 +182,7 @@ def preflight(out, gpu):
     from mmdet.datasets import build_dataloader
     check_fold(out, 'A')
     cfg = Config.fromfile(str(out/'A/detector_config.py'))
+    training_repair.validate_config(cfg)
     from mmrotate.utils import compat_cfg
     compat_cfg(deepcopy(cfg))  # Exercise the actual trainer compatibility before GPU updates.
     set_random_seed(core.SETTINGS['seed'], deterministic=True)
@@ -193,8 +197,11 @@ def preflight(out, gpu):
     loader = build_dataloader(data, samples_per_gpu=2, workers_per_gpu=2, num_gpus=1, dist=False, shuffle=True, seed=core.SETTINGS['seed'])
     torch.cuda.reset_peak_memory_stats(gpu)
     records = []; before = time.monotonic()
+    # All weights are discarded. Extra iterations check storage stability, not performance.
+    memory_guard = training_repair.MemoryPlateau()
+    engineering_steps = core.SETTINGS['preflight_steps'] + 64
     for i, batch in enumerate(loader):
-        if i >= core.SETTINGS['preflight_steps']: break
+        if i >= engineering_steps: break
         torch.cuda.synchronize(); started = time.monotonic()
         opt.zero_grad(); value = wrapped.train_step(batch, opt)
         loss = value['loss']
@@ -202,13 +209,20 @@ def preflight(out, gpu):
         loss.backward()
         norm = float(torch.nn.utils.clip_grad_norm_(wrapped.parameters(), 10.))
         if not np.isfinite(norm): raise ValueError('Nonfinite detector gradient')
+        after_norm = float(torch.norm(torch.stack([
+            torch.norm(p.grad.detach(), 2.) for p in wrapped.parameters() if p.grad is not None]), 2.))
         opt.step(); torch.cuda.synchronize()
+        memory = memory_guard.observe(torch.cuda.memory_allocated(gpu), torch.cuda.memory_reserved(gpu))
         records.append(dict(step=i+1, seconds=time.monotonic()-started, loss=float(loss), gradient_before_clip=norm,
+                            gradient_after_clip=after_norm, gradient_clip_fraction=min(1., 10./(norm+1e-6)),
+                            memory=memory,
                             logs={k:float(v) for k,v in value['log_vars'].items()}))
         emit(dict(stage='discarded_detector_preflight', **records[-1]))
     total = torch.cuda.get_device_properties(gpu).total_memory
-    result = dict(passed=len(records)==8 and torch.cuda.max_memory_reserved(gpu)<.95*total,
+    result = dict(passed=len(records)==engineering_steps and torch.cuda.max_memory_reserved(gpu)<.95*total,
         steps=records, discarded=True, detector_parameters=sum(p.numel() for p in model.parameters()),
+        original_smoke_steps=core.SETTINGS['preflight_steps'], additional_memory_check_steps=64,
+        memory_guard=training_repair.MEMORY_GUARD, memory_plateau_passed=True,
         peak_allocated_bytes=torch.cuda.max_memory_allocated(gpu), peak_reserved_bytes=torch.cuda.max_memory_reserved(gpu),
         device_total_bytes=total, device=torch.cuda.get_device_name(gpu),
         elapsed=time.monotonic()-before, batch=2, input=[1024,1024], precision='FP32',
@@ -220,6 +234,8 @@ def preflight(out, gpu):
 
 def train_detector(out, fold):
     check_fold(out, fold)
+    from mmcv import Config
+    training_repair.validate_config(Config.fromfile(str(out/fold/'detector_config.py')))
     if not json.loads((out/'resource_preflight.json').read_text())['passed']:
         raise ValueError('Detector training requires discarded resource preflight')
     folder = out/fold
@@ -251,6 +267,7 @@ def cache_views(out, fold, model, gpu, allowed_rows):
     folder = out/fold
     lookup = {r['image']:r for r in allowed_rows}
     result = []
+    memory_guard = training_repair.MemoryPlateau()
     for scale in (1., .5):
         specs = frozen.g.fixed_specs(cfg, scale)
         for spec, split in zip(specs, ('train', 'train_sim')):
@@ -262,6 +279,10 @@ def cache_views(out, fold, model, gpu, allowed_rows):
             data = scatter(collate([dataset[i]], samples_per_gpu=1), [gpu])[0]
             image, metas = data['img'][0], data['img_metas'][0]
             tensors = frozen.capture_cache(model, image, metas)
+            torch.cuda.synchronize(gpu)
+            memory = memory_guard.observe(torch.cuda.memory_allocated(gpu), torch.cuda.memory_reserved(gpu))
+            if memory['step'] % 100 == 0:
+                emit(dict(stage='cache_memory', fold=fold, **memory))
             old = lookup[name]; gt = torch.tensor(old['gt'], dtype=torch.float32).reshape(1,5)
             error = float((tensors['boxes_original'][0,:2]-gt[0,:2]).norm()) if len(tensors['boxes_original']) else None
             result.append(dict(image=name, domain=old['domain'], sequence=old['sequence'], role='train',
@@ -307,11 +328,14 @@ def midpoint_predict(out, fold, gpu):
     head = SigmaMidpointHead(1.5).cuda(gpu)
     opt = frozen.optimizer_for(head)
     updates = 0
+    memory_guard = training_repair.MemoryPlateau()
     with (folder/'midpoint_train.jsonl').open('x') as log:
         for epoch in range(1,4):
             batches = frozen.epoch_batches(cache, epoch)
             for slot, indices in enumerate(batches):
                 value = frozen.update(head, opt, cache, indices, torch.device('cuda', gpu)); updates += 1
+                torch.cuda.synchronize(gpu)
+                value['memory'] = memory_guard.observe(torch.cuda.memory_allocated(gpu), torch.cuda.memory_reserved(gpu))
                 log.write(json.dumps(dict(epoch=epoch, slot=slot, **value))+'\n')
             emit(dict(stage='auxiliary_midpoint_epoch', fold=fold, epoch=epoch, updates=updates))
     eligible_support = {d:sum(r['domain']==d and r['eligible'] for r in cache) for d in ('real','sim')}
@@ -327,6 +351,7 @@ def midpoint_predict(out, fold, gpu):
     dataset = frozen.dataset_for(original_cfg, 'train', 1.)
     names = [Path(i['filename']).stem for i in frozen.infos(dataset)]
     requested = set(specification['predict_images']); outputs = []
+    memory_guard = training_repair.MemoryPlateau()
     with torch.no_grad():
         for index, name in enumerate(names):
             if name not in requested: continue
@@ -341,6 +366,9 @@ def midpoint_predict(out, fold, gpu):
             old = by_name[name]
             outputs.append({k:deepcopy(old[k]) for k in ('image','sequence','domain','split','frame_id','image_size','gt')})
             outputs[-1].update(pred=pred, auxiliary_B=base, excluded_fold=fold)
+            torch.cuda.synchronize(gpu)
+            memory = memory_guard.observe(torch.cuda.memory_allocated(gpu), torch.cuda.memory_reserved(gpu))
+            if memory['step'] % 100 == 0: emit(dict(stage='OOF_memory', fold=fold, **memory))
             if len(outputs)%100 == 0: emit(dict(stage='OOF_predict', fold=fold, done=len(outputs), total=len(requested)))
     if {r['image'] for r in outputs} != requested: raise ValueError('OOF prediction coverage incomplete')
     if frozen.g.state_digest(model) != before: raise ValueError('Auxiliary inference detector changed')

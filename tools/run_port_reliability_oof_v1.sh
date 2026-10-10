@@ -24,16 +24,25 @@ finish() {
   exit "$status"
 }
 trap finish EXIT
-gpu=""
-for card in 3 2; do
-  reading="$(nvidia-smi -i "$card" --query-gpu=memory.used,utilization.gpu --format=csv,noheader,nounits)"
-  read -r used load <<< "${reading//,/ }"
-  if (( used < 200 && load < 5 )); then gpu="$card"; break; fi
-done
-[[ -n "$gpu" ]] || { printf 'GPU2/3 busy; stop\n' >&2; exit 3; }
+check_idle_cards() {
+  local apps card reading uuid used load
+  apps="$(nvidia-smi --query-compute-apps=gpu_uuid --format=csv,noheader)"
+  for card in 2 3; do
+    reading="$(nvidia-smi -i "$card" --query-gpu=uuid,memory.used,utilization.gpu --format=csv,noheader,nounits)"
+    read -r uuid used load <<< "${reading//,/ }"
+    printf 'GPU%s %s used=%sMiB util=%s%%\n' "$card" "$uuid" "$used" "$load" >> "$run_dir/gpu.log"
+    if [[ "$apps" == *"$uuid"* ]] || (( used >= 100 || load != 0 )); then
+      printf 'GPU%s occupied; stop without training\n' "$card" >&2; return 3
+    fi
+  done
+}
+check_idle_cards
+gpu=3
 export CUDA_VISIBLE_DEVICES="$gpu"
-printf 'Physical GPU=%s\n' "$gpu" | tee "$run_dir/gpu.log"
+printf 'Physical GPU=%s\n' "$gpu" | tee -a "$run_dir/gpu.log"
 python -c 'import sys,torch,numpy; print(sys.version,torch.__version__,numpy.__version__,torch.cuda.get_device_name(0))' | tee "$run_dir/runtime.log"
 python -m unittest discover -s tests -p 'test_port_reliability_oof_v1.py' -v 2>&1 | tee "$run_dir/tests.log"
+python -m unittest discover -s tests -p 'test_port_reliability_oof_training_v2.py' -v 2>&1 | tee "$run_dir/training_repair_tests.log"
+check_idle_cards
 python crane_project/tools/run_port_reliability_oof_v1.py --mode all --gpu 0 --out "$run_dir/result" 2>&1 | tee "$run_dir/run.log"
 python crane_project/tools/review_port_reliability_oof_v1.py "$run_dir/result" --receipt "$run_dir/result/server_review.json" 2>&1 | tee "$run_dir/review.log"

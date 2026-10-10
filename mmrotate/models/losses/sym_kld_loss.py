@@ -18,11 +18,13 @@ class SymKLDLoss(nn.Module):
     def __init__(self, 
                  eps: float = 1e-6, 
                  reduction: str = 'mean', 
-                 loss_weight: float = 1.0):
+                 loss_weight: float = 1.0,
+                 strict_finite: bool = False):
         super(SymKLDLoss, self).__init__()
         self.eps = eps
         self.reduction = reduction
         self.loss_weight = loss_weight
+        self.strict_finite = bool(strict_finite)
 
     def forward(self,
                 pred,
@@ -41,6 +43,8 @@ class SymKLDLoss(nn.Module):
 
         # 1. 调用底层度量算子，得到原始对称 KLD 距离
         raw_kld = sym_kld(pred, target, eps=self.eps)
+        if self.strict_finite and not torch.isfinite(raw_kld).all():
+            raise FloatingPointError('Nonfinite SymKLD regression distance')
 
         # 2. 对原始距离做有界化压缩，避免极端错位样本把梯度拉爆
         raw_kld = torch.nan_to_num(raw_kld, nan=1e4, posinf=1e4, neginf=0.0)

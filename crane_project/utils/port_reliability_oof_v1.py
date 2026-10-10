@@ -19,6 +19,7 @@ METHODS = ('in_sample', 'oof', 'common_in_sample', 'common_oof',
            'full_simple', 'score_only')
 CONTROLS = ('in_sample', 'full_simple', 'score_only')
 SETTINGS = dict(seed=1701, detector_epochs=24, detector_batch=2,
+                auxiliary_training_revision='normalized_padding_per_image_gt_strict_v2',
                 midpoint_epochs=3, midpoint_seed=1703, sigma_cells=1.5,
                 preflight_steps=8, minimum_output_coverage=.95,
                 minimum_center_matching_fraction=.90, correct_retention=.95,
