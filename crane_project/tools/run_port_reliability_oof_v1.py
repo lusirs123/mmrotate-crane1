@@ -98,7 +98,9 @@ def prepare(out):
             spec.ann_file = split+'/annfiles/'
             spec.img_prefix = split+'/images/'
         # This auxiliary trainer never constructs original VAL or TEST datasets.
-        cfg.data.pop('val', None); cfg.data.pop('test', None)
+        # compat_cfg dereferences both entries even with validate=False.
+        # Empty placeholders carry no dataset path and are never constructed.
+        cfg.data.val = dict(); cfg.data.test = dict()
         cfg.data.samples_per_gpu = core.SETTINGS['detector_batch']
         cfg.data.workers_per_gpu = 2
         # MMRotate 0.x compat_cfg rejects duplicate legacy/new loader options.

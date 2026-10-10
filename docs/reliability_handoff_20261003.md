@@ -2545,3 +2545,5 @@ OOF标签由各自实际预测与GT计算双边最大相对误差>10%，漏检�
 训练源码ccab8a1，首次RUN_ID=20261010_real_oof_v1，GPU3。14项服务器检查通过；8步资源预检实际完成，模型31,560,792参数，FP32/batch2/1024，显存峰值allocated2,589,477,376 bytes（约2.41GiB），reserved2,822,766,592 bytes（约2.63GiB），8GB GTX1080资源护栏通过。第1步含启动/内核开销13.70s，后7步约0.96～0.99s/步；这不是完整训练或部署延迟。按约39,700个两辅助B训练更新粗估约11小时，另加缓存/head/推理与IO，非完成ETA保证。
 
 进入实际tools/train.py后，MMRotate compat_cfg发现data.samples_per_gpu与data.train_dataloader.samples_per_gpu重复设置，零正式训练更新即停止，退出1；首次包SHA e754e0f5d674625ea302f8336197d150e8ee57f7c64b8ab24de08f0c6aabc187，原失败日志保留。修复仅移除新旧loader重复字段并在资源预检前执行实际compat_cfg；增加服务器配置兼容回归，不改架构/数据/预算/初始化/门槛，不把此工程失败计为性能失败。修正版使用独立RUN_ID，资源预检模型仍丢弃。
+
+继续静态核对compat_cfg发现其在validate=False时仍读取data.val/test字段；辅助配置改为无路径空占位，防止框架字段访问错误，实际不会构造原VAL/TEST数据集。该问题在修正版启动前修正，无新增训练失败。来源闭包追加compat_config.py，共81份。

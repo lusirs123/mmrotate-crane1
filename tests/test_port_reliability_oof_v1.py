@@ -127,6 +127,7 @@ class ContractTests(unittest.TestCase):
         cfg=Config.fromfile(str(Path(__file__).parents[1]/'crane_project/configs/crane_symeood_k1_port_day2night_aug_b_v1.py'))
         cfg.data.samples_per_gpu=2;cfg.data.workers_per_gpu=2
         cfg.data.pop('train_dataloader',None)
+        cfg.data.val=dict();cfg.data.test=dict()
         cfg=compat_cfg(cfg)
         self.assertEqual(cfg.data.train_dataloader.samples_per_gpu,2)
 
