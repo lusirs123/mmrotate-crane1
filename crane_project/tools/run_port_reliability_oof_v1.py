@@ -101,7 +101,8 @@ def prepare(out):
         cfg.data.pop('val', None); cfg.data.pop('test', None)
         cfg.data.samples_per_gpu = core.SETTINGS['detector_batch']
         cfg.data.workers_per_gpu = 2
-        cfg.data.train_dataloader = dict(samples_per_gpu=core.SETTINGS['detector_batch'], workers_per_gpu=2)
+        # MMRotate 0.x compat_cfg rejects duplicate legacy/new loader options.
+        cfg.data.pop('train_dataloader', None)
         cfg.workflow = [('train', 1)]
         cfg.runner.max_epochs = core.SETTINGS['detector_epochs']
         cfg.load_from = None; cfg.resume_from = None; cfg.auto_resume = False
@@ -175,6 +176,8 @@ def preflight(out, gpu):
     from mmdet.datasets import build_dataloader
     check_fold(out, 'A')
     cfg = Config.fromfile(str(out/'A/detector_config.py'))
+    from mmrotate.utils import compat_cfg
+    compat_cfg(deepcopy(cfg))  # Exercise the actual trainer compatibility before GPU updates.
     set_random_seed(core.SETTINGS['seed'], deterministic=True)
     torch.cuda.set_device(gpu)
     model = model_for(cfg).cuda(gpu)
