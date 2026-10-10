@@ -2538,7 +2538,7 @@ OOF标签由各自实际预测与GT计算双边最大相对误差>10%，漏检�
 
 ### 44.4 实现与运行状态
 
-新增独立core/runner/CPU reviewer/protocol/source pins/tests/shell入口。训练全过程原M/policy只校验来源，不更新；候选policy单独保存，在线只需要正式M及一个simple，不加载辅助模型，不读GT/sequence/domain。深度使用价值未被本实验建立。所有产物集中work_dirs/port_reliability_oof_v1/RUN_ID/result，两套辅助权重分别位于A/B；分析包排除权重、缓存及符号链接数据目录。当前尚未运行资源预检或真实辅助训练；以下状态需实际回填。
+新增独立core/runner/CPU reviewer/protocol/source pins/tests/shell入口。训练全过程原M/policy只校验来源，不更新；候选policy单独保存，在线只需要正式M及一个simple，不加载辅助模型，不读GT/sequence/domain。深度使用价值未被本实验建立。所有产物集中work_dirs/port_reliability_oof_v1/RUN_ID/result，两套辅助权重分别位于A/B；分析包排除权重、缓存及符号链接数据目录。本段为初始实现状态；实际预检、兼容修复及训练启动进展见44.5/44.6。
 
 ### 44.5 首次资源预检与零正式更新兼容修复
 
@@ -2547,3 +2547,13 @@ OOF标签由各自实际预测与GT计算双边最大相对误差>10%，漏检�
 进入实际tools/train.py后，MMRotate compat_cfg发现data.samples_per_gpu与data.train_dataloader.samples_per_gpu重复设置，零正式训练更新即停止，退出1；首次包SHA e754e0f5d674625ea302f8336197d150e8ee57f7c64b8ab24de08f0c6aabc187，原失败日志保留。修复仅移除新旧loader重复字段并在资源预检前执行实际compat_cfg；增加服务器配置兼容回归，不改架构/数据/预算/初始化/门槛，不把此工程失败计为性能失败。修正版使用独立RUN_ID，资源预检模型仍丢弃。
 
 继续静态核对compat_cfg发现其在validate=False时仍读取data.val/test字段；辅助配置改为无路径空占位，防止框架字段访问错误，实际不会构造原VAL/TEST数据集。该问题在修正版启动前修正，无新增训练失败。来源闭包追加compat_config.py，共81份。
+
+### 44.6 修正版真实训练已启动，性能结果待完成
+
+修正版训练源码7b3f2a6，RUN_ID=20261010_real_oof_v1_fix1；服务器原项目目录/mmrotljj，物理GPU3（逻辑0），后台脚本PID1497581，实际tools/train.py PID1500331。15项服务器检查全部通过；修正版8步预检通过，参数量及显存峰值与首次一致，后7步耗时中位数0.9867s。预检模型丢弃后重新按合同初始化，没有从首次失败或预检状态继续训练。
+
+2026-10-10 10:09:53服务器日志确认辅助A正式训练已达到Epoch[1][150/830]，batch2、最大24轮、workflow仅train、--no-validate、seed1701。允许Real911/Sim748加载身份与合同一致。第100/150步记录loss1.9031/1.4762，显存日志2469MiB；这些是训练运行/有限数值证据，不是判断准确性或泛化收益。两套辅助检测器总训练量约39,700步，按资源预检粗估约11小时，另加midpoint、折外推理与IO，不作为完成时间保证。
+
+后台流程依次执行A24轮末态→A自己的sigma1.5 midpoint3轮→A排除序列预测→B相同步骤→来源护栏→TRAIN四组固定simple拟合→完整VAL→服务器独立review与本RUN_ID打包；源码中实际完整VAL评分仍在TRAIN模型冻结及来源护栏通过之后。来源或VAL失败均按原合同停止，不自动TEST或替换正式policy。当前B、各midpoint、OOF、判断器与VAL尚未完成，不能宣称可靠性改进。最终结果回传、双端复算和修正版包清理也尚未发生，不将“后台已启动”写成全部流程完成。
+
+首次零正式更新失败包已回传，SHA与安全成员检查通过，完整失败目录/日志/预检记录保留两端；仅该次tar.gz已精确删除，清理回执位于首次运行目录。修正版完成后包将位于服务器work_dirs根目录`port_reliability_oof_v1_20261010_real_oof_v1_fix1.tar.gz`，权重不回传。服务器既有工作区/暂存指纹b48cc0…/d54105…保持；正式M、原policy及历史结果身份保持。
