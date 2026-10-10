@@ -2515,3 +2515,27 @@ C100次分项梯度记录加权辅助/BCE范数比.0512～54.5073（首批.6841�
 **决定与边界：** 封存本合同，保留正式M/simple，尚不能隔离P3、受限读出、标签/真实错误支持的唯一根因，也不构成原ReDC复现失败。先整理正式可靠性成果及负结果边界，不自动展开新训练。中心仅输出命中874/886、输出覆盖886/887、全帧正确覆盖874/887保持。
 
 完整结果集中work_dirs/port_reliability_spatial_axis_v1/20261009_spatial_axis_v1_fix2；独立interpretation.md/json与mac_review在result。新空间特征保留两端、末态.pth保留服务器SHA621fd91dc62f006323f676291f982cbd55472a1023bd0351735a0f2aeb232f12。最终回传包SHA9e2850283a2858ec26ebe8ed75ee7bb51d194a42a189209beb2fbe1c37906f95，安全成员/路径核验通过。首次和fix1的零更新失败日志已取回保留。服务器既有工作区/暂存指纹保持b48cc0…/d54105…。回传、记录Git同步与仅本项包/bundle精确清理回执保存同result，不写论文主要成果。
+
+## 44. 按Real序列排除的训练预测来源对照（2026-10-10）
+
+### 44.1 授权、假设与固定范围
+
+用户授权按“来源合同→资源预检→两套辅助训练→折外预测→simple对照→完整VAL”执行，并沿用本地修改/Git同步/服务器原目录与mmrotljj/后两张空闲卡/回传独立复核/本项压缩包清理流程。正式M=B24＋sigma1.5/epoch03、原simple/policy、三分量接口、几何/深度公式保持。仅检验改变判断器训练预测来源是否能提高正式M上的尺寸错误辨识；未宣称错误支持是唯一根因，不增加新质量网络或特征。
+
+### 44.2 数据与初始化合同
+
+完整TRAIN Real1810、Sim748；Real A=seq01/05共899，B=seq06/12/13共911。辅助A用B+Sim1659训练并预测A899，辅助B用A+Sim1647训练并预测B911。各保留当前SymEOOD ResNet50/FPN、SymNFL/SymKLD/SymPOLA与B增强，初始化只用通用ImageNet ResNet50；禁止加载B24、原SymEOOD港口权重及正式midpoint。各辅助B固定24轮末态，midpoint sigma1.5从中性初始化只读该折允许数据1/.5缓存，固定3轮末态；原域均衡batch8/lr.001/clip10目标不改。无辅助VAL选权、无TEST。
+
+seq12两个连续源片段绑定同组；seq13有独立源文件记录。旧seq01/05/06缺完整采集事件关联证据，故仅称整序列排除、不称独立采集事件或整域折外；TRAIN跨A/B精确图片SHA重复为0。Sim只有seq08，保持正式M原in-sample材料，明确不是Sim折外。原图/标注通过manifest逐文件SHA核对；新训练目录只建允许身份的符号链接，原数据不复制、不改动。
+
+### 44.3 预检、判断器与停止条件
+
+资源预检独立进程执行8个实际FP32检测训练step，batch2、1024输入；记录loss/梯度、每步耗时及显存allocated/reserved峰值，预检模型丢弃，峰值reserved须<物理总显存95%，有限数值；不自动改batch。服务器已缓存通用ResNet50，不需要港口任务权重初始化。
+
+OOF标签由各自实际预测与GT计算双边最大相对误差>10%，漏检保留MISSING、不标成尺寸错。按视频检查辅助输出覆盖≥95%、输出中心<15px比例≥90%，属于工程失效护栏，不保证错误类型代表性。若不通过，标AUXILIARY_SOURCE_FAILED_STOP，正式VAL评分不启动；不因此加训练或重分组。
+
+判断器两主臂同simple3特征、float64平衡logistic、L2=.1/Newton100/梯度1e-8：in_sample复现原TRAIN拟合，oof使用Real折外+相同Sim原预测；另列common_in_sample/common_oof共同有框身份对照，只有oof可晋级，不反选共同子集臂。先固定四臂TRAIN模型，再用同一正式M完整VAL887帧/886输出校准各自单一全局门限，分域/逐视频正确保留≥95%，whole ties。报告FA/FR/ED/CR/MISSING、同数/同CR对照、逐视频AUROC、连续正确FR/错误FA与中心输出/全帧覆盖。oof总体同数/同CR须严格优于in_sample/原simple/score，各分组FA不增且连续正确FR保护；失败VAL_FAILED_STOP，不重选辅助权重/特征/分组/门限。通过只标VAL_PASS_FROZEN_TEST_PENDING，未自动部署或访问TEST。
+
+### 44.4 实现与运行状态
+
+新增独立core/runner/CPU reviewer/protocol/source pins/tests/shell入口。训练全过程原M/policy只校验来源，不更新；候选policy单独保存，在线只需要正式M及一个simple，不加载辅助模型，不读GT/sequence/domain。深度使用价值未被本实验建立。所有产物集中work_dirs/port_reliability_oof_v1/RUN_ID/result，两套辅助权重分别位于A/B；分析包排除权重、缓存及符号链接数据目录。当前尚未运行资源预检或真实辅助训练；以下状态需实际回填。

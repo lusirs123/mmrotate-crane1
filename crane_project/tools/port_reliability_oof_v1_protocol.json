@@ -1,0 +1,47 @@
+{
+  "calibration": "One global full VAL cutoff respecting >=95% correct retention each domain/video. Entire ties. Existing formal policy kept.",
+  "deployment": "Only final formal M and one new policy; auxiliaries not present online; GT and video IDs offline only; candidate not automatically deployed.",
+  "fitting": {
+    "gradient_tolerance": 1e-08,
+    "l2": 0.1,
+    "max_iterations": 100
+  },
+  "groups": {
+    "A": [
+      "real_seq01",
+      "real_seq05"
+    ],
+    "B": [
+      "real_seq06",
+      "real_seq12",
+      "real_seq13"
+    ]
+  },
+  "input_pins": {
+    "work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/epoch_24.pth": "8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23",
+    "work_dirs/crane_symeood_k1_port_day2night_midpoint_sigma_v1/sigma_1p5/head_epoch_03.pth": "16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7",
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f",
+    "work_dirs/port_reliability_feature_ablation_v1/20261008_size_features_v1/fit/scored_TRAIN_VAL.jsonl.gz": "e804241c2b7d529ed816f9d2f33dedad1e2961a5b132426bc816777b324c03b4",
+    "work_dirs/port_results/geometry/port_geometry_midpoint_formal_v1_roi_cache/cache_manifest.json": "046c5998dee0ba3703f1ae4e08fc6a02e9804d216ea12241357f69f2a4afd1e3"
+  },
+  "paper_scope": "New source experiment. Does not establish depth usability. TEST repeatedly exposed, no TEST access in this entry.",
+  "preflight": "Eight discarded actual FP32 training steps, batch2/1024, finite loss and gradients, peak reserved<95% device memory. No auto batch change.",
+  "protocol": "port_reliability_oof_v1",
+  "selection": "Main OOF arm only. Common-membership arms diagnostic, no fallback adoption. Strict overall sameCR/same-count FA gains versus same-TRAIN simple/frozen simple/score, per-group nonincrease and correct-FR run protection.",
+  "settings": {
+    "auxiliary_weight_initialization": "ImageNet_only_no_port_task_checkpoint",
+    "correct_retention": 0.95,
+    "detector_batch": 2,
+    "detector_epochs": 24,
+    "midpoint_epochs": 3,
+    "midpoint_seed": 1703,
+    "minimum_center_matching_fraction": 0.9,
+    "minimum_output_coverage": 0.95,
+    "preflight_steps": 8,
+    "seed": 1701,
+    "sigma_cells": 1.5,
+    "source_scope": "sequence_excluded_Real_only_not_independent_acquisition_events"
+  },
+  "source_limitations": "Legacy seq01/05/06 acquisition event independence unavailable; recorded whole sequences excluded, exact cross-group image duplicate check. seq12 linked segments remain one group.",
+  "training": "Two sequential auxiliary SymEOOD B24 plus own sigma1.5 midpoint ep03. ImageNet init only, no formal B/M warmstart. TRAIN permitted sequences only. No auxiliary VAL checkpoint selection. Sim kept in sample."
+}
