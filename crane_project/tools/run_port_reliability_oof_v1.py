@@ -289,7 +289,20 @@ def midpoint_predict(out, fold, gpu):
     cache = cache_views(out, fold, model, gpu, allowed)
     if frozen.g.state_digest(model) != before: raise ValueError('Frozen auxiliary detector mutated')
     pools = {d:[r for r in cache if r['domain']==d and r['eligible']] for d in ('real','sim')}
-    if any(not p for p in pools.values()): raise ValueError('Auxiliary midpoint has no eligible domain support')
+    support = {d: {str(scale): dict(
+        views=sum(r['domain']==d and r['scale']==scale for r in cache),
+        outputs=sum(r['domain']==d and r['scale']==scale and len(r['boxes_original'])>0 for r in cache),
+        eligible=sum(r['domain']==d and r['scale']==scale and r['eligible'] for r in cache))
+        for scale in (1., .5)} for d in ('real','sim')}
+    write(folder/'midpoint_training_support.json', support)
+    if any(not p for p in pools.values()):
+        write(out/'completion.json', dict(status='AUXILIARY_SOURCE_FAILED_STOP',
+            failure_stage='midpoint_training_support', fold=fold,
+            empty_domains=[d for d,p in pools.items() if not p],
+            support_report=fold+'/midpoint_training_support.json',
+            adopted=False, VAL_scored=False, TEST_read=False))
+        emit(dict(stage='source_failed_stop', fold=fold, support=support))
+        return
     set_random_seed(core.SETTINGS['midpoint_seed'], deterministic=True)
     head = SigmaMidpointHead(1.5).cuda(gpu)
     opt = frozen.optimizer_for(head)
@@ -337,6 +350,14 @@ def midpoint_predict(out, fold, gpu):
         midpoint_sha256=sha(folder/'midpoint_epoch_03.pth'), support=core.support(outputs),
         auxiliary_training_center_eligible_views=eligible_support,
         prediction_GT_routing=False, VAL_TEST_read=False))
+    # Apply the existing per-video source criteria before spending another fold's
+    # training budget. This is not a new quality threshold or checkpoint choice.
+    gate = core.source_gate(outputs, require_two_classes=False)
+    write(folder/'oof_source_gate.json', gate)
+    if not gate['passed']:
+        write(out/'completion.json', dict(status='AUXILIARY_SOURCE_FAILED_STOP',
+            failure_stage='fold_oof_source', fold=fold,
+            adopted=False, VAL_scored=False, TEST_read=False))
 
 
 def assess(out):
@@ -383,6 +404,9 @@ def assess(out):
     candidate_policy=deepcopy(policy)
     candidate_policy['simple_policy']['models']['size']=deepcopy(models['oof'])
     candidate_policy['simple_policy']['cutoffs']['simple']['size']=deepcopy(cutoffs['oof'])
+    candidate_policy['simple_policy']['calibration_role'] = (
+        'size: full_VAL_GT_correct_retention95_per_domain_video; '
+        'angle: unchanged_formal_policy')
     candidate_policy['candidate_identity']=dict(protocol=core.VERSION,gate_passed=gate['passed'],
         automatically_deployed=False,auxiliary_models_required_online=False,
         report_sha256=sha(out/'report.json'))
@@ -418,6 +442,11 @@ def main():
             for fold in ('A','B'):
                 subprocess.run([sys.executable,__file__,'--mode','detector','--fold',fold,'--out',str(out)],check=True)
                 subprocess.run([sys.executable,__file__,'--mode','midpoint','--fold',fold,'--gpu',str(args.gpu),'--out',str(out)],check=True)
+                if (out/'completion.json').exists():
+                    status=json.loads((out/'completion.json').read_text())['status']
+                    if status != 'AUXILIARY_SOURCE_FAILED_STOP':
+                        raise ValueError('Unexpected early completion state')
+                    return
             assess(out)
     except Exception as e:
         if out.exists() and not (out/'failure.json').exists():

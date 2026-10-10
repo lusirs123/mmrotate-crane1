@@ -109,7 +109,7 @@ def support(rows):
     return result
 
 
-def source_gate(rows):
+def source_gate(rows, require_two_classes=True):
     """Engineering sanity, not evidence of transferable error coverage."""
     failures = []
     for name, v in support(rows).items():
@@ -119,7 +119,7 @@ def source_gate(rows):
             if (v['center']['hit_rate_on_outputs'] or 0) < SETTINGS['minimum_center_matching_fraction']:
                 failures.append(dict(group=name, check='aux_center_matching90'))
     all_counts = support(rows)['all']
-    if not all_counts['good'] or not all_counts['bad']:
+    if require_two_classes and (not all_counts['good'] or not all_counts['bad']):
         failures.append(dict(group='all', check='two_quality_classes'))
     return dict(passed=not failures, failures=failures,
                 guarantees_representative_errors=False)

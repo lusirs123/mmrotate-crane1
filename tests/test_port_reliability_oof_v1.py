@@ -19,6 +19,56 @@ def rows():
 
 
 class ContractTests(unittest.TestCase):
+    def test_partial_fold_does_not_require_both_quality_classes(self):
+        part=[r for r in rows() if r['sequence'] in core.GROUPS['A']]
+        for r in part:r['pred'][2]=20.
+        self.assertTrue(core.source_gate(part,require_two_classes=False)['passed'])
+        self.assertFalse(core.source_gate(part)['passed'])
+
+    def test_fold_failure_stops_before_second_detector(self):
+        import json, tempfile
+        from unittest.mock import patch
+        from crane_project.tools import run_port_reliability_oof_v1 as runner
+        with tempfile.TemporaryDirectory(dir=str(runner.ROOT/'work_dirs')) as tmp:
+            out=Path(tmp)
+            calls=[]
+            def run(args, **kwargs):
+                calls.append(args)
+                if args[args.index('--mode')+1]=='midpoint':
+                    (out/'completion.json').write_text(json.dumps(dict(status='AUXILIARY_SOURCE_FAILED_STOP')))
+            with patch.object(runner,'prepare'), patch.object(runner.subprocess,'run',side_effect=run), patch.object(runner,'assess') as assess, patch.object(runner.sys,'argv',['runner','--mode','all','--out',tmp]):
+                runner.main()
+            self.assertEqual(len(calls),3)
+            self.assertFalse(any('--fold' in a and a[a.index('--fold')+1]=='B' for a in calls))
+            assess.assert_not_called()
+
+    def test_empty_support_receipt_does_not_claim_val_review(self):
+        import json,tempfile
+        from crane_project.tools import review_port_reliability_oof_v1 as reviewer
+        with tempfile.TemporaryDirectory() as tmp:
+            out=Path(tmp);(out/'B').mkdir()
+            (out/'completion.json').write_text(json.dumps(dict(status='AUXILIARY_SOURCE_FAILED_STOP',failure_stage='midpoint_training_support',support_report='B/support.json',empty_domains=['real','sim'])))
+            (out/'B/support.json').write_text(json.dumps({d:{'1.0':dict(views=10,outputs=0,eligible=0)} for d in ('real','sim')}))
+            reviewer.review(out,out/'receipt.json')
+            result=json.loads((out/'receipt.json').read_text())
+            self.assertTrue(result['passed']);self.assertFalse(result['VAL_scored'])
+            self.assertFalse(result['GPU_predictions_independently_replayed'])
+
+    def test_partial_fold_source_failure_recomputes_saved_rows(self):
+        import json,tempfile
+        from crane_project.tools import review_port_reliability_oof_v1 as reviewer
+        from crane_project.tools import run_port_reliability_oof_v1 as runner
+        part=[r for r in rows() if r['sequence'] in core.GROUPS['A']]
+        for r in part:
+            if r['frame_id']%2:r['pred']=None
+        with tempfile.TemporaryDirectory() as tmp:
+            out=Path(tmp);(out/'A').mkdir()
+            (out/'completion.json').write_text(json.dumps(dict(status='AUXILIARY_SOURCE_FAILED_STOP',failure_stage='fold_oof_source',fold='A')))
+            runner.dump_rows(out/'A/oof_predictions.jsonl.gz',part)
+            runner.write(out/'A/oof_source_gate.json',core.source_gate(part))
+            reviewer.review(out,out/'receipt.json')
+            self.assertTrue(json.loads((out/'receipt.json').read_text())['source_gate_recomputed'])
+
     def test_two_folds_exclude_full_sequences(self):
         p=core.plan(rows());self.assertEqual(len(p['A']['predict_images']),899)
         self.assertEqual(len(p['B']['predict_images']),911)
