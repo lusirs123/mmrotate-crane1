@@ -1,0 +1,7 @@
+{
+  "scope": "local receipt archive, not server artifacts",
+  "files": {
+    "ap_report.json": "6e682f64824fe0b68bbe6b49276ebf7d147fe9891a70b0fe3d7f7757b4bc7d34",
+    "received_check.json": "194437bcc1c316197b8e54f07def7e5d7341b325218f91d9f21b0d245241affc"
+  }
+}

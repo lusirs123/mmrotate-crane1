@@ -1,0 +1,50 @@
+{
+  "scope": "byte-identical copies of existing AP evidence for Git synchronization; no recomputation",
+  "files": {
+    "val_cpu/ap_report.json": {
+      "sha256": "33f0fce2283985fdd94fcb87c48bb4e492bfb61a4e78761ff8090ddd024391fe",
+      "original_local_path": "work_dirs/port_geometry_ap_v1_val_cpu_final_20261010/ap_report.json",
+      "bytes": 6544
+    },
+    "val_cpu/artifacts.json": {
+      "sha256": "b089a8013d65dc93c81897f8f63cf6d79e46c7d163ff2b27354b1c81afab986e",
+      "original_local_path": "work_dirs/port_geometry_ap_v1_val_cpu_final_20261010/artifacts.json",
+      "bytes": 728
+    },
+    "val_cpu/pr_details.json": {
+      "sha256": "c099dab46779d470e97dcc1aab03db784c876c752c81f8d899a104b8a289a130",
+      "original_local_path": "work_dirs/port_geometry_ap_v1_val_cpu_final_20261010/pr_details.json",
+      "bytes": 595857
+    },
+    "val_native/ap_report.json": {
+      "sha256": "6e682f64824fe0b68bbe6b49276ebf7d147fe9891a70b0fe3d7f7757b4bc7d34",
+      "original_local_path": "work_dirs/port_geometry_ap_v1_val_native_review_20261010/ap_report.json",
+      "bytes": 7842
+    },
+    "val_native/received_check.json": {
+      "sha256": "194437bcc1c316197b8e54f07def7e5d7341b325218f91d9f21b0d245241affc",
+      "original_local_path": "work_dirs/port_geometry_ap_v1_val_native_review_20261010/received_check.json",
+      "bytes": 630
+    },
+    "val_native/review_artifacts.json": {
+      "sha256": "8c4c337b31237eeceee1cfdc50300d176fb286181e3cde27cbea30e6146dd22f",
+      "original_local_path": "work_dirs/port_geometry_ap_v1_val_native_review_20261010/review_artifacts.json",
+      "bytes": 263
+    },
+    "test_cpu/ap_report.json": {
+      "sha256": "9efa363584d329739d728bac0d2a1db38299a2e25de8869774c8c8ec50f8a2e7",
+      "original_local_path": "work_dirs/port_geometry_ap_test_v1_cpu_final_20261010/ap_report.json",
+      "bytes": 6604
+    },
+    "test_cpu/artifacts.json": {
+      "sha256": "0b5e00fb9eb74cbbe85383e82ff21da596ed51d6c662589af5bcdb5e401284b1",
+      "original_local_path": "work_dirs/port_geometry_ap_test_v1_cpu_final_20261010/artifacts.json",
+      "bytes": 875
+    },
+    "test_cpu/pr_details.json": {
+      "sha256": "f021be1743cb4f4cde8aa9ebad560fe4383dd8ff90ae1144b90e7cb7bc436813",
+      "original_local_path": "work_dirs/port_geometry_ap_test_v1_cpu_final_20261010/pr_details.json",
+      "bytes": 1001872
+    }
+  }
+}

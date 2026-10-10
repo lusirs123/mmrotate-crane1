@@ -190,7 +190,7 @@ def parser():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--eval-dir', default='work_dirs/port_geometry_midpoint_sigma15_v1_test_eval')
     p.add_argument('--ann-dir', default='crane_project/data/crane_grab_port_day2night_v1/test/annfiles')
-    p.add_argument('--val-ap-report', default='work_dirs/port_geometry_ap_v1_val_native_server/ap_report.json')
+    p.add_argument('--val-ap-report', default='docs/detection/ap_evidence_20261010/val_native/ap_report.json')
     p.add_argument('--out-dir', required=True)
     p.add_argument('--backend', choices=('cpu', 'mmrotate'), default='mmrotate')
     p.add_argument('--check-only', action='store_true')

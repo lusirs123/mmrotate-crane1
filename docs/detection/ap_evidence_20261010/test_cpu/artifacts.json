@@ -1,0 +1,14 @@
+{
+  "protocol": "port_geometry_ap_test_v1_fixed_exposed_test",
+  "files": {
+    "pr_details.json": "f021be1743cb4f4cde8aa9ebad560fe4383dd8ff90ae1144b90e7cb7bc436813",
+    "ap_report.json": "9efa363584d329739d728bac0d2a1db38299a2e25de8869774c8c8ec50f8a2e7"
+  },
+  "sources": {
+    "crane_project/tools/eval_port_geometry_ap_test_v1.py": "084aa4bf8a25a81e1a9cb368262b238889962c4243934449dc099e92ce66b90e",
+    "crane_project/tools/eval_port_geometry_ap_v1.py": "6b09332e8b6a36a8874780ac0331a01fc44cb859b8dfa21e50548b7b7ce16400",
+    "crane_project/tools/eval_crane_offline.py": "52d22caa5383a0c35c3b4f1b1f6b1453ba5da9d2618da0eb686eff8570bfc9b9",
+    "mmrotate/core/evaluation/eval_map.py": "d5aa00b0fb5d5e1f29344e54dfd334965bcef1a747fe1efe93e4bc053c657fbc",
+    "tests/test_port_geometry_ap_test_v1.py": "9236464f6f9e8dea217fef5fa0a473fb88697dd5d40f2e413d0e4be44cfa0666"
+  }
+}

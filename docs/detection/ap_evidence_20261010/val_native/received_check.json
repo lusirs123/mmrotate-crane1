@@ -1,0 +1,13 @@
+{
+  "status": "RECEIVED_NATIVE_AP_SUMMARY_CHECK_PASS",
+  "received_report_sha256": "6e682f64824fe0b68bbe6b49276ebf7d147fe9891a70b0fe3d7f7757b4bc7d34",
+  "native_ap_entries_verified": 8,
+  "exact_local_ap_tp_fp_coverage_match": true,
+  "input_sha_checks": 5,
+  "fixed_weight_and_annotation_identity_match": true,
+  "zero_inference_updates_no_test_no_reselection": true,
+  "server_pr_details_received": false,
+  "server_source_artifacts_received": false,
+  "native_execution": "server report and terminal evidence; not rerun locally",
+  "scope": "summary/provenance/arithmetic cross-check, not independent server PR/source audit"
+}

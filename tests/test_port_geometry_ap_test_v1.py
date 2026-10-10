@@ -122,6 +122,12 @@ def test_original_val_cli_still_has_no_test_route():
     with pytest.raises(SystemExit):t.ap.parser().parse_args(['--split','test','--out-dir','synthetic'])
 
 
+def test_default_val_gate_is_git_synchronizable():
+    args=t.parser().parse_args(['--out-dir','synthetic'])
+    assert args.val_ap_report=='docs/detection/ap_evidence_20261010/val_native/ap_report.json'
+    assert t.checked_val_gate(t.ROOT/args.val_ap_report)['status']=='VAL_AP_NATIVE_VERIFIED'
+
+
 def test_ranked_ap_can_increase_while_final_tp_count_decreases():
     # Same scores/frames: earlier TP precision can improve even with lower recall.
     gt=[20.,30.,10.,5.,0.];a=[];b=[]

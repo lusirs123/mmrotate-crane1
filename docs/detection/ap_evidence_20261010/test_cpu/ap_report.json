@@ -1,0 +1,210 @@
+{
+  "protocol": "port_geometry_ap_test_v1_fixed_exposed_test",
+  "split": "test",
+  "frames": 1440,
+  "provenance": {
+    "inputs": {
+      "completion.json": "8fe7f065ddca16871b9dbf41f84186b99ff3a51e46c308b8c3dfa5d71f7a0ce2",
+      "protocol.json": "140111513d69eef9377012d4774019c406fa8a8f72321ef2315e543155efeb1c",
+      "frozen_selection.json": "c52bf18854a514e171c4f5cf2e6afce69b7b372412f56f3d9ec74edadd9386c0",
+      "test_rows.jsonl": "13c4cfa7f1f67a7bc2cad36da1ec067adbeae74080b387d39efe39fdc41a788d",
+      "artifacts.json": "262f2622c722414283045cba18b293866a3138868f186564b5406fc37cc2558d"
+    },
+    "native_val_ap_report_sha256": "6e682f64824fe0b68bbe6b49276ebf7d147fe9891a70b0fe3d7f7757b4bc7d34",
+    "annotation_set_sha256": "e0dbb1bd8aea7209314d8ed60bc44e965550ed606135cc0016e1075d717de13e",
+    "b_checkpoint_sha256": "8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23",
+    "head_checkpoint_sha256": "16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7",
+    "checkpoint_identity": "sealed evaluation metadata, no weight reload",
+    "gt_conversion": {
+      "evaluation_gt": "sealed row GT, never regenerated",
+      "max_reparse_abs_error_xywha": [
+        0.03192138671875,
+        0.068817138671875,
+        0.00012969970703125,
+        5.91278076171875e-05,
+        0.002028837422023977
+      ],
+      "min_reparse_riou": 0.9947987700927426,
+      "validation": "same VAL enclosure 0.001px/minimum area relative error 1e-5 checks"
+    }
+  },
+  "head_updates": 0,
+  "detector_updates": 0,
+  "inference_calls": 0,
+  "test_access": true,
+  "test_repeatedly_exposed": true,
+  "selection_changed": false,
+  "selection_on_test": false,
+  "metric": {
+    "class_name": "grab",
+    "coordinates": "original image le90 radians",
+    "output_protocol": "fixed final Top-1, inherited score, missing frames retained",
+    "iou_thresholds": [
+      0.5,
+      0.75
+    ],
+    "integration": "VOC2007 11points",
+    "matching": "per-image max IoU, greedy descending score, duplicates FP",
+    "ignored_gt": 0,
+    "tie_order": "NumPy default argsort; sealed image order",
+    "iou_backend": "eval_crane_offline.compute_riou / OpenCV CPU",
+    "native_backend": "cpu",
+    "coco_ap_50_95": false
+  },
+  "software": {
+    "python": "3.13.5",
+    "numpy": "2.1.3",
+    "opencv": "4.12.0"
+  },
+  "groups": {
+    "real": {
+      "b": {
+        "coverage": {
+          "total_frames": 868,
+          "output_frames": 859,
+          "center_correct_frames": 858,
+          "center_threshold_px": 15,
+          "center_comparison": "strict <",
+          "output_center_hit_percent": 99.88358556461002,
+          "output_coverage_percent": 98.963133640553,
+          "full_frame_center_correct_percent": 98.84792626728111
+        },
+        "AP50": {
+          "ap": 0.9082240462303162,
+          "ap_percent": 90.82240462303162,
+          "num_gts": 868,
+          "num_dets": 859,
+          "tp": 852,
+          "fp": 7,
+          "native_verification": null
+        },
+        "AP75": {
+          "ap": 0.782849133014679,
+          "ap_percent": 78.2849133014679,
+          "num_gts": 868,
+          "num_dets": 859,
+          "tp": 752,
+          "fp": 107,
+          "native_verification": null
+        },
+        "min_abs_iou_margin": {
+          "0.5": 0.006374801226275761,
+          "0.75": 5.3606796386995725e-05
+        }
+      },
+      "midpoint": {
+        "coverage": {
+          "total_frames": 868,
+          "output_frames": 859,
+          "center_correct_frames": 858,
+          "center_threshold_px": 15,
+          "center_comparison": "strict <",
+          "output_center_hit_percent": 99.88358556461002,
+          "output_coverage_percent": 98.963133640553,
+          "full_frame_center_correct_percent": 98.84792626728111
+        },
+        "AP50": {
+          "ap": 0.9088729619979858,
+          "ap_percent": 90.88729619979858,
+          "num_gts": 868,
+          "num_dets": 859,
+          "tp": 851,
+          "fp": 8,
+          "native_verification": null
+        },
+        "AP75": {
+          "ap": 0.7859076857566833,
+          "ap_percent": 78.59076857566833,
+          "num_gts": 868,
+          "num_dets": 859,
+          "tp": 766,
+          "fp": 93,
+          "native_verification": null
+        },
+        "min_abs_iou_margin": {
+          "0.5": 0.0016825464255678102,
+          "0.75": 0.00028280626440468914
+        }
+      },
+      "delta_percentage_points": {
+        "AP50": 0.06489157676696777,
+        "AP75": 0.30585527420043945
+      }
+    },
+    "sim": {
+      "b": {
+        "coverage": {
+          "total_frames": 572,
+          "output_frames": 572,
+          "center_correct_frames": 572,
+          "center_threshold_px": 15,
+          "center_comparison": "strict <",
+          "output_center_hit_percent": 100.0,
+          "output_coverage_percent": 100.0,
+          "full_frame_center_correct_percent": 100.0
+        },
+        "AP50": {
+          "ap": 1.0,
+          "ap_percent": 100.0,
+          "num_gts": 572,
+          "num_dets": 572,
+          "tp": 572,
+          "fp": 0,
+          "native_verification": null
+        },
+        "AP75": {
+          "ap": 0.908355176448822,
+          "ap_percent": 90.8355176448822,
+          "num_gts": 572,
+          "num_dets": 572,
+          "tp": 565,
+          "fp": 7,
+          "native_verification": null
+        },
+        "min_abs_iou_margin": {
+          "0.5": 0.2140829451336721,
+          "0.75": 0.0008499239811498027
+        }
+      },
+      "midpoint": {
+        "coverage": {
+          "total_frames": 572,
+          "output_frames": 572,
+          "center_correct_frames": 572,
+          "center_threshold_px": 15,
+          "center_comparison": "strict <",
+          "output_center_hit_percent": 100.0,
+          "output_coverage_percent": 100.0,
+          "full_frame_center_correct_percent": 100.0
+        },
+        "AP50": {
+          "ap": 1.0,
+          "ap_percent": 100.0,
+          "num_gts": 572,
+          "num_dets": 572,
+          "tp": 572,
+          "fp": 0,
+          "native_verification": null
+        },
+        "AP75": {
+          "ap": 0.9090909361839294,
+          "ap_percent": 90.90909361839294,
+          "num_gts": 572,
+          "num_dets": 572,
+          "tp": 571,
+          "fp": 1,
+          "native_verification": null
+        },
+        "min_abs_iou_margin": {
+          "0.5": 0.2333748486164804,
+          "0.75": 0.01662515138351961
+        }
+      },
+      "delta_percentage_points": {
+        "AP50": 0.0,
+        "AP75": 0.07357597351074219
+      }
+    }
+  },
+  "status": "TEST_AP_CPU_COMPLETE_NATIVE_CHECK_PENDING"
+}

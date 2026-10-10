@@ -1,0 +1,13 @@
+{
+  "protocol": "port_geometry_ap_v1_fixed_val",
+  "files": {
+    "pr_details.json": "c099dab46779d470e97dcc1aab03db784c876c752c81f8d899a104b8a289a130",
+    "ap_report.json": "33f0fce2283985fdd94fcb87c48bb4e492bfb61a4e78761ff8090ddd024391fe"
+  },
+  "sources": {
+    "crane_project/tools/eval_port_geometry_ap_v1.py": "6b09332e8b6a36a8874780ac0331a01fc44cb859b8dfa21e50548b7b7ce16400",
+    "crane_project/tools/eval_crane_offline.py": "52d22caa5383a0c35c3b4f1b1f6b1453ba5da9d2618da0eb686eff8570bfc9b9",
+    "mmrotate/core/evaluation/eval_map.py": "d5aa00b0fb5d5e1f29344e54dfd334965bcef1a747fe1efe93e4bc053c657fbc",
+    "tests/test_port_geometry_ap_v1.py": "20dd5fc4d17aab65304114b7a8b7ff3aca1f30a846f63e87f6ddb7def9967297"
+  }
+}
