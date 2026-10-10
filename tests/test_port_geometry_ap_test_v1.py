@@ -128,6 +128,38 @@ def test_default_val_gate_is_git_synchronizable():
     assert t.checked_val_gate(t.ROOT/args.val_ap_report)['status']=='VAL_AP_NATIVE_VERIFIED'
 
 
+def test_default_test_inputs_are_byte_identical_sync_bundle():
+    args=t.parser().parse_args(['--out-dir','synthetic'])
+    assert args.eval_dir=='docs/detection/ap_evidence_20261010/test_source'
+    p=t.checked_eval_dir(t.ROOT/args.eval_dir)
+    bundle=t.ap.read_json(p/'bundle_manifest.json')['files']
+    manifest=t.ap.read_json(p/'artifacts.json')['files']
+    assert set(bundle)==set(t.REQUIRED+('artifacts.json',))
+    for name in bundle:
+        assert t.ap.sha(p/name)==bundle[name]['sha256']
+        if name!='artifacts.json':assert t.ap.sha(p/name)==manifest[name]
+    assert t.ap.sha(p/'test_rows.jsonl')==t.ROWS_SHA
+
+
+@pytest.mark.parametrize('partial',[False,True])
+def test_missing_test_inputs_explain_sync_path_without_output(partial,tmp_path,monkeypatch):
+    monkeypatch.setattr(t,'checked_val_gate',lambda *args:val_report())
+    p=tmp_path/'archived-test'
+    if partial:
+        p.mkdir();(p/'completion.json').write_text('{}')
+    args=SimpleNamespace(eval_dir=p,ann_dir=tmp_path,val_ap_report=tmp_path,
+                         out_dir=tmp_path/'out',backend='cpu',check_only=True)
+    with pytest.raises(FileNotFoundError,match='missing:.*artifacts.json.*Sync docs/detection'):
+        t.run(args)
+    assert not args.out_dir.exists()
+
+
+def test_explicit_archived_directory_supported_without_fallback(tmp_path):
+    p=tmp_path/'archived-test';p.mkdir()
+    for name in t.REQUIRED+('artifacts.json',):(p/name).write_text('{}')
+    assert t.checked_eval_dir(p)==p
+
+
 def test_ranked_ap_can_increase_while_final_tp_count_decreases():
     # Same scores/frames: earlier TP precision can improve even with lower recall.
     gt=[20.,30.,10.,5.,0.];a=[];b=[]

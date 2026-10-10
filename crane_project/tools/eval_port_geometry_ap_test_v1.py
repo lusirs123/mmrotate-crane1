@@ -23,6 +23,20 @@ ROWS_SHA = '13c4cfa7f1f67a7bc2cad36da1ec067adbeae74080b387d39efe39fdc41a788d'
 ANN_SHA = 'e0dbb1bd8aea7209314d8ed60bc44e965550ed606135cc0016e1075d717de13e'
 VAL_AP_SHA = '6e682f64824fe0b68bbe6b49276ebf7d147fe9891a70b0fe3d7f7757b4bc7d34'
 REQUIRED = ('completion.json', 'protocol.json', 'frozen_selection.json', 'test_rows.jsonl')
+DEFAULT_EVAL_DIR = 'docs/detection/ap_evidence_20261010/test_source'
+
+
+def checked_eval_dir(eval_dir):
+    # Explicit archive paths remain supported; never guess another experiment.
+    p = Path(eval_dir)
+    missing = [name for name in REQUIRED + ('artifacts.json',) if not (p / name).is_file()]
+    if missing:
+        raise FileNotFoundError(
+            'Incomplete sealed TEST AP input directory: %s; missing: %s. '
+            'Sync %s and use --eval-dir %s, or specify the complete original '
+            'archived directory. No inference or input reconstruction is needed.' %
+            (p, ', '.join(missing), DEFAULT_EVAL_DIR, DEFAULT_EVAL_DIR))
+    return p
 
 
 def checked_val_gate(path):
@@ -81,7 +95,7 @@ def validate_rows(rows):
 
 def checked_inputs(eval_dir, ann_dir, val_ap_report):
     val = checked_val_gate(val_ap_report)
-    p, a = Path(eval_dir), Path(ann_dir)
+    p, a = checked_eval_dir(eval_dir), Path(ann_dir)
     manifest = ap.read_json(p / 'artifacts.json')
     for name in REQUIRED:
         if ap.sha(p / name) != manifest['files'][name]:
@@ -136,6 +150,7 @@ def checked_inputs(eval_dir, ann_dir, val_ap_report):
         errors.append(ap.np.abs(ap.np.asarray(r['gt']) - parsed[0]))
         ious.append(ap.compute_riou(r['gt'], parsed[0]))
     return rows, dict(inputs={n: ap.sha(p / n) for n in REQUIRED + ('artifacts.json',)},
+        eval_directory=str(p.resolve()),
         native_val_ap_report_sha256=ap.sha(val_ap_report), annotation_set_sha256=digest.hexdigest(),
         b_checkpoint_sha256=ap.B_SHA, head_checkpoint_sha256=ap.HEAD_SHA,
         checkpoint_identity='sealed evaluation metadata, no weight reload',
@@ -188,7 +203,8 @@ def run(args):
 
 def parser():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--eval-dir', default='work_dirs/port_geometry_midpoint_sigma15_v1_test_eval')
+    p.add_argument('--eval-dir', default=DEFAULT_EVAL_DIR,
+                   help='Complete sealed TEST input directory; explicit archived paths are supported')
     p.add_argument('--ann-dir', default='crane_project/data/crane_grab_port_day2night_v1/test/annfiles')
     p.add_argument('--val-ap-report', default='docs/detection/ap_evidence_20261010/val_native/ap_report.json')
     p.add_argument('--out-dir', required=True)

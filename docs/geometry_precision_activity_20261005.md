@@ -28,7 +28,7 @@
 
 ### 1.1 当前目标与任务分工
 
-**论文投稿准备（A060，2026-10-10）：** [有限实验清单](detection/小论文投稿有限实验清单_20261010.md)P0完整VAL原生AP已由A058核验完成；A059固定已暴露TEST CPU计算完成，原生TEST核对待完成。按用户同步要求，9份必要AP JSON逐字节复制到[可同步证据目录](detection/ap_evidence_20261010/README.md)，TEST默认VAL门槛及文档链接改用该目录，不需同步本机work_dirs。当前25项测试及新默认路径完整输入静态核对通过，原VAL源码、报告字节、AP公式／数值保持；迁移没有重算AP或删历史结果。real TEST AP75 78.2849%→78.5908%、sim 90.8355%→90.9091%；real AP50 TP852→851同时披露。服务器命令更新见[TEST说明](detection/固定TEST_AP补充评价与运行说明_20261010.md)，固定B24／σ1.5-ep03，不训练／推理／选权，不改论文、可靠性／深度。TEST不升级为独立确认；外部比较仍待下一阶段，本轮不启动。
+**论文投稿准备（A061，2026-10-10）：** [有限实验清单](detection/小论文投稿有限实验清单_20261010.md)P0完整VAL原生AP已由A058核验完成；A059固定已暴露TEST CPU计算完成，原生TEST核对待完成。按用户同步要求，9份必要AP JSON逐字节复制到[可同步证据目录](detection/ap_evidence_20261010/README.md)，TEST默认VAL门槛及文档链接改用该目录，不需同步本机work_dirs。A061修复服务器原TEST目录缺失：将5份原输入逐字节复制到可同步test_source，默认入口改用该路径并增加明确缺文件诊断，29项测试及新默认路径完整1440帧输入静态核对通过，原VAL源码、报告字节、AP公式／数值保持；迁移没有重算AP或删历史结果。real TEST AP75 78.2849%→78.5908%、sim 90.8355%→90.9091%；real AP50 TP852→851同时披露。服务器命令更新见[TEST说明](detection/固定TEST_AP补充评价与运行说明_20261010.md)，固定B24／σ1.5-ep03，不训练／推理／选权，不改论文、可靠性／深度。TEST不升级为独立确认；外部比较仍待下一阶段，本轮不启动。
 
 **当前推进（A055）：** A048两组有限实验已收束、不采用，保持B24＋σ1.5-ep03，无补跑／延长预算。A050～A053来源核对及材料准备完成，A054记录20帧四点包围框及OBB／固定k比较职责，A055确认20份人工复核标志全部保存，取消两帧补勾待办。全部坐标及PNG保持，已有结构／几何诊断沿用；对象／测量声明仍空、旧检查合同未适配，不能直接导出GT或训练。下一步固定顶梁及梯形凸起的包围方向／范围与四点→OBB读取，补声明并取得同帧原轴／适用k配对；20帧仍UNASSIGNED，事件／近重复和物理对应待核验。没有model／policy／公式改动，不从Train-03或TEST选方案，两个下游共同收益须分别评价。
 
@@ -1271,3 +1271,14 @@ CUDA_VISIBLE_DEVICES=3 bash crane_project/tools/run_port_detection_runtime_v1.sh
 **用户要求／修改：** 用户明确“不要修改在workdir下，没办法同步”。新增`docs/detection/ap_evidence_20261010/`，逐字节复制VAL CPU、VAL原生收件及TEST CPU的9份必要JSON（1,621,215字节）；复制来源／SHA在sync_manifest.json，README区分原执行artifact与本机收件清单。原件保留，未删除／覆盖或重算。脚本／测试仍在crane_project/tools与tests；仅改TEST脚本默认val-ap-report到`docs/detection/ap_evidence_20261010/val_native/ap_report.json`，AP公式、输入保护、报告内容和VAL脚本保持。文档主链接／服务器显式参数同步更新；work_dirs只是服务器已有预测／新运行输出，不作为必须同步的材料入口。
 
 **验证／状态：** 新增真实固定VAL报告／默认可同步路径测试，当前TEST工具25项全部通过；用新默认门槛进行完整1440帧输入静态核对通过，输出在/tmp而非work_dirs。9份JSON与原件SHA／字节相同，原生VAL报告SHA保持6e682f…，同步目录不被Git忽略；文档链接、Python3.8语法及diff检查通过。历史artifact保留当时source SHA，不能改写为路径变更后的重新运行报告。未重算AP／推理／训练或连接服务器；原生TEST核对仍待用户在服务器运行，P0 VAL已完成状态不变。源码、测试、目录和说明需要正常加入用户自己的Git同步，本轮未执行提交／推送或修改.gitignore。
+
+
+<a id="activity-a061"></a>
+
+### A061. 2026-10-10：修复服务器TEST AP原目录缺失并补齐可同步输入
+
+**事实／原因：** 用户回传旧命令在读取work_dirs/port_geometry_midpoint_sigma15_v1_test_eval/artifacts.json时FileNotFoundError并要求修复。这是默认路径假定失效，不能据此判断AP公式或成绩有误，也未确认服务器实际归档位置。本地已找到并核对原封存全量TEST输入。未连接服务器。
+
+**修改／交付：** 5份AP必需原文件（completion、protocol、frozen_selection、test_rows、artifacts）逐字节复制到docs/detection/ap_evidence_20261010/test_source，共4,624,450字节，bundle_manifest另列原路径／SHA／大小；原件及历史报告保持。原artifacts中的其它文件不属于本次复制范围。TEST脚本默认eval-dir改为该非忽略入口，新增缺文件清单与同步提示；仍在VAL门槛之后核对TEST输入，显式归档路径继续经过原哈希／身份检查，不自动搜索或改选实验。provenance新增实际输入绝对目录，AP数学、原VAL脚本、模型／预测／score和阈值不变。运行说明改为同步该输入包并使用新输出目录input_fix_v1。
+
+**验证／待办：** /opt/anaconda3/bin/python下29项测试通过，Python3.8语法通过；完整1440帧新默认入口静态核对通过（STATIC_TEST_AP_INPUTS_PASS_NO_INFERENCE_NO_UPDATES，输出/tmp）。覆盖完整副本哈希、缺失／不完整目录不创建输出、显式归档支持及原门槛优先顺序；未重算AP。系统及bundled Python缺pytest或cv2，复用既有Anaconda环境，没有安装依赖。服务器原生TEST仍待实际运行／回传；本轮修复不将CPU结果升级为原生通过，不训练／推理／选权、不改论文／可靠性／深度，不提交或推送。TEST多次暴露及工程采用时序保持。

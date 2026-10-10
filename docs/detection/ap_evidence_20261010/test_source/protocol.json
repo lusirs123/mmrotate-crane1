@@ -1,0 +1,55 @@
+{
+  "protocol": "port_geometry_midpoint_sigma15_v1_frozen_evaluation",
+  "training_protocol": "port_geometry_midpoint_sigma_v1",
+  "fixed_checkpoint": {
+    "path": "head_epoch_03.pth",
+    "epoch": 3,
+    "updates": 2706,
+    "sigma_cells": 1.5,
+    "sha256": "16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7",
+    "head_digest": {
+      "parameters": "f84d99dac7cb0f2dcb86b5eaf33c21c1d360bdca5d0193b7b3da6c98f92bdc63",
+      "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "parameter_count": 17696,
+      "buffer_count": 0
+    },
+    "save_reload_exact": true
+  },
+  "cache_manifest_sha256": "046c5998dee0ba3703f1ae4e08fc6a02e9804d216ea12241357f69f2a4afd1e3",
+  "frozen_b": {
+    "selected_epoch": "epoch_24",
+    "checkpoint_sha256": "8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23",
+    "config_sha256": "9da972b7010540e12b2501d1c400db13c159381f495f539d6315e7adb498e345",
+    "pkl_sha256": "cbfa341c53faf859a4eb96ab62a2470611cde0493896f50fcc7f805f53020725",
+    "selection_sha256": "ccaa55376d3d40175c86386fbb7c6e2e8db54a1e13b9b1611783c7255fb54352",
+    "annotation_sha256": "8bd2e2da86d52b555e2cac5e1098361bd01a4ca09f9df9cb0642e07accc1f6be"
+  },
+  "counts": {
+    "val": {
+      "real_seq07": 226,
+      "real_seq14": 149,
+      "sim_seq10": 512
+    },
+    "test": {
+      "real_seq03": 200,
+      "real_seq04": 668,
+      "sim_seq09": 572
+    }
+  },
+  "test_annotation_sha256": "e0dbb1bd8aea7209314d8ed60bc44e965550ed606135cc0016e1075d717de13e",
+  "test_image_identity_sha256": "6448e47b9a715f47f04eacaaabb54a32b522c72208bf6e82793284de2aad665d",
+  "selection": "Keep original ALL24 full-VAL head selection. Verify all24 summaries and original scoring; only the fixed sigma1.5/epoch03 SHA is admissible. No CLI sigma/epoch/threshold overrides.",
+  "static": "Only source/protocol and indexed training text/selected weight SHA. No torch.load, image/annotation/dataset reads, ROI cache tensors or GPU.",
+  "inference": "Frozen SymEOOD+B ep24 -> aligned P3 ROI -> frozen SigmaMidpointHead(1.5). Reuse original capture/decoder, isotropic transforms and sx/sy/raw w-h-angle restoration, scores/output count and GT-free fallback. One extraction/three native head calls per frame.",
+  "val_gate": "Fresh standard-scale full887-frame online VAL must reproduce indexed epoch03 rows, decisions and full summaries under original tolerances. TEST requires this successful indexed report and matching source/checkpoint/runtime. Gate checked before any TEST input access.",
+  "test": "One fixed exposed1440-frame TEST, same-run B/midpoint comparison. No weight averaging, retraining, cache rebuilding or TEST parameter/checkpoint selection.",
+  "reporting": "Two overall B/midpoint console tables. JSON retains domains/sequences, pure/penalty angle, geometry, intervals and separate output-frame center correctness/output coverage/full-frame center correctness. Historical metric R_center remains all-frame.",
+  "scope": {
+    "head_updates": 0,
+    "detector_updates": 0,
+    "selection_on_test": false,
+    "automatic_promotion": false,
+    "test_repeatedly_exposed": true,
+    "depth_accuracy_verified": false
+  }
+}
