@@ -4,7 +4,7 @@
 
 - `val_cpu/`：完整VAL CPU参考AP、PR详情、当时输出／源码artifact。
 - `val_native/`：已核验服务器原生VAL报告，以及本机收件检查／清单；服务器PR／源码清单尚未回传，这两份本机文件不冒充服务器artifact。
-- `test_cpu/`：固定已暴露TEST CPU参考AP、PR详情、当时输出／源码artifact；服务器原生TEST核对尚未完成。
+- `test_cpu/`：固定已暴露TEST CPU参考AP、PR详情、当时输出／源码artifact；保留原CPU执行状态；A062原生TEST回传核对已完成，见test_native。
 
 TEST脚本默认从`val_native/ap_report.json`读取固定原生VAL门槛，报告SHA保持`6e682f64824fe0b68bbe6b49276ebf7d147fe9891a70b0fe3d7f7757b4bc7d34`。代码在`crane_project/tools/`、测试在`tests/`、运行说明在`docs/detection/`，均可同步。
 
@@ -15,3 +15,7 @@ TEST脚本默认从`val_native/ap_report.json`读取固定原生VAL门槛，报�
 `test_source/`新增AP必需的五份原封存文件，逐字节复制共4,624,450字节，来源与SHA见其`bundle_manifest.json`。保存1440帧标准尺度的GT／B／midpoint／原分数和空输出，并保留原completion、protocol、VAL选权及artifacts；不包含图片、权重或新推理。原artifacts还列有非AP必需文件，本次未复制，不能据此称原结果目录全部归档。前述sync_manifest仅记录A060的9份报告副本，保持历史内容。
 
 TEST默认eval-dir现为本目录下的test_source，服务器命令见[运行说明](../固定TEST_AP补充评价与运行说明_20261010.md)。这解决服务器旧work_dirs输入目录缺失，并保留显式指定完整归档目录的能力；不自动搜索或选择其它候选。须同步test_source中的test_rows.jsonl，只有汇总AP不能重新进行原生核对。原标注仍读取服务器既有test/annfiles。
+
+## A062：服务器原生TEST回传已核验
+
+`test_native/ap_report.json`为用户回传原报告的逐字节副本，SHA `faac1587e26f17e562130f8b3bc0bf37ba261d6a2113dbb42fd69f6ee980c140`。完整1440帧、8项AP／CPU参考及本机旧AP、TP／FP、覆盖与5份输入SHA一致；received_check和review_artifacts只记录本机收件检查，不冒充服务器artifact。未收到服务器PR详情／源码清单，需要归档时取回既有文件，无需重跑AP。原CPU／VAL及同步清单均保留字节。
