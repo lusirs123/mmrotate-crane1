@@ -8,6 +8,8 @@
 
 **来源及分工：** [midpoint封存方法与结果](detection/旋转ROI四边中点几何修正_midpoint_v1_方法与结果_20261003.md)第12～14节负责已固定的方法／结果，[可靠性交接](reliability_handoff_20261003.md)由另一窗口独立维护。新阶段活动不写回旧交接，不因迁移改变任何模型、协议或性能结论。
 
+**最新论文机制补强（A063，2026-10-11）：** 用户授权同容量读出对照的本地代码修改，明确先不训练、只用一张卡。新增均匀先验中性残差头；原σ1.5／ep03及B保持封存身份。静态／CPU合成检查与未来真实实验分开；当前没有新性能结果、服务器预检或训练回传。服务器先执行静态检查及零更新GPU预检，核验后另行决定正式训练。具体范围、历史检测源码差异和命令见[A063](#activity-a063)；不改可靠性、深度或论文。
+
 **最新执行状态（A055，2026-10-07）：** 用户已补齐candidate08_f00386／f00452两帧的人工复核标志；读取保存文件确认20/20均independent_reviewed=true、unmeasurable=false。相比A054，仅这两份JSON SHA变化，全部20帧四点坐标／类型／标签和原PNG SHA保持；继承A054结构及几何检查，不重跑未变化测试。目标仍为顶梁及长边梯形凸起，人工绘制和复核标志保存完成；20份对象定义／测量依据仍空，旧实体四角点检查合同尚未适配，不等于规范OBB读出或训练资格通过。最新状态见[完成确认JSON](../annotation_materials/port_independent_size_labels_v1_20261006_final/review_20261007/annotation_completion.json)及[A055](#activity-a055)，A054报告／叠加图保留为补勾前快照。下一待办是统一四点到OBB合同、补齐符合实际的对象／测量声明及同帧原轴／k比较；无需再补勾这两帧。没有改标注、检查器、旧GT／split、模型／policy／深度公式或启动训练。
 
 ## 记录规则
@@ -1301,3 +1303,45 @@ CUDA_VISIBLE_DEVICES=3 bash crane_project/tools/run_port_detection_runtime_v1.sh
 **归档／边界：** 原报告逐字节复制至docs/detection/ap_evidence_20261010/test_native/ap_report.json，SHA faac1587e26f17e562130f8b3bc0bf37ba261d6a2113dbb42fd69f6ee980c140；received_check及review_artifacts为本机收件检查。未收到服务器pr_details／artifacts，报告声明原生PR检查通过，不称本机独立逐PR／运行源码核验。服务器GT重算中心／尺寸差0、最大角差2.9766e−8rad，保存GT不替换；本机旧转换诊断另保留。缺件只取回既有输出，无需重算AP。
 
 **文档／待办：** 更新TEST AP说明、VAL后续状态、投稿清单、证据README、检测／midpoint补充入口及第1.1节；A059～A061追加历史状态提示。TEST说明第5节集中保存完整VAL／TEST四行表与精简写作依据，明确Top-1／VOC07，TEST多次暴露及工程采用时序，不填不存在的其它方法AP。未改论文／可靠性／深度、代码／模型或历史成绩；未连接服务器、安装依赖、重算AP／训练／推理或Git提交。本次回传及文档内部数字／链接／SHA检查通过；外部比较与独立序列仍为待安排工作，不自动启动。
+
+<a id="activity-a063"></a>
+
+### A063. 2026-10-11：实现同容量均匀先验读出对照，先做零更新检查
+
+**授权／事实：** 用户授权本地修改，先不训练，只用一张卡。本轮未连接服务器、读取真实TRAIN／VAL缓存或启动真实数据训练。B24＋σ1.5／ep03、可靠性、深度接口和论文均不改；新对照尚无性能结果。
+
+**固定设计，待验证：** 新增一个17,696参数的小头，继承9×9旋转ROI、259通道、hidden32、点对应／SmoothL1、原图还原、矩形解码与整框回退。原σ1.5为`a + E softmax(Q+L) − E softmax(Q)`；新对照为`a + E softmax(L) − E softmax(0)`。Q置零、中性期望在同一有限网格实际计算，双方零logits精确等于B；不直接删除减法，避免截断先验初值偏差。只检验**保留中性残差形式下B高斯空间先验的作用**；概率分布、梯度及可达残差范围也改变，不能单独证明减法校准、σ最优或退化根因。
+
+**未来正式预算，代码已实现／执行未授权：** 只新训均匀读出头，seed1703、Adam0.001、clip10、batch8（4real＋4sim），TRAIN2558身份／5116双尺度视图、原5103可用条件、902步×24轮＝21,648更新。复用原3份CPU ROI缓存；B不加载、构建、forward或更新，无新提取。新头从同一初始状态开始，不从ep03或预检权重继续。全部24轮完整标准尺度VAL按原规则选权，不限制16轮之后、不强制ep03；σ1.5复用原完整24轮实验及选中ep03。没有TEST阶段、参数扫描、自动胜者或替换。
+
+**三阶段：** `--stage check`只核对文本／来源／封存artifact与权重字节SHA，不加载tensor或GPU；`--stage preflight`用一张逻辑GPU复用3份CPU缓存，精确重放σ1.5全部887帧VAL，再核验新头完整VAL初值恒等、两个TRAIN梯度batch和零更新权重保存恢复。**无optimizer.step，不是有限拟合，不输出改善成绩。** `--stage train`另需成功且身份／计划一致的preflight报告，重新初始化后才优化。输入缺失在创建输出前报错，已有输出拒绝覆盖，输出须与原实验／缓存／预检输入分离。新权重绑定readout、协议、来源、参考实验和缓存；旧σ加载器拒绝新权重。记录CUDA allocated／reserved峰值，不声明未测显存上限。
+
+**历史源码差异：** 本机SymPOLA／SymKLD／SymNFL／SymEOOD head／detector五份源码已不同于历史SHA。本轮未改这些文件或刷新旧清单。新入口从不变的历史清单恢复缓存／参考身份；其余参与小头读出、监督、坐标、解码、评价与选权的来源严格匹配历史SHA。上述5类的方法不实例化／调用；runtime版本检查仍可能导入MMRotate注册表。分别记录历史／当前SHA，并在新87份清单中绑定当前全部文件；未来未声明漂移仍拒绝。缓存对照通过不代表当前检测器源码与历史相同，也不代替未来端到端推理复核。
+
+**文件：** [小头](../crane_project/utils/port_geometry_midpoint_readout_v1.py)、[入口](../crane_project/tools/train_port_geometry_midpoint_readout_v1.py)、[协议](../crane_project/tools/port_geometry_midpoint_readout_v1_protocol.json)、[87份来源](../crane_project/tools/port_geometry_midpoint_readout_v1_sources.json)、[单测](../tests/test_port_geometry_midpoint_readout_v1.py)，均在可同步目录。投稿清单相应行已更新；没有将本机实现放入work_dirs。
+
+**报告计划：** 标准尺度VAL比较B／均匀读出／σ1.5；real／sim分别报输出帧中心命中、输出覆盖、全帧中心正确覆盖、RIoU、DFR、ACI、TDR、MCML、MRF、sim惩罚及纯角度。保留接受／回退／无效候选计数、候选几何、全部24轮摘要及逐帧框，避免回退掩盖效果。不新增AP、TEST或可靠性评价；TEST多次暴露、σ1.5工程采用发生在TEST回传后，继续披露。
+
+**本机验证：** Python3.8／PyTorch1.8 CPU下新增22项检查通过，覆盖坐标边界、冻结输入、梯度、零更新保存恢复、错身份／预检篡改拒绝、静态分支，以及模拟全部24轮选权事件（不实际优化）。扩展旧midpoint回归合计51通过、1失败；该失败来自原历史清单对上述5份既有检测源码漂移的拒绝，保留失败与旧SHA，不写成全通过。系统Python缺torch，较新Anaconda Torch的旧RNG反序列化默认不兼容，改用已有mmrot环境验证，未安装依赖或声称跨Torch版本通过。Python3.8 AST／compile、协议／87份SHA、bash及diff空白检查通过。真实缓存、CUDA、参考重载和效果仍待服务器回传。
+
+**服务器本轮只执行检查（同步当前项目版本及来源清单绑定文件）：**
+
+```bash
+cd /media/omnisky/personal_files/ljj/symEOOD
+CUDA_VISIBLE_DEVICES="" PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python -m pytest -q tests/test_port_geometry_midpoint_readout_v1.py
+
+CUDA_VISIBLE_DEVICES="" PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/train_port_geometry_midpoint_readout_v1.py \
+  --stage check \
+  --out-dir work_dirs/port_geometry_midpoint_readout_v1_static
+
+CUDA_VISIBLE_DEVICES=3 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
+python crane_project/tools/train_port_geometry_midpoint_readout_v1.py \
+  --stage preflight --gpu 0 \
+  --out-dir work_dirs/port_geometry_midpoint_readout_v1_preflight
+```
+
+依次通过后再执行下一条；物理卡3映射逻辑0，不用torchrun/DDP。默认输入为原正式组、sigma组σ1.5 selection及原CPU缓存；若目录迁移，显式传`--baseline-dir`／`--reference-selection`／`--cache-dir`真实路径，不复制重算旧实验。已有输出改新后缀，不删除覆盖。
+
+**下一待办：** 回传静态和preflight的completion／artifacts；失败则回传完整错误及failure（输入合同阶段失败不建输出）。先审查来源、参考重放、零更新、梯度及显存，通过后再另行授权正式对照。本轮没有立即执行的训练或TEST命令，也没有机制收益结论。
