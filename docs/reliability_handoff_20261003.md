@@ -2724,3 +2724,5 @@ TRAIN/inference像素逐位一致，GT中心还原最大差0，分配GT编码解
 **启动验证。** GPU2/3启动前均12MiB、0%、无compute进程，脚本测试后再次检查两卡空闲，仅使用物理GPU3。Torch1.13.1+cu117/MMCV1.7.0/GTX1080运行时导入通过；新版23项及原修复24项共47项服务器测试全部通过、无跳过。训练实际加载Real911＋Sim748，hook顺序为VERY_HIGH诊断→ABOVE_NORMAL严格optimizer→LOW更新确认。至本轮核验44步全部完成实际更新、无异常，损失/梯度有限、clip后范数约10；32步预热后的12步reserved保持2932MiB，更新结束allocated保持365.208MiB，GPU总占用瞬时约3252MiB，GPU2保持12MiB/0%。这是启动阶段平台证据，不是7000步全程稳定保证。原reserved零增长、allocated16MiB容差、4GiB绝对上限与异常更新前隔离均继续生效。
 
 **当前未完成。** 诊断仍运行，尚无`completion.json`/`exit_code.txt`，未捕获失稳、未复放异常batch、未作唯一根因结论。7000步不重现也只记预算内未重现，不称训练问题解决。结束后应先核对completion、触发步是否执行optimizer、各分量梯度/分配/GT解码和快照SHA，再决定是否需要无更新单batch复放及一项明确修复；不自动重跑完整训练。脚本退出将日志/JSON压成一个文件置服务器work_dirs根目录，不含权重/PT快照/data，完整产物保留；本轮尚无完成压缩包可回传或清理。查看日志：`tail -n 50 -F work_dirs/port_reliability_oof_v1/20261011_211408_A_instability_trace_v1_diagnose/run.log`；逐步证据为该目录`result/A/trace/updates.jsonl`。
+
+**离开前复核与同步边界。** 后续读取107步均已更新，预热后75步reserved仍全为2932MiB，step107主分类0.3133、主回归1.1530、ATSS0.0856、裁剪前梯度131.869、裁剪后约10、无触发，训练PID仍在运行。运行记录提交`25a5a70`已推送；期间另一几何窗口提交`860c6da`进入同一main，额外记录bundle命令因可能夹带非本轮提交被自动审批拦截，未传输。服务器保留`edd1d6a`诊断实现，不声称两端最新HEAD同步；该边界不影响已启动且源码固定的诊断。后续不要为了同步文档改动运行中的诊断源文件。
