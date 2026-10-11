@@ -2712,3 +2712,15 @@ TRAIN/inference像素逐位一致，GT中心还原最大差0，分配GT编码解
 **职责表述。** 原44.12“训练进程不构造VAL”已收窄到检测器训练子进程。midpoint实际先缓存冻结检测器的VAL/折外特征，然后只用允许TRAIN更新head，完成3轮并释放optimizer后才在VAL选head；说明与代码执行顺序一致，未为了文档改变算法或数据流。VAL选权依据几何/时序规则，可靠性VAL仍包含候选门限标定与效果评价，二者是共享开发VAL的不同用途，不称独立验证。
 
 **本地验证与边界。** 新增5项复放比较测试全部通过，覆盖原有限容差、NaN/正负Inf的严格JSON往返及一致/不一致组合、有限与非有限双向不匹配、有限loss配非有限梯度、损坏文本拒绝。测试调用实际复放使用的比较函数，没有Torch/GPU模拟性能。3份受影响Python静态语法通过；旧87份源码SHA保持，原已通过的选权/训练检查未重复运行。真实GPU异常batch复放、MMCV钩子及显存未核验，待服务器恢复后执行；未产生新的训练或可靠性性能结论。源码仍未提交/推送。
+
+### 44.15 辅助A有限失稳诊断：服务器后台启动（2026-10-11 21:14起，Asia/Taipei）
+
+**授权与范围。** 用户确认服务器恢复，要求运行并确认“现在只是检测哪里出现问题”。本轮仅启动44.12的`diagnose`：辅助A新鲜ImageNet初始化，原TRAIN/seed/优化合同，最多7000次更新；不自动进入`selected`完整A/B、VAL选权、判断器训练或TEST。本次诊断快照不是可用OOF权重，启动正常不等于失稳已修复或可靠性改善。
+
+**同步与后台证据。** 六份实现/测试/交接文件提交并推送`edd1d6a71e30bb975108c49b0afaf3ab3300ef7d`。服务器项目仍为`/media/omnisky/personal_files/ljj/symEOOD`。普通Git拉取被服务器既有127.0.0.1:17890代理拒绝连接，改用该提交的增量Git bundle传输/验证/快进，未修改代理配置；两端bundle SHA均为`fd081672159de38cf44641c3d230ea6bf9b9741d10d09136658f4d05618ad284`，同步后准确HEAD一致，临时bundle已删除。服务器已有worktree/index指纹仍为`b48cc0…`/`d54105…`，原暂存与未提交内容保留；另一几何窗口本地记录改动未纳入本次提交。
+
+运行ID为`20261011_211408_A_instability_trace_v1_diagnose`，全部诊断产物在`work_dirs/port_reliability_oof_v1/`该运行目录内，外层launcher日志/JSON同置该父目录。后台wrapper PID2140249、训练PID2141926，实际cwd为上述项目，环境`mmrotljj`，训练`CUDA_VISIBLE_DEVICES=3`；stdin为`/dev/null`，训练SigIgn包含SIGHUP忽略位，独立session、输出重定向，普通SSH断线不会终止该已核实进程。不重复启动同ID、不根据此条静态记录判断后续仍存活。
+
+**启动验证。** GPU2/3启动前均12MiB、0%、无compute进程，脚本测试后再次检查两卡空闲，仅使用物理GPU3。Torch1.13.1+cu117/MMCV1.7.0/GTX1080运行时导入通过；新版23项及原修复24项共47项服务器测试全部通过、无跳过。训练实际加载Real911＋Sim748，hook顺序为VERY_HIGH诊断→ABOVE_NORMAL严格optimizer→LOW更新确认。至本轮核验44步全部完成实际更新、无异常，损失/梯度有限、clip后范数约10；32步预热后的12步reserved保持2932MiB，更新结束allocated保持365.208MiB，GPU总占用瞬时约3252MiB，GPU2保持12MiB/0%。这是启动阶段平台证据，不是7000步全程稳定保证。原reserved零增长、allocated16MiB容差、4GiB绝对上限与异常更新前隔离均继续生效。
+
+**当前未完成。** 诊断仍运行，尚无`completion.json`/`exit_code.txt`，未捕获失稳、未复放异常batch、未作唯一根因结论。7000步不重现也只记预算内未重现，不称训练问题解决。结束后应先核对completion、触发步是否执行optimizer、各分量梯度/分配/GT解码和快照SHA，再决定是否需要无更新单batch复放及一项明确修复；不自动重跑完整训练。脚本退出将日志/JSON压成一个文件置服务器work_dirs根目录，不含权重/PT快照/data，完整产物保留；本轮尚无完成压缩包可回传或清理。查看日志：`tail -n 50 -F work_dirs/port_reliability_oof_v1/20261011_211408_A_instability_trace_v1_diagnose/run.log`；逐步证据为该目录`result/A/trace/updates.jsonl`。
