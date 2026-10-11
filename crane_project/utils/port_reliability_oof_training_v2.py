@@ -1,8 +1,41 @@
 """Auxiliary-only repair. Historical B configuration and inference stay intact."""
+from copy import deepcopy
+
 REVISION = 'normalized_padding_per_image_gt_strict_v2'
+INFERENCE_REVISION = 'auxiliary_normalized_grey_inference_v1'
 HOOK_MODULE = 'mmrotate.core.hooks.port_strict_optimizer_hook'
 MEMORY_GUARD = dict(warmup_steps=32, allocated_tolerance_bytes=16 * 2**20,
                     reserved_tolerance_bytes=0, absolute_limit_bytes=4 * 2**30)
+
+
+def inference_specs(specs, auxiliary_cfg):
+    """Repair a copied deterministic pipeline, never the formal B pipeline.
+
+    The empty auxiliary VAL/TEST placeholders are not datasets. Callers supply
+    deterministic TRAIN inference specs and explicitly choose their membership.
+    Match normalization to the actual auxiliary TRAIN config before padding.
+    """
+    validate_config(auxiliary_cfg)
+    result = deepcopy(specs)
+    if len(result) != len(auxiliary_cfg.data.train):
+        raise ValueError('Auxiliary inference/TRAIN split count differs')
+    for spec, trained in zip(result, auxiliary_cfg.data.train):
+        transforms = spec['pipeline'][1]['transforms']
+        norm_index = next(i for i, op in enumerate(transforms) if op['type'] == 'Normalize')
+        pad_index = next(i for i, op in enumerate(transforms) if op['type'] == 'Pad')
+        if norm_index >= pad_index:
+            raise ValueError('Auxiliary inference requires Normalize -> Pad')
+        norm, pad = transforms[norm_index], transforms[pad_index]
+        trained_norm = next(op for op in trained['pipeline'] if op['type'] == 'Normalize')
+        trained_pad = next(op for op in trained['pipeline'] if op['type'] == 'Pad')
+        if any(norm[k] != trained_norm[k] for k in ('mean', 'std', 'to_rgb')):
+            raise ValueError('Auxiliary inference normalization differs from TRAIN')
+        if pad['size'] != trained_pad['size']:
+            raise ValueError('Auxiliary inference padding size differs from TRAIN')
+        if tuple(pad['pad_val']['img']) != (114.,) * 3:
+            raise ValueError('Expected historical template, refuse double repair')
+        pad['pad_val']['img'] = tuple(trained_pad['pad_val']['img'])
+    return result
 
 
 class MemoryPlateau:

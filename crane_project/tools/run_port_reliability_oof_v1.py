@@ -265,11 +265,12 @@ def cache_views(out, fold, model, gpu, allowed_rows):
     from crane_project.tools import train_port_geometry_midpoint_formal_v1 as frozen
     cfg = Config.fromfile(str(CONFIG))
     folder = out/fold
+    auxiliary_cfg = Config.fromfile(str(folder/'detector_config.py'))
     lookup = {r['image']:r for r in allowed_rows}
     result = []
     memory_guard = training_repair.MemoryPlateau()
     for scale in (1., .5):
-        specs = frozen.g.fixed_specs(cfg, scale)
+        specs = training_repair.inference_specs(frozen.g.fixed_specs(cfg, scale), auxiliary_cfg)
         for spec, split in zip(specs, ('train', 'train_sim')):
             spec['data_root'] = str((folder/'data').resolve())+'/'
         dataset = ConcatDataset([build_dataset(s) for s in specs])
@@ -348,7 +349,10 @@ def midpoint_predict(out, fold, gpu):
     head.eval(); head.requires_grad_(False); del cache, pools; torch.cuda.empty_cache()
     # Held-out images enter only frozen inference. No GT-dependent routing/selection.
     original_cfg = Config.fromfile(str(CONFIG))
-    dataset = frozen.dataset_for(original_cfg, 'train', 1.)
+    from mmrotate.datasets import build_dataset
+    from mmdet.datasets.dataset_wrappers import ConcatDataset
+    specs = training_repair.inference_specs(frozen.g.fixed_specs(original_cfg, 1.), cfg)
+    dataset = ConcatDataset([build_dataset(s) for s in specs])
     names = [Path(i['filename']).stem for i in frozen.infos(dataset)]
     requested = set(specification['predict_images']); outputs = []
     memory_guard = training_repair.MemoryPlateau()
@@ -377,7 +381,8 @@ def midpoint_predict(out, fold, gpu):
         detector_state_after=frozen.g.state_digest(model), detector_sha256=sha(detector_path),
         midpoint_sha256=sha(folder/'midpoint_epoch_03.pth'), support=core.support(outputs),
         auxiliary_training_center_eligible_views=eligible_support,
-        prediction_GT_routing=False, VAL_TEST_read=False))
+        prediction_GT_routing=False, VAL_TEST_read=False,
+        auxiliary_inference_revision=training_repair.INFERENCE_REVISION))
     # Apply the existing per-video source criteria before spending another fold's
     # training budget. This is not a new quality threshold or checkpoint choice.
     gate = core.source_gate(outputs, require_two_classes=False)

@@ -38,6 +38,30 @@ def fixture_config():
 
 
 class ConfigTests(unittest.TestCase):
+    def inference_fixture(self):
+        cfg = repair.repair_config(fixture_config())
+        specs = [dict(pipeline=[dict(type='LoadImageFromFile'),
+            dict(type='MultiScaleFlipAug', transforms=deepcopy(fixture_config().data.train[0]['pipeline']))])
+            for _ in range(2)]
+        return cfg, specs
+
+    def test_inference_uses_training_padding_without_mutating_formal_template(self):
+        cfg, specs = self.inference_fixture(); before = deepcopy(specs)
+        result = repair.inference_specs(specs, cfg)
+        self.assertEqual(specs, before)
+        for spec, train in zip(result, cfg.data.train):
+            self.assertEqual(spec['pipeline'][1]['transforms'][1]['pad_val'], train['pipeline'][1]['pad_val'])
+        with self.assertRaises(ValueError): repair.inference_specs(result, cfg)
+
+    def test_inference_rejects_normalization_or_padding_shape_drift(self):
+        for key, value in (('std', [1.,1.,1.]), ('to_rgb', False)):
+            cfg, specs = self.inference_fixture()
+            specs[0]['pipeline'][1]['transforms'][0][key] = value
+            with self.assertRaises(ValueError): repair.inference_specs(specs, cfg)
+        cfg, specs = self.inference_fixture()
+        specs[0]['pipeline'][1]['transforms'][1]['size'] = (512,512)
+        with self.assertRaises(ValueError): repair.inference_specs(specs, cfg)
+
     def test_memory_guard_accepts_stable_storage_and_cpu_scalar_state(self):
         guard = repair.MemoryPlateau(warmup_steps=2, allocated_tolerance_bytes=0)
         guard.observe(10, 20); guard.observe(15, 30)
