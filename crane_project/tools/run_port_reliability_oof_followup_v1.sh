@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/../.."
+purpose="${1:-diagnose}"
+run_id="${2:-$(date +%Y%m%d_%H%M%S)}"
+[[ "$purpose" == diagnose || "$purpose" == selected ]] || exit 2
+[[ "$run_id" =~ ^[A-Za-z0-9_]+$ ]] || exit 2
+run_dir="work_dirs/port_reliability_oof_v1/${run_id}_${purpose}"
+archive="work_dirs/port_reliability_oof_followup_v1_${run_id}_${purpose}.tar.gz"
+[[ ! -e "$run_dir" && ! -e "$archive" ]] || { printf 'Refuse overwrite\n' >&2; exit 2; }
+mkdir -p "$run_dir"
+export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
+export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+git diff --binary | sha256sum > "$run_dir/worktree_before.sha256"
+git diff --cached --binary | sha256sum > "$run_dir/index_before.sha256"
+finish() {
+  status=$?
+  trap - EXIT
+  git diff --binary | sha256sum > "$run_dir/worktree_after.sha256"
+  git diff --cached --binary | sha256sum > "$run_dir/index_after.sha256"
+  cmp "$run_dir/worktree_before.sha256" "$run_dir/worktree_after.sha256" || status=4
+  cmp "$run_dir/index_before.sha256" "$run_dir/index_after.sha256" || status=4
+  printf '%s\n' "$status" > "$run_dir/exit_code.txt"
+  tar --exclude='*.pth' --exclude='*/data' --exclude='*.pt' -czf "$archive" -C work_dirs/port_reliability_oof_v1 "${run_id}_${purpose}"
+  sha256sum "$archive" | tee "$run_dir/archive.sha256"
+  exit "$status"
+}
+trap finish EXIT
+check_idle_cards() {
+  local apps card reading uuid used load
+  apps="$(nvidia-smi --query-compute-apps=gpu_uuid --format=csv,noheader)"
+  for card in 2 3; do
+    reading="$(nvidia-smi -i "$card" --query-gpu=uuid,memory.used,utilization.gpu --format=csv,noheader,nounits)"
+    read -r uuid used load <<< "${reading//,/ }"
+    printf 'GPU%s %s used=%sMiB util=%s%%\n' "$card" "$uuid" "$used" "$load" >> "$run_dir/gpu.log"
+    if [[ "$apps" == *"$uuid"* ]] || (( used >= 100 || load != 0 )); then
+      printf 'GPU%s occupied; stop without training\n' "$card" >&2; return 3
+    fi
+  done
+}
+check_idle_cards
+export CUDA_VISIBLE_DEVICES=3
+python -c 'import torch,mmcv; from mmrotate.core.hooks.port_oof_trace_hook import PortOOFTraceHook; assert torch.cuda.is_available(); print(torch.__version__,mmcv.__version__,torch.cuda.get_device_name(0))' | tee "$run_dir/runtime.log"
+python -m unittest discover -s tests -p 'test_port_reliability_oof_followup_v1.py' -v 2>&1 | tee "$run_dir/tests.log"
+python -m unittest discover -s tests -p 'test_port_reliability_oof_training_v2.py' -v 2>&1 | tee "$run_dir/repair_tests.log"
+sleep 3
+check_idle_cards
+python crane_project/tools/run_port_reliability_oof_followup_v1.py --mode "$purpose" --gpu 0 --out "$run_dir/result" 2>&1 | tee "$run_dir/run.log"
+# No automatic continuation from diagnosis to full selected training or TEST.
