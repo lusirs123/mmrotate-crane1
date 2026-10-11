@@ -1,0 +1,62 @@
+{
+  "status": "SERVER_PREFLIGHT_RECEIPT_VERIFIED_NOT_PERFORMANCE_EVIDENCE",
+  "archive_sha256": "66b73a0165b731d97849c1a10cfcf0f7c7a62a02605626d6710c302731eac261",
+  "archive_filename": "port_geometry_midpoint_readout_v1_review_cfaf168_20261011.tar.gz",
+  "member_count": 29,
+  "verified_artifact_files": [
+    "run_cfaf168_20261011_01/static/completion.json",
+    "run_cfaf168_20261011_01/static/progress.jsonl",
+    "run_cfaf168_20261011_01/static/protocol.json",
+    "run_cfaf168_20261011_01/static/reuse_paths.json",
+    "run_cfaf168_20261011_01/static/sources.json",
+    "run_cfaf168_20261011_01/preflight/failure.json",
+    "run_cfaf168_20261011_01/preflight/progress.jsonl",
+    "run_cfaf168_20261011_01/preflight/protocol.json",
+    "run_cfaf168_20261011_01/preflight/reuse_paths.json",
+    "run_cfaf168_20261011_01/preflight/sources.json",
+    "run_cfaf168_20261011_02/preflight/completion.json",
+    "run_cfaf168_20261011_02/preflight/progress.jsonl",
+    "run_cfaf168_20261011_02/preflight/protocol.json",
+    "run_cfaf168_20261011_02/preflight/reuse_paths.json",
+    "run_cfaf168_20261011_02/preflight/sources.json"
+  ],
+  "deliberately_omitted": [
+    {
+      "path": "run_cfaf168_20261011_02/preflight/zero_update_head.pth",
+      "sha256": "1fc3814e5cf44a4a9f23a3ba5fdcd632f88c3a47ff9d653ce520997e27aab225",
+      "reason": "zero-update checkpoint retained only on server, deliberately excluded"
+    }
+  ],
+  "implementation_commit": "cfaf168d11967326debcd9fae06cb03523f1d516",
+  "server_tests_passed": 22,
+  "static_contract_pass": true,
+  "preflight_pass": true,
+  "reference_val_replay_frames": 887,
+  "real_optimizer_updates": 0,
+  "peak_torch_mib": {
+    "allocated": 1.9091796875,
+    "reserved": 4.0
+  },
+  "runtime": {
+    "torch": "1.13.1+cu117",
+    "cuda": "11.7",
+    "cudnn": 8801,
+    "mmcv": "1.7.0",
+    "mmdet": "2.25.1",
+    "mmrotate": "0.3.4",
+    "opencv": "4.13.0",
+    "gpu": "NVIDIA GeForce GTX 1080"
+  },
+  "limitations": [
+    "No local checkpoint reload: zero-update binary excluded and retained on server.",
+    "Exact reference predictions verified by server against existing cached VAL; no new local re-inference.",
+    "Peak is PyTorch allocator memory, not total process VRAM or formal-training maximum.",
+    "No formal training, new geometry benefit, TEST or automatic promotion."
+  ],
+  "compression_cleanup": {
+    "local_deleted": true,
+    "server_deleted": true,
+    "both_verified_absent": true,
+    "raw_results_retained": true
+  }
+}

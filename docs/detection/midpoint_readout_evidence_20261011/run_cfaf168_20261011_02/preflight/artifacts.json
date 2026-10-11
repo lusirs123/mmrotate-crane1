@@ -1,0 +1,11 @@
+{
+  "protocol": "port_geometry_midpoint_readout_v1",
+  "files": {
+    "completion.json": "53d42dc4a8d13f31ef97b48054d64d06baec51d16399f6b8a82c1cc3bc70fc5c",
+    "progress.jsonl": "2218153d3a8fa23950e5944fcde97db4b39383f03a064697cffb962d482b3e3b",
+    "protocol.json": "b8b20a984b53031a7d0288755b620b2e8cefb4c3393cd77b9e16db8c282cb118",
+    "reuse_paths.json": "41c91e3cf8c4ab5cb139c3406a1ba056eabd17af1ed4785025b0d70b278cd460",
+    "sources.json": "6804faf1ca02f7ba1efa191254a06c3490e215a4cea35a74b25cfc871b1df8e0",
+    "zero_update_head.pth": "1fc3814e5cf44a4a9f23a3ba5fdcd632f88c3a47ff9d653ce520997e27aab225"
+  }
+}

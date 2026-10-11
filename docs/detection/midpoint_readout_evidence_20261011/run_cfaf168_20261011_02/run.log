@@ -1,0 +1,22 @@
+{
+  "cwd": "/media/omnisky/personal_files/ljj/symEOOD",
+  "git_head": "cfaf168d11967326debcd9fae06cb03523f1d516",
+  "python": "/media/omnisky/4435947f-033c-4e45-904d-f2c4d0bfbf70/Anaconda3/envs/mmrotljj/bin/python",
+  "conda_default_env": "mmrotljj",
+  "LD_LIBRARY_PATH": "/usr/local/cuda-11.8/lib64",
+  "commands": [
+    "CUDA_VISIBLE_DEVICES=3 stage preflight gpu0"
+  ],
+  "reuse_tests_static": "run_cfaf168_20261011_01",
+  "formal_training": false,
+  "test_data_access": false
+}
+Readout preflight : one new uniform-neutral head; frozen B forward/updates=0; preflight optimizer updates=0; formal training requires --stage train.
+One logical GPU: 0 ; loading reviewed CPU ROI cache, no detector construction.
+Replaying fixed sigma1.5 epoch03 on all887 cached VAL frames.
+Reference replay exact; starting preflight
+Saved work_dirs/port_geometry_midpoint_readout_v1/run_cfaf168_20261011_02/preflight/completion.json status READOUT_PREFLIGHT_PASS_ZERO_UPDATES_REVIEW_REQUIRED
+/media/omnisky/4435947f-033c-4e45-904d-f2c4d0bfbf70/Anaconda3/envs/mmrotljj/lib/python3.8/site-packages/mmcv/__init__.py:20: UserWarning: On January 1, 2023, MMCV will release v2.0.0, in which it will remove components related to the training process and add a data transformation module. In addition, it will rename the package names mmcv to mmcv-lite and mmcv-full to mmcv. See https://github.com/open-mmlab/mmcv/blob/master/docs/en/compatibility.md for more details.
+  warnings.warn(
+/media/omnisky/4435947f-033c-4e45-904d-f2c4d0bfbf70/Anaconda3/envs/mmrotljj/lib/python3.8/site-packages/torch/functional.py:504: UserWarning: torch.meshgrid: in an upcoming release, it will be required to pass the indexing argument. (Triggered internally at ../aten/src/ATen/native/TensorShape.cpp:3190.)
+  return _VF.meshgrid(tensors, **kwargs)  # type: ignore[attr-defined]

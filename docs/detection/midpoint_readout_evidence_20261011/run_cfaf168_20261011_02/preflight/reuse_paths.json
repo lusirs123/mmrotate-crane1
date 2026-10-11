@@ -1,0 +1,5 @@
+{
+  "baseline_dir": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/crane_symeood_k1_port_day2night_midpoint_formal_v1",
+  "reference_selection": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/crane_symeood_k1_port_day2night_midpoint_sigma_v1/sigma_1p5/selection.json",
+  "cache_dir": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/port_results/geometry/port_geometry_midpoint_formal_v1_roi_cache"
+}

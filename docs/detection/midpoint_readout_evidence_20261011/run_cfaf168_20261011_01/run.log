@@ -1,0 +1,32 @@
+{
+  "cwd": "/media/omnisky/personal_files/ljj/symEOOD",
+  "git_head": "cfaf168d11967326debcd9fae06cb03523f1d516",
+  "python": "/media/omnisky/4435947f-033c-4e45-904d-f2c4d0bfbf70/Anaconda3/envs/mmrotljj/bin/python",
+  "conda_default_env": "mmrotljj",
+  "commands": [
+    "CPU pytest new22",
+    "CPU stage check",
+    "CUDA_VISIBLE_DEVICES=3 stage preflight gpu0"
+  ],
+  "formal_training": false,
+  "test_data_access": false
+}
+......................                                                   [100%]
+=============================== warnings summary ===============================
+tests/test_port_geometry_midpoint_readout_v1.py::test_exact_zero_identity_raw_axes_angle_boundary_actual_xy_empty[False-dtype0]
+  /media/omnisky/4435947f-033c-4e45-904d-f2c4d0bfbf70/Anaconda3/envs/mmrotljj/lib/python3.8/site-packages/torch/functional.py:504: UserWarning: torch.meshgrid: in an upcoming release, it will be required to pass the indexing argument. (Triggered internally at ../aten/src/ATen/native/TensorShape.cpp:3190.)
+    return _VF.meshgrid(tensors, **kwargs)  # type: ignore[attr-defined]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+22 passed, 1 warning in 12.43s
+Readout check : one new uniform-neutral head; frozen B forward/updates=0; preflight optimizer updates=0; formal training requires --stage train.
+Saved work_dirs/port_geometry_midpoint_readout_v1/run_cfaf168_20261011_01/static/completion.json status STATIC_READOUT_CONTRACT_PASS_NO_TENSOR_LOAD_NO_GPU_NO_UPDATES
+Readout preflight : one new uniform-neutral head; frozen B forward/updates=0; preflight optimizer updates=0; formal training requires --stage train.
+/media/omnisky/4435947f-033c-4e45-904d-f2c4d0bfbf70/Anaconda3/envs/mmrotljj/lib/python3.8/site-packages/mmcv/__init__.py:20: UserWarning: On January 1, 2023, MMCV will release v2.0.0, in which it will remove components related to the training process and add a data transformation module. In addition, it will rename the package names mmcv to mmcv-lite and mmcv-full to mmcv. See https://github.com/open-mmlab/mmcv/blob/master/docs/en/compatibility.md for more details.
+  warnings.warn(
+Traceback (most recent call last):
+  File "crane_project/tools/train_port_geometry_midpoint_readout_v1.py", line 446, in <module>
+    run(parser().parse_args())
+  File "crane_project/tools/train_port_geometry_midpoint_readout_v1.py", line 376, in run
+    raise ValueError('Original cache/runtime/GPU model differs')
+ValueError: Original cache/runtime/GPU model differs

@@ -8,7 +8,7 @@
 
 **来源及分工：** [midpoint封存方法与结果](detection/旋转ROI四边中点几何修正_midpoint_v1_方法与结果_20261003.md)第12～14节负责已固定的方法／结果，[可靠性交接](reliability_handoff_20261003.md)由另一窗口独立维护。新阶段活动不写回旧交接，不因迁移改变任何模型、协议或性能结论。
 
-**最新论文机制补强（A063，2026-10-11）：** 用户授权同容量读出对照的本地代码修改，明确先不训练、只用一张卡。新增均匀先验中性残差头；原σ1.5／ep03及B保持封存身份。静态／CPU合成检查与未来真实实验分开；当前没有新性能结果、服务器预检或训练回传。服务器先执行静态检查及零更新GPU预检，核验后另行决定正式训练。具体范围、历史检测源码差异和命令见[A063](#activity-a063)；不改可靠性、深度或论文。
+**最新论文机制补强（A064，2026-10-11）：** 本地实现cfaf168已提交／推送并由服务器快进拉取；mmrotljj下22项单测、静态及单卡零更新预检通过。首次cuDNN8.5／缓存8.8.1不符在加载前失败；临时使用已有8.8.1库后runtime完全匹配，旧σ1.5完整887帧VAL精确重放，新头初值恒等、梯度与保存恢复通过。只有工程证据，没有真实拟合或性能改善；正式对照需另行授权。原B24／σ1.5-ep03与可靠性／深度／论文保持。收件、清理与环境说明见[A064](#activity-a064)及[结果分析](detection/midpoint_readout_evidence_20261011/README.md)。
 
 **最新执行状态（A055，2026-10-07）：** 用户已补齐candidate08_f00386／f00452两帧的人工复核标志；读取保存文件确认20/20均independent_reviewed=true、unmeasurable=false。相比A054，仅这两份JSON SHA变化，全部20帧四点坐标／类型／标签和原PNG SHA保持；继承A054结构及几何检查，不重跑未变化测试。目标仍为顶梁及长边梯形凸起，人工绘制和复核标志保存完成；20份对象定义／测量依据仍空，旧实体四角点检查合同尚未适配，不等于规范OBB读出或训练资格通过。最新状态见[完成确认JSON](../annotation_materials/port_independent_size_labels_v1_20261006_final/review_20261007/annotation_completion.json)及[A055](#activity-a055)，A054报告／叠加图保留为补勾前快照。下一待办是统一四点到OBB合同、补齐符合实际的对象／测量声明及同帧原轴／k比较；无需再补勾这两帧。没有改标注、检查器、旧GT／split、模型／policy／深度公式或启动训练。
 
@@ -1308,6 +1308,8 @@ CUDA_VISIBLE_DEVICES=3 bash crane_project/tools/run_port_detection_runtime_v1.sh
 
 ### A063. 2026-10-11：实现同容量均匀先验读出对照，先做零更新检查
 
+**当前状态提示：** 下文“未运行”为实现时状态；A064已按用户新授权完成服务器检查和本地收件，正式训练仍未执行。cuDNN临时库路径要求见A064。
+
 **授权／事实：** 用户授权本地修改，先不训练，只用一张卡。本轮未连接服务器、读取真实TRAIN／VAL缓存或启动真实数据训练。B24＋σ1.5／ep03、可靠性、深度接口和论文均不改；新对照尚无性能结果。
 
 **固定设计，待验证：** 新增一个17,696参数的小头，继承9×9旋转ROI、259通道、hidden32、点对应／SmoothL1、原图还原、矩形解码与整框回退。原σ1.5为`a + E softmax(Q+L) − E softmax(Q)`；新对照为`a + E softmax(L) − E softmax(0)`。Q置零、中性期望在同一有限网格实际计算，双方零logits精确等于B；不直接删除减法，避免截断先验初值偏差。只检验**保留中性残差形式下B高斯空间先验的作用**；概率分布、梯度及可达残差范围也改变，不能单独证明减法校准、σ最优或退化根因。
@@ -1345,3 +1347,19 @@ python crane_project/tools/train_port_geometry_midpoint_readout_v1.py \
 依次通过后再执行下一条；物理卡3映射逻辑0，不用torchrun/DDP。默认输入为原正式组、sigma组σ1.5 selection及原CPU缓存；若目录迁移，显式传`--baseline-dir`／`--reference-selection`／`--cache-dir`真实路径，不复制重算旧实验。已有输出改新后缀，不删除覆盖。
 
 **下一待办：** 回传静态和preflight的completion／artifacts；失败则回传完整错误及failure（输入合同阶段失败不建输出）。先审查来源、参考重放、零更新、梯度及显存，通过后再另行授权正式对照。本轮没有立即执行的训练或TEST命令，也没有机制收益结论。
+
+<a id="activity-a064"></a>
+
+### A064. 2026-10-11：提交同步并完成单卡零更新预检、回传分析与压缩包清理
+
+**授权／操作：** 用户授权本地Git提交、服务器工作目录拉取、mmrotljj运行、压缩下载分析记录并删除压缩包；沿用“先不训练”的约束，仅执行A063新增单测、静态及零更新预检。实现提交`cfaf168d11967326debcd9fae06cb03523f1d516`已推送，服务器在`/media/omnisky/personal_files/ljj/symEOOD`以main快进拉取。保留两端其它窗口的已有改动，不强推／重置／stash。首次公开仓库推送被自动审批拒绝；只读确认仓库属于当前认证用户且其权限为ADMIN后重试获准。服务器旧Git代理仅以单次`git -c http.https://github.com.proxy= pull --ff-only origin main`覆盖，未修改永久配置。
+
+**真实运行／故障修复：** `run_cfaf168_20261011_01`中22项新增单测通过、静态状态`STATIC_READOUT_CONTRACT_PASS_NO_TENSOR_LOAD_NO_GPU_NO_UPDATES`；GPU预检因cuDNN8500不等于缓存合同8801而在tensor加载前失败，退出码1、更新0，完整失败保留。非交互shell未指定库路径；将服务器已有`/usr/local/cuda-11.8/lib64`临时加入LD_LIBRARY_PATH后，第二次`run_cfaf168_20261011_02`仅重跑预检，通过全部runtime字段与原合同。未安装依赖、修改conda／系统库／shell配置或降低版本保护。
+
+**成功预检事实：** 状态`READOUT_PREFLIGHT_PASS_ZERO_UPDATES_REVIEW_REQUIRED`、退出码0、35.49秒；物理GPU3映射逻辑0，仅一张GTX1080。Torch1.13.1+cu117、CUDA11.7、cuDNN8801、MMCV1.7.0、MMDetection2.25.1、MMRotate0.3.4、OpenCV4.13.0。σ1.5／head_epoch03完整887帧缓存VAL精确重放，新头完整VAL初值精确等于B；17,696参数及共同初始摘要一致，零更新权重保存恢复通过。两个TRAIN梯度batch损失0.00324249／0.00996561，输出梯度范数约2.4547e−4／4.6931e−4，有限非零且未触发clip10。head optimizer更新、B forward／更新／提取均0，CPU缓存加载3份，TEST访问false，902×24计划未执行。
+
+**显存边界：** PyTorch allocated峰值2,001,920字节＝1.9092MiB、reserved峰值4,194,304字节＝4MiB；只说明本次零更新缓存小头检查的分配器峰值，不包括完整CUDA进程显存，不承诺正式训练或端到端推理上限。
+
+**本地收件／清理：** 约44KB结果包包含两次运行的文本、JSON、日志和退出码，SHA256 `66b73a0165b731d97849c1a10cfcf0f7c7a62a02605626d6710c302731eac261`；下载后安全展开至[可同步证据目录](detection/midpoint_readout_evidence_20261011/README.md)，逐项核对15份artifact文本SHA、静态／GPU proof、当前87份来源、参考身份、runtime及零更新事实。[本机收件检查](detection/midpoint_readout_evidence_20261011/local_review_receipt.json)与服务器原artifact区分。未打包ROI张量／模型权重／源码副本；zero_update_head.pth只留服务器，未冒称本机重载或重算887帧。记录分析后逐一校验包SHA，再仅删除本次本地与服务器传输压缩包并确认不存在；服务器原始两次运行目录、日志、失败及零更新权重保留。
+
+**结论／待验证：** 工程门槛通过，可准备一次同预算均匀读出头对照；没有正式训练、新几何收益或机制根因结论。后续须另获训练授权，从共同初值重新初始化、单卡21,648更新，全部24轮完整VAL按原规则选权；不要从预检权重续训，不强制旧ep03，不读TEST。不改论文、可靠性、深度及既有B／σ1.5身份；TEST多次暴露与σ1.5采用时序继续披露。以后同服务器启动前使用进程临时设置`export LD_LIBRARY_PATH="/usr/local/cuda-11.8/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"`；成功预检报告入口为`work_dirs/port_geometry_midpoint_readout_v1/run_cfaf168_20261011_02/preflight/completion.json`，原文件保留。
