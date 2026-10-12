@@ -1,0 +1,13 @@
+{
+  "client_date": "2026-10-12",
+  "cwd": "/media/omnisky/personal_files/ljj/symEOOD",
+  "git_head": "fd5feb9a35a6372727bf0098fae4ae72163bbaad",
+  "physical_gpu": 2,
+  "logical_gpu": 0,
+  "runtime_environment": "mmrotljj",
+  "source_manifest_sha256": "1d2ab80883df079a1064e57ce94f12c75024048abfe6b05a43f0ffd8dd72fb46",
+  "scope": "Frozen VAL gate then fixed TEST; no optimization, parameter overrides or reselection",
+  "command": "#!/usr/bin/env bash\nset -e\ncd /media/omnisky/personal_files/ljj/symEOOD\nrun_root=work_dirs/port_geometry_midpoint_readout_test_v1/20261012_gpu2_v1\ntrap 'rc=$?; printf \"%s\\n\" \"$rc\" > \"$run_root/exit_code.txt\"' EXIT\nsource /media/omnisky/4435947f-033c-4e45-904d-f2c4d0bfbf70/Anaconda3/etc/profile.d/conda.sh\nconda activate mmrotljj\nexport LD_LIBRARY_PATH=\"/usr/local/cuda-11.8/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}\"\nexport CUDA_VISIBLE_DEVICES=2\nexport PYTHONPATH=\"$PWD${PYTHONPATH:+:$PYTHONPATH}\"\nexport PYTHONUNBUFFERED=1\npython crane_project/tools/eval_port_geometry_midpoint_readout_test_v1.py \\\n  --stage val --gpu 0 --out-dir \"$run_root/val\"\npython crane_project/tools/eval_port_geometry_midpoint_readout_test_v1.py \\\n  --stage test --gpu 0 --val-report \"$run_root/val/completion.json\" \\\n  --out-dir \"$run_root/test\"\n",
+  "test_repeatedly_exposed": true,
+  "new_source_sync": "Only4 new files copied after no-overwrite checks, immutable old training closure unchanged"
+}

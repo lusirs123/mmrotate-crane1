@@ -1,7 +1,0 @@
-{
-  "identity": "local receipt manifest, not server source/output artifact",
-  "files": {
-    "ap_report.json": "faac1587e26f17e562130f8b3bc0bf37ba261d6a2113dbb42fd69f6ee980c140",
-    "received_check.json": "5dc5cb71652a41529986ff4f1e4ca16858239d4f1e3c6e15fcdf0ad23f285320"
-  }
-}

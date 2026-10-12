@@ -171,5 +171,45 @@
       }
     ],
     "historical_verification_note": "verified_artifact_files describes complete receipt verification before this cleanup. Original artifacts may list files now retained only on server or moved to Trash; they are not a complete local bundle manifest."
-  }
+  },
+  "local_retention_history": [
+    {
+      "date": "2026-10-12",
+      "scope": "Paper-evidence cleanup of local copies; server originals untouched.",
+      "trash_directory": "/Users/mac/.Trash/symEOOD_paper_evidence_redundant_20261012_103648",
+      "moved_files": [
+        {
+          "project_relative_path": "docs/detection/midpoint_readout_evidence_20261011/run_cfaf168_20261011_01/preflight/failure.json",
+          "sha256": "b8bccb259a4fa17dc9462891e082d26a57aaca82484d1fede7edf04c917c0974",
+          "bytes": 97595
+        },
+        {
+          "project_relative_path": "docs/detection/midpoint_readout_evidence_20261011/run_cfaf168_20261011_01/run.log",
+          "sha256": "168e01693593948aeff5ec811514296148a0ced1a380542f9d36ab10f819343b",
+          "bytes": 2516
+        },
+        {
+          "project_relative_path": "docs/detection/midpoint_readout_evidence_20261011/run_cfaf168_20261011_02/run.log",
+          "sha256": "1ef810f2cd2cc72305417c335a4b9185a85793f2cb5ba04d301f7e569874a56c",
+          "bytes": 1837
+        },
+        {
+          "project_relative_path": "docs/detection/midpoint_readout_evidence_20261011/run_cfaf168_20261011_02/preflight/artifacts.json",
+          "sha256": "5414035cf6109e05376a6bae0799a5c4558aa9b52021aa1ba16bad5be835856d",
+          "bytes": 617
+        }
+      ],
+      "retained_files": [
+        "README.md",
+        "local_review_receipt.json",
+        "run_cfaf168_20261011_02/preflight/completion.json"
+      ],
+      "note": "Historical verified-file lists describe receipt before cleanup. Original artifact indices still describe full server output, not the current local subset."
+    }
+  ],
+  "current_local_retained_files": [
+    "README.md",
+    "local_review_receipt.json",
+    "run_cfaf168_20261011_02/preflight/completion.json"
+  ]
 }

@@ -1,0 +1,265 @@
+{
+  "status": "LOCAL_FIXED_TEST_RECEIPT_FULL_RECALC_VERIFIED",
+  "indexed_files_verified": [
+    "static/completion.json",
+    "val/sources.json",
+    "val/uniform_rows.jsonl",
+    "val/uniform_summary.json",
+    "val/gaussian_rows.jsonl",
+    "val/protocol.json",
+    "val/gaussian_summary.json",
+    "val/completion.json",
+    "val/compare.json",
+    "test/sources.json",
+    "test/compare.csv",
+    "test/uniform_rows.jsonl",
+    "test/uniform_summary.json",
+    "test/gaussian_rows.jsonl",
+    "test/protocol.json",
+    "test/gaussian_summary.json",
+    "test/completion.json",
+    "test/compare.json"
+  ],
+  "server_tests": 21,
+  "local_tests_with_original_regression": 43,
+  "fixed_uniform": {
+    "path": "head_epoch_04.pth",
+    "epoch": 4,
+    "updates": 3608,
+    "sha256": "d0ec9a60ee33b0843128d65e5a3127291d5948926e14128bfbe7b8d07acb0c05",
+    "readout": "uniform_neutral_residual",
+    "head_digest": {
+      "parameters": "e0ff50258f6e1d84ef78607de40b5a82aeb8f27f05d97609961bc43c236505df",
+      "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "parameter_count": 17696,
+      "buffer_count": 0
+    },
+    "save_reload_exact": true
+  },
+  "fixed_gaussian": {
+    "path": "head_epoch_03.pth",
+    "epoch": 3,
+    "updates": 2706,
+    "sigma_cells": 1.5,
+    "sha256": "16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7",
+    "head_digest": {
+      "parameters": "f84d99dac7cb0f2dcb86b5eaf33c21c1d360bdca5d0193b7b3da6c98f92bdc63",
+      "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "parameter_count": 17696,
+      "buffer_count": 0
+    },
+    "save_reload_exact": true
+  },
+  "frames": {
+    "val": 887,
+    "test": 1440
+  },
+  "test_domain_counts": {
+    "real": 868,
+    "sim": 572
+  },
+  "head_updates": 0,
+  "detector_updates": 0,
+  "all_three_conditions_share_exact_b_rows": true,
+  "historical_test_gaussian_b_replay_pass": true,
+  "summary_numeric_fields_recalculated": 15348,
+  "summary_max_abs_diff": 0.0,
+  "geometry_max_abs_diff": 8.69272911618868e-06,
+  "test_access": true,
+  "selection_on_test": false,
+  "automatic_promotion": false,
+  "limitations": [
+    "One seed and previously exposed TEST; no independent generalization or statistical significance.",
+    "Local recalculation uses saved predictions; no local model/weight re-inference.",
+    "No AP evaluation or depth/reliability outcome."
+  ],
+  "archive_sha256": "88b00bf5f44fd050e70c3e34002fc35a8814ed004162616edf41e316fa061b79",
+  "archive_bytes": 2529469,
+  "archive_filename": "port_geometry_midpoint_readout_fixed_test_v1_review_20261012_gpu2.tar.gz",
+  "compression_cleanup": {
+    "local_deleted": true,
+    "server_deleted": true,
+    "both_verified_absent": true,
+    "raw_server_reports_and_training_weights_retained": true
+  },
+  "raw_server_run": "work_dirs/port_geometry_midpoint_readout_test_v1/20261012_gpu2_v1",
+  "local_retention_history": [
+    {
+      "date": "2026-10-12",
+      "scope": "Paper-evidence cleanup of local copies; server originals untouched.",
+      "trash_directory": "/Users/mac/.Trash/symEOOD_paper_evidence_redundant_20261012_103648",
+      "moved_files": [
+        {
+          "project_relative_path": "docs/detection/midpoint_readout_fixed_test_evidence_20261012/exit_code.txt",
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+          "bytes": 2
+        },
+        {
+          "project_relative_path": "docs/detection/midpoint_readout_fixed_test_evidence_20261012/check_exit_code.txt",
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+          "bytes": 2
+        },
+        {
+          "project_relative_path": "docs/detection/midpoint_readout_fixed_test_evidence_20261012/run.log",
+          "sha256": "b8216675fd00064e2eb821763176485dcd215760b539db97e7f0b60f2080fd53",
+          "bytes": 4969
+        },
+        {
+          "project_relative_path": "docs/detection/midpoint_readout_fixed_test_evidence_20261012/tests.log",
+          "sha256": "dd48697e398c9622b95eafbf137d20a8910072740c08bb77eb6e5f3302a8b2a2",
+          "bytes": 778
+        },
+        {
+          "project_relative_path": "docs/detection/midpoint_readout_fixed_test_evidence_20261012/static.log",
+          "sha256": "7dd985947f2d27fc306ac710a53c5532accda65d53c40602c21cf6960d2aa058",
+          "bytes": 159
+        },
+        {
+          "project_relative_path": "docs/detection/midpoint_readout_fixed_test_evidence_20261012/static/completion.json",
+          "sha256": "24cd97f3b7b5279a9d99a3c4e3bf88b16af625c0d6a83e25092f0fb0f1427934",
+          "bytes": 181049
+        },
+        {
+          "project_relative_path": "docs/detection/midpoint_readout_fixed_test_evidence_20261012/static/artifacts.json",
+          "sha256": "bf341af2594bf49f78d28e7d495dc4e582e69dfce876297aea3648bef3fd2641",
+          "bytes": 350
+        },
+        {
+          "project_relative_path": "docs/detection/midpoint_readout_fixed_test_evidence_20261012/test/compare.csv",
+          "sha256": "5222a96a0494f819f727a5989925d03725491b91c02d46cb658cb7356669b714",
+          "bytes": 1255
+        }
+      ],
+      "retained_files": [
+        "README.md",
+        "local_review_receipt.json",
+        "run_metadata.json",
+        "server_review.json",
+        "test/artifacts.json",
+        "test/compare.json",
+        "test/completion.json",
+        "test/gaussian_rows.jsonl",
+        "test/gaussian_summary.json",
+        "test/protocol.json",
+        "test/sources.json",
+        "test/uniform_rows.jsonl",
+        "test/uniform_summary.json",
+        "val/artifacts.json",
+        "val/compare.json",
+        "val/completion.json",
+        "val/gaussian_rows.jsonl",
+        "val/gaussian_summary.json",
+        "val/protocol.json",
+        "val/sources.json",
+        "val/uniform_rows.jsonl",
+        "val/uniform_summary.json"
+      ],
+      "note": "Historical verified-file lists describe receipt before cleanup. Original artifact indices still describe full server output, not the current local subset."
+    }
+  ],
+  "current_local_retained_files": [
+    "README.md",
+    "local_review_receipt.json",
+    "run_metadata.json",
+    "server_review.json",
+    "test/artifacts.json",
+    "test/compare.json",
+    "test/completion.json",
+    "test/gaussian_rows.jsonl",
+    "test/gaussian_summary.json",
+    "test/protocol.json",
+    "test/sources.json",
+    "test/uniform_rows.jsonl",
+    "test/uniform_summary.json",
+    "train/artifacts.json",
+    "train/completion.json",
+    "train/local_review_receipt.json",
+    "train/run_metadata.json",
+    "train/selected_val_compare.json",
+    "train/selection.json",
+    "train/server_review.json",
+    "train/val_epoch_04.rows.jsonl",
+    "train/val_readout_compare.json",
+    "val/artifacts.json",
+    "val/compare.json",
+    "val/completion.json",
+    "val/gaussian_rows.jsonl",
+    "val/gaussian_summary.json",
+    "val/protocol.json",
+    "val/sources.json",
+    "val/uniform_rows.jsonl",
+    "val/uniform_summary.json"
+  ],
+  "local_directory_merge": {
+    "date": "2026-10-12",
+    "mapping": [
+      {
+        "old": "docs/detection/midpoint_readout_formal_evidence_20261012/train/artifacts.json",
+        "new": "docs/detection/midpoint_readout_fixed_test_evidence_20261012/train/artifacts.json",
+        "sha256": "a0538fccdb3ef92ab5d9af24d3411f6cb4f8daf597a6bb46032239827ffc32ab",
+        "bytes": 7844
+      },
+      {
+        "old": "docs/detection/midpoint_readout_formal_evidence_20261012/train/completion.json",
+        "new": "docs/detection/midpoint_readout_fixed_test_evidence_20261012/train/completion.json",
+        "sha256": "6296697cb705b8ac1b24684ecae869bf7bdc99439b8050e650c8699108c13e44",
+        "bytes": 233699
+      },
+      {
+        "old": "docs/detection/midpoint_readout_formal_evidence_20261012/train/selected_val_compare.json",
+        "new": "docs/detection/midpoint_readout_fixed_test_evidence_20261012/train/selected_val_compare.json",
+        "sha256": "dbbe17183a97c9ab101ac5088450db675461fdb4e559c3eac436a31815b2ffdf",
+        "bytes": 149464
+      },
+      {
+        "old": "docs/detection/midpoint_readout_formal_evidence_20261012/train/selection.json",
+        "new": "docs/detection/midpoint_readout_fixed_test_evidence_20261012/train/selection.json",
+        "sha256": "b7ff1901aa2ce9b4191190ac6d7af59102927bd658b4eddbab88466295d081b9",
+        "bytes": 129385
+      },
+      {
+        "old": "docs/detection/midpoint_readout_formal_evidence_20261012/train/val_epoch_04.rows.jsonl",
+        "new": "docs/detection/midpoint_readout_fixed_test_evidence_20261012/train/val_epoch_04.rows.jsonl",
+        "sha256": "307d93dd4377b2599c510c62ac746bc9e9a270fcf5078a3acfd2fe8b088ae50e",
+        "bytes": 2499010
+      },
+      {
+        "old": "docs/detection/midpoint_readout_formal_evidence_20261012/train/val_readout_compare.json",
+        "new": "docs/detection/midpoint_readout_fixed_test_evidence_20261012/train/val_readout_compare.json",
+        "sha256": "456e4e20bcba20d061f26b11b13ce0401f96e218fa75c270bf8fc6cfc9f9f51b",
+        "bytes": 4535580
+      },
+      {
+        "old": "docs/detection/midpoint_readout_formal_evidence_20261012/local_review_receipt.json",
+        "new": "docs/detection/midpoint_readout_fixed_test_evidence_20261012/train/local_review_receipt.json",
+        "sha256": "3c8c88a8da33647a0d31783cbcf943c4fc74e2df648819be95c3bcf55bdfb64c",
+        "bytes": 4054
+      },
+      {
+        "old": "docs/detection/midpoint_readout_formal_evidence_20261012/run_metadata.json",
+        "new": "docs/detection/midpoint_readout_fixed_test_evidence_20261012/train/run_metadata.json",
+        "sha256": "4d96b08917d25b89b719cdb6857d9aa15443a5caf0b7199e6c895dbcf910db9c",
+        "bytes": 1698
+      },
+      {
+        "old": "docs/detection/midpoint_readout_formal_evidence_20261012/server_review.json",
+        "new": "docs/detection/midpoint_readout_fixed_test_evidence_20261012/train/server_review.json",
+        "sha256": "babde9f0107ff7a771f673b00d17925df79ce9fbde641541c51e6531d0ae0436",
+        "bytes": 1100
+      }
+    ],
+    "redundant_readme_trashed": "/Users/mac/.Trash/symEOOD_formal_evidence_merged_20261012_104427/README.md",
+    "important_original_file_sha_preserved": true,
+    "test_fixture_only_path_change": {
+      "previous_sha256": "0454fd593697d12aff987ee2b5edff0b51b9df24eb003ee62e7508c32dce95fe",
+      "current_sha256": "db23af1201397499eab091e49d8bc75b01660c55fbd0e700de07364d5d2b8647"
+    },
+    "current_source_manifest_change": {
+      "previous_sha256": "1d2ab80883df079a1064e57ce94f12c75024048abfe6b05a43f0ffd8dd72fb46",
+      "current_sha256": "dfad67a4459aaa2c4ae573b097c0c922ee832ed882750364e2419a5456a727f9"
+    },
+    "historical_report_source_snapshot_unchanged": true,
+    "new_model_run": false,
+    "local_receipt_metadata_appended_after_byte_identical_move": true
+  }
+}

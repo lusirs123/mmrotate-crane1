@@ -1,7 +1,6 @@
 {
   "protocol": "port_geometry_midpoint_readout_v1",
-  "stage": "preflight",
-  "status": "FAILED_READOUT_REVIEW_REQUIRED",
+  "readout": "uniform_neutral_residual",
   "proof": {
     "identity": {
       "protocol_sha256": "b8b20a984b53031a7d0288755b620b2e8cefb4c3393cd77b9e16db8c282cb118",
@@ -847,15 +846,939 @@
       }
     }
   },
-  "readout": "uniform_neutral_residual",
-  "head_updates_total": 0,
-  "detector_updates": 0,
-  "detector_forward_calls": 0,
-  "feature_extractions": 0,
-  "cache_tensor_loads": 0,
+  "split": "val",
+  "selected_checkpoint": {
+    "path": "head_epoch_04.pth",
+    "sha256": "d0ec9a60ee33b0843128d65e5a3127291d5948926e14128bfbe7b8d07acb0c05",
+    "epoch": 4,
+    "updates": 3608,
+    "readout": "uniform_neutral_residual",
+    "head_digest": {
+      "parameters": "e0ff50258f6e1d84ef78607de40b5a82aeb8f27f05d97609961bc43c236505df",
+      "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "parameter_count": 17696,
+      "buffer_count": 0
+    },
+    "save_reload_exact": true
+  },
+  "selection_config": {
+    "r_center_delta": 0.005,
+    "mcml_limit": 5,
+    "weight_sim": 0.7,
+    "weight_real": 0.3,
+    "soft_w_tdr": 0.35,
+    "soft_w_r_center": 0.25,
+    "soft_w_aci": 0.2,
+    "soft_w_angle": 0.2
+  },
+  "selection_info": {
+    "w_max": 0.98881,
+    "mcml_limit": 5,
+    "delta": 0.005,
+    "total": 24,
+    "feasible": 24,
+    "mcml_rejected": 0,
+    "selection": "constraint_pass"
+  },
+  "all_checkpoints": {
+    "head_epoch_01.pth": {
+      "checkpoint": {
+        "path": "head_epoch_01.pth",
+        "sha256": "588493207ffbd7607f606323af184305238496c495c923b8eb5780611c146110",
+        "epoch": 1,
+        "updates": 902,
+        "readout": "uniform_neutral_residual",
+        "head_digest": {
+          "parameters": "24e67de85c9cb8b64221f1193e103e109bea43d9814757d27d0681bae47c1ab9",
+          "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "parameter_count": 17696,
+          "buffer_count": 0
+        },
+        "save_reload_exact": true
+      },
+      "metrics": {
+        "real/R_center(%)": 95.47,
+        "real/mean_RIoU": 0.7957,
+        "real/DFR(%/frame)": 4.5751,
+        "real/ACI": 0.9376,
+        "real/TDR_w10(%)": 100.0,
+        "real/MCML_max(frames)": 4,
+        "real/MCML_mean(frames)": 2.0,
+        "real/MCML_pass(limit=5)": 1,
+        "real/MRF(frames)": 1.57,
+        "sim/A-RMSE(deg)": 4.5575,
+        "sim/R_center(%)": 100.0,
+        "sim/mean_RIoU": 0.8857,
+        "sim/DFR(%/frame)": 2.3397,
+        "sim/ACI": 0.9507,
+        "sim/TDR_w10(%)": 100.0,
+        "sim/MCML_max(frames)": 0,
+        "sim/MCML_mean(frames)": 0.0,
+        "sim/MCML_pass(limit=5)": 1
+      }
+    },
+    "head_epoch_02.pth": {
+      "checkpoint": {
+        "path": "head_epoch_02.pth",
+        "sha256": "0e1286e42c5d2f76929b66af5991963b0ccebee995912c5cf870d23adb165e68",
+        "epoch": 2,
+        "updates": 1804,
+        "readout": "uniform_neutral_residual",
+        "head_digest": {
+          "parameters": "5439e9a249c3fbef51d41288d2f130cc4d16ab405a129e57cc6e2646af1ba21d",
+          "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "parameter_count": 17696,
+          "buffer_count": 0
+        },
+        "save_reload_exact": true
+      },
+      "metrics": {
+        "real/R_center(%)": 95.73,
+        "real/mean_RIoU": 0.7979,
+        "real/DFR(%/frame)": 4.506,
+        "real/ACI": 0.9378,
+        "real/TDR_w10(%)": 100.0,
+        "real/MCML_max(frames)": 4,
+        "real/MCML_mean(frames)": 2.0,
+        "real/MCML_pass(limit=5)": 1,
+        "real/MRF(frames)": 1.57,
+        "sim/A-RMSE(deg)": 2.0183,
+        "sim/R_center(%)": 100.0,
+        "sim/mean_RIoU": 0.8864,
+        "sim/DFR(%/frame)": 2.3161,
+        "sim/ACI": 0.9516,
+        "sim/TDR_w10(%)": 100.0,
+        "sim/MCML_max(frames)": 0,
+        "sim/MCML_mean(frames)": 0.0,
+        "sim/MCML_pass(limit=5)": 1
+      }
+    },
+    "head_epoch_03.pth": {
+      "checkpoint": {
+        "path": "head_epoch_03.pth",
+        "sha256": "629ff6cfcf5d35238c82263a2492b3ba699a8faf97877870af09bb1f8df0815f",
+        "epoch": 3,
+        "updates": 2706,
+        "readout": "uniform_neutral_residual",
+        "head_digest": {
+          "parameters": "cf93921a89f51be85c9f6cb0ec76ae99986229417a91a6a022f6adebb3984063",
+          "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "parameter_count": 17696,
+          "buffer_count": 0
+        },
+        "save_reload_exact": true
+      },
+      "metrics": {
+        "real/R_center(%)": 96.27,
+        "real/mean_RIoU": 0.7956,
+        "real/DFR(%/frame)": 4.6049,
+        "real/ACI": 0.9374,
+        "real/TDR_w10(%)": 100.0,
+        "real/MCML_max(frames)": 4,
+        "real/MCML_mean(frames)": 2.0,
+        "real/MCML_pass(limit=5)": 1,
+        "real/MRF(frames)": 1.57,
+        "sim/A-RMSE(deg)": 1.9008,
+        "sim/R_center(%)": 100.0,
+        "sim/mean_RIoU": 0.8902,
+        "sim/DFR(%/frame)": 2.284,
+        "sim/ACI": 0.9527,
+        "sim/TDR_w10(%)": 100.0,
+        "sim/MCML_max(frames)": 0,
+        "sim/MCML_mean(frames)": 0.0,
+        "sim/MCML_pass(limit=5)": 1
+      }
+    },
+    "head_epoch_04.pth": {
+      "checkpoint": {
+        "path": "head_epoch_04.pth",
+        "sha256": "d0ec9a60ee33b0843128d65e5a3127291d5948926e14128bfbe7b8d07acb0c05",
+        "epoch": 4,
+        "updates": 3608,
+        "readout": "uniform_neutral_residual",
+        "head_digest": {
+          "parameters": "e0ff50258f6e1d84ef78607de40b5a82aeb8f27f05d97609961bc43c236505df",
+          "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "parameter_count": 17696,
+          "buffer_count": 0
+        },
+        "save_reload_exact": true
+      },
+      "metrics": {
+        "real/R_center(%)": 96.27,
+        "real/mean_RIoU": 0.7957,
+        "real/DFR(%/frame)": 4.6147,
+        "real/ACI": 0.9379,
+        "real/TDR_w10(%)": 100.0,
+        "real/MCML_max(frames)": 4,
+        "real/MCML_mean(frames)": 2.0,
+        "real/MCML_pass(limit=5)": 1,
+        "real/MRF(frames)": 1.57,
+        "sim/A-RMSE(deg)": 1.7298,
+        "sim/R_center(%)": 100.0,
+        "sim/mean_RIoU": 0.8869,
+        "sim/DFR(%/frame)": 2.3669,
+        "sim/ACI": 0.9548,
+        "sim/TDR_w10(%)": 100.0,
+        "sim/MCML_max(frames)": 0,
+        "sim/MCML_mean(frames)": 0.0,
+        "sim/MCML_pass(limit=5)": 1
+      }
+    },
+    "head_epoch_05.pth": {
+      "checkpoint": {
+        "path": "head_epoch_05.pth",
+        "sha256": "879c657d0a3645178c17197afd8d47fabb23c5948defb76c3b2963e9c9c1b8c1",
+        "epoch": 5,
+        "updates": 4510,
+        "readout": "uniform_neutral_residual",
+        "head_digest": {
+          "parameters": "26f1aad088d1580955059713b2cb44f96e6357a4f8bb3d8139fbd4b00c3c29d7",
+          "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "parameter_count": 17696,
+          "buffer_count": 0
+        },
+        "save_reload_exact": true
+      },
+      "metrics": {
+        "real/R_center(%)": 96.0,
+        "real/mean_RIoU": 0.7983,
+        "real/DFR(%/frame)": 4.7268,
+        "real/ACI": 0.9385,
+        "real/TDR_w10(%)": 100.0,
+        "real/MCML_max(frames)": 4,
+        "real/MCML_mean(frames)": 2.0,
+        "real/MCML_pass(limit=5)": 1,
+        "real/MRF(frames)": 1.57,
+        "sim/A-RMSE(deg)": 4.3078,
+        "sim/R_center(%)": 100.0,
+        "sim/mean_RIoU": 0.8917,
+        "sim/DFR(%/frame)": 2.3617,
+        "sim/ACI": 0.9566,
+        "sim/TDR_w10(%)": 100.0,
+        "sim/MCML_max(frames)": 0,
+        "sim/MCML_mean(frames)": 0.0,
+        "sim/MCML_pass(limit=5)": 1
+      }
+    },
+    "head_epoch_06.pth": {
+      "checkpoint": {
+        "path": "head_epoch_06.pth",
+        "sha256": "41014ee88500227464088047eafb914a07e0b4186ae0812a124020b7f44ea4d3",
+        "epoch": 6,
+        "updates": 5412,
+        "readout": "uniform_neutral_residual",
+        "head_digest": {
+          "parameters": "dfdfd47955dcde9463b856fed7fc0b2423ad5959adf27982807ee7eba3bd30ca",
+          "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "parameter_count": 17696,
+          "buffer_count": 0
+        },
+        "save_reload_exact": true
+      },
+      "metrics": {
+        "real/R_center(%)": 96.0,
+        "real/mean_RIoU": 0.7929,
+        "real/DFR(%/frame)": 4.5771,
+        "real/ACI": 0.9402,
+        "real/TDR_w10(%)": 100.0,
+        "real/MCML_max(frames)": 4,
+        "real/MCML_mean(frames)": 2.0,
+        "real/MCML_pass(limit=5)": 1,
+        "real/MRF(frames)": 1.57,
+        "sim/A-RMSE(deg)": 4.3086,
+        "sim/R_center(%)": 100.0,
+        "sim/mean_RIoU": 0.8929,
+        "sim/DFR(%/frame)": 2.3825,
+        "sim/ACI": 0.9567,
+        "sim/TDR_w10(%)": 100.0,
+        "sim/MCML_max(frames)": 0,
+        "sim/MCML_mean(frames)": 0.0,
+        "sim/MCML_pass(limit=5)": 1
+      }
+    },
+    "head_epoch_07.pth": {
+      "checkpoint": {
+        "path": "head_epoch_07.pth",
+        "sha256": "2d996617e07ffc4ecf42676a3c794c41e80435b6800857fd088ac620454d6cae",
+        "epoch": 7,
+        "updates": 6314,
+        "readout": "uniform_neutral_residual",
+        "head_digest": {
+          "parameters": "4905e2507ecbf3c83064d1058b1f9aba0e14c3308765598eafc50f63e89780b9",
+          "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "parameter_count": 17696,
+          "buffer_count": 0
+        },
+        "save_reload_exact": true
+      },
+      "metrics": {
+        "real/R_center(%)": 95.73,
+        "real/mean_RIoU": 0.7941,
+        "real/DFR(%/frame)": 4.5919,
+        "real/ACI": 0.9411,
+        "real/TDR_w10(%)": 100.0,
+        "real/MCML_max(frames)": 4,
+        "real/MCML_mean(frames)": 2.0,
+        "real/MCML_pass(limit=5)": 1,
+        "real/MRF(frames)": 1.57,
+        "sim/A-RMSE(deg)": 5.8585,
+        "sim/R_center(%)": 100.0,
+        "sim/mean_RIoU": 0.8921,
+        "sim/DFR(%/frame)": 2.4021,
+        "sim/ACI": 0.9582,
+        "sim/TDR_w10(%)": 100.0,
+        "sim/MCML_max(frames)": 0,
+        "sim/MCML_mean(frames)": 0.0,
+        "sim/MCML_pass(limit=5)": 1
+      }
+    },
+    "head_epoch_08.pth": {
+      "checkpoint": {
+        "path": "head_epoch_08.pth",
+        "sha256": "362a9d580f087238ef8054b1df5568ee69dbd3ea38856c0dea6f91b4feb21411",
+        "epoch": 8,
+        "updates": 7216,
+        "readout": "uniform_neutral_residual",
+        "head_digest": {
+          "parameters": "c21633d22c452cfb22fc626ea3ae3dd69de9d2c800378d518e911c5052f49141",
+          "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "parameter_count": 17696,
+          "buffer_count": 0
+        },
+        "save_reload_exact": true
+      },
+      "metrics": {
+        "real/R_center(%)": 95.73,
+        "real/mean_RIoU": 0.7944,
+        "real/DFR(%/frame)": 4.6752,
+        "real/ACI": 0.9413,
+        "real/TDR_w10(%)": 100.0,
+        "real/MCML_max(frames)": 4,
+        "real/MCML_mean(frames)": 2.0,
+        "real/MCML_pass(limit=5)": 1,
+        "real/MRF(frames)": 1.57,
+        "sim/A-RMSE(deg)": 5.8057,
+        "sim/R_center(%)": 100.0,
+        "sim/mean_RIoU": 0.8899,
+        "sim/DFR(%/frame)": 2.467,
+        "sim/ACI": 0.9588,
+        "sim/TDR_w10(%)": 100.0,
+        "sim/MCML_max(frames)": 0,
+        "sim/MCML_mean(frames)": 0.0,
+        "sim/MCML_pass(limit=5)": 1
+      }
+    },
+    "head_epoch_09.pth": {
+      "checkpoint": {
+        "path": "head_epoch_09.pth",
+        "sha256": "246d1f5771d431a3f05aee5592aa116dcbf24d7914ec739209dc59b756d13298",
+        "epoch": 9,
+        "updates": 8118,
+        "readout": "uniform_neutral_residual",
+        "head_digest": {
+          "parameters": "2e771bd050d25f45b5a8edad3bfc2d46e3e477591226404bc0ce5b3b1494e099",
+          "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "parameter_count": 17696,
+          "buffer_count": 0
+        },
+        "save_reload_exact": true
+      },
+      "metrics": {
+        "real/R_center(%)": 95.73,
+        "real/mean_RIoU": 0.7983,
+        "real/DFR(%/frame)": 4.5598,
+        "real/ACI": 0.9415,
+        "real/TDR_w10(%)": 100.0,
+        "real/MCML_max(frames)": 4,
+        "real/MCML_mean(frames)": 2.0,
+        "real/MCML_pass(limit=5)": 1,
+        "real/MRF(frames)": 1.57,
+        "sim/A-RMSE(deg)": 5.8029,
+        "sim/R_center(%)": 100.0,
+        "sim/mean_RIoU": 0.8952,
+        "sim/DFR(%/frame)": 2.486,
+        "sim/ACI": 0.9585,
+        "sim/TDR_w10(%)": 100.0,
+        "sim/MCML_max(frames)": 0,
+        "sim/MCML_mean(frames)": 0.0,
+        "sim/MCML_pass(limit=5)": 1
+      }
+    },
+    "head_epoch_10.pth": {
+      "checkpoint": {
+        "path": "head_epoch_10.pth",
+        "sha256": "cbabd0d49c579999bbe60100df751ac49225b2de9d0fbee2964c0670b7ffcd5e",
+        "epoch": 10,
+        "updates": 9020,
+        "readout": "uniform_neutral_residual",
+        "head_digest": {
+          "parameters": "0f262c6e627632c6567663edc70410123d95124d3eb47ed906fc74f8d970b260",
+          "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "parameter_count": 17696,
+          "buffer_count": 0
+        },
+        "save_reload_exact": true
+      },
+      "metrics": {
+        "real/R_center(%)": 95.73,
+        "real/mean_RIoU": 0.7957,
+        "real/DFR(%/frame)": 4.5388,
+        "real/ACI": 0.9414,
+        "real/TDR_w10(%)": 100.0,
+        "real/MCML_max(frames)": 4,
+        "real/MCML_mean(frames)": 2.0,
+        "real/MCML_pass(limit=5)": 1,
+        "real/MRF(frames)": 1.57,
+        "sim/A-RMSE(deg)": 7.0175,
+        "sim/R_center(%)": 100.0,
+        "sim/mean_RIoU": 0.8944,
+        "sim/DFR(%/frame)": 2.4745,
+        "sim/ACI": 0.9599,
+        "sim/TDR_w10(%)": 100.0,
+        "sim/MCML_max(frames)": 0,
+        "sim/MCML_mean(frames)": 0.0,
+        "sim/MCML_pass(limit=5)": 1
+      }
+    },
+    "head_epoch_11.pth": {
+      "checkpoint": {
+        "path": "head_epoch_11.pth",
+        "sha256": "3b5f5bfe861a8cb768e1fdacb7219bb7c721f1a1dba5cfdffc0ad7a0fdffc4cb",
+        "epoch": 11,
+        "updates": 9922,
+        "readout": "uniform_neutral_residual",
+        "head_digest": {
+          "parameters": "9fd9b924f673eae9b02257b25b95eee052d08f5859221d0a175265aae1d72726",
+          "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "parameter_count": 17696,
+          "buffer_count": 0
+        },
+        "save_reload_exact": true
+      },
+      "metrics": {
+        "real/R_center(%)": 96.0,
+        "real/mean_RIoU": 0.8005,
+        "real/DFR(%/frame)": 4.6108,
+        "real/ACI": 0.9418,
+        "real/TDR_w10(%)": 100.0,
+        "real/MCML_max(frames)": 4,
+        "real/MCML_mean(frames)": 2.0,
+        "real/MCML_pass(limit=5)": 1,
+        "real/MRF(frames)": 1.57,
+        "sim/A-RMSE(deg)": 4.2153,
+        "sim/R_center(%)": 100.0,
+        "sim/mean_RIoU": 0.8936,
+        "sim/DFR(%/frame)": 2.5416,
+        "sim/ACI": 0.9604,
+        "sim/TDR_w10(%)": 100.0,
+        "sim/MCML_max(frames)": 0,
+        "sim/MCML_mean(frames)": 0.0,
+        "sim/MCML_pass(limit=5)": 1
+      }
+    },
+    "head_epoch_12.pth": {
+      "checkpoint": {
+        "path": "head_epoch_12.pth",
+        "sha256": "1b8f5365bfe82489dc2f5e4a6bf7d083a750a38def03c0c3be2ca6f9d0ff7b1c",
+        "epoch": 12,
+        "updates": 10824,
+        "readout": "uniform_neutral_residual",
+        "head_digest": {
+          "parameters": "3bb1d1932f729c1ba8f1f547a9a3a66322093e5e82682130d07591f3c3d9e99f",
+          "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "parameter_count": 17696,
+          "buffer_count": 0
+        },
+        "save_reload_exact": true
+      },
+      "metrics": {
+        "real/R_center(%)": 95.73,
+        "real/mean_RIoU": 0.8004,
+        "real/DFR(%/frame)": 4.544,
+        "real/ACI": 0.9419,
+        "real/TDR_w10(%)": 100.0,
+        "real/MCML_max(frames)": 4,
+        "real/MCML_mean(frames)": 2.0,
+        "real/MCML_pass(limit=5)": 1,
+        "real/MRF(frames)": 1.57,
+        "sim/A-RMSE(deg)": 7.0083,
+        "sim/R_center(%)": 100.0,
+        "sim/mean_RIoU": 0.8922,
+        "sim/DFR(%/frame)": 2.5646,
+        "sim/ACI": 0.9604,
+        "sim/TDR_w10(%)": 100.0,
+        "sim/MCML_max(frames)": 0,
+        "sim/MCML_mean(frames)": 0.0,
+        "sim/MCML_pass(limit=5)": 1
+      }
+    },
+    "head_epoch_13.pth": {
+      "checkpoint": {
+        "path": "head_epoch_13.pth",
+        "sha256": "953508f83f72f57ca0e536f355bb1f46c4a1c6292caf8ae0f207230ee7d1db94",
+        "epoch": 13,
+        "updates": 11726,
+        "readout": "uniform_neutral_residual",
+        "head_digest": {
+          "parameters": "1c48c4fffc46beb8bc76ec3822288980622440664f9722fc6e5c87a3d2f903c4",
+          "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "parameter_count": 17696,
+          "buffer_count": 0
+        },
+        "save_reload_exact": true
+      },
+      "metrics": {
+        "real/R_center(%)": 95.73,
+        "real/mean_RIoU": 0.8026,
+        "real/DFR(%/frame)": 4.6207,
+        "real/ACI": 0.9428,
+        "real/TDR_w10(%)": 100.0,
+        "real/MCML_max(frames)": 4,
+        "real/MCML_mean(frames)": 2.0,
+        "real/MCML_pass(limit=5)": 1,
+        "real/MRF(frames)": 1.57,
+        "sim/A-RMSE(deg)": 5.7723,
+        "sim/R_center(%)": 100.0,
+        "sim/mean_RIoU": 0.8927,
+        "sim/DFR(%/frame)": 2.6407,
+        "sim/ACI": 0.9608,
+        "sim/TDR_w10(%)": 100.0,
+        "sim/MCML_max(frames)": 0,
+        "sim/MCML_mean(frames)": 0.0,
+        "sim/MCML_pass(limit=5)": 1
+      }
+    },
+    "head_epoch_14.pth": {
+      "checkpoint": {
+        "path": "head_epoch_14.pth",
+        "sha256": "8101594525a529ce35c0ece318a12e8a3f7985c78627176a33d51dde159d3c25",
+        "epoch": 14,
+        "updates": 12628,
+        "readout": "uniform_neutral_residual",
+        "head_digest": {
+          "parameters": "eae365e29d5ad958d633932f56666f2403eb5b4d2c49bd3226cc38648b9bce02",
+          "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "parameter_count": 17696,
+          "buffer_count": 0
+        },
+        "save_reload_exact": true
+      },
+      "metrics": {
+        "real/R_center(%)": 95.73,
+        "real/mean_RIoU": 0.8004,
+        "real/DFR(%/frame)": 4.5956,
+        "real/ACI": 0.943,
+        "real/TDR_w10(%)": 100.0,
+        "real/MCML_max(frames)": 4,
+        "real/MCML_mean(frames)": 2.0,
+        "real/MCML_pass(limit=5)": 1,
+        "real/MRF(frames)": 1.57,
+        "sim/A-RMSE(deg)": 5.7571,
+        "sim/R_center(%)": 100.0,
+        "sim/mean_RIoU": 0.8934,
+        "sim/DFR(%/frame)": 2.6593,
+        "sim/ACI": 0.9619,
+        "sim/TDR_w10(%)": 100.0,
+        "sim/MCML_max(frames)": 0,
+        "sim/MCML_mean(frames)": 0.0,
+        "sim/MCML_pass(limit=5)": 1
+      }
+    },
+    "head_epoch_15.pth": {
+      "checkpoint": {
+        "path": "head_epoch_15.pth",
+        "sha256": "60af9f90a68845bc7d81b744f3d64dc243230142e596ae32590894d3b20f79f1",
+        "epoch": 15,
+        "updates": 13530,
+        "readout": "uniform_neutral_residual",
+        "head_digest": {
+          "parameters": "3c238b32b968b4388500dfa6380345d4c8e2d5eb4319df5d60acff08e80294a3",
+          "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "parameter_count": 17696,
+          "buffer_count": 0
+        },
+        "save_reload_exact": true
+      },
+      "metrics": {
+        "real/R_center(%)": 95.73,
+        "real/mean_RIoU": 0.7992,
+        "real/DFR(%/frame)": 4.584,
+        "real/ACI": 0.943,
+        "real/TDR_w10(%)": 100.0,
+        "real/MCML_max(frames)": 4,
+        "real/MCML_mean(frames)": 2.0,
+        "real/MCML_pass(limit=5)": 1,
+        "real/MRF(frames)": 1.57,
+        "sim/A-RMSE(deg)": 8.048,
+        "sim/R_center(%)": 100.0,
+        "sim/mean_RIoU": 0.8915,
+        "sim/DFR(%/frame)": 2.6737,
+        "sim/ACI": 0.9619,
+        "sim/TDR_w10(%)": 100.0,
+        "sim/MCML_max(frames)": 0,
+        "sim/MCML_mean(frames)": 0.0,
+        "sim/MCML_pass(limit=5)": 1
+      }
+    },
+    "head_epoch_16.pth": {
+      "checkpoint": {
+        "path": "head_epoch_16.pth",
+        "sha256": "024310850366e3084986251a8d3e1f9ce30a33d8d9fad662ff85002608a9698d",
+        "epoch": 16,
+        "updates": 14432,
+        "readout": "uniform_neutral_residual",
+        "head_digest": {
+          "parameters": "daf9b0f741d134d96dfa31de929a03b5e11f03fbf0a9c25fbc3ad8ce08b0ed6b",
+          "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "parameter_count": 17696,
+          "buffer_count": 0
+        },
+        "save_reload_exact": true
+      },
+      "metrics": {
+        "real/R_center(%)": 95.73,
+        "real/mean_RIoU": 0.7974,
+        "real/DFR(%/frame)": 4.6943,
+        "real/ACI": 0.9428,
+        "real/TDR_w10(%)": 100.0,
+        "real/MCML_max(frames)": 4,
+        "real/MCML_mean(frames)": 2.0,
+        "real/MCML_pass(limit=5)": 1,
+        "real/MRF(frames)": 1.57,
+        "sim/A-RMSE(deg)": 8.057,
+        "sim/R_center(%)": 100.0,
+        "sim/mean_RIoU": 0.8914,
+        "sim/DFR(%/frame)": 2.7391,
+        "sim/ACI": 0.9616,
+        "sim/TDR_w10(%)": 100.0,
+        "sim/MCML_max(frames)": 0,
+        "sim/MCML_mean(frames)": 0.0,
+        "sim/MCML_pass(limit=5)": 1
+      }
+    },
+    "head_epoch_17.pth": {
+      "checkpoint": {
+        "path": "head_epoch_17.pth",
+        "sha256": "07f35903f6b6e0fd0c276a720c3233523e7e6b3e07d72797e100eb7c2793e39d",
+        "epoch": 17,
+        "updates": 15334,
+        "readout": "uniform_neutral_residual",
+        "head_digest": {
+          "parameters": "73aeed97178845218d7d8a17035d08f5fac5bc866022b3994978830c71e96b15",
+          "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "parameter_count": 17696,
+          "buffer_count": 0
+        },
+        "save_reload_exact": true
+      },
+      "metrics": {
+        "real/R_center(%)": 95.73,
+        "real/mean_RIoU": 0.7999,
+        "real/DFR(%/frame)": 4.6607,
+        "real/ACI": 0.943,
+        "real/TDR_w10(%)": 100.0,
+        "real/MCML_max(frames)": 4,
+        "real/MCML_mean(frames)": 2.0,
+        "real/MCML_pass(limit=5)": 1,
+        "real/MRF(frames)": 1.57,
+        "sim/A-RMSE(deg)": 8.9817,
+        "sim/R_center(%)": 100.0,
+        "sim/mean_RIoU": 0.8915,
+        "sim/DFR(%/frame)": 2.7246,
+        "sim/ACI": 0.962,
+        "sim/TDR_w10(%)": 100.0,
+        "sim/MCML_max(frames)": 0,
+        "sim/MCML_mean(frames)": 0.0,
+        "sim/MCML_pass(limit=5)": 1
+      }
+    },
+    "head_epoch_18.pth": {
+      "checkpoint": {
+        "path": "head_epoch_18.pth",
+        "sha256": "fa5b935129704da1fafaac3f979901b564bec467f3b6aa8d9b2572b2b2bcead7",
+        "epoch": 18,
+        "updates": 16236,
+        "readout": "uniform_neutral_residual",
+        "head_digest": {
+          "parameters": "b45330650e4ca1d66bb56662883f6654c7beaea98c1594ce52c75e46488b5209",
+          "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "parameter_count": 17696,
+          "buffer_count": 0
+        },
+        "save_reload_exact": true
+      },
+      "metrics": {
+        "real/R_center(%)": 95.73,
+        "real/mean_RIoU": 0.8005,
+        "real/DFR(%/frame)": 4.6499,
+        "real/ACI": 0.9434,
+        "real/TDR_w10(%)": 100.0,
+        "real/MCML_max(frames)": 4,
+        "real/MCML_mean(frames)": 2.0,
+        "real/MCML_pass(limit=5)": 1,
+        "real/MRF(frames)": 1.57,
+        "sim/A-RMSE(deg)": 10.5884,
+        "sim/R_center(%)": 100.0,
+        "sim/mean_RIoU": 0.8925,
+        "sim/DFR(%/frame)": 2.7432,
+        "sim/ACI": 0.962,
+        "sim/TDR_w10(%)": 100.0,
+        "sim/MCML_max(frames)": 0,
+        "sim/MCML_mean(frames)": 0.0,
+        "sim/MCML_pass(limit=5)": 1
+      }
+    },
+    "head_epoch_19.pth": {
+      "checkpoint": {
+        "path": "head_epoch_19.pth",
+        "sha256": "7ed1c4bffcf7a397aedca4947d26dcc3a78e5689f6cdf3d7b9a235f91d33f78f",
+        "epoch": 19,
+        "updates": 17138,
+        "readout": "uniform_neutral_residual",
+        "head_digest": {
+          "parameters": "1b8f0c0921921a63f83d61201ad1d323900825a4710fdee15923e0764d1a030e",
+          "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "parameter_count": 17696,
+          "buffer_count": 0
+        },
+        "save_reload_exact": true
+      },
+      "metrics": {
+        "real/R_center(%)": 95.73,
+        "real/mean_RIoU": 0.7986,
+        "real/DFR(%/frame)": 4.6875,
+        "real/ACI": 0.9432,
+        "real/TDR_w10(%)": 100.0,
+        "real/MCML_max(frames)": 4,
+        "real/MCML_mean(frames)": 2.0,
+        "real/MCML_pass(limit=5)": 1,
+        "real/MRF(frames)": 1.57,
+        "sim/A-RMSE(deg)": 8.9818,
+        "sim/R_center(%)": 100.0,
+        "sim/mean_RIoU": 0.8935,
+        "sim/DFR(%/frame)": 2.7722,
+        "sim/ACI": 0.9616,
+        "sim/TDR_w10(%)": 100.0,
+        "sim/MCML_max(frames)": 0,
+        "sim/MCML_mean(frames)": 0.0,
+        "sim/MCML_pass(limit=5)": 1
+      }
+    },
+    "head_epoch_20.pth": {
+      "checkpoint": {
+        "path": "head_epoch_20.pth",
+        "sha256": "b8d4fffe0cbb7447bbeb62cc2dba8fa37ef4fd13d16c413a0c73767e8b721a95",
+        "epoch": 20,
+        "updates": 18040,
+        "readout": "uniform_neutral_residual",
+        "head_digest": {
+          "parameters": "004a357bd09b2047249f13308433d9d991bc0733d6b05887c93f3ea8d56cc7e6",
+          "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "parameter_count": 17696,
+          "buffer_count": 0
+        },
+        "save_reload_exact": true
+      },
+      "metrics": {
+        "real/R_center(%)": 95.47,
+        "real/mean_RIoU": 0.793,
+        "real/DFR(%/frame)": 4.5772,
+        "real/ACI": 0.9433,
+        "real/TDR_w10(%)": 100.0,
+        "real/MCML_max(frames)": 4,
+        "real/MCML_mean(frames)": 2.0,
+        "real/MCML_pass(limit=5)": 1,
+        "real/MRF(frames)": 1.57,
+        "sim/A-RMSE(deg)": 9.8137,
+        "sim/R_center(%)": 100.0,
+        "sim/mean_RIoU": 0.8938,
+        "sim/DFR(%/frame)": 2.7237,
+        "sim/ACI": 0.9624,
+        "sim/TDR_w10(%)": 100.0,
+        "sim/MCML_max(frames)": 0,
+        "sim/MCML_mean(frames)": 0.0,
+        "sim/MCML_pass(limit=5)": 1
+      }
+    },
+    "head_epoch_21.pth": {
+      "checkpoint": {
+        "path": "head_epoch_21.pth",
+        "sha256": "d8182477211d9c50c28b140e0acabccae8baaee91ff4318c31b58289a50ba89b",
+        "epoch": 21,
+        "updates": 18942,
+        "readout": "uniform_neutral_residual",
+        "head_digest": {
+          "parameters": "cb1a9c0e95e33f8baffde690860778013ce4e0a913c186287d41c3b003ba48cd",
+          "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "parameter_count": 17696,
+          "buffer_count": 0
+        },
+        "save_reload_exact": true
+      },
+      "metrics": {
+        "real/R_center(%)": 95.47,
+        "real/mean_RIoU": 0.7964,
+        "real/DFR(%/frame)": 4.6415,
+        "real/ACI": 0.943,
+        "real/TDR_w10(%)": 100.0,
+        "real/MCML_max(frames)": 4,
+        "real/MCML_mean(frames)": 2.0,
+        "real/MCML_pass(limit=5)": 1,
+        "real/MRF(frames)": 1.57,
+        "sim/A-RMSE(deg)": 11.9875,
+        "sim/R_center(%)": 100.0,
+        "sim/mean_RIoU": 0.891,
+        "sim/DFR(%/frame)": 2.817,
+        "sim/ACI": 0.962,
+        "sim/TDR_w10(%)": 100.0,
+        "sim/MCML_max(frames)": 0,
+        "sim/MCML_mean(frames)": 0.0,
+        "sim/MCML_pass(limit=5)": 1
+      }
+    },
+    "head_epoch_22.pth": {
+      "checkpoint": {
+        "path": "head_epoch_22.pth",
+        "sha256": "bada57b0af29d6989f6b9024e8f398022a586eef00cae635aa797a8e475b3a36",
+        "epoch": 22,
+        "updates": 19844,
+        "readout": "uniform_neutral_residual",
+        "head_digest": {
+          "parameters": "8e2776ffbfa06a43c63bbf6e13ee0af51ff1425d322725798849e28a37318a3f",
+          "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "parameter_count": 17696,
+          "buffer_count": 0
+        },
+        "save_reload_exact": true
+      },
+      "metrics": {
+        "real/R_center(%)": 95.47,
+        "real/mean_RIoU": 0.7997,
+        "real/DFR(%/frame)": 4.5991,
+        "real/ACI": 0.9427,
+        "real/TDR_w10(%)": 100.0,
+        "real/MCML_max(frames)": 4,
+        "real/MCML_mean(frames)": 2.0,
+        "real/MCML_pass(limit=5)": 1,
+        "real/MRF(frames)": 1.57,
+        "sim/A-RMSE(deg)": 5.7604,
+        "sim/R_center(%)": 100.0,
+        "sim/mean_RIoU": 0.8951,
+        "sim/DFR(%/frame)": 2.7965,
+        "sim/ACI": 0.9614,
+        "sim/TDR_w10(%)": 100.0,
+        "sim/MCML_max(frames)": 0,
+        "sim/MCML_mean(frames)": 0.0,
+        "sim/MCML_pass(limit=5)": 1
+      }
+    },
+    "head_epoch_23.pth": {
+      "checkpoint": {
+        "path": "head_epoch_23.pth",
+        "sha256": "6c8c903ce47c7a6cfc0f147d74fcab9448be07362b0ea719d906a3a5afe5541c",
+        "epoch": 23,
+        "updates": 20746,
+        "readout": "uniform_neutral_residual",
+        "head_digest": {
+          "parameters": "148eb0715ec55c3ac226974d0549d4a9c282125f25d52201840a9159dc357954",
+          "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "parameter_count": 17696,
+          "buffer_count": 0
+        },
+        "save_reload_exact": true
+      },
+      "metrics": {
+        "real/R_center(%)": 95.47,
+        "real/mean_RIoU": 0.8,
+        "real/DFR(%/frame)": 4.6746,
+        "real/ACI": 0.9434,
+        "real/TDR_w10(%)": 100.0,
+        "real/MCML_max(frames)": 4,
+        "real/MCML_mean(frames)": 2.0,
+        "real/MCML_pass(limit=5)": 1,
+        "real/MRF(frames)": 1.57,
+        "sim/A-RMSE(deg)": 8.046,
+        "sim/R_center(%)": 100.0,
+        "sim/mean_RIoU": 0.8966,
+        "sim/DFR(%/frame)": 2.7617,
+        "sim/ACI": 0.962,
+        "sim/TDR_w10(%)": 100.0,
+        "sim/MCML_max(frames)": 0,
+        "sim/MCML_mean(frames)": 0.0,
+        "sim/MCML_pass(limit=5)": 1
+      }
+    },
+    "head_epoch_24.pth": {
+      "checkpoint": {
+        "path": "head_epoch_24.pth",
+        "sha256": "0be003d69f1db3cca2c05ec7a1bc11ee58abc41d87ce24c36aad4d3e8bab9933",
+        "epoch": 24,
+        "updates": 21648,
+        "readout": "uniform_neutral_residual",
+        "head_digest": {
+          "parameters": "e82a8d38d0f36ab796b965e5c67e14aa009b43d85d64584d5663aa69ae03f0ca",
+          "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+          "parameter_count": 17696,
+          "buffer_count": 0
+        },
+        "save_reload_exact": true
+      },
+      "metrics": {
+        "real/R_center(%)": 95.47,
+        "real/mean_RIoU": 0.7941,
+        "real/DFR(%/frame)": 4.6291,
+        "real/ACI": 0.9434,
+        "real/TDR_w10(%)": 100.0,
+        "real/MCML_max(frames)": 4,
+        "real/MCML_mean(frames)": 2.0,
+        "real/MCML_pass(limit=5)": 1,
+        "real/MRF(frames)": 1.57,
+        "sim/A-RMSE(deg)": 8.9815,
+        "sim/R_center(%)": 100.0,
+        "sim/mean_RIoU": 0.8822,
+        "sim/DFR(%/frame)": 2.8618,
+        "sim/ACI": 0.9616,
+        "sim/TDR_w10(%)": 100.0,
+        "sim/MCML_max(frames)": 0,
+        "sim/MCML_mean(frames)": 0.0,
+        "sim/MCML_pass(limit=5)": 1
+      }
+    }
+  },
+  "cache_manifest_sha256": "046c5998dee0ba3703f1ae4e08fc6a02e9804d216ea12241357f69f2a4afd1e3",
+  "comparison": {
+    "checks": {
+      "real/all_frame_center_preserved": true,
+      "real/no_new_center_failures": false,
+      "real/output_coverage_preserved": true,
+      "real/mean_riou_nonregressing": true,
+      "real/center_continuity_preserved": true,
+      "real/long_edge_relative_error": false,
+      "real/short_edge_relative_error": true,
+      "real/DFR(%/frame)": false,
+      "real/ACI": true,
+      "real/MCML_max(frames)": true,
+      "sim/all_frame_center_preserved": true,
+      "sim/no_new_center_failures": true,
+      "sim/output_coverage_preserved": true,
+      "sim/mean_riou_nonregressing": true,
+      "sim/center_continuity_preserved": true,
+      "sim/long_edge_relative_error": false,
+      "sim/short_edge_relative_error": true,
+      "sim/DFR(%/frame)": true,
+      "sim/ACI": true,
+      "sim/MCML_max(frames)": true,
+      "real/center_rmse_nonregressing": true,
+      "sim/pure_angle_rmse_nonregressing": true,
+      "real_seq07/riou_continuity_preserved": true,
+      "real_seq14/riou_continuity_preserved": true,
+      "sim_seq10/riou_continuity_preserved": true
+    },
+    "all_checks_passed": false,
+    "automatic_promotion": false
+  },
   "test_access": false,
   "selection_on_test": false,
-  "automatic_promotion": false,
-  "error": "ValueError: Original cache/runtime/GPU model differs",
-  "elapsed_seconds": 2.280083287972957
+  "automatic_promotion": false
 }

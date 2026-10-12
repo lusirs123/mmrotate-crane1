@@ -1,0 +1,113 @@
+{
+  "status": "LOCAL_FORMAL_RECEIPT_AND_FULL_VAL_RECALC_VERIFIED",
+  "artifact_files_verified": [
+    "val_epoch_04.rows.jsonl",
+    "val_readout_compare.csv",
+    "val_baseline.json",
+    "val_readout_compare.json",
+    "selected_val_compare.json",
+    "selection.json",
+    "completion.json"
+  ],
+  "chosen": {
+    "path": "head_epoch_04.pth",
+    "sha256": "d0ec9a60ee33b0843128d65e5a3127291d5948926e14128bfbe7b8d07acb0c05",
+    "epoch": 4,
+    "updates": 3608,
+    "readout": "uniform_neutral_residual",
+    "head_digest": {
+      "parameters": "e0ff50258f6e1d84ef78607de40b5a82aeb8f27f05d97609961bc43c236505df",
+      "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "parameter_count": 17696,
+      "buffer_count": 0
+    },
+    "save_reload_exact": true
+  },
+  "epochs": 24,
+  "optimizer_updates": 21648,
+  "full_val_frames": 887,
+  "full_val_domain_counts": {
+    "real": 375,
+    "sim": 512
+  },
+  "all24_selection_recomputed": true,
+  "geometry_max_abs_diff": 6.736309921762107e-06,
+  "summary_max_abs_diff": 0.0,
+  "summary_numeric_fields_checked": 2563,
+  "test_access": false,
+  "model_weights_downloaded": false,
+  "limitations": [
+    "No local model inference or checkpoint reload; weights retained on server.",
+    "Cached VAL only; this is not a fresh end-to-end detector replay.",
+    "One seed; TEST previously exposed; no statistical significance or automatic replacement."
+  ],
+  "archive_sha256": "8db5cb0731cca023197cb25bb0fd99e1418c7dca6ffacac2d9ca0ef7a05d58fd",
+  "archive_filename": "port_geometry_midpoint_readout_formal_v1_review_20261012_gpu2.tar.gz",
+  "archive_bytes": 808190,
+  "compression_cleanup": {
+    "local_deleted": true,
+    "server_deleted": true,
+    "both_verified_absent": true,
+    "original_server_artifacts_and_weights_retained": true
+  },
+  "raw_server_run": "work_dirs/port_geometry_midpoint_readout_v1/formal_20261012_gpu2_v1",
+  "local_retention_history": [
+    {
+      "date": "2026-10-12",
+      "scope": "Paper-evidence cleanup of local copies; server originals untouched.",
+      "trash_directory": "/Users/mac/.Trash/symEOOD_paper_evidence_redundant_20261012_103648",
+      "moved_files": [
+        {
+          "project_relative_path": "docs/detection/midpoint_readout_formal_evidence_20261012/exit_code.txt",
+          "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+          "bytes": 2
+        },
+        {
+          "project_relative_path": "docs/detection/midpoint_readout_formal_evidence_20261012/run.log",
+          "sha256": "b4077fa580b00446a3f9900b32a2dd39d10ecaefdea2c8f09223d22031cc5a67",
+          "bytes": 3955
+        },
+        {
+          "project_relative_path": "docs/detection/midpoint_readout_formal_evidence_20261012/train/val_baseline.json",
+          "sha256": "35d188799cdd3d1a916dc6e6dc9a5403d2fe1dc2782951ef4aef999859a90e46",
+          "bytes": 149799
+        },
+        {
+          "project_relative_path": "docs/detection/midpoint_readout_formal_evidence_20261012/train/val_readout_compare.csv",
+          "sha256": "0fc93e7c8d56df082e3c7a515b052518573177530068462d86806c15167f8ec8",
+          "bytes": 1225
+        }
+      ],
+      "retained_files": [
+        "local_review_receipt.json",
+        "run_metadata.json",
+        "server_review.json",
+        "train/artifacts.json",
+        "train/completion.json",
+        "train/selected_val_compare.json",
+        "train/selection.json",
+        "train/val_epoch_04.rows.jsonl",
+        "train/val_readout_compare.json"
+      ],
+      "note": "Historical verified-file lists describe receipt before cleanup. Original artifact indices still describe full server output, not the current local subset."
+    }
+  ],
+  "current_local_retained_files": [
+    "artifacts.json",
+    "completion.json",
+    "local_review_receipt.json",
+    "run_metadata.json",
+    "selected_val_compare.json",
+    "selection.json",
+    "server_review.json",
+    "val_epoch_04.rows.jsonl",
+    "val_readout_compare.json"
+  ],
+  "local_directory_merge": {
+    "date": "2026-10-12",
+    "from_directory": "docs/detection/midpoint_readout_formal_evidence_20261012",
+    "to_directory": "docs/detection/midpoint_readout_fixed_test_evidence_20261012/train",
+    "original_indexed_files_bytes_unchanged": true,
+    "note": "Historical current_local_retained_files before migration used former root-relative paths; present train directory is authoritative."
+  }
+}

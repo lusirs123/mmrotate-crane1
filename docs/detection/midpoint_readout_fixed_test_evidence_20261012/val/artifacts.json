@@ -1,0 +1,15 @@
+{
+  "protocol": "port_geometry_midpoint_readout_v1_fixed_test",
+  "files": {
+    "compare.csv": "0fc93e7c8d56df082e3c7a515b052518573177530068462d86806c15167f8ec8",
+    "compare.json": "1e723e2a629c9a81a3a0af80dbd04fe93461ce1c65fbf01e795f48d55be3596e",
+    "completion.json": "50326f8070c341066453a7ade0965c06b260a1fb0fe84eb6fc267d8eee23d38a",
+    "gaussian_rows.jsonl": "7c3aeadb51a33f48d489bdde7acfc4378ac5fd28ceded9223bb8beb15cde20ea",
+    "gaussian_summary.json": "9895e5a3aada2b1f86a25ded59376fdbc280b3df3b80d636be9620f3f950a021",
+    "progress.jsonl": "558759dc8ff49d8b046d4ae264a6468736b28138f52ebf784f31a7be2e00dfcf",
+    "protocol.json": "86ba04e70a64f3b3c140f581481d6c4eeb54145597db2754331b95c43229ea11",
+    "sources.json": "1d2ab80883df079a1064e57ce94f12c75024048abfe6b05a43f0ffd8dd72fb46",
+    "uniform_rows.jsonl": "41d1ae17f6f45e339b2ef50fde8c54d9993fd1ac2a72be54649788bf42f64570",
+    "uniform_summary.json": "dbbe17183a97c9ab101ac5088450db675461fdb4e559c3eac436a31815b2ffdf"
+  }
+}

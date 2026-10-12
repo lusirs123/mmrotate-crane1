@@ -1,0 +1,18 @@
+{
+  "client_date": "2026-10-12",
+  "cwd": "/media/omnisky/personal_files/ljj/symEOOD",
+  "git_head": "cfa6303661550695fe189b216f6f16ce9a803934",
+  "physical_gpu": 2,
+  "logical_gpu": 0,
+  "gpu_snapshot_before_launch": "0, GPU-a0bb1b92-b540-8a22-8aba-e808f235ae2e, 34, 0\n1, GPU-717daf35-132d-1763-3a16-40a98dee4457, 12, 0\n2, GPU-f27e38a4-c41d-656c-8fe2-0aea00894db8, 12, 0\n3, GPU-c6990e5d-f27d-46da-3756-95118d4d799a, 12, 0\n",
+  "conda_environment": "mmrotljj",
+  "preflight_report": "work_dirs/port_geometry_midpoint_readout_v1/run_cfaf168_20261011_02/preflight/completion.json",
+  "preflight_sha256": "53d42dc4a8d13f31ef97b48054d64d06baec51d16399f6b8a82c1cc3bc70fc5c",
+  "epochs": 24,
+  "updates": 21648,
+  "selection": "All 24 full-VAL checkpoints, unchanged rule",
+  "test_access": false,
+  "user_authorized_formal_training": true,
+  "command": "#!/usr/bin/env bash\nset -e\ncd /media/omnisky/personal_files/ljj/symEOOD\nrun_root=work_dirs/port_geometry_midpoint_readout_v1/formal_20261012_gpu2_v1\ntrap 'rc=$?; printf \"%s\\n\" \"$rc\" > \"$run_root/exit_code.txt\"' EXIT\nsource /media/omnisky/4435947f-033c-4e45-904d-f2c4d0bfbf70/Anaconda3/etc/profile.d/conda.sh\nconda activate mmrotljj\nexport LD_LIBRARY_PATH=\"/usr/local/cuda-11.8/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}\"\nexport CUDA_VISIBLE_DEVICES=2\nexport PYTHONPATH=\"$PWD${PYTHONPATH:+:$PYTHONPATH}\"\nexport PYTHONUNBUFFERED=1\npython crane_project/tools/train_port_geometry_midpoint_readout_v1.py \\\n  --stage train --gpu 0 \\\n  --preflight-report work_dirs/port_geometry_midpoint_readout_v1/run_cfaf168_20261011_02/preflight/completion.json \\\n  --out-dir \"$run_root/train\"\n",
+  "detector_forward_or_updates": 0
+}

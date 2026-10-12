@@ -1,5 +1,11 @@
 # 可同步的AP结果与固定VAL／TEST入口
 
+## 当前论文证据保留范围（2026-10-12）
+
+保留VAL／TEST原生AP报告、CPU参考与PR逐点详情、相关artifact、两份received_check、同步／输入来源清单及完整TEST五份输入。PR详情可支持精度曲线与AP匹配复核，TEST输入是AP及固定机制评价入口的实际依赖，不因论文正文未展示而删除。
+
+两个重复的本机`review_artifacts.json`已移入废纸篓；它们只是报告与received_check的重复SHA索引，原生报告与received_check均保持字节不变。历史`sync_manifest.json`仍为复制时清单，不能作为当前保留文件的完整索引。恢复目录：`/Users/mac/.Trash/symEOOD_paper_evidence_redundant_20261012_103648`，其manifest.json列原路径／SHA。下面A060～A062描述保留历史身份，旧review_artifacts目前仅在废纸篓。服务器原件和脚本不改。
+
 本目录不受项目`.gitignore`的`work_dirs`规则影响，是论文写作／报告核对和TEST AP的可同步证据入口。2026-10-10按用户要求从本地原结果目录逐字节复制9份必要JSON，共约1.6MB；不重新计算、不修改数值、不删除历史原件。复制来源和SHA见`sync_manifest.json`。
 
 - `val_cpu/`：完整VAL CPU参考AP、PR详情、当时输出／源码artifact。
@@ -14,7 +20,7 @@ TEST脚本默认从`val_native/ap_report.json`读取固定原生VAL门槛，报�
 
 `test_source/`新增AP必需的五份原封存文件，逐字节复制共4,624,450字节，来源与SHA见其`bundle_manifest.json`。保存1440帧标准尺度的GT／B／midpoint／原分数和空输出，并保留原completion、protocol、VAL选权及artifacts；不包含图片、权重或新推理。原artifacts还列有非AP必需文件，本次未复制，不能据此称原结果目录全部归档。前述sync_manifest仅记录A060的9份报告副本，保持历史内容。
 
-TEST默认eval-dir现为本目录下的test_source，服务器命令见[运行说明](../固定TEST_AP补充评价与运行说明_20261010.md)。这解决服务器旧work_dirs输入目录缺失，并保留显式指定完整归档目录的能力；不自动搜索或选择其它候选。须同步test_source中的test_rows.jsonl，只有汇总AP不能重新进行原生核对。原标注仍读取服务器既有test/annfiles。
+TEST默认eval-dir现为本目录下的test_source，服务器命令见[运行说明](../AP评价口径与运行说明_20261010.md)。这解决服务器旧work_dirs输入目录缺失，并保留显式指定完整归档目录的能力；不自动搜索或选择其它候选。须同步test_source中的test_rows.jsonl，只有汇总AP不能重新进行原生核对。原标注仍读取服务器既有test/annfiles。
 
 ## A062：服务器原生TEST回传已核验
 

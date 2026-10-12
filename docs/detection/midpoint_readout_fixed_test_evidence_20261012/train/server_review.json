@@ -1,0 +1,54 @@
+{
+  "status": "SERVER_FINAL_ARTIFACT_AND_TRACE_VERIFIED",
+  "all_indexed_files_sha_verified": true,
+  "progress_counts": {
+    "optimizer_step": 21648,
+    "train": 21648,
+    "epoch_complete": 24,
+    "complete": 1
+  },
+  "all_optimizer_steps_exact_order": true,
+  "epochs_complete": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24
+  ],
+  "max_grad_norm_before_clip": 0.977634608745575,
+  "selected_checkpoint": {
+    "path": "head_epoch_04.pth",
+    "sha256": "d0ec9a60ee33b0843128d65e5a3127291d5948926e14128bfbe7b8d07acb0c05",
+    "epoch": 4,
+    "updates": 3608,
+    "readout": "uniform_neutral_residual",
+    "head_digest": {
+      "parameters": "e0ff50258f6e1d84ef78607de40b5a82aeb8f27f05d97609961bc43c236505df",
+      "buffers": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "parameter_count": 17696,
+      "buffer_count": 0
+    },
+    "save_reload_exact": true
+  },
+  "original_weights_retained": true,
+  "test_access": false
+}

@@ -1,0 +1,38 @@
+{
+  "status": "SERVER_FIXED_TEST_ARTIFACT_TRACE_VERIFIED",
+  "indexed_files_verified": [
+    "static/completion.json",
+    "static/protocol.json",
+    "static/sources.json",
+    "val/compare.csv",
+    "val/compare.json",
+    "val/completion.json",
+    "val/gaussian_rows.jsonl",
+    "val/gaussian_summary.json",
+    "val/progress.jsonl",
+    "val/protocol.json",
+    "val/sources.json",
+    "val/uniform_rows.jsonl",
+    "val/uniform_summary.json",
+    "test/compare.csv",
+    "test/compare.json",
+    "test/completion.json",
+    "test/gaussian_rows.jsonl",
+    "test/gaussian_summary.json",
+    "test/progress.jsonl",
+    "test/protocol.json",
+    "test/sources.json",
+    "test/uniform_rows.jsonl",
+    "test/uniform_summary.json"
+  ],
+  "source_identity_end_equals_start": true,
+  "stages_complete": true,
+  "test_frames": 1440,
+  "val_frames": 887,
+  "optimizer_updates": 0,
+  "test_selection": false,
+  "old_test_replay_pass": {
+    "frames": 1440,
+    "boxes_decisions_and_summary_pass": true
+  }
+}

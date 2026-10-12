@@ -146,7 +146,7 @@ source-validation JSON，不加载图像、checkpoint 或 GPU，也不训练、�
 
 **阅读约定**
 
-- 本文档只覆盖「冻结语义分支 + SymEOOD 旋转检测」支线。OBB 观测链（含 Base V3 的真实在线推理入口与固定 TEST 指标链）见 [OBB 观测可靠性与连续输出](../obb/OBB观测可靠性与连续输出.md)，深度几何契约见 [Webots 单目深度估计](../webots/Webots单目深度估计.md)。**本文档内的「未完成」只在检测融合支线内成立。**
+- 本文档只覆盖「冻结语义分支 + SymEOOD 旋转检测」支线。OBB 观测链（含 Base V3 的真实在线推理入口与固定 TEST 指标链）见 [OBB 观测可靠性与连续输出](../archive/20261003_reliability_replaced_by_simple_v1/readable/docs/obb/OBB观测可靠性与连续输出.md)，深度几何契约见 [Webots 单目深度估计](../webots/Webots单目深度估计.md)。**本文档内的「未完成」只在检测融合支线内成立。**
 - 正文中的模型身份、数据角色和协议版本是判断数字归属的唯一依据；同一指标只在同一模型、同一协议下可比。
 - 第 3 节按实验族记录，每族包含问题、方法变化、冻结条件、数据角色、关键结果、裁决和证据入口。失败实验保留其方法差异与停止条件，不合并为笼统的「均失败」。
 - 已被后续裁决取代的计划不再作为待办出现；仅在设计演进需要时保留一句演进说明。
@@ -191,7 +191,7 @@ source-validation JSON，不加载图像、checkpoint 或 GPU，也不训练、�
 6. **当前根因是监督与验证支持不足**：既有 source split 中「native 错误而 S7 正确」的自然增益样本极度稀疏（source-train 仅 7 帧，且全部位于 `sim_seq08`），同时不存在可用的 real 困难留出序列，因此无法从现有 source 数据训练并证明一个跨域安全的质量排序/接管器。
 7. **联合前端尚未验证**：`crane_symeood_dino_unified_v1.py` 已实现 SymEOOD 主头与冻结 DINO 候选的联合推理结构，但只是新的、尚未验证的组合模型；SymEOOD 与 DINO 各自的数字只能作为组件证据。
 8. **未闭环项按支线区分**（某个配置未完成不等于整个项目未完成）：
-   - **Base V3 观测链（OBB 主线）**：图像→OBB 的真实在线推理入口与固定 TEST 指标链已实现并冻结为报告，见 [OBB 观测可靠性与连续输出](../obb/OBB观测可靠性与连续输出.md) 第 4 节；该支线未完成的是未知新序列与物理状态证据。
+   - **Base V3 观测链（OBB 主线）**：图像→OBB 的真实在线推理入口与固定 TEST 指标链已实现并冻结为报告，见 [OBB 观测可靠性与连续输出](../archive/20261003_reliability_replaced_by_simple_v1/readable/docs/obb/OBB观测可靠性与连续输出.md) 第 4 节；该支线未完成的是未知新序列与物理状态证据。
    - **DINO/S7 支线**：统一训练/推理入口、自包含最终 checkpoint、蒸馏与实时化、真正未知序列泛化、模型冻结后的完整 final test 未完成，且完整 test 未获授权。
    - **联合前端 `unified_v1`**：仅实现、未验证，联合 source gate 尚未运行。
    - **检测融合 seq11 支线**：251 帧三折时序块 OOF/CV 未执行。
@@ -209,7 +209,7 @@ source-validation JSON，不加载图像、checkpoint 或 GPU，也不训练、�
 | --- | --- | --- |
 | **ScopedDINO（暗光语义救援分支）** | scope-gated frozen-DINO semantic rescue branch：BrightAug 主检测器 + 冻结 DINOv2 ViT-L/14 语义路径 + source-only 训练的单尺度 oriented RPN/ROI 小头 + `alpha=0.25` 因果框稳定器。低照度 scope 由 target-dev 困难切片导出（`target_label_derived=true`）。 | 暗光大目标的机制证据来源；完整 test 结果标记为 diagnosis-only，不是 zero-shot 泛化声明。 |
 | **正式 native-S14 DINO 组件** | 冻结 DINOv2 native S14 + ROI classifier `alpha=0.5` + S7 disabled，checkpoint `source_safe_interpolated_head.pth`。 | 当前唯一正式 DINO 组件与部署基线；也被 Webots 深度接口与联合 config 引用。 |
-| **Base V3 epoch9** | SymEOOD K1 epoch24 有框时作为锚框、K1 缺失时使用冻结 DINO 候选的融合检测前端。refiner 输出的固定分数 `1.0` 是常数，不是检测置信度。 | OBB 观测可靠性主线采用的冻结前端（见 [OBB 观测可靠性与连续输出](../obb/OBB观测可靠性与连续输出.md)）。 |
+| **Base V3 epoch9** | SymEOOD K1 epoch24 有框时作为锚框、K1 缺失时使用冻结 DINO 候选的融合检测前端。refiner 输出的固定分数 `1.0` 是常数，不是检测置信度。 | OBB 观测可靠性主线采用的冻结前端（见 [OBB 观测可靠性与连续输出](../archive/20261003_reliability_replaced_by_simple_v1/readable/docs/obb/OBB观测可靠性与连续输出.md)）。 |
 | **V4+seq11-v2 replay epoch10** | Base V3 epoch9 初始化 + retention loss + 原始 2781 帧 replay + seq11 train 203 帧（合计 2984 帧）训练的 refiner。 | **历史暂定 source-retention candidate**，`source_gate_passed=False`，缺少困难块 OOF/CV 支持，不能写成已验收最终模型。 |
 | **普通 SymEOOD K1 epoch24** | config `crane_project/configs/crane_symeood_k1_source_val_eval.py`，checkpoint `work_dirs/crane_symeood_k1/epoch_24.pth`，SHA256 `57233e5423de4a9d0a67fd51058cd7d92adaac5d6621f275cc0ec5b0fc7f9ee2`。 | 与 V4+seq11-v2 不是同一模型；不得用其它模型指标替代其身份。 |
 | **BrightAug（简单数据增强）** | 增强管线只含 `RRandomFlip`（水平/垂直/对角各 0.25）+ `RandomBrightnessContrast`（仅 brightness 0.4–1.0，prob 0.5），没有随机裁剪、旋转或对比度扰动。checkpoint `work_dirs/crane_symeood_k1_brightaug/epoch_20.pth`。 | ScopedDINO 的通用检测器底座；暗光分支之外的帧完全沿用其结果。 |
@@ -1432,7 +1432,7 @@ native-anchor 将 S7 state update 与 post-S7-state old-correct loss 都降为 `
 
 #### 3.2.7 未闭环问题与行动顺序（DINO/S7 支线）
 
-**本节全部结论只适用于「冻结 DINOv2 + SymEOOD 检测融合」支线**，不适用于 OBB 观测主线：Base V3 的图像→OBB 真实在线推理入口与固定 TEST 指标链已在 OBB 主线实现并冻结为报告，见 [OBB 观测可靠性与连续输出](../obb/OBB观测可靠性与连续输出.md) 第 4 节。某个配置尚未验证，不代表整个项目没有完成统一推理或 TEST。
+**本节全部结论只适用于「冻结 DINOv2 + SymEOOD 检测融合」支线**，不适用于 OBB 观测主线：Base V3 的图像→OBB 真实在线推理入口与固定 TEST 指标链已在 OBB 主线实现并冻结为报告，见 [OBB 观测可靠性与连续输出](../archive/20261003_reliability_replaced_by_simple_v1/readable/docs/obb/OBB观测可靠性与连续输出.md) 第 4 节。某个配置尚未验证，不代表整个项目没有完成统一推理或 TEST。
 
 **四个未闭环问题（支线内）**
 
@@ -1859,7 +1859,7 @@ SHA256 = d69484eb766d6e2f0f1fe59ec5f0c70623fd925d6f4a015ebe712dce61d85506
 新账号不要只依赖聊天历史。按以下顺序读取即可恢复当前项目状态：
 
 1. 本文档第 1 节（当前结论与模型身份）与第 3 节（实验演进与裁决）。
-2. [OBB 观测可靠性与连续输出](../obb/OBB观测可靠性与连续输出.md)：小论文当前的检测前端身份与观测接口。
+2. [OBB 观测可靠性与连续输出](../archive/20261003_reliability_replaced_by_simple_v1/readable/docs/obb/OBB观测可靠性与连续输出.md)：小论文当前的检测前端身份与观测接口。
 3. [Webots 单目深度估计](../webots/Webots单目深度估计.md)：深度接口契约与当前边界。
 4. `.workbuddy/memory/MEMORY.md`：项目级历史索引；再按需读取同目录日期文件。
 
@@ -2279,7 +2279,7 @@ crane_project/configs/crane_symeood_dino_k1_retentive_causal_phase_refiner_sourc
 
 整合清单与哈希：[manifest.json](../archive/20260915_pre_consolidation/manifest.json)。该 manifest 是 **2026-09-15 首次机械整合的快照**：其中的 `anchor`、`integrated_body_sha256` 字段描述的是当时的章节编号与结构，本文件的语义重写已改变编号与组织方式，因此这些字段不再对应当前正文，只作为归档原文的身份与完整性凭据。本轮（第二轮）的「原锚点 → 新正文位置」映射、状态裁定与待核验清单见 [融合核对表](../audit/融合核对表.md)。本次为语义级重写：同一研究背景、结构、符号、数据协议与评价边界只保留一处完整说明；同一实验的多次记录已合并为单一记录；重复的交接说明、自检清单、状态总结与「下一步」链已删除；已被后续裁决取代的计划退出行动清单。原文件中每条独有的方法、公式、实验、裁决和证据入口均在正文有对应位置。本次整理不代表重新验证过权重、外部结果、文献或实验指标。
 
-相关文档：[OBB 观测可靠性与连续输出](../obb/OBB观测可靠性与连续输出.md)、[Webots 单目深度估计](../webots/Webots单目深度估计.md)、[研究文档入口](../README.md)。
+相关文档：[OBB 观测可靠性与连续输出](../archive/20261003_reliability_replaced_by_simple_v1/readable/docs/obb/OBB观测可靠性与连续输出.md)、[Webots 单目深度估计](../webots/Webots单目深度估计.md)、[研究文档入口](../README.md)。
 
 
 ## 合并的历史记录
