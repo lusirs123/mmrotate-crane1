@@ -27,7 +27,8 @@ trap finish EXIT
 idle_cards() {
   local apps card reading uuid used load
   apps="$(nvidia-smi --query-compute-apps=gpu_uuid --format=csv,noheader)"
-  for card in 2 3; do
+  # User authorized coexistence with work on physical GPU2; train on GPU3 only.
+  for card in 3; do
     reading="$(nvidia-smi -i "$card" --query-gpu=uuid,memory.used,utilization.gpu --format=csv,noheader,nounits)"
     read -r uuid used load <<< "${reading//,/ }"
     printf 'GPU%s %s used=%sMiB util=%s%%\n' "$card" "$uuid" "$used" "$load" >> "$run_dir/gpu.log"
