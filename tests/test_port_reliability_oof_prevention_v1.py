@@ -41,7 +41,8 @@ class BackwardTests(unittest.TestCase):
 
     def test_large_fp32_regression_is_not_a_stop_if_mixed_is_small(self):
         p = torch.tensor(1., requires_grad=True)
-        stats = prevention.measured_budget_backward(1e8*p+3*p, 1e8*p, [p])
+        regression = 1e8*p
+        stats = prevention.measured_budget_backward(regression+3*p, regression, [p])
         self.assertEqual(float(p.grad), 13.)
         self.assertEqual(prevention.reasons(dict(main_cls=.5, main_reg=1., total=1.5), stats['gradient_before_clip']), [])
         self.assertGreater(stats['raw_gradient_before_budget'], 1000.)
