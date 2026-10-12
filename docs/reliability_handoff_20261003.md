@@ -2793,5 +2793,5 @@ FP32物理梯度与主轴解析FP64参考的相对差仅2.744e−7/9.195e−7，
 ```bash
 tail -n 50 -F work_dirs/port_reliability_oof_v1/20261012_A_budget10_prevention_v1/run.log
 ```
-prepare阶段尚无run.log时读取同目录launcher.log。初始时长估计3～5小时，需以实际7000步吞吐修正，首次异常可提前结束。
+prepare阶段尚无run.log时读取同目录launcher.log。初始时长估计3～5小时。启动后独立核验五份源码SHA两端一致，原A与本轮15项配置/资源比较均一致；已观察到82次实际更新，32步预热后50步reserved保持2878MiB，最后主分类/回归loss为0.25557/1.40677，尚未触发异常。前50步日志time=1.834s/step，按7000步估计约3.6小时，暂按3.5～4小时安排；MMCV显示10:07:16是原24epoch全程ETA，不是本轮预算。该早期状态不代表经过6452原失稳窗口或最终修复通过。
 
