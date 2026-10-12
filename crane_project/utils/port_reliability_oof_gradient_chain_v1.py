@@ -93,9 +93,15 @@ def regression_budget_backward(total, regression, parameters, budget=REGRESSION_
     norm = torch.stack([g.detach().norm() for g in present]).norm()
     if not torch.isfinite(norm): raise FloatingPointError('Invalid regression gradient norm')
     scale = min(1.,budget/(float(norm)+1e-12))
+    # Cancel the original regression branch before backward, then add its
+    # scaled parameter-gradient explicitly. A surrogate with coefficient
+    # (scale-1) loses precision when FP32 scale is near machine epsilon.
+    (total-regression).backward()
+    for p,g in zip(parameters,values):
+        if g is None: continue
+        if p.grad is None: p.grad=g.detach().mul(scale)
+        else: p.grad.add_(g.detach(),alpha=scale)
     del values, present
-    surrogate = total + (scale-1)*regression
-    surrogate.backward()
     return dict(regression_gradient_norm=float(norm),regression_gradient_scale=scale,
                 regression_gradient_budgeted_norm=float(norm)*scale,
                 regression_budget=budget,forward_loss_unchanged=True)
