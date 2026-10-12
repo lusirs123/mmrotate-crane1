@@ -3,6 +3,8 @@ import math
 
 VERSION = 'port_reliability_oof_gradient_chain_v1'
 LIMIT_BYTES = 4 * 2**30
+REGRESSION_BUDGET = 10.0  # inherited global clip norm; no coefficient search
+FINITE_UPDATES = 16
 
 
 def analytic_kld_terms(p, q):
@@ -70,4 +72,31 @@ def validate_boundary(snapshot, completion, name):
         raise ValueError('Only captured diagnostic snapshots allowed')
     if completion['status'] != 'ANOMALY_QUARANTINED_BEFORE_OPTIMIZER':
         raise ValueError('Only the captured finite-gradient anomaly is supported')
+
+
+def regression_budget_backward(total, regression, parameters, budget=REGRESSION_BUDGET):
+    """Auxiliary-only gradient repair: bound main-regression contribution first.
+
+    Forward losses and targets remain unchanged. The detached multiplier makes
+    backward use g_other + min(1, 10/||g_reg||)*g_reg. The ordinary global clip
+    and optimizer follow. This does not prove training or downstream accuracy.
+    """
+    import torch
+    if budget != REGRESSION_BUDGET:
+        raise ValueError('Fixed inherited budget required; no tuning here')
+    if any(p.grad is not None for p in parameters):
+        raise ValueError('Clear gradients before auxiliary budget backward')
+    values = torch.autograd.grad(regression,parameters,retain_graph=True,allow_unused=True)
+    present = [g for g in values if g is not None]
+    if not present or not all(bool(torch.isfinite(g).all()) for g in present):
+        raise FloatingPointError('Invalid regression gradient before budget scaling')
+    norm = torch.stack([g.detach().norm() for g in present]).norm()
+    if not torch.isfinite(norm): raise FloatingPointError('Invalid regression gradient norm')
+    scale = min(1.,budget/(float(norm)+1e-12))
+    del values, present
+    surrogate = total + (scale-1)*regression
+    surrogate.backward()
+    return dict(regression_gradient_norm=float(norm),regression_gradient_scale=scale,
+                regression_gradient_budgeted_norm=float(norm)*scale,
+                regression_budget=budget,forward_loss_unchanged=True)
 
