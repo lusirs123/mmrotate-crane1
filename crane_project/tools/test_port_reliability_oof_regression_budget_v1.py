@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Two 16-update TRAIN snapshot continuations; diagnostic weights are discarded.
+"""Two 64-update TRAIN snapshot continuations; diagnostic weights are discarded.
 
 Same anomalous pre-forward state, momentum/RNG, batches and budget in both arms.
 Only main-regression gradient budgeting differs. No dataset/VAL/TEST is loaded.
@@ -66,7 +66,7 @@ def run(source,out,gpu,arm):
         def update(self,values,num_samples):self.values.update(values)
     runner=SimpleNamespace(model=model,optimizer=optimizer,iter=saved['iteration'],log_buffer=Log())
     hook=(PortStrictOptimizerHook if arm=='control' else PortOOFRegressionBudgetHook)(
-        grad_clip=dict(max_norm=10,norm_type=2),memory_guard=dict(warmup_steps=2))
+        grad_clip=dict(max_norm=10,norm_type=2),memory_guard=deepcopy(parent.old.training_repair.MEMORY_GUARD))
     if arm!='control':hook.before_run(runner)
     positives=[];orig=model.bbox_head.loss_bbox.forward
     def capture(_loss,p,q,*args,**kwargs):
