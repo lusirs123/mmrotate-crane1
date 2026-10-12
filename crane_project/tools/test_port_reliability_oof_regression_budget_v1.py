@@ -94,7 +94,6 @@ def run(source,out,gpu,arm):
             if torch.cuda.max_memory_reserved(gpu)>contract.LIMIT_BYTES:raise RuntimeError('Fixed4GiB resource limit exceeded')
             entry.update(optimizer_updated=True,gradient_stats=deepcopy(runner.log_buffer.values),
                 reserved_MiB=torch.cuda.memory_reserved(gpu)/2**20)
-            updates+=1
         except Exception as exc:
             failure=repr(exc);entry.update(failure=failure,gradient_stats=deepcopy(runner.log_buffer.values))
         # The historical control checks memory after step; do not misreport an
