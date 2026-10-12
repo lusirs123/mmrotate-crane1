@@ -2823,3 +2823,5 @@ tail -n 50 -F work_dirs/port_reliability_oof_v1/20261012_A_budget10_scalar_gpu3_
 ```
 prepare期间可看同目录launcher.log。仍预计7000步约3～4小时，实际速度和首次异常可改变完成时间，原24epoch日志ETA不是本轮预算。
 
+**重启早期观测（非最终通过）。** 服务器重启后15项配置/资源比较全部一致，10份源码SHA核对通过。已观测119次实际更新，第33—119步共87步reserved保持2878MiB，尚无completion；前89步样本、loss、原始/混合/回归梯度、缩放及裁剪后梯度与44.18旧轨迹完全一致。第90步的同批次loss/梯度也与旧记录一致，现在optimizer.step成功且reserved仍2878MiB，说明这项检查分配优化已越过先前资源退出点；不能外推所有7000步或原6452失稳窗口。明细`configuration_comparison.json`/`early_observation.json`，诊断包SHA63156661…本地80条重放记录独立核对相同；GPU占用退出包SHA06cc01a9…核对exit3、无result/无训练。两类已完成分析包按用户授权两端清理，完整目录/日志/allocator JSON/旧PT快照保留；新后台训练未结束，最终结果压缩包仍待脚本退出后生成。
+
