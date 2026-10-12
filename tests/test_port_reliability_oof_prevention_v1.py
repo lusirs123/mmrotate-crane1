@@ -107,6 +107,44 @@ class BackwardTests(unittest.TestCase):
             report=json.loads((Path(directory)/'trace/completion.json').read_text())
             self.assertEqual(report['status'],'ANOMALY_QUARANTINED_BEFORE_OPTIMIZER')
 
+    def test_actual_hook_budgeted_update_and_resource_stop_before_step(self):
+        import tempfile
+        from pathlib import Path
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from mmrotate.core.hooks.port_oof_prevention_hook import PortOOFPreventionHook
+        from crane_project.utils.port_reliability_oof_training_v2 import MEMORY_GUARD
+        class Tiny(torch.nn.Module):
+            def __init__(self):
+                super().__init__(); self.p=torch.nn.Parameter(torch.tensor(0.))
+                self.bbox_head=SimpleNamespace(assigner=SimpleNamespace(_local_call_count=0))
+            def forward_train(self, img_metas):
+                return dict(loss_bbox=100*self.p,loss_cls=3*self.p)
+        class Log:
+            def update(self,*args): pass
+        for resource_failure in (False, True):
+            with self.subTest(resource_failure=resource_failure), tempfile.TemporaryDirectory() as directory:
+                m=Tiny(); optimizer=torch.optim.SGD(m.parameters(),lr=.1,momentum=.9)
+                runner=SimpleNamespace(model=m,optimizer=optimizer,iter=0,epoch=0,log_buffer=Log())
+                hook=PortOOFPreventionHook(directory=str(Path(directory)/'trace'),settings=prevention.SETTINGS,
+                    memory_guard=MEMORY_GUARD,grad_clip=dict(max_norm=10,norm_type=2))
+                hook.before_run(runner); hook.before_train_iter(runner)
+                terms=m.forward_train([dict(filename='real_train.jpg')])
+                runner.outputs=dict(loss=sum(terms.values()),num_samples=1)
+                with patch('torch.cuda.synchronize'), patch('torch.cuda.memory_allocated',return_value=0), patch('torch.cuda.memory_reserved',return_value=0):
+                    if resource_failure:
+                        with patch.object(hook.memory_guard,'observe',side_effect=RuntimeError('memory grows')):
+                            with self.assertRaises(RuntimeError):hook.after_train_iter(runner)
+                        self.assertEqual(float(m.p),0.)
+                        self.assertEqual(hook.completed,0)
+                        self.assertEqual(len(optimizer.state),0)
+                    else:
+                        hook.after_train_iter(runner)
+                        self.assertAlmostEqual(float(m.p),-1.,places=6)
+                        self.assertEqual(hook.completed,1)
+                        self.assertIn(m.p,optimizer.state)
+                        hook.finish('TEST_FIXTURE',runner)
+
 
 if __name__ == '__main__':
     unittest.main()

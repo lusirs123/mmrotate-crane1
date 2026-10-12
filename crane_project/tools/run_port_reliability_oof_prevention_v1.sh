@@ -37,8 +37,8 @@ idle_cards() {
   done
 }
 idle_cards
-python -m unittest discover -s tests -p 'test_port_reliability_oof_prevention_v1.py' -v 2>&1 | tee "$run_dir/tests.log"
-python -m unittest discover -s tests -p 'test_port_reliability_oof_gradient_chain_v1.py' -v 2>&1 | tee "$run_dir/budget_tests.log"
+CUDA_VISIBLE_DEVICES= python -m unittest discover -s tests -p 'test_port_reliability_oof_prevention_v1.py' -v 2>&1 | tee "$run_dir/tests.log"
+CUDA_VISIBLE_DEVICES= python -m unittest discover -s tests -p 'test_port_reliability_oof_gradient_chain_v1.py' -v 2>&1 | tee "$run_dir/budget_tests.log"
 python crane_project/tools/run_port_reliability_oof_prevention_v1.py --mode prepare --out "$run_dir/result" 2>&1 | tee "$run_dir/prepare.log"
 python crane_project/tools/run_port_reliability_oof_prevention_v1.py --mode check --out "$run_dir/result" 2>&1 | tee "$run_dir/check.log"
 idle_cards
