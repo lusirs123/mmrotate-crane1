@@ -8,6 +8,12 @@ except ImportError:
 
 
 class BoundaryTests(unittest.TestCase):
+    def test_finite_budget_covers_original_memory_warmup_and_plateau(self):
+        from crane_project.utils.port_reliability_oof_training_v2 import MEMORY_GUARD
+        self.assertEqual(MEMORY_GUARD['warmup_steps'],32)
+        self.assertEqual(chain.FINITE_UPDATES,2*MEMORY_GUARD['warmup_steps'])
+        self.assertEqual(MEMORY_GUARD['reserved_tolerance_bytes'],0)
+
     def test_only_exact_previous_and_anomaly_steps(self):
         completion=dict(completed_updates=6451,status='ANOMALY_QUARANTINED_BEFORE_OPTIMIZER')
         chain.validate_boundary(dict(iteration=6450,diagnostic_only=True),completion,'previous')

@@ -4,7 +4,7 @@ import math
 VERSION = 'port_reliability_oof_gradient_chain_v1'
 LIMIT_BYTES = 4 * 2**30
 REGRESSION_BUDGET = 10.0  # inherited global clip norm; no coefficient search
-FINITE_UPDATES = 16
+FINITE_UPDATES = 64  # original32 warmup plus32 updates to verify the plateau
 
 
 def analytic_kld_terms(p, q):
