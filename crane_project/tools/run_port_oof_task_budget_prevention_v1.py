@@ -29,7 +29,8 @@ def prepare(out):
     # Replace only that newly prepared metadata, never an existing run.
     (out/'A/membership.json').write_text(json.dumps(dict(membership,resolved_config_sha256=pin),indent=2)+'\n')
     saved=json.loads((out/'prevention.json').read_text())
-    saved.update(task_budget_revision=task.VERSION,task_budgets={k:task.BUDGET for k in task.TASKS},
+    saved.update(task_budget_revision=task.VERSION,task_memory_revision=task.MEMORY_REVISION,
+        raw_gradient_measurement_enabled=False,task_budgets={k:task.BUDGET for k in task.TASKS},
         configuration_sha256=pin)
     saved['sources'].update({p:parent.old.sha(ROOT/p) for p in FILES})
     (out/'prevention.json').write_text(json.dumps(saved,indent=2)+'\n')
@@ -41,6 +42,8 @@ def check(out):
     saved=json.loads((out/'prevention.json').read_text())
     c=parent.contract
     if (saved.get('task_budget_revision')!=task.VERSION or
+            saved.get('task_memory_revision')!=task.MEMORY_REVISION or
+            saved.get('raw_gradient_measurement_enabled') is not False or
             saved.get('task_budgets')!={k:task.BUDGET for k in task.TASKS} or
             saved['protocol']!=c.VERSION or saved['settings']!=c.SETTINGS or
             saved['allocation_revision']!=c.ALLOCATION_REVISION or
@@ -61,6 +64,7 @@ def train(out):
         '--no-validate','--seed','1701','--deterministic'],cwd=str(ROOT))
     result=json.loads((out/'A/prevention/completion.json').read_text())
     if (proc.returncode==0 or result.get('task_budget_revision')!=task.VERSION or
+            result.get('task_memory_revision')!=task.MEMORY_REVISION or
             result['status'] not in ('PREVENTION_WINDOW_PASS','ANOMALY_QUARANTINED_BEFORE_OPTIMIZER',
                                     'FORWARD_FAILURE_STOP','UPDATE_OR_RESOURCE_FAILURE_STOP')):
         raise ValueError('Trainer did not stop at registered task-budget boundary')

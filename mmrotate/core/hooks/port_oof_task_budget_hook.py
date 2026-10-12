@@ -4,14 +4,14 @@ import torch
 from mmcv.runner import HOOKS
 from mmrotate.core.hooks.port_oof_prevention_hook import PortOOFPreventionHook, PreventionStopped
 from mmrotate.core.hooks.port_oof_trace_hook import sum_loss
-from crane_project.utils.port_reliability_oof_prevention_v1 import SETTINGS, reasons
-from crane_project.utils.port_oof_task_budget_v1 import VERSION, task_budget_backward
+from crane_project.utils.port_reliability_oof_prevention_v1 import reasons
+from crane_project.utils.port_oof_task_budget_v1 import VERSION, MEMORY_REVISION, task_budget_backward, release_loss_graphs
 
 
 @HOOKS.register_module()
 class PortOOFTaskBudgetHook(PortOOFPreventionHook):
-    def __init__(self, task_budget_revision, **kwargs):
-        if task_budget_revision != VERSION:
+    def __init__(self, task_budget_revision, task_memory_revision, **kwargs):
+        if task_budget_revision != VERSION or task_memory_revision != MEMORY_REVISION:
             raise ValueError('Explicit fixed per-task budget revision required')
         super().__init__(**kwargs)
 
@@ -24,6 +24,10 @@ class PortOOFTaskBudgetHook(PortOOFPreventionHook):
             p=self.directory/'completion.json'
             report=json.loads(p.read_text())
             report['task_budget_revision']=VERSION
+            report['task_memory_revision']=MEMORY_REVISION
+            report['raw_gradient_measurement_enabled']=False
+            report['peak_raw_gradient']=None
+            report['raw_gradient_exceedances']=None
             p.write_text(json.dumps(json_safe(report),indent=2,allow_nan=False)+'\n')
 
     def after_train_iter(self,runner):
@@ -31,7 +35,7 @@ class PortOOFTaskBudgetHook(PortOOFPreventionHook):
         record=dict(step=runner.iter+1,epoch=runner.epoch+1,
             lr=[g['lr'] for g in runner.optimizer.param_groups],
             images=[Path(m['filename']).stem for m in self.batch['img_metas']],optimizer_updated=False,
-            task_budget_revision=VERSION)
+            task_budget_revision=VERSION,task_memory_revision=MEMORY_REVISION)
         try:
             terms=dict(main_cls=sum_loss(self.losses['loss_cls']),main_reg=self._regression_loss)
             aux=[sum_loss(v) for k,v in self.losses.items() if 'loss' in k and k not in ('loss_cls','loss_bbox')]
@@ -51,10 +55,10 @@ class PortOOFTaskBudgetHook(PortOOFPreventionHook):
             runner.optimizer.zero_grad(set_to_none=True)
             params=[p for p in runner.model.parameters() if p.requires_grad]
             stats=task_budget_backward(terms,params)
+            release_loss_graphs(runner,self)
+            del terms,aux,total
             record.update(stats)
-            self.peak_raw=max(self.peak_raw,stats['raw_gradient_before_budget'])
             self.peak_mixed=max(self.peak_mixed,stats['gradient_before_clip'])
-            self.raw_exceedances+=int(stats['raw_gradient_before_budget']>=SETTINGS['gradient_limit'])
             self.budgeted_steps+=int(any(x['scale']<1. for x in stats['component_gradients'].values()))
             failure=reasons(values,stats['gradient_before_clip'])
             if failure:

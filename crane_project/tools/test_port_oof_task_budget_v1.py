@@ -24,7 +24,8 @@ def run(source,out,arm,mode):
     from crane_project.tools.run_port_reliability_oof_v1 import sha
     from crane_project.utils.port_reliability_oof_prevention_v1 import (
         check_config,measured_budget_backward,reasons,CacheAwareMemoryGuard)
-    from crane_project.utils.port_oof_task_budget_v1 import task_budget_backward,VERSION
+    from crane_project.utils.port_oof_task_budget_v1 import task_budget_backward,release_loss_graphs,VERSION,MEMORY_REVISION
+    from types import SimpleNamespace
     from crane_project.utils.port_reliability_oof_followup_v1 import json_safe
     folder=source/'result/A/prevention'
     completion=json.loads((folder/'completion.json').read_text())
@@ -77,6 +78,11 @@ def run(source,out,arm,mode):
                 raise ValueError('Three tasks differ from original total')
             stats=(task_budget_backward(terms,params) if arm=='task_budget' else
                    measured_budget_backward(value['loss'],terms['main_reg'],params))
+            if arm=='task_budget':
+                holder=SimpleNamespace(losses=loss,_regression_loss=terms['main_reg'])
+                release_loss_graphs(SimpleNamespace(outputs=value),holder)
+                captured.clear()
+                del loss,terms,holder
             alarms=reasons(values,stats['gradient_before_clip'])
             before=float(torch.nn.utils.clip_grad_norm_(params,10.))
             after=float(torch.stack([p.grad.detach().norm() for p in params if p.grad is not None]).norm())
@@ -91,13 +97,15 @@ def run(source,out,arm,mode):
                 original_guard_alarms=alarms,optimizer_updated=mode=='finite',memory=memory))
             print(json.dumps(dict(arm=arm,index=i+1,losses=values,mixed=stats['gradient_before_clip'],
                                   original_guard_alarms=alarms,reserved_MiB=memory['reserved_bytes']/2**20)),flush=True)
-            del value,loss,terms
+            del value
+            if arm!='task_budget':del loss,terms
         except Exception as exc:
             failure=repr(exc);break
     unchanged=all(torch.equal(p.detach().cpu(),saved['model'][n]) for n,p in model.named_parameters())
     if mode=='zero' and not unchanged:raise ValueError('Zero-update verification changed parameters')
     if sha(path)!=pin:raise ValueError('Original snapshot changed')
-    report=dict(task_budget_revision=VERSION,arm=arm,mode=mode,records=logs,failure=failure,
+    report=dict(task_budget_revision=VERSION,task_memory_revision=MEMORY_REVISION,
+        arm=arm,mode=mode,records=logs,failure=failure,
         optimizer_updates=updates,fixed_update_budget=0 if mode=='zero' else 64,
         initialization_snapshot_sha256=pin,initial_forward_identical=bool(logs),parameters_unchanged=unchanged,
         original_snapshot_unchanged=True,original_source_run_resumed=False,weights_saved=False,

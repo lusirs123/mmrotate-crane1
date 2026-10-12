@@ -1,5 +1,5 @@
 import unittest
-from crane_project.utils.port_oof_task_budget_v1 import BUDGET,TASKS,VERSION
+from crane_project.utils.port_oof_task_budget_v1 import BUDGET,TASKS,VERSION,MEMORY_REVISION
 try:
     import torch
 except ImportError:
@@ -59,6 +59,42 @@ class BackwardTests(unittest.TestCase):
             with self.assertRaises(FloatingPointError):
                 self.backward(dict(main_cls=p*bad,main_reg=p,auxiliary=p),[p])
 
+    def test_optional_raw_measurement_changes_no_delivered_gradient_or_sgd_update(self):
+        from crane_project.utils.port_oof_task_budget_v1 import task_budget_backward
+        gradients=[];weights=[];momenta=[]
+        for raw in (True,False):
+            p=torch.nn.Parameter(torch.tensor([.1,-.2,.3]))
+            opt=torch.optim.SGD([p],lr=.0025,momentum=.9,weight_decay=.0001)
+            opt.state[p]['momentum_buffer']=torch.tensor([1.,-2.,3.])
+            terms=dict(main_cls=(p*torch.tensor([1e5,-3e4,7e4])).sum(),
+                       main_reg=(p*torch.tensor([-9e4,2e4,-4e4])).sum(),auxiliary=p.square().sum())
+            stats=task_budget_backward(terms,[p],measure_raw=raw)
+            self.assertEqual(stats['raw_gradient_measured'],raw)
+            self.assertEqual(stats['raw_gradient_before_budget'] is None,not raw)
+            gradients.append(p.grad.clone())
+            torch.nn.utils.clip_grad_norm_([p],10.)
+            opt.step()
+            weights.append(p.detach().clone());momenta.append(opt.state[p]['momentum_buffer'].clone())
+        self.assertTrue(torch.equal(gradients[0],gradients[1]))
+        self.assertTrue(torch.equal(weights[0],weights[1]))
+        self.assertTrue(torch.equal(momenta[0],momenta[1]))
+
+    def test_release_only_completed_graph_references(self):
+        from types import SimpleNamespace
+        from crane_project.utils.port_oof_task_budget_v1 import release_loss_graphs
+        p=torch.nn.Parameter(torch.tensor(2.))
+        total=p.square();original=float(total.detach())
+        p.grad=torch.ones_like(p)
+        batch=object();buffers=object()
+        runner=SimpleNamespace(outputs=dict(loss=total,log_vars=dict(loss=original)))
+        hook=SimpleNamespace(losses={'loss_cls':total},_regression_loss=total,batch=batch,pre_buffers=buffers)
+        release_loss_graphs(runner,hook)
+        self.assertIsNone(runner.outputs['loss'].grad_fn)
+        self.assertEqual(float(runner.outputs['loss']),original)
+        self.assertIsNone(hook.losses);self.assertIsNone(hook._regression_loss)
+        self.assertIs(hook.batch,batch);self.assertIs(hook.pre_buffers,buffers)
+        self.assertEqual(float(p.grad),1.)
+
     def test_actual_hook_keeps_loss_and_resource_stops_before_optimizer(self):
         import json
         import tempfile
@@ -84,7 +120,8 @@ class BackwardTests(unittest.TestCase):
                 m=Tiny(case=='loss')
                 opt=torch.optim.SGD(m.parameters(),lr=.1,momentum=.9)
                 runner=SimpleNamespace(model=m,optimizer=opt,iter=0,epoch=0,log_buffer=Log())
-                hook=PortOOFTaskBudgetHook(task_budget_revision=VERSION,directory=str(Path(d)/'trace'),
+                hook=PortOOFTaskBudgetHook(task_budget_revision=VERSION,task_memory_revision=MEMORY_REVISION,
+                    directory=str(Path(d)/'trace'),
                     settings=SETTINGS,memory_guard=MEMORY_SETTINGS,grad_clip=dict(max_norm=10,norm_type=2))
                 hook.before_run(runner)
                 hook.before_train_iter(runner)
@@ -102,6 +139,7 @@ class BackwardTests(unittest.TestCase):
                         hook.after_train_iter(runner)
                         self.assertAlmostEqual(float(m.p.norm()),1.,places=5)
                         self.assertEqual(hook.completed,1)
+                        self.assertIsNone(runner.outputs['loss'].grad_fn)
                         hook.finish('TEST_FIXTURE',runner)
                 if case!='normal':
                     self.assertEqual(float(m.p.norm()),0.)
@@ -109,6 +147,8 @@ class BackwardTests(unittest.TestCase):
                     self.assertEqual(hook.completed,0)
                 report=json.loads((Path(d)/'trace/completion.json').read_text())
                 self.assertEqual(report['task_budget_revision'],VERSION)
+                self.assertEqual(report['task_memory_revision'],MEMORY_REVISION)
+                self.assertIsNone(report['peak_raw_gradient'])
 
 
 if __name__=='__main__':unittest.main()
