@@ -2833,3 +2833,21 @@ prepare期间可看同目录launcher.log。仍预计7000步约3～4小时，实�
 
 **终态证据与回传。** 服务器仅CPU读取before_anomaly/after_forward_before_update快照，SHA与completion一致，iteration均1730；183个参数张量及SGD optimizer/momentum完全相同，after.trace与第1731行一致，证明该步未更新。wrapper exit0只表示预设边界成功隔离/归档，并非PREVENTION_WINDOW_PASS。现有23项服务器测试状态与10份源码SHA均核对，不重复运行未改测试。CPU分析保存analysis_summary.json；诊断快照不作为OOF来源。原生成包SHA9ea6418d…另存initial_archive.sha256，纳入本轮分析后包SHA`398f31abe12b49acbcc18fac7baf9834c9581fc2aead8cfe6c79c49cf4d4e011`，安全回传同一运行目录32个成员，无PT/PTH/数据软链。Mac独立复算1731行连续次序/1730更新/1698步平台/1093次缩放/最大loss梯度/停止资源信息，核对15项配置与10份源码SHA、工作区/暂存指纹不变。local_review.json明确没有Mac Torch复验；没有以exit0或测试通过替代预防通过。完整结果与服务器异常PT保留，包核验后仅清理本次两端压缩包；本轮只更新可靠性运行记录，不改论文主要结果或算法。
 
+### 44.20 用户允许暂时显存增加后的资源判定修复与预防验证：后台运行，最终结果待定（2026-10-12）
+
+**授权更新。** 用户明确“查看诊断结果，修复这个问题，要是暂时的显存增加可以接受，继续后续的验证现有修复能否预防失稳”。本轮据此撤销本次入口的reserved预热后零增长判断，允许4GiB上限内缓存扩展；不再把每次cached增长等同泄漏。不修改原通用MemoryPlateau/PortStrictOptimizerHook、旧实验终态、正式M/simple/policy、模型/损失/主回归预算10/全局clip10/SGD/seed1701/TRAIN身份/24epoch日程/7000步，不新增第二种训练修复，不启动B/midpoint/判断器或VAL/TEST。
+
+**阶段诊断事实。** 上轮中断前新增`diagnose_port_oof_prevention_memory_v1.py --expected-step1731 --all-phases`，明确校验保存快照iteration1730、SHA与原completion。固定40次GPU零更新，恢复保存的实际增强批次/buffer/RNG/assigner，不做optimizer.step，参数与快照SHA不变。逐行及backbone/neck/main head/aux head/forward/预算反向/clip记录显示该批次首次分配后reserved均2782MiB，检查点allocated387.722～388.222MiB，最高阶段活跃峰值2607.930MiB；冷进程没有重现原1730步allocator历史中的晚发128MiB，所以仍不锁定其唯一原因、不凭重放稳定证明整个训练无泄漏。诊断的GPU同步和Python逐行追踪会增加开销，仅诊断入口启用，不在新训练中运行。源快照只诊断，不作为OOF来源。工具main fbf8df9／服务器994d4b2已推送。
+
+**资源规则独立版本。** `memory_revision=cache_aware_resource_v2`，只接入PortOOFPreventionHook，配置与prevention.json/completion均显式记录，旧配置不能被新入口重新解释。继承32步预热、检查点活跃显存16MiB容差及4GiB绝对上限；cache扩展只记录。固定64步活跃allocation窗口，每32步评估前/后32个值的上中位数；后中位数高于预热活跃峰值＋16MiB，且比前中位数增加≥4MiB，连续两次评估满足时停止。上中位数避免单次跳到稳定较高平台被连续两次误判；短暂活跃尖峰可接受，但任何观测的current/peak allocated/reserved>4GiB立即停止。趋势分辨率以下的慢/小增长仍受硬上限约束，不声称数学保证永无泄漏。窗口仅CPU整数deque(maxlen64)，没有GPU张量历史；不清空cache、不人为预占内存、不更改反向。每步额外保存allocator current/peak/inactive_split/active/retry/OOM标量，即使guard抛错也保留原始资源证据。loss5/10、混合梯度1000、非有限值及更新前隔离继续保持。
+
+**验证。** 本地8项CPU合同/资源测试通过、10项Torch跳过；服务器18项全部通过，覆盖NaN/Inf、梯度逐位等价、FP32大梯度、实际hook资源失败时参数/SGD动量零更新、缓存扩展与短暂尖峰、32种单次稳定跳变对齐、持续活跃上升、current及peak4GiB上限、错误配置/计数。不重复未变原测试，后台复现脚本自带另10项原预算/解析参考检查。新guard零更新重放已保存90行/1731行检查点资源记录，分别接受2/128MiB cache扩展，均无持续活跃增长触发；旧运行status不改，旧逐阶段peak历史不可得，不能声称其历史全部峰值也通过新cap。重放辅助命令最初误用系统python缺numpy，已切回既定mmrotljj，不安装包或改环境。结果`20261012_A_budget10_scalar_gpu3_prevention_v1/cache_aware_guard_record_replay.json`。源码main1aa434d／任务分支57afd5b已推送，两端运行源文件同步。
+
+**新运行。** 物理GPU3启动前12MiB/0%、无计算任务；按用户允许GPU2共存授权只检查GPU3，不停止其他任务。服务器目录与mmrotljj环境不变，后台PID1609876、SIGHUP忽略、stdin=/dev/null、新session，SSH断线不结束。新ID`20261012_A_budget10_cacheaware_gpu3_prevention_v1`；仍从原ImageNet/seed1701健康初始化，非从1730/6452快照续训，避免未保存的DataLoader未来序列/采样状态改变原有限合同。最多7000实际更新，首次训练异常或新资源规则触发停止，无自动完整A/B续跑。旧快照/目录/规则保留。当前仅已启动，不能宣布预防成功或可靠性收益；需到达原6452窗口并完成7000后另验。
+
+日志：
+```bash
+tail -n 50 -F work_dirs/port_reliability_oof_v1/20261012_A_budget10_cacheaware_gpu3_prevention_v1/run.log
+```
+脚本退出后单个结果包位于work_dirs根目录，分析回传核验后仅删除该包，完整结果保留。约3.5小时预算，实际进度/首次异常决定耗时，MMCV24epoch ETA不是本轮预算。
+
