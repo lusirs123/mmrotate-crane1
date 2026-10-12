@@ -2851,3 +2851,7 @@ tail -n 50 -F work_dirs/port_reliability_oof_v1/20261012_A_budget10_cacheaware_g
 ```
 脚本退出后单个结果包位于work_dirs根目录，分析回传核验后仅删除该包，完整结果保留。约3.5小时预算，实际进度/首次异常决定耗时，MMCV24epoch ETA不是本轮预算。
 
+**启动后独立核对。** 新配置除resource guard外的14项模型/优化器/LR/seed/增强/采样/工作流/初始化/全局clip比较均一致，10份源码SHA检查通过；原资源规则和新规则显式同时写入configuration_comparison.json。已观察225次真实更新，225步的样本、loss、原始/混合/回归梯度、缩放及裁剪后梯度与44.19保存轨迹完全一致，预热后reserved仍2878MiB；记录的活跃峰值2617.475MiB、缓存峰值2878MiB，未触发新保护。early_observation.json明确原6452窗口尚未到达、最终预防结果待定；这个阶段不能代表7000步通过或可靠性提升。
+
+阶段诊断与资源记录重放包SHA`0b55a5725b3cb6d444772d988cb1a6855305ea3397de274d6f1cad65105e88fb`安全回传到原1731运行目录（无权重/数据），本地独立核验40次零更新/峰值/缓存及90＋1731＝1821行guard重放输出逐项一致；旧峰值历史不可得仍明确披露。cacheguard_analysis_local_review.json保存复核。本轮18项server测试＋后台脚本10项原预算测试通过，Mac8项CPU通过、10项Torch跳过；不将Mac统计核对写成Torch梯度复验。已完成分析包在核验后仅删除两端包文件，保留所有JSON/allocator分段与旧快照；新7000步验证仍在运行，未生成或清理其最终结果包。
+
