@@ -64,6 +64,7 @@ def prepare(out):
     old.write(out/'prepare.json', dict(proof=proof, plan=plan))
     old.write(out/'prevention.json', dict(protocol=contract.VERSION, settings=contract.SETTINGS,
         allocation_revision=contract.ALLOCATION_REVISION,
+        memory_revision=contract.MEMORY_REVISION, memory_settings=contract.MEMORY_SETTINGS,
         sources={p:old.sha(ROOT/p) for p in FILES}, configuration_sha256=old.sha(folder/'detector_config.py'),
         initialization='fresh_ImageNet_only', inherited_optimizer_momentum=False,
         fold='A', TRAIN_images=len(specification['train_images']),
@@ -75,7 +76,8 @@ def check(out):
     from mmcv import Config
     saved = json.loads((out/'prevention.json').read_text())
     if (saved['protocol'] != contract.VERSION or saved['settings'] != contract.SETTINGS or
-            saved['allocation_revision'] != contract.ALLOCATION_REVISION):
+            saved['allocation_revision'] != contract.ALLOCATION_REVISION or
+            saved['memory_revision'] != contract.MEMORY_REVISION or saved['memory_settings'] != contract.MEMORY_SETTINGS):
         raise ValueError('Prevention contract changed')
     for path, pin in saved['sources'].items():
         if old.sha(ROOT/path) != pin:
