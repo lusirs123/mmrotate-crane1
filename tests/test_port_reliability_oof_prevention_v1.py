@@ -9,6 +9,37 @@ except ImportError:
 
 
 class ContractTests(unittest.TestCase):
+    def test_cache_growth_and_short_active_spikes_are_allowed_below_cap(self):
+        guard=prevention.CacheAwareMemoryGuard()
+        for step in range(1,193):
+            active=(450 if step in range(80,84) else 390)*2**20
+            record=guard.observe(active,(2878 if step<90 else 3006)*2**20)
+        self.assertEqual(guard.cache_growth_events,1)
+        self.assertEqual(record['sustained_growth_checks'],0)
+
+    def test_single_stable_active_jump_is_not_persistent_growth_at_any_alignment(self):
+        for change_at in range(33,65):
+            guard=prevention.CacheAwareMemoryGuard()
+            for step in range(1,193):
+                guard.observe((390 if step<change_at else 450)*2**20,3100*2**20)
+            self.assertEqual(guard.growth_checks,0)
+
+    def test_persistent_active_growth_stops(self):
+        guard=prevention.CacheAwareMemoryGuard()
+        with self.assertRaisesRegex(RuntimeError,'Persistent active'):
+            for step in range(1,193):
+                guard.observe((390+max(0,step-32))*2**20,3100*2**20)
+        self.assertGreaterEqual(guard.growth_checks,2)
+
+    def test_fixed_cap_includes_transient_peaks(self):
+        for kw in (dict(reserved=4*2**30+1),dict(peak_reserved=4*2**30+1),dict(peak_allocated=4*2**30+1)):
+            guard=prevention.CacheAwareMemoryGuard()
+            arguments=dict(allocated=390*2**20,reserved=3006*2**20);arguments.update(kw)
+            with self.assertRaisesRegex(RuntimeError,'fixed4GiB'):guard.observe(**arguments)
+
+    def test_invalid_settings_and_counters_are_rejected(self):
+        with self.assertRaises(ValueError):prevention.CacheAwareMemoryGuard(absolute_limit_bytes=8*2**30)
+        with self.assertRaises(ValueError):prevention.CacheAwareMemoryGuard().observe(10,9)
     def test_fixed_limits(self):
         self.assertEqual(prevention.SETTINGS['max_updates'], 7000)
         self.assertEqual(prevention.SETTINGS['regression_budget'], 10.)
@@ -101,7 +132,7 @@ class BackwardTests(unittest.TestCase):
         from types import SimpleNamespace
         from unittest.mock import patch
         from mmrotate.core.hooks.port_oof_prevention_hook import PortOOFPreventionHook, PreventionStopped
-        from crane_project.utils.port_reliability_oof_training_v2 import MEMORY_GUARD
+        from crane_project.utils.port_reliability_oof_prevention_v1 import MEMORY_SETTINGS as MEMORY_GUARD
         class Tiny(torch.nn.Module):
             def __init__(self):
                 super().__init__(); self.p=torch.nn.Parameter(torch.tensor(1.))
@@ -135,7 +166,7 @@ class BackwardTests(unittest.TestCase):
         from types import SimpleNamespace
         from unittest.mock import patch
         from mmrotate.core.hooks.port_oof_prevention_hook import PortOOFPreventionHook
-        from crane_project.utils.port_reliability_oof_training_v2 import MEMORY_GUARD
+        from crane_project.utils.port_reliability_oof_prevention_v1 import MEMORY_SETTINGS as MEMORY_GUARD
         class Tiny(torch.nn.Module):
             def __init__(self):
                 super().__init__(); self.p=torch.nn.Parameter(torch.tensor(0.))

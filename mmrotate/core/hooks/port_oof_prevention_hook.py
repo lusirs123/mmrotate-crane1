@@ -10,6 +10,7 @@ from mmrotate.core.hooks.port_oof_regression_budget_hook import PortOOFRegressio
 from mmrotate.core.hooks.port_oof_trace_hook import cpu_tree, rng_state, runtime_state, sum_loss
 from crane_project.utils.port_reliability_oof_followup_v1 import json_safe
 from crane_project.utils.port_reliability_oof_prevention_v1 import SETTINGS, VERSION, ALLOCATION_REVISION, reasons, measured_budget_backward, finite_gradient_norm
+from crane_project.utils.port_reliability_oof_prevention_v1 import MEMORY_SETTINGS, MEMORY_REVISION, CacheAwareMemoryGuard
 
 
 class PreventionStopped(RuntimeError):
@@ -18,10 +19,11 @@ class PreventionStopped(RuntimeError):
 
 @HOOKS.register_module()
 class PortOOFPreventionHook(PortOOFRegressionBudgetHook):
-    def __init__(self, directory, settings, **kwargs):
-        super().__init__(**kwargs)
-        if settings != SETTINGS or self.memory_guard is None:
-            raise ValueError('Fixed limits and memory plateau required')
+    def __init__(self, directory, settings, memory_guard, **kwargs):
+        if settings != SETTINGS or memory_guard != MEMORY_SETTINGS:
+            raise ValueError('Fixed training and cache-aware resource limits required')
+        super().__init__(memory_guard=None, **kwargs)
+        self.memory_guard = CacheAwareMemoryGuard(**memory_guard)
         self.directory = Path(directory)
         self.completed = 0
         self.finished = False
@@ -112,7 +114,7 @@ class PortOOFPreventionHook(PortOOFRegressionBudgetHook):
                 for block in iter(lambda:stream.read(1024*1024), b''):
                     digest.update(block)
             pins[path.name] = digest.hexdigest()
-        report = dict(protocol=VERSION, allocation_revision=ALLOCATION_REVISION,
+        report = dict(protocol=VERSION, allocation_revision=ALLOCATION_REVISION, memory_revision=MEMORY_REVISION,
                       status=status, completed_updates=self.completed,
                       max_updates=SETTINGS['max_updates'], peak_raw_gradient=self.peak_raw,
                       peak_mixed_gradient=self.peak_mixed, raw_gradient_exceedances=self.raw_exceedances,
@@ -120,7 +122,7 @@ class PortOOFPreventionHook(PortOOFRegressionBudgetHook):
                       VAL_scored=False, TEST_read=False, adopted=False,
                       diagnostic_weights_usable_as_OOF=False, full_training_completed=False,
                       gradient_stop_definition='budgeted_mixed_before_global_clip',
-                      memory_guard=self.memory_guard.settings)
+                      memory_guard=self.memory_guard.settings, memory_summary=self.memory_guard.summary())
         (self.directory/'completion.json').write_text(json.dumps(report, indent=2, allow_nan=False)+'\n')
         self.log.close()
 
@@ -156,7 +158,20 @@ class PortOOFPreventionHook(PortOOFRegressionBudgetHook):
             self.clip_grads(params)
             record['gradient_after_clip'] = float(torch.stack([p.grad.detach().norm() for p in params if p.grad is not None]).norm())
             torch.cuda.synchronize()
-            record['memory'] = self.memory_guard.observe(torch.cuda.memory_allocated(), torch.cuda.memory_reserved())
+            peak_kwargs = (dict(peak_allocated=torch.cuda.max_memory_allocated(),
+                                peak_reserved=torch.cuda.max_memory_reserved())
+                           if torch.cuda.is_available() else {})
+            allocated, reserved = torch.cuda.memory_allocated(), torch.cuda.memory_reserved()
+            allocator_stats = torch.cuda.memory_stats() if torch.cuda.is_available() else {}
+            # Keep raw evidence even when the guard raises before step().
+            record['allocator'] = dict(allocated_bytes=allocated, reserved_bytes=reserved,
+                peak_allocated_bytes=peak_kwargs.get('peak_allocated',allocated),
+                peak_reserved_bytes=peak_kwargs.get('peak_reserved',reserved),
+                inactive_split_bytes=allocator_stats.get('inactive_split_bytes.all.current'),
+                active_bytes=allocator_stats.get('active_bytes.all.current'),
+                allocation_retries=allocator_stats.get('num_alloc_retries'),
+                OOM_events=allocator_stats.get('num_ooms'))
+            record['memory'] = self.memory_guard.observe(allocated, reserved, **peak_kwargs)
             runner.log_buffer.update(dict(stats, gradient_after_clip=record['gradient_after_clip'],
                 cuda_allocated_mib=record['memory']['allocated_bytes']/2**20,
                 cuda_reserved_mib=record['memory']['reserved_bytes']/2**20), runner.outputs['num_samples'])
