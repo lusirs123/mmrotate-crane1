@@ -5,11 +5,11 @@ import json
 from pathlib import Path
 import types
 import torch
-from mmcv.runner import HOOKS
+from mmcv.runner import HOOKS, OptimizerHook
 from mmrotate.core.hooks.port_oof_regression_budget_hook import PortOOFRegressionBudgetHook
 from mmrotate.core.hooks.port_oof_trace_hook import cpu_tree, rng_state, runtime_state, sum_loss
 from crane_project.utils.port_reliability_oof_followup_v1 import json_safe
-from crane_project.utils.port_reliability_oof_prevention_v1 import SETTINGS, VERSION, reasons, measured_budget_backward
+from crane_project.utils.port_reliability_oof_prevention_v1 import SETTINGS, VERSION, ALLOCATION_REVISION, reasons, measured_budget_backward, finite_gradient_norm
 
 
 class PreventionStopped(RuntimeError):
@@ -28,6 +28,22 @@ class PortOOFPreventionHook(PortOOFRegressionBudgetHook):
         self.peak_raw = self.peak_mixed = 0.
         self.raw_exceedances = 0
         self.budgeted_steps = 0
+
+    def clip_grads(self, params):
+        # Identical clip10 operation; scalar finite checks avoid full-size
+        # boolean masks introduced by the generic strict hook.
+        params = [p for p in params if p.requires_grad and p.grad is not None]
+        finite_gradient_norm(p.grad for p in params)
+        before = OptimizerHook.clip_grads(self, params)
+        after = finite_gradient_norm(p.grad for p in params)
+        if not bool(torch.isfinite(before)):
+            raise FloatingPointError('Nonfinite gradient norm before optimizer')
+        if self._runner is not None:
+            self._runner.log_buffer.update(dict(gradient_before_clip=float(before),
+                gradient_after_clip=float(after),
+                gradient_clip_fraction=min(1.,10./(float(before)+1e-6)),
+                nonfinite_gradient_events=self.nonfinite_gradient_events),self._runner.outputs['num_samples'])
+        return before
 
     def before_run(self, runner):
         self.model = runner.model.module if hasattr(runner.model, 'module') else runner.model
@@ -96,7 +112,8 @@ class PortOOFPreventionHook(PortOOFRegressionBudgetHook):
                 for block in iter(lambda:stream.read(1024*1024), b''):
                     digest.update(block)
             pins[path.name] = digest.hexdigest()
-        report = dict(protocol=VERSION, status=status, completed_updates=self.completed,
+        report = dict(protocol=VERSION, allocation_revision=ALLOCATION_REVISION,
+                      status=status, completed_updates=self.completed,
                       max_updates=SETTINGS['max_updates'], peak_raw_gradient=self.peak_raw,
                       peak_mixed_gradient=self.peak_mixed, raw_gradient_exceedances=self.raw_exceedances,
                       budgeted_steps=self.budgeted_steps, snapshot_sha256=pins,

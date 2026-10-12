@@ -29,6 +29,28 @@ class ContractTests(unittest.TestCase):
 
 @unittest.skipIf(torch is None, 'Torch required')
 class BackwardTests(unittest.TestCase):
+    def test_scalar_finite_checks_reject_nan_inf_and_missing(self):
+        for gradients in ([None], [torch.tensor([float('nan')])], [torch.tensor([float('inf')])]):
+            with self.assertRaises(FloatingPointError):prevention.finite_gradient_norm(gradients)
+        g=torch.tensor([3.,4.])
+        self.assertEqual(float(prevention.finite_gradient_norm([g,None])),5.)
+
+    def test_all_finite_checks_are_scalar_and_update_is_identical(self):
+        from unittest.mock import patch
+        from crane_project.utils.port_reliability_oof_gradient_chain_v1 import regression_budget_backward
+        original=torch.isfinite;seen=[]
+        def check(value):
+            seen.append(value.numel());return original(value)
+        p=torch.arange(64,dtype=torch.float32).requires_grad_(True)
+        q=p.detach().clone().requires_grad_(True)
+        weights=torch.arange(1,65,dtype=torch.float32)
+        regression=(p*weights).sum()
+        with patch('torch.isfinite',side_effect=check):
+            prevention.measured_budget_backward(regression+3*p.sum(),regression,[p])
+        r=(q*weights).sum();regression_budget_backward(r+3*q.sum(),r,[q])
+        torch.testing.assert_close(p.grad,q.grad,atol=0,rtol=0)
+        self.assertTrue(seen and all(n==1 for n in seen))
+
     def test_same_repair_and_raw_mixed_measurements(self):
         from crane_project.utils.port_reliability_oof_gradient_chain_v1 import regression_budget_backward
         p = torch.tensor([1., 2.], requires_grad=True)
