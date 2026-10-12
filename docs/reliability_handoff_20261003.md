@@ -2777,7 +2777,7 @@ FP32物理梯度与主轴解析FP64参考的相对差仅2.744e−7/9.195e−7，
 
 **同步隔离。** 本次源码已推送origin/main（代码末态8f31439）。因另一个窗口正在整理文档，仅将本轮源码/可靠性记录同步并推送`codex/oof-gradient-chain-v1`；服务器实际工作目录已切换该任务分支，main引用保留任务开始时25a5a70，避免主分支快进冲突或夹带几何文档。此调整只处理本轮创建的提交引用，原worktree/index内容不改；任务分支可正常追踪origin同名分支。当前任务记录在该分支归档，本机主工作区文档整理改动与本节同时保留，未整包提交其他窗口修改。
 
-### 44.18 现有回归预算修复的健康初始化预防验证：后台启动，结果待定（2026-10-12）
+### 44.18 现有回归预算修复的健康初始化预防验证：第90步资源护栏停止，机制未验收（2026-10-12）
 
 **授权与范围。** 用户授权验证现有修复能否预防失稳，修改代码并按原流程Git同步/服务器运行。只运行辅助A，原ImageNet初始化、seed1701、原1659张允许TRAIN、batch2/FP32/原增强、SGD及24epoch学习率日程保持；从第一步采用44.17相同主回归预算10及原全局clip10，最多7000次实际更新，首次异常停止。不继承6452权重或SGD动量，不启动B/midpoint/判断器、不加载VAL/TEST图像或选权、不修改正式M/simple/policy。原TRAIN/VAL角色元数据与来源SHA审查仍复用，不能称未读取任何VAL元数据。
 
@@ -2787,11 +2787,19 @@ FP32物理梯度与主轴解析FP64参考的相对差仅2.744e−7/9.195e−7，
 
 **检查与同步。** 本地3项不依赖Torch的合同检查通过，8项Torch检查跳过；服务器11项新测试通过，另10项原回归预算/解析参考测试通过。测试大梯度夹具最初独立重建回归表达式，与实际捕获共享张量不一致；已修正为复用捕获回归张量，不改变训练修复。实际hook验证loss停止时零更新、前向前buffer和assigner还原、正常预算＋clip更新，以及显存失败时参数/momentum均零更新。源码main提交b3b3af0/ff2a7f4/949f42d已推送；服务器隔离任务分支`codex/oof-gradient-chain-v1`同步797b29f/b46d0a8/e835f53，避免夹带另一窗口文档整理。原87份来源身份继续核对。
 
-**运行。** 服务器实际目录`/media/omnisky/personal_files/ljj/symEOOD`、环境`mmrotljj`，后台PID513734，SIGHUP忽略、stdin=/dev/null、新session；SSH断线不结束后台进程。初查第三张GPU有其他200MiB任务，未启动或停止该任务；再次确认物理GPU2/3均12MiB、0%、无计算进程后启动，训练只使用物理GPU3。脚本prepare后再次检查GPU2/3。结果统一`work_dirs/port_reliability_oof_v1/20261012_A_budget10_prevention_v1/`；script退出时自动生成`work_dirs/port_reliability_oof_prevention_v1_20261012_A_budget10.tar.gz`，无PT/PTH/数据软链。完成后需读取状态、回传复算并记录，再仅删除本次压缩包；完整结果和异常快照保留。当前尚无本轮稳定性或可靠性性能结论。
+**运行。** 服务器实际目录`/media/omnisky/personal_files/ljj/symEOOD`、环境`mmrotljj`，后台PID513734，SIGHUP忽略、stdin=/dev/null、新session；SSH断线不结束后台进程。初查第三张GPU有其他200MiB任务，未启动或停止该任务；再次确认物理GPU2/3均12MiB、0%、无计算进程后启动，训练只使用物理GPU3。脚本prepare后再次检查GPU2/3。结果统一`work_dirs/port_reliability_oof_v1/20261012_A_budget10_prevention_v1/`；script退出时自动生成`work_dirs/port_reliability_oof_prevention_v1_20261012_A_budget10.tar.gz`，无PT/PTH/数据软链。完成后需读取状态、回传复算并记录，再仅删除本次压缩包；完整结果和异常快照保留。本轮随后在第90步因资源护栏停止，不能判定失稳预防效果，也没有可靠性性能结论。
 
 日志（服务器项目目录内）：
 ```bash
 tail -n 50 -F work_dirs/port_reliability_oof_v1/20261012_A_budget10_prevention_v1/run.log
 ```
 prepare阶段尚无run.log时读取同目录launcher.log。初始时长估计3～5小时。启动后独立核验五份源码SHA两端一致，原A与本轮15项配置/资源比较均一致；已观察到82次实际更新，32步预热后50步reserved保持2878MiB，最后主分类/回归loss为0.25557/1.40677，尚未触发异常。前50步日志time=1.834s/step，按7000步估计约3.6小时，暂按3.5～4小时安排；MMCV显示10:07:16是原24epoch全程ETA，不是本轮预算。该早期状态不代表经过6452原失稳窗口或最终修复通过。
+
+**最终状态与独立核验。** `UPDATE_OR_RESOURCE_FAILURE_STOP`，实际完成89次更新，第90步在optimizer.step之前退出；没有重新运行或放宽显存容差。该步两张允许TRAIN为sim_seq08_00484/00650，主分类loss0.343703、主回归0.698738、总loss1.078433，原总梯度137.655、预算后混合28.363、全局clip后10；90步均无loss/非有限/混合梯度1000触发。reserved由预热平台2878MiB增加为2880MiB（2MiB），而allocated389.722MiB低于预热最大392.597MiB。因此是严格缓存平台合同未通过，不是已观察到模型loss/梯度失稳、OOM或已证明持续泄漏；未达到原6452附近窗口，不能宣布修复有效/无效。更新成功的第33—89步共57步reserved均2878MiB。原始/混合梯度峰值425.875/197.571，90次主回归预算均启用；这也不是完整训练或检测交付质量证据。
+
+服务器仅CPU读取前向前/后快照核验183个参数张量和SGD optimizer/momentum完全相同、快照SHA不变，异常记录与快照trace一致；两快照保持diagnostic_only，不作为OOF来源。进程PID513734已退出，当时GPU2/3回到12MiB、0%。wrapper退出码0表示按已登记边界停止并成功归档，**不表示PREVENTION_WINDOW_PASS**；真实结论须读取completion.status。原正式M/policy及A/B历史身份保持。
+
+结果包补入CPU分析后SHA为`83f0cc13959b44786b3cbb60687aa7dc4001b7224da9bc20850387afd0eb2e96`（初始包哈希另保留initial_archive.sha256）。安全回传同一运行目录，31个tar成员、无PT/PTH/数据软链；Mac独立核对10份源码SHA、15项原A配置比较、90行次序与89次更新、57步缓存平台、loss/梯度未触发、异常资源信息、工作区和暂存指纹不变。记录analysis_summary.json/local_review.json；没有把CPU检查写成Mac Torch复验。完整结果与服务器PT异常快照保留，包核验后按用户授权清理。运行记录只更新本节，不改正式主要结果或论文稿。
+
+**下一步边界。** 用户要求缓存预热后不增长，本次已按要求停止，不自动续训、不改变容差或预热长度。若后续继续，应先解决/确认资源检查可执行性，再重复同一预防合同；不能将这次资源退出当作回归预算的机制失败而叠加第二种训练修复。仍不启动完整A/B、VAL/TEST或可靠性判断器训练。
 
