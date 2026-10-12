@@ -58,5 +58,118 @@
     "server_deleted": true,
     "both_verified_absent": true,
     "raw_results_retained": true
+  },
+  "local_retention": {
+    "date": "2026-10-11",
+    "scope": "Only local copies in midpoint_readout_evidence_20261011; server originals untouched.",
+    "retained_files": [
+      "README.md",
+      "local_review_receipt.json",
+      "run_cfaf168_20261011_01/preflight/failure.json",
+      "run_cfaf168_20261011_01/run.log",
+      "run_cfaf168_20261011_02/preflight/artifacts.json",
+      "run_cfaf168_20261011_02/preflight/completion.json",
+      "run_cfaf168_20261011_02/run.log"
+    ],
+    "trash_directory": "/Users/mac/.Trash/symEOOD_midpoint_readout_copies_20261011_212309",
+    "moved_count": 19,
+    "moved_files": [
+      {
+        "relative_path": "run_cfaf168_20261011_01/exit_code.txt",
+        "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865",
+        "bytes": 2
+      },
+      {
+        "relative_path": "run_cfaf168_20261011_01/preflight/artifacts.json",
+        "sha256": "c3a819d14da90842ff3fe92d2706eaee476f784f02faf8384d6a4373d12d0580",
+        "bytes": 518
+      },
+      {
+        "relative_path": "run_cfaf168_20261011_01/preflight/progress.jsonl",
+        "sha256": "9f5829c94ed010069ded7b42a0b9a3905b2a79d493d12abab799b0d395511d55",
+        "bytes": 85
+      },
+      {
+        "relative_path": "run_cfaf168_20261011_01/preflight/protocol.json",
+        "sha256": "b8b20a984b53031a7d0288755b620b2e8cefb4c3393cd77b9e16db8c282cb118",
+        "bytes": 5323
+      },
+      {
+        "relative_path": "run_cfaf168_20261011_01/preflight/reuse_paths.json",
+        "sha256": "41c91e3cf8c4ab5cb139c3406a1ba056eabd17af1ed4785025b0d70b278cd460",
+        "bytes": 417
+      },
+      {
+        "relative_path": "run_cfaf168_20261011_01/preflight/sources.json",
+        "sha256": "6804faf1ca02f7ba1efa191254a06c3490e215a4cea35a74b25cfc871b1df8e0",
+        "bytes": 11337
+      },
+      {
+        "relative_path": "run_cfaf168_20261011_01/run_metadata.json",
+        "sha256": "44390233010d0da6d041e3f75532fca08310b76994bc8a149265c16a1561b237",
+        "bytes": 427
+      },
+      {
+        "relative_path": "run_cfaf168_20261011_01/static/artifacts.json",
+        "sha256": "60bb105a63beeff6b90e1065f5e7908679968f8cec18758679bc93789e3bf40e",
+        "bytes": 521
+      },
+      {
+        "relative_path": "run_cfaf168_20261011_01/static/completion.json",
+        "sha256": "30ef1346085d8afc5ba1d604d7bc20f9de23d64b25956210bf5b274c6c1c8541",
+        "bytes": 97556
+      },
+      {
+        "relative_path": "run_cfaf168_20261011_01/static/progress.jsonl",
+        "sha256": "1a82ad1919c6a498eca132b3f6a70c04608e1f29cf5d31bac5d1c88ffde9b401",
+        "bytes": 97
+      },
+      {
+        "relative_path": "run_cfaf168_20261011_01/static/protocol.json",
+        "sha256": "b8b20a984b53031a7d0288755b620b2e8cefb4c3393cd77b9e16db8c282cb118",
+        "bytes": 5323
+      },
+      {
+        "relative_path": "run_cfaf168_20261011_01/static/reuse_paths.json",
+        "sha256": "41c91e3cf8c4ab5cb139c3406a1ba056eabd17af1ed4785025b0d70b278cd460",
+        "bytes": 417
+      },
+      {
+        "relative_path": "run_cfaf168_20261011_01/static/sources.json",
+        "sha256": "6804faf1ca02f7ba1efa191254a06c3490e215a4cea35a74b25cfc871b1df8e0",
+        "bytes": 11337
+      },
+      {
+        "relative_path": "run_cfaf168_20261011_02/exit_code.txt",
+        "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+        "bytes": 2
+      },
+      {
+        "relative_path": "run_cfaf168_20261011_02/preflight/progress.jsonl",
+        "sha256": "2218153d3a8fa23950e5944fcde97db4b39383f03a064697cffb962d482b3e3b",
+        "bytes": 87
+      },
+      {
+        "relative_path": "run_cfaf168_20261011_02/preflight/protocol.json",
+        "sha256": "b8b20a984b53031a7d0288755b620b2e8cefb4c3393cd77b9e16db8c282cb118",
+        "bytes": 5323
+      },
+      {
+        "relative_path": "run_cfaf168_20261011_02/preflight/reuse_paths.json",
+        "sha256": "41c91e3cf8c4ab5cb139c3406a1ba056eabd17af1ed4785025b0d70b278cd460",
+        "bytes": 417
+      },
+      {
+        "relative_path": "run_cfaf168_20261011_02/preflight/sources.json",
+        "sha256": "6804faf1ca02f7ba1efa191254a06c3490e215a4cea35a74b25cfc871b1df8e0",
+        "bytes": 11337
+      },
+      {
+        "relative_path": "run_cfaf168_20261011_02/run_metadata.json",
+        "sha256": "6caf9770386bbe20aacb057465e565bc2f96e3906611d22ab1bb48d0009d19f9",
+        "bytes": 482
+      }
+    ],
+    "historical_verification_note": "verified_artifact_files describes complete receipt verification before this cleanup. Original artifacts may list files now retained only on server or moved to Trash; they are not a complete local bundle manifest."
   }
 }

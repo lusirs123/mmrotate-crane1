@@ -1363,3 +1363,9 @@ python crane_project/tools/train_port_geometry_midpoint_readout_v1.py \
 **本地收件／清理：** 约44KB结果包包含两次运行的文本、JSON、日志和退出码，SHA256 `66b73a0165b731d97849c1a10cfcf0f7c7a62a02605626d6710c302731eac261`；下载后安全展开至[可同步证据目录](detection/midpoint_readout_evidence_20261011/README.md)，逐项核对15份artifact文本SHA、静态／GPU proof、当前87份来源、参考身份、runtime及零更新事实。[本机收件检查](detection/midpoint_readout_evidence_20261011/local_review_receipt.json)与服务器原artifact区分。未打包ROI张量／模型权重／源码副本；zero_update_head.pth只留服务器，未冒称本机重载或重算887帧。记录分析后逐一校验包SHA，再仅删除本次本地与服务器传输压缩包并确认不存在；服务器原始两次运行目录、日志、失败及零更新权重保留。
 
 **结论／待验证：** 工程门槛通过，可准备一次同预算均匀读出头对照；没有正式训练、新几何收益或机制根因结论。后续须另获训练授权，从共同初值重新初始化、单卡21,648更新，全部24轮完整VAL按原规则选权；不要从预检权重续训，不强制旧ep03，不读TEST。不改论文、可靠性、深度及既有B／σ1.5身份；TEST多次暴露与σ1.5采用时序继续披露。以后同服务器启动前使用进程临时设置`export LD_LIBRARY_PATH="/usr/local/cuda-11.8/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"`；成功预检报告入口为`work_dirs/port_geometry_midpoint_readout_v1/run_cfaf168_20261011_02/preflight/completion.json`，原文件保留。
+
+<a id="activity-a065"></a>
+
+### A065. 2026-10-11：精简本地读出预检副本，冗余文件移入废纸篓
+
+用户要求仅保留重要文件；只处理截图中的`docs/detection/midpoint_readout_evidence_20261011/`，26份精简为7份：README、收件清单、成功completion与原artifacts、失败failure及两次run.log。其余19份重复协议／源码清单／路径记录／进度／静态报告／退出码／元数据副本（151,008字节）移入系统废纸篓独立目录，逐份SHA确认一致且原路径已不存在；空子目录清理。恢复目录、原相对路径、SHA及大小登记在收件清单`local_retention`，没有永久删除。原artifacts字节不改、仍代表服务器完整输出；15份核验清单保留精简前收件身份，不冒称当前本地全量材料齐备。服务器原始报告、权重与缓存未动，AP证据、其它方法／结果及源码保持；本轮未连接服务器、提交Git、训练或重复已通过预检。README同步说明当前保留范围。
