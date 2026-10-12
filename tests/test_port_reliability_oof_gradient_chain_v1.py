@@ -69,6 +69,12 @@ class GaussianTests(unittest.TestCase):
         torch.testing.assert_close(p.grad,torch.tensor([5.,7.]))
         self.assertEqual(stats['regression_gradient_scale'],1.)
 
+    def test_large_fp32_regression_preserves_budget_and_other_gradient(self):
+        p=torch.tensor(1.,requires_grad=True);regression=1e8*p;other=3*p
+        stats=chain.regression_budget_backward(regression+other,regression,[p])
+        self.assertEqual(float(p.grad),13.)
+        self.assertEqual(stats['regression_gradient_budgeted_norm'],10.)
+
     def test_nonfinite_regression_stops_before_backward(self):
         p=torch.tensor(1.,requires_grad=True);regression=p*float('inf')
         with self.assertRaises(FloatingPointError):chain.regression_budget_backward(regression,regression,[p])
