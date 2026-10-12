@@ -2776,3 +2776,22 @@ FP32物理梯度与主轴解析FP64参考的相对差仅2.744e−7/9.195e−7，
 **工程与回传。** 最终10项服务器测试全部通过，Mac缺Torch：2项CPU通过、8项运行时跳过（不称Mac梯度复验）。服务器包SHA`b7c629478a37a23fb69f7e7f1f49f1e522d672d27a79d88eac90921c5fab9284`安全回传到同一运行目录，22项、无权重/PT；Mac核对5份测试源码SHA、6份JSON结果SHA、两次归因重现/向量重建、64步计数、同初始化/批次顺序、末态聚合与25/2尖峰计数一致。明细为analysis_summary.json/local_review.json及result、finite64、finite64_fix1子目录。原工作区/暂存b48cc0…/d54105…保持，其他窗口正在整理的本地文档原样保留。本次包核验后清理，两端完整结果及原快照保留；没有更新正式主要结果成绩或论文稿。
 
 **同步隔离。** 本次源码已推送origin/main（代码末态8f31439）。因另一个窗口正在整理文档，仅将本轮源码/可靠性记录同步并推送`codex/oof-gradient-chain-v1`；服务器实际工作目录已切换该任务分支，main引用保留任务开始时25a5a70，避免主分支快进冲突或夹带几何文档。此调整只处理本轮创建的提交引用，原worktree/index内容不改；任务分支可正常追踪origin同名分支。当前任务记录在该分支归档，本机主工作区文档整理改动与本节同时保留，未整包提交其他窗口修改。
+
+### 44.18 现有回归预算修复的健康初始化预防验证：后台启动，结果待定（2026-10-12）
+
+**授权与范围。** 用户授权验证现有修复能否预防失稳，修改代码并按原流程Git同步/服务器运行。只运行辅助A，原ImageNet初始化、seed1701、原1659张允许TRAIN、batch2/FP32/原增强、SGD及24epoch学习率日程保持；从第一步采用44.17相同主回归预算10及原全局clip10，最多7000次实际更新，首次异常停止。不继承6452权重或SGD动量，不启动B/midpoint/判断器、不加载VAL/TEST图像或选权、不修改正式M/simple/policy。原TRAIN/VAL角色元数据与来源SHA审查仍复用，不能称未读取任何VAL元数据。
+
+**增量与合同。** 新增`run_port_reliability_oof_prevention_v1.py/.sh`、`port_reliability_oof_prevention_v1.py`、`PortOOFPreventionHook`和11项测试，独立入口不接入旧完整A/B训练。反向仍先计算真实主回归梯度，其他loss正常反向，显式加预算后的回归梯度。原始总梯度由其他梯度＋未缩放回归梯度计算并记录，停止判断使用预算后、全局clip之前的实际混合梯度≥1000；保持分类loss≥5、主回归loss≥10、任何非有限值以及原32步预热/显存护栏。护栏均在本次optimizer.step之前。原24epoch配置仅保持学习率/NFL日程，实际7000次即终止，不由MMCV完整24epoch ETA推断本轮时长。
+
+不再每步完整CPU模型快照或额外原总loss反向/密集分量归因：仅保存小规模可变buffer/RNG/assigner运行状态。异常时参数和momentum尚未更新，将当前参数与前向前buffer合成准确的前向前快照，另存前向后快照及实际增强批次。正常每步记录标量JSON；不保存可作为OOF来源的训练权重。通过仅表示该A窗口稳定，不代表完整TRAIN稳定、OOF来源合格或可靠性FA/FR收益；失败则本次不自动增加修复或预算。
+
+**检查与同步。** 本地3项不依赖Torch的合同检查通过，8项Torch检查跳过；服务器11项新测试通过，另10项原回归预算/解析参考测试通过。测试大梯度夹具最初独立重建回归表达式，与实际捕获共享张量不一致；已修正为复用捕获回归张量，不改变训练修复。实际hook验证loss停止时零更新、前向前buffer和assigner还原、正常预算＋clip更新，以及显存失败时参数/momentum均零更新。源码main提交b3b3af0/ff2a7f4/949f42d已推送；服务器隔离任务分支`codex/oof-gradient-chain-v1`同步797b29f/b46d0a8/e835f53，避免夹带另一窗口文档整理。原87份来源身份继续核对。
+
+**运行。** 服务器实际目录`/media/omnisky/personal_files/ljj/symEOOD`、环境`mmrotljj`，后台PID513734，SIGHUP忽略、stdin=/dev/null、新session；SSH断线不结束后台进程。初查第三张GPU有其他200MiB任务，未启动或停止该任务；再次确认物理GPU2/3均12MiB、0%、无计算进程后启动，训练只使用物理GPU3。脚本prepare后再次检查GPU2/3。结果统一`work_dirs/port_reliability_oof_v1/20261012_A_budget10_prevention_v1/`；script退出时自动生成`work_dirs/port_reliability_oof_prevention_v1_20261012_A_budget10.tar.gz`，无PT/PTH/数据软链。完成后需读取状态、回传复算并记录，再仅删除本次压缩包；完整结果和异常快照保留。当前尚无本轮稳定性或可靠性性能结论。
+
+日志（服务器项目目录内）：
+```bash
+tail -n 50 -F work_dirs/port_reliability_oof_v1/20261012_A_budget10_prevention_v1/run.log
+```
+prepare阶段尚无run.log时读取同目录launcher.log。初始时长估计3～5小时，需以实际7000步吞吐修正，首次异常可提前结束。
+
