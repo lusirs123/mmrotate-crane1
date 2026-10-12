@@ -33,8 +33,12 @@ def task_budget_backward(terms, parameters):
             g = g.detach()
             if raw[i] is None: raw[i] = g.clone()
             else: raw[i].add_(g)
-            if p.grad is None: p.grad = g.mul(scale)
-            else: p.grad.add_(g,alpha=scale)
+            # Materialize every scaled contribution with the same rounding.
+            # Mixing mul for the first task with fused add(alpha=...) later
+            # leaves a residual for equal opposite large FP32 gradients.
+            scaled = g.mul(scale)
+            if p.grad is None: p.grad = scaled
+            else: p.grad.add_(scaled)
         del gs
     raw_norm = float(finite_gradient_norm(raw))
     mixed = float(finite_gradient_norm(p.grad for p in parameters))
