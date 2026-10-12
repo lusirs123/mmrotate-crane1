@@ -2803,3 +2803,23 @@ prepare阶段尚无run.log时读取同目录launcher.log。初始时长估计3�
 
 **下一步边界。** 用户要求缓存预热后不增长，本次已按要求停止，不自动续训、不改变容差或预热长度。若后续继续，应先解决/确认资源检查可执行性，再重复同一预防合同；不能将这次资源退出当作回归预算的机制失败而叠加第二种训练修复。仍不启动完整A/B、VAL/TEST或可靠性判断器训练。
 
+### 44.19 第90步缓存定位、标量有限值检查及同合同重启：后台进行，最终结果待定（2026-10-12）
+
+**授权。** 用户要求先定位2MiB增长，若无大问题重新运行既有修复的健康初始化预防验证。本轮只处理辅助TRAIN诊断检查的缓存开销，不添加第二种训练修复、不改原32步预热/零reserved增长/allocated16MiB容差/4GiB上限、loss与梯度停止阈值、预算10、7000步、TRAIN/seed1701/模型/SGD/LR日程，仍不启动B或VAL/TEST。
+
+**零更新定位事实。** 新增`diagnose_port_oof_prevention_memory_v1.py`，读取44.18第90步前向前快照（SHA bd0ab7…），保留其optimizer状态以匹配存储，但不执行optimizer.step。固定原版/标量版各40次同一实际增强TRAIN批次，每次恢复前向前buffer、RNG与assigner运行状态；参数逐张量核验不变，源快照SHA保持。Python行级缓存追踪显示原检查中两次`torch.isfinite(g).all()`各新增2MiB GPU缓存，原40次末态reserved均2782MiB；首次之后不持续增长。该追踪只定位保存批次的新分配，不重现原90步全部allocator历史，因此不能宣布两次分配就是原晚发2MiB的唯一根因，也不能凭一次增长证明泄漏。
+
+**实现增量。** `finite_gradient_norm`使用L2标量范数有限性检查，NaN/Inf或范数溢出仍停止；主回归预算/其他梯度/显式逐参数组合/全局clip10/实际SGD更新均不改。本次独立`PortOOFPreventionHook.clip_grads`保持原MMCV裁剪操作及日志，有限性预检采用同一标量检查，不修改通用PortStrictOptimizerHook或旧正式配置。版本标记`allocation_revision=scalar_norm_finite_checks_v1`单独保存并校验，以保留原运行身份。未清空GPU缓存或增大预热/容差。main提交a617f7a/6f5262e，隔离服务器任务分支fd5feb9/51463bb，均已推送；保留另一窗口已有工作区/暂存改动。
+
+**验证事实。** 服务器13项测试通过，新增标量检查NaN/Inf/缺梯度拦截及64维梯度与原实现逐位相同、所有isfinite检查仅处理标量的测试；原实际hook零更新停止/前向前buffer/显存失败参数与SGD动量不变/正常裁剪更新继续通过。Mac3项合同检查通过、10项Torch跳过。标量版40次GPU零更新重放的总loss、原始梯度、混合梯度、回归梯度、缩放与预算范数每次均与原版JSON浮点值完全相等（loss1.078433、raw137.655365、mixed28.362972）。reserved均2780MiB，比原版少2MiB；allocated范围两者相同387.722～388.222MiB，没有持续累积。仍不能保证真实不同批次的完整7000步缓存不增加，原护栏持续执行。定位材料统一在44.18原结果目录下`memory_diagnosis`/`memory_diagnosis_scalar`及`memory_diagnosis_comparison.json`；不是新增数据角色或模型候选性能。
+
+**首次重启尝试未开始训练。** `20261012_A_budget10_scalar_prevention_v1`后台launcher PID603596启动时物理GPU2出现其他窗口进程598655（几何TEST），物理GPU3空闲。脚本严格按GPU2/3都空闲要求在测试/prepare/训练前退出，exit_code3，不能写成训练失败或新的预防结果；不停止该进程、不读其TEST结果、不占用其显卡。该尝试日志/归档保留原身份，待空闲后另立运行ID避免覆盖。
+
+**用户更新GPU授权与实际重启。** 用户随后明确“继续就行，不用在意第三张卡，显存占用小”，因此仅第四张物理GPU3为空闲检查对象；不再以GPU2任务阻断，不改变训练显存护栏。脚本变更main df598af／服务器任务分支63540e1已推送同步。重新使用新ID`20261012_A_budget10_scalar_gpu3_prevention_v1`，后台PID613570，SIGHUP忽略、stdin=/dev/null、新session，mmrotljj环境/指定服务器目录不变。服务器13项新版测试＋10项原梯度链/预算测试通过后执行prepare和来源检查，仅A从ImageNet重启，不续用89步权重或momentum、不启动B。新的源码SHA/配置/pipeline/运行身份另存；旧失败运行不改结论，原第90步异常快照继续保留。完成后需读completion.status，回传复算、更新本节并仅删除本次结果压缩包；在此之前不能宣布失稳预防有效或可靠性性能改善。
+
+当前日志：
+```bash
+tail -n 50 -F work_dirs/port_reliability_oof_v1/20261012_A_budget10_scalar_gpu3_prevention_v1/run.log
+```
+prepare期间可看同目录launcher.log。仍预计7000步约3～4小时，实际速度和首次异常可改变完成时间，原24epoch日志ETA不是本轮预算。
+
