@@ -8,6 +8,19 @@ VERSION = 'port_reliability_oof_prevention_v1'
 SETTINGS = dict(max_updates=7000, gradient_limit=1000., main_cls_limit=5.,
                 main_reg_limit=10., regression_budget=10., seed=1701)
 HOOK = 'mmrotate.core.hooks.port_oof_prevention_hook'
+ALLOCATION_REVISION = 'scalar_norm_finite_checks_v1'
+
+
+def finite_gradient_norm(gradients):
+    """Reject NaN/Inf (including norm overflow) without gradient-sized masks."""
+    import torch
+    norms = [g.detach().norm() for g in gradients if g is not None]
+    if not norms:
+        raise FloatingPointError('Missing gradients')
+    norm = torch.stack(norms).norm()
+    if not bool(torch.isfinite(norm)):
+        raise FloatingPointError('Nonfinite gradient norm')
+    return norm
 
 
 def reasons(losses, mixed_norm):
@@ -58,18 +71,13 @@ def measured_budget_backward(total, regression, parameters):
     if any(p.grad is not None for p in parameters):
         raise ValueError('Clear gradients before prevention backward')
     gradients = torch.autograd.grad(regression, parameters, retain_graph=True, allow_unused=True)
-    active = [g for g in gradients if g is not None]
-    if not active or not all(bool(torch.isfinite(g).all()) for g in active):
-        raise FloatingPointError('Nonfinite/missing regression gradients')
-    norm = torch.stack([g.detach().norm() for g in active]).norm()
-    if not torch.isfinite(norm):
-        raise FloatingPointError('Nonfinite regression norm')
+    norm = finite_gradient_norm(gradients)
     scale = min(1., SETTINGS['regression_budget'] / (float(norm) + 1e-12))
     (total - regression).backward()
     raw_norms = []
     for p, g in zip(parameters, gradients):
         other = p.grad
-        if other is not None and not bool(torch.isfinite(other).all()):
+        if other is not None and not bool(torch.isfinite(other.detach().norm())):
             raise FloatingPointError('Nonfinite other gradients')
         raw = g.detach() if other is None and g is not None else other
         if other is not None and g is not None:
@@ -82,10 +90,7 @@ def measured_budget_backward(total, regression, parameters):
             else:
                 p.grad.add_(g.detach(), alpha=scale)
         del raw
-    present = [p.grad for p in parameters if p.grad is not None]
-    if not present or not all(bool(torch.isfinite(g).all()) for g in present):
-        raise FloatingPointError('Nonfinite/missing mixed gradients')
-    mixed = torch.stack([g.detach().norm() for g in present]).norm()
+    mixed = finite_gradient_norm(p.grad for p in parameters)
     raw_norm = torch.stack(raw_norms).norm()
     if not torch.isfinite(mixed) or not torch.isfinite(raw_norm):
         raise FloatingPointError('Nonfinite gradient norm')
