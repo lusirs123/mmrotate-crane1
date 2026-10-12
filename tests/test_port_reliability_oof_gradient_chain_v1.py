@@ -46,5 +46,45 @@ class GaussianTests(unittest.TestCase):
         expected=((1+chain.analytic_kld_terms(p,q)['raw']).sqrt()-1)[0]/2*2
         torch.testing.assert_close(chain.reference_loss(p,q,w,2,2),expected)
 
+    def test_budget_bounds_regression_and_preserves_other_gradient(self):
+        p=torch.tensor([1.,2.],requires_grad=True)
+        regression=100*p[0]+200*p[1]
+        other=3*p[0]-4*p[1]
+        before=float((regression+other).detach())
+        stats=chain.regression_budget_backward(regression+other,regression,[p])
+        scale=10/(100**2+200**2)**.5
+        torch.testing.assert_close(p.grad,torch.tensor([3.+100*scale,-4.+200*scale]))
+        self.assertAlmostEqual(stats['regression_gradient_budgeted_norm'],10)
+        self.assertEqual(float((regression+other).detach()),before)
+
+    def test_small_regression_is_exactly_unchanged(self):
+        p=torch.tensor([1.,2.],requires_grad=True);regression=p.square().sum();total=regression+3*p.sum()
+        stats=chain.regression_budget_backward(total,regression,[p])
+        torch.testing.assert_close(p.grad,torch.tensor([5.,7.]))
+        self.assertEqual(stats['regression_gradient_scale'],1.)
+
+    def test_nonfinite_regression_stops_before_backward(self):
+        p=torch.tensor(1.,requires_grad=True);regression=p*float('inf')
+        with self.assertRaises(FloatingPointError):chain.regression_budget_backward(regression,regression,[p])
+        self.assertIsNone(p.grad)
+
+    def test_actual_hook_rejects_nonfinite_and_preserves_normal_update(self):
+        from types import SimpleNamespace
+        from mmrotate.core.hooks.port_oof_regression_budget_hook import PortOOFRegressionBudgetHook
+        class Tiny(torch.nn.Module):
+            def __init__(self):super().__init__();self.p=torch.nn.Parameter(torch.tensor(1.))
+            def forward_train(self,bad=False):return dict(loss_bbox=self.p*(float('inf') if bad else 2),loss_cls=self.p*3)
+        class Log:
+            def __init__(self):self.v={}
+            def update(self,v,n):self.v.update(v)
+        m=Tiny();optimizer=torch.optim.SGD(m.parameters(),lr=.1)
+        runner=SimpleNamespace(model=m,optimizer=optimizer,log_buffer=Log())
+        hook=PortOOFRegressionBudgetHook(grad_clip=dict(max_norm=10,norm_type=2));hook.before_run(runner)
+        hook.before_train_iter(runner);terms=m.forward_train();runner.outputs=dict(loss=sum(terms.values()),num_samples=1)
+        hook.after_train_iter(runner);self.assertAlmostEqual(float(m.p),.5,places=6)
+        hook.before_train_iter(runner);terms=m.forward_train(True);runner.outputs=dict(loss=sum(terms.values()),num_samples=1)
+        with self.assertRaises(FloatingPointError):hook.after_train_iter(runner)
+        self.assertAlmostEqual(float(m.p),.5,places=6)
+
 
 if __name__ == '__main__': unittest.main()
