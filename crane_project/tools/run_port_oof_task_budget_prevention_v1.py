@@ -25,12 +25,14 @@ def prepare(out):
     cfg.dump(str(path))
     pin=parent.old.sha(path)
     membership=json.loads((out/'A/membership.json').read_text())
-    parent.old.write(out/'A/membership.json',dict(membership,resolved_config_sha256=pin))
+    # parent.prepare created these metadata files in a new exclusive directory.
+    # Replace only that newly prepared metadata, never an existing run.
+    (out/'A/membership.json').write_text(json.dumps(dict(membership,resolved_config_sha256=pin),indent=2)+'\n')
     saved=json.loads((out/'prevention.json').read_text())
     saved.update(task_budget_revision=task.VERSION,task_budgets={k:task.BUDGET for k in task.TASKS},
         configuration_sha256=pin)
     saved['sources'].update({p:parent.old.sha(ROOT/p) for p in FILES})
-    parent.old.write(out/'prevention.json',saved)
+    (out/'prevention.json').write_text(json.dumps(saved,indent=2)+'\n')
     check(out)
 
 
