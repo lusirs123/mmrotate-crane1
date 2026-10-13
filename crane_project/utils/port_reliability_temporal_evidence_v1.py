@@ -65,12 +65,31 @@ def enrich(rows, boundaries):
         if new_video: tracker=CausalSizeEvidence()
         point=tracker.observe(row['pred'],row['frame_id'],row['image_size'],
             reset=new_video or row['frame_id'] in boundaries.get(row['sequence'], []))
+        point['acquisition_boundary']=row['frame_id'] in boundaries.get(row['sequence'], [])
         item=deepcopy(row); item['temporal']=point
         item['risks']=dict(full_simple=row['size_risks']['full_simple'],
             score_only=1-row['pred'][5] if row['pred'] is not None else None,
             temporal=point['primary'])
         outputs.append(item); previous=row
     return outputs
+
+
+def summarize(rows, accepted):
+    """Known acquisition joins also break runs, retaining original reported indices."""
+    copied=[];positions={};offsets=Counter()
+    for r in states.checked_order(rows):
+        if r.get('temporal',{}).get('acquisition_boundary'):offsets[r['sequence']]+=1
+        item=dict(r);item['frame_id']=r['frame_id']+offsets[r['sequence']]
+        positions[(item['sequence'],item['frame_id'])]=r['frame_id'];copied.append(item)
+    result=states.summarize(copied,accepted);seen=set()
+    for kind in result['runs'].values():
+        for segment in kind['segments']+kind['longest_segments']:
+            if id(segment) in seen:continue
+            seen.add(id(segment))
+            for field in ('start_frame','end_frame'):
+                segment[field]=positions[(segment['sequence'],segment[field])]
+    result['known_acquisition_boundaries_reset_runs']=True
+    return result
 
 
 def formal_accept(rows):
@@ -106,7 +125,7 @@ def point(rows, method, count=None, correct=None):
     if count is not None:
         if not 0 <= count <= len(out): raise ValueError('Invalid acceptance count')
         selected=out[:count]
-        result=states.summarize(rows,{r['image'] for r in selected})
+        result=summarize(rows,{r['image'] for r in selected})
         boundary=selected[-1]['risks'][method] if selected else None
         ties=[r for r in out if r['risks'][method]==boundary] if boundary is not None else []
         before=[r for r in out if r['risks'][method]<boundary] if boundary is not None else []
@@ -122,13 +141,13 @@ def point(rows, method, count=None, correct=None):
             for r in out:
                 seen+=int(metrics.bad(r) is False)
                 if seen>=correct: target=r['risks'][method];break
-        result=states.summarize(rows,{r['image'] for r in out if target is not None and r['risks'][method]<=target})
+        result=summarize(rows,{r['image'] for r in out if target is not None and r['risks'][method]<=target})
         result.update(exact_CR=result['states']['CR']==correct,offline_GT_threshold=target)
     return result
 
 
 def raw_error_profile(rows, cutoff):
-    summary=states.summarize(rows,{r['image'] for r in rows if r['pred'] is not None})
+    summary=summarize(rows,{r['image'] for r in rows if r['pred'] is not None})
     segments=summary['runs']['incorrect_acceptance']['segments'];by_id={r['image']:r for r in rows}
     long_ids={r['image'] for r in rows for seg in segments if seg['length']>=SETTINGS['long_error_run_min']
         and r['sequence']==seg['sequence'] and seg['start_frame']<=r['frame_id']<=seg['end_frame']}
@@ -157,8 +176,8 @@ def evaluate(rows, cutoff):
     baseline=formal_accept(rows); proposed=veto_accept(rows,cutoff)
     full={};evidence={}
     for group,part in metrics.grouped(rows).items():
-        actual=states.summarize(part,proposed & {r['image'] for r in part})
-        base=states.summarize(part,baseline & {r['image'] for r in part})
+        actual=summarize(part,proposed & {r['image'] for r in part})
+        base=summarize(part,baseline & {r['image'] for r in part})
         controls={m:dict(same_count=point(part,m,count=actual['accepted_outputs']),
             same_CR=point(part,m,correct=actual['states']['CR'])) for m in ('full_simple','score_only')}
         full[group]=dict(formal=base,temporal_veto=actual,controls=controls,
@@ -167,7 +186,7 @@ def evaluate(rows, cutoff):
                          added_FR=actual['states']['FR']-base['states']['FR']))
         supported=[r for r in part if r['temporal']['available']]
         supported_ids={r['image'] for r in supported}
-        ref=states.summarize(supported,baseline & supported_ids)
+        ref=summarize(supported,baseline & supported_ids)
         good=sum(metrics.bad(r) is False for r in supported);target=math.ceil(.95*good)
         comparison={m:dict(AUROC=metrics.auc(supported,m),
             same_formal_count=point(supported,m,count=ref['accepted_outputs']),

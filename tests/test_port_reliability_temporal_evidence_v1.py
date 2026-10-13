@@ -60,6 +60,13 @@ class TemporalTests(unittest.TestCase):
         with self.assertRaises(ValueError):core.enrich([row(1,split='test')],{})
         with self.assertRaises(ValueError):core.fit_cutoff(core.enrich([row(i,split='val') for i in range(4)],{}))
 
+    def test_acquisition_join_breaks_reported_runs_without_renumbering(self):
+        a=core.enrich([row(i,size=70) for i in range(8)],{'real_seq01':[4]})
+        s=core.summarize(a,{r['image'] for r in a})
+        runs=s['runs']['incorrect_acceptance']['segments']
+        self.assertEqual([(r['start_frame'],r['end_frame'],r['length']) for r in runs],[(0,3,4),(4,7,4)])
+        self.assertEqual(s['states']['FA'],8)
+
     def test_constant_wrong_sizes_are_not_detected(self):
         a=core.enrich([row(i,size=70) for i in range(10)],{})
         self.assertTrue(all(r['temporal']['primary']==0 for r in a[3:]))
