@@ -1,0 +1,40 @@
+{
+  "frontend_pins": {
+    "work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/epoch_24.pth": "8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23",
+    "work_dirs/crane_symeood_k1_port_day2night_midpoint_sigma_v1/sigma_1p5/head_epoch_03.pth": "16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7"
+  },
+  "input_pins": {
+    "crane_project/data/crane_grab_port_day2night_v1/manifest.json": "128bd9aac390ad878a46c005a22f44d322a5acf61a47ad128991eb7444a4886f",
+    "crane_project/data/crane_grab_port_day2night_v1/provenance/axis_k2p1/sampling_manifest.json": "83b89a4f4e541ef0009a134317ecf5c60f4feaaf5733f8a4191e9b7a9101d31e",
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f",
+    "work_dirs/port_reliability_feature_ablation_v1/20261008_size_features_v1/fit/scored_TRAIN_VAL.jsonl.gz": "e804241c2b7d529ed816f9d2f33dedad1e2961a5b132426bc816777b324c03b4",
+    "work_dirs/port_reliability_temporal_fusion_v1/20261013_fusion_cpu_v1/result/calibration.json": "cfe8ca2d6a6b9e9a99073627132c9b78a5cb6eac2b8a4cffccb314ec601bb0d2",
+    "work_dirs/port_reliability_temporal_fusion_v1/20261013_fusion_cpu_v1/result/models.json": "17d524567a620d9a51935a1906d147b0e7f4be210014be3ad6b5272211373469",
+    "work_dirs/port_reliability_temporal_fusion_v1/20261013_fusion_cpu_v1/result/report.json": "1c6aba1cffddc002b627b2c4c3a5250780738541cf0acfe9db6129660441e29a",
+    "work_dirs/port_reliability_temporal_fusion_v1/20261013_fusion_cpu_v1/result/scored_TRAIN.jsonl.gz": "07581783dd1a2fda5063f9e8ff7ac80c21c40ca9c5294988dd30c582249f4c69",
+    "work_dirs/port_reliability_temporal_fusion_v1/20261013_fusion_cpu_v1/result/scored_VAL.jsonl.gz": "e0dc15693286c06afac803f995a9e5d277e5ae75ecc84069e286388cd9288d4f",
+    "work_dirs/port_reliability_temporal_fusion_v1/20261013_fusion_cpu_v1/result/server_review.json": "568d35d30349e3fad902433a58badff08444e60b5810340caf1257c11bcc4336"
+  },
+  "limitations": [
+    "Frame correlation: no IID p-values or confidence guarantee.",
+    "VAL repeatedly exposed: development evidence only.",
+    "TRAIN-only direction selection is descriptive; no score deployment.",
+    "Small error counts cannot establish absence of all nonlinear information.",
+    "No candidate trained, no geometry or policy changed."
+  ],
+  "matching": "Low-deviation errors matched to nearest low-deviation correct within same video and absolute relative-log-size distance<=.1. Controls may be reused, disclose unmatched/errors/control count; not independent pairs.",
+  "previous_result": "work_dirs/port_reliability_temporal_fusion_v1/20261013_fusion_cpu_v1/result",
+  "protocol": "port_reliability_conditional_evidence_v1",
+  "roles": "Full TRAIN fixes feature quartiles/median and descriptive orientation, saved before full exposed VAL. No new roles, fits, thresholds or TEST.",
+  "screen": "Descriptive prerequisite only: same feature has TRAIN-directed low-deviation AUC>=.6 with >=5 errors and >=5 correct in >=2 TRAIN videos and >=1 VAL video; 4 median-by-original-temporal cells each >=5 errors and >=5 correct, signed interaction contrast abs>=.1 agrees in >=2 TRAIN and >=1 VAL videos. No automatic model fitting. These conservative screening constants are not confidence bounds or a proof of information absence.",
+  "settings": {
+    "level_cutoff": 0.0785511443740936,
+    "minimum_TRAIN_videos": 2,
+    "minimum_VAL_videos": 1,
+    "minimum_bad": 5,
+    "minimum_good": 5,
+    "screening_auc": 0.6,
+    "screening_interaction_contrast": 0.1,
+    "size_match_log_tolerance": 0.1
+  }
+}
