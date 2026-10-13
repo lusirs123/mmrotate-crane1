@@ -121,5 +121,16 @@ class FusionTests(unittest.TestCase):
         self.assertEqual(core.level.summarize(rows,ids)['states'],expected['states'])
         self.assertIsNone(matched_veto_ids(rows,len(rows)+1,'count'))
 
+    def test_review_gate_survives_sorted_JSON_roundtrip(self):
+        import json
+        from crane_project.tools.review_port_reliability_temporal_fusion_v1 import equivalent_gate
+        rows=core.score(toy(),core.fit(toy()))
+        report=core.evaluate(rows,{a:dict(risk_le=.8) for a in core.ARMS})
+        before=core.gate(report)
+        after=core.gate(json.loads(json.dumps(report,sort_keys=True)))
+        self.assertTrue(equivalent_gate(before,after))
+        broken=deepcopy(after);broken['failures'].append(dict(check='unexpected'))
+        self.assertFalse(equivalent_gate(before,broken))
+
 
 if __name__ == '__main__': unittest.main()

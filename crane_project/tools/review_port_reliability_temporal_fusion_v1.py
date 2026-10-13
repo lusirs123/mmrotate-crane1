@@ -17,6 +17,14 @@ from crane_project.tools.review_port_reliability_temporal_history_gate_v1 import
 VERSION = 'port_reliability_temporal_fusion_v1'
 
 
+def equivalent_gate(left, right):
+    def normalized(value):
+        result = dict(value)
+        result['failures'] = sorted(value['failures'], key=lambda x:json.dumps(x,sort_keys=True))
+        return result
+    return normalized(left) == normalized(right)
+
+
 def check_summary(rows, ids, summary):
     check_counts_runs(rows, ids, summary)
     c = summary['states']; n = len(rows); outputs = n-c['MISSING']; good = c['CR']+c['FR']
@@ -186,7 +194,7 @@ def main():
     if total != 3445 or set(raw) != {r['image'] for rows in scored.values() for r in rows} or report['TEST_opened'] or report['neural_training_updates'] or report['detector_inferences']:
         raise ValueError('Scope differs')
     from crane_project.utils import port_reliability_temporal_fusion_v1 as core
-    if core.gate(report['roles']['VAL']) != report['gate']: raise ValueError('Verified gate differs')
+    if not equivalent_gate(core.gate(report['roles']['VAL']), report['gate']): raise ValueError('Verified gate differs')
     result = dict(passed=True, rows=total, independent_checks=checks, fit_gradient_max=gradients,
                   max_temporal_replay_difference=maxdiff, absent_frontend_files=absent,
                   review_only_repairs=repairs,
