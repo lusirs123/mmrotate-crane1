@@ -80,5 +80,19 @@ class Tests(unittest.TestCase):
         self.assertEqual(a['groups']['all']['FR_with_bad_history'],1)
         self.assertEqual(a['details'][1]['state'],'FR')
 
+    def test_quantile_cross_numpy_tolerance(self):
+        from crane_project.tools.review_port_reliability_conditional_evidence_v1 import train_rules_equal
+        a={'quantiles':{'x':[.1,.2,.3]},'directions':{'x':-1}}
+        b=copy.deepcopy(a);b['quantiles']['x'][1]=np.nextafter(.2,1.)
+        self.assertTrue(train_rules_equal(a,b))
+        b['quantiles']['x'][1]+=.000001
+        self.assertFalse(train_rules_equal(a,b))
+
+    def test_rule_metadata_not_tolerant(self):
+        from crane_project.tools.review_port_reliability_conditional_evidence_v1 import train_rules_equal
+        a={'quantiles':{'x':[.1]},'directions':{'x':-1}}
+        b=copy.deepcopy(a);b['directions']['x']=1
+        self.assertFalse(train_rules_equal(a,b))
+
 
 if __name__=='__main__':unittest.main()

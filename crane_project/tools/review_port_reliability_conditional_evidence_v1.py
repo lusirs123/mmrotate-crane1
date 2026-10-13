@@ -23,13 +23,31 @@ def label(r):
     return any(abs(a-b)/b>.1 for a,b in zip(sorted(r['pred'][2:4]),sorted(r['gt'][2:4])))
 
 
-def review(result,allow_absent=False):
+def train_rules_equal(left,right):
+    a,b=dict(left),dict(right)
+    aq,bq=a.pop('quantiles'),b.pop('quantiles')
+    return a==b and set(aq)==set(bq) and all(
+        np.allclose(aq[k],bq[k],atol=1e-13,rtol=0,equal_nan=False) for k in aq)
+
+
+def review(result,allow_absent=False,original_review=None):
     p,s,pins,absent=runner.load(allow_absent)
     report=json.loads((result/'report.json').read_text()); frozen=json.loads((result/'TRAIN_rules.json').read_text())
-    if (report['input_pins']!=pins or not set(report['absent_frontend'])<=set(p['frontend_pins'])
+    if (set(report['input_pins'])!=set(pins) or not set(report['absent_frontend'])<=set(p['frontend_pins'])
             or (not allow_absent and report['absent_frontend'])):raise ValueError('Manifest differs')
+    repairs={}
+    for name,digest in pins.items():
+        if report['input_pins'][name]==digest:continue
+        allowed={'crane_project/tools/review_'+core.VERSION+'.py':'original_review.py',
+                 'tests/test_'+core.VERSION+'.py':'original_tests.py'}
+        if original_review is None or name not in allowed:raise ValueError('Non-review source changed')
+        original=original_review if name.startswith('crane_project/') else result/allowed[name]
+        if (original.is_symlink() or original.resolve().parent!=result.resolve()
+                or runner.sha(original)!=report['input_pins'][name]):raise ValueError('Original review not preserved')
+        repairs[name]=dict(original_sha256=report['input_pins'][name],current_sha256=digest,
+                           scope='audit-only float tolerance; no report/quantile/regrouping change')
     previous=ROOT/p['previous_result'];parts={role:runner.read(previous/('scored_'+role+'.jsonl.gz')) for role in ('TRAIN','VAL')}
-    if frozen!=core.freeze_train(parts['TRAIN']):raise ValueError('TRAIN-only rules differ')
+    if not train_rules_equal(frozen,core.freeze_train(parts['TRAIN'])):raise ValueError('TRAIN-only rules differ')
     checks=0
     for role,rows in parts.items():
         core.validate(rows,role)
@@ -60,13 +78,14 @@ def review(result,allow_absent=False):
         raise ValueError('Diagnostic scope changed')
     return dict(passed=True,rows=sum(map(len,parts.values())),independent_checks=checks,
                 report_sha256=runner.sha(result/'report.json'),absent_frontend=absent,
-                deterministic_full_replay=True,TEST_opened=False,fit_calls=0)
+                deterministic_full_replay=True,TEST_opened=False,fit_calls=0,review_only_repairs=repairs)
 
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('--result',type=Path,required=True);p.add_argument('--out',type=Path,required=True)
-    p.add_argument('--allow-absent-frontend',action='store_true');a=p.parse_args()
-    runner.write(a.out,review(a.result,a.allow_absent_frontend));print('Independent review passed',flush=True)
+    p.add_argument('--allow-absent-frontend',action='store_true')
+    p.add_argument('--original-review-source',type=Path);a=p.parse_args()
+    runner.write(a.out,review(a.result,a.allow_absent_frontend,a.original_review_source));print('Independent review passed',flush=True)
 
 
 if __name__=='__main__':main()
