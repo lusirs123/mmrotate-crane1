@@ -57,7 +57,7 @@ def review(result,allow_absent=False,original_review=None):
         original=original_review if name.startswith('crane_project/') else result/allowed[name]
         if original.is_symlink() or original.resolve().parent!=result.resolve() or runner.io.sha(original)!=report['input_pins'][name]:raise ValueError('Original audit source not preserved')
         repairs[name]=dict(original_sha256=report['input_pins'][name],current_sha256=digest,
-                           scope='audit JSON key normalization only; no refit/rescore/calibration')
+                           scope='audit JSON representation/1e-13 history tolerance only; no refit/rescore/calibration')
     if not set(report['absent_frontend'])<=set(p['frontend_pins']) or (not allow_absent and report['absent_frontend']):raise ValueError('Unverified frontend')
     previous=ROOT/p['previous_result'];parts={role:runner.io.read(result/('scored_'+role+'.jsonl.gz')) for role in ('TRAIN','VAL')}
     checks=0;maxdiff=0.
@@ -70,7 +70,7 @@ def review(result,allow_absent=False,original_review=None):
                 if key!='risks' and r[key]!=old[key]:raise ValueError('Frozen frame mutated: '+key)
             if set(r['risks'])!=set(old['risks'])|{core.METHOD}:raise ValueError('Unexpected risk features')
             if any(r['risks'][k]!=v for k,v in old['risks'].items()):raise ValueError('Frozen baseline risk changed')
-            if r['temporal']!=history['temporal']:raise ValueError('Causal history replay differs')
+            if not equivalent_payload(r['temporal'],history['temporal']):raise ValueError('Causal history replay differs')
             expected=old['risks']['fusion4']
             if r['pred'] is not None and r['temporal']['available']:
                 m=models['fusion4'];z=(vector(r)-m['mean'])/m['scale']

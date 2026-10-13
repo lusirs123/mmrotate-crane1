@@ -135,5 +135,12 @@ class Tests(unittest.TestCase):
         self.assertTrue(equivalent_metrics(saved,raw))
         saved['states']['FA']=4;self.assertFalse(equivalent_metrics(saved,raw))
 
+    def test_history_cross_platform_tolerance_keeps_frames_exact(self):
+        from crane_project.tools.review_port_reliability_conditional_evidence_v1 import equivalent_payload
+        a={'primary':.1,'available':True,'history_frames':[1,2,3]};b=deepcopy(a)
+        b['primary']=np.nextafter(.1,1.)
+        self.assertTrue(equivalent_payload(a,b))
+        b['history_frames'][-1]=4;self.assertFalse(equivalent_payload(a,b))
+
 
 if __name__=='__main__':unittest.main()
