@@ -1,0 +1,63 @@
+{
+  "boundaries": {
+    "real_seq12": [
+      122
+    ]
+  },
+  "data_manifest": "crane_project/data/crane_grab_port_day2night_v1/manifest.json",
+  "frozen_frontend_identity": {
+    "work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/epoch_24.pth": "8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23",
+    "work_dirs/crane_symeood_k1_port_day2night_midpoint_sigma_v1/sigma_1p5/head_epoch_03.pth": "16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7"
+  },
+  "input_pins": {
+    "crane_project/data/crane_grab_port_day2night_v1/manifest.json": "128bd9aac390ad878a46c005a22f44d322a5acf61a47ad128991eb7444a4886f",
+    "crane_project/data/crane_grab_port_day2night_v1/provenance/axis_k2p1/sampling_manifest.json": "83b89a4f4e541ef0009a134317ecf5c60f4feaaf5733f8a4191e9b7a9101d31e",
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f",
+    "work_dirs/port_reliability_feature_ablation_v1/20261008_size_features_v1/fit/scored_TRAIN_VAL.jsonl.gz": "e804241c2b7d529ed816f9d2f33dedad1e2961a5b132426bc816777b324c03b4"
+  },
+  "policy": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json",
+  "rows": "work_dirs/port_reliability_feature_ablation_v1/20261008_size_features_v1/fit/scored_TRAIN_VAL.jsonl.gz",
+  "sampling_manifest": "crane_project/data/crane_grab_port_day2night_v1/provenance/axis_k2p1/sampling_manifest.json",
+  "protocol": "port_reliability_temporal_fusion_v1",
+  "fitting": {
+    "l2": 0.1,
+    "max_iterations": 100,
+    "gradient_tolerance": 1e-08
+  },
+  "history": 3,
+  "feature_arms": {
+    "static3": [
+      "score_logit",
+      "log_relative_geometric_size",
+      "log_aspect"
+    ],
+    "fusion4": [
+      "score_logit",
+      "log_relative_geometric_size",
+      "log_aspect",
+      "past3_log_edge_deviation"
+    ]
+  },
+  "roles": {
+    "fitting": "Complete TRAIN; paired arms use every history-supported output, including genuine correct/errors. Shared static fallback uses ALL TRAIN outputs. No new split roles.",
+    "calibration": "Complete exposed VAL; once per arm choose global max group95 good-risk quantile. Fixed weights; no coefficient/window/loss search.",
+    "TEST": "Not opened by this runner. Only separate frozen report after gate pass and approval."
+  },
+  "target_good_retention": 0.95,
+  "control_same_supported_TRAIN": true,
+  "old_level_cutoff": 0.0785511443740936,
+  "gate": "Each domain/video correct retention>=95%; strict overall same-count and same-CR FA gain over static3/formal simple/score, per-group nonincrease; correct-FR longest protection vs each matched control. Also beat old veto at feasible shared CR; candidate shared target=min(candidate CR, original simple retained correct maximum), whole ties, never online threshold.",
+  "online": "Only predictions/image size/sample index/reset; fixed 3 past observations; common fallback for unsupported history, no fake temporal zero. Center/angle/box/score/output unchanged; missing has no size decision.",
+  "references": [
+    "https://arxiv.org/abs/2012.07504",
+    "https://arxiv.org/abs/2405.20459"
+  ],
+  "limitations": [
+    "No new image evidence. Stable wrong boxes can remain low risk.",
+    "71 genuine TRAIN size errors; class balancing does not add types.",
+    "VAL repeatedly exposed; results are development evidence, not independent validation.",
+    "Balanced sigmoid is a ranking risk, not calibrated probability.",
+    "Sample index is not elapsed seconds.",
+    "Failure seals this bounded linear fusion; no automatic new features, heads, budget or TEST."
+  ]
+}
