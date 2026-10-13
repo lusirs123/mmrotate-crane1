@@ -113,5 +113,13 @@ class FusionTests(unittest.TestCase):
         rows = toy(); saved = deepcopy(rows); core.score(rows,core.fit(rows))
         self.assertEqual(rows,saved)
 
+    def test_independent_old_match_helper_signature_and_selection(self):
+        from crane_project.tools.review_port_reliability_temporal_fusion_v1 import matched_veto_ids
+        rows = core.score(toy(),core.fit(toy()))
+        ids = matched_veto_ids(rows,5,'CR')
+        expected = core.trend.matched_veto(rows,correct=5)
+        self.assertEqual(core.level.summarize(rows,ids)['states'],expected['states'])
+        self.assertIsNone(matched_veto_ids(rows,len(rows)+1,'count'))
+
 
 if __name__ == '__main__': unittest.main()

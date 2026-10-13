@@ -74,17 +74,31 @@ def check_fit(model, rows):
 def main():
     p = argparse.ArgumentParser(); p.add_argument('--result', type=Path, required=True)
     p.add_argument('--out', type=Path, required=True); p.add_argument('--allow-absent-frontend', action='store_true')
+    p.add_argument('--original-review-source', type=Path,
+                   help='Audit a review-only repair without changing the original run report/pins')
     a = p.parse_args(); report = json.loads((a.result/'report.json').read_text())
     protocol = json.loads((ROOT/('crane_project/tools/'+VERSION+'_protocol.json')).read_text())
     if report['models'] != json.loads((a.result/'models.json').read_text()) or report['cutoffs'] != json.loads((a.result/'calibration.json').read_text()):
         raise ValueError('Saved model/calibration artifact differs')
-    absent = []
+    absent = []; repairs = {}
     for name, digest in dict(report['input_pins'], **report['sources']['sources']).items():
         path = ROOT/name
         if a.allow_absent_frontend and not path.exists() and name in protocol['frozen_frontend_identity']:
             if digest != protocol['frozen_frontend_identity'][name]: raise ValueError('Frontend pin differs')
             absent.append(name); continue
-        if hashlib.sha256(path.read_bytes()).hexdigest() != digest: raise ValueError('Input/source changed '+name)
+        actual = hashlib.sha256(path.read_bytes()).hexdigest()
+        if actual != digest:
+            own_name = 'crane_project/tools/review_'+VERSION+'.py'
+            test_name = 'tests/test_'+VERSION+'.py'
+            if name not in (own_name, test_name) or a.original_review_source is None:
+                raise ValueError('Input/source changed '+name)
+            original_source = a.original_review_source if name == own_name else a.result/('original_test_'+VERSION+'.py')
+            if (original_source.is_symlink() or original_source.resolve().parent != a.result.resolve()
+                    or hashlib.sha256(original_source.read_bytes()).hexdigest() != digest):
+                raise ValueError('Original review code/pin not preserved')
+            current_sources = json.loads((ROOT/('crane_project/tools/'+VERSION+'_sources.json')).read_text())
+            if actual != current_sources['sources'][name]: raise ValueError('Repair differs from pinned current review')
+            repairs[name] = dict(original_sha256=digest,current_sha256=actual,scope='review only, no refit or recalibration')
     raw = {r['image']:r for r in read(ROOT/protocol['rows'])}; scored = {}; total = checks = 0; maxdiff = 0.
     for role in ('TRAIN', 'VAL'):
         rows = read(a.result/('scored_'+role+'.jsonl.gz')); scored[role] = rows
@@ -158,7 +172,7 @@ def main():
             ids = rank_ids(part, 'fusion4', correct=shared)
             check_summary(part, ids, data['candidate_at_old_shared_CR']); checks += 1
             for kind, target, key in [('CR', shared, 'old_same_CR'), ('count', data['candidate']['accepted_outputs'], 'old_same_count')]:
-                ids = matched_veto_ids(part, target, kind, key='temporal')
+                ids = matched_veto_ids(part, target, kind)
                 if ids is None:
                     if data[key]['feasible']: raise ValueError('Old-rule matching feasibility differs')
                 else: check_summary(part, ids, data[key])
@@ -175,6 +189,7 @@ def main():
     if core.gate(report['roles']['VAL']) != report['gate']: raise ValueError('Verified gate differs')
     result = dict(passed=True, rows=total, independent_checks=checks, fit_gradient_max=gradients,
                   max_temporal_replay_difference=maxdiff, absent_frontend_files=absent,
+                  review_only_repairs=repairs,
                   report_sha256=hashlib.sha256((a.result/'report.json').read_bytes()).hexdigest(), TEST_opened=False)
     with a.out.open('x') as f: json.dump(result,f,indent=2,sort_keys=True); f.write('\n')
     print(json.dumps(result,sort_keys=True))
