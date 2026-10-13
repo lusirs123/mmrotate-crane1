@@ -30,6 +30,16 @@ def train_rules_equal(left,right):
         np.allclose(aq[k],bq[k],atol=1e-13,rtol=0,equal_nan=False) for k in aq)
 
 
+def equivalent_payload(left,right):
+    if isinstance(left,dict):
+        return isinstance(right,dict) and set(left)==set(right) and all(equivalent_payload(left[k],right[k]) for k in left)
+    if isinstance(left,list):
+        return isinstance(right,list) and len(left)==len(right) and all(equivalent_payload(a,b) for a,b in zip(left,right))
+    if isinstance(left,float):
+        return isinstance(right,float) and math.isfinite(left) and math.isfinite(right) and math.isclose(left,right,rel_tol=0,abs_tol=1e-13)
+    return type(left)==type(right) and left==right
+
+
 def review(result,allow_absent=False,original_review=None):
     p,s,pins,absent=runner.load(allow_absent)
     report=json.loads((result/'report.json').read_text()); frozen=json.loads((result/'TRAIN_rules.json').read_text())
@@ -71,7 +81,7 @@ def review(result,allow_absent=False,original_review=None):
                 if distance>core.SETTINGS['size_match_log_tolerance'] or abs(distance-pair['size_distance'])>1e-12:raise ValueError('Size tolerance invalid')
             checks+=1
         # Deterministic full audit complements the independent contracts above.
-        if report['roles'][role]!=core.analyze(rows,frozen,report['frozen_cutoff']):raise ValueError('Full conditional analysis differs')
+        if not equivalent_payload(report['roles'][role],core.analyze(rows,frozen,report['frozen_cutoff'])):raise ValueError('Full conditional analysis differs')
     if report['screen']!=core.prerequisite_screen(report['roles']):raise ValueError('Screen differs')
     cutoff=json.loads((previous/'calibration.json').read_text())['fusion4']['risk_le']
     if report['frozen_cutoff']!=cutoff or any(report[k]!=0 for k in ('fit_calls','training_updates','detector_inferences')) or report['TEST_opened'] or report['policy_changed'] or report['formal_flags_changed']:

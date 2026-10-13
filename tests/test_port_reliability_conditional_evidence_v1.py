@@ -94,5 +94,17 @@ class Tests(unittest.TestCase):
         b=copy.deepcopy(a);b['directions']['x']=1
         self.assertFalse(train_rules_equal(a,b))
 
+    def test_replay_tolerance_does_not_hide_count_or_identity(self):
+        from crane_project.tools.review_port_reliability_conditional_evidence_v1 import equivalent_payload
+        a={'count':1,'image':'a','rate':.2};b=copy.deepcopy(a);b['rate']=np.nextafter(.2,1.)
+        self.assertTrue(equivalent_payload(a,b))
+        b['count']=2;self.assertFalse(equivalent_payload(a,b))
+        b['count']=1;b['image']='b';self.assertFalse(equivalent_payload(a,b))
+
+    def test_replay_tolerance_rejects_nan_and_large_float_change(self):
+        from crane_project.tools.review_port_reliability_conditional_evidence_v1 import equivalent_payload
+        self.assertFalse(equivalent_payload(float('nan'),float('nan')))
+        self.assertFalse(equivalent_payload(.2,.200001))
+
 
 if __name__=='__main__':unittest.main()
