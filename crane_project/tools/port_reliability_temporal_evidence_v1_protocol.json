@@ -1,0 +1,43 @@
+{
+  "boundaries": {
+    "real_seq12": [
+      122
+    ]
+  },
+  "cutoff": "TRAIN correctly accepted history-supported observations: maximal group95 whole-tie cutoff; one global bound",
+  "data_manifest": "crane_project/data/crane_grab_port_day2night_v1/manifest.json",
+  "frozen_frontend_identity": {
+    "work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/epoch_24.pth": "8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23",
+    "work_dirs/crane_symeood_k1_port_day2night_midpoint_sigma_v1/sigma_1p5/head_epoch_03.pth": "16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7"
+  },
+  "gate": "full-frame raw correct retention95 by domain/video; same-count and same-CR strict overall gain vs simple/score, per-group nonincrease, longest correct FR protection; evidence-only, no adoption",
+  "input_pins": {
+    "crane_project/data/crane_grab_port_day2night_v1/manifest.json": "128bd9aac390ad878a46c005a22f44d322a5acf61a47ad128991eb7444a4886f",
+    "crane_project/data/crane_grab_port_day2night_v1/provenance/axis_k2p1/sampling_manifest.json": "83b89a4f4e541ef0009a134317ecf5c60f4feaaf5733f8a4191e9b7a9101d31e",
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f",
+    "work_dirs/port_reliability_feature_ablation_v1/20261008_size_features_v1/fit/scored_TRAIN_VAL.jsonl.gz": "e804241c2b7d529ed816f9d2f33dedad1e2961a5b132426bc816777b324c03b4"
+  },
+  "limitations": [
+    "Sample indices do not imply original consecutive frames or wall-clock seconds.",
+    "No physical motion model; genuine motion can trigger deviation.",
+    "Stable incorrect sizes can remain low-risk.",
+    "Unsupported history preserves original flags; no frames omitted from full evaluation.",
+    "VAL already exposed; no feature/window/threshold reselection after report."
+  ],
+  "policy": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json",
+  "primary_formula": "max(abs(log(current_long)-median(log(previous3_long))),abs(log(current_short)-median(log(previous3_short))))",
+  "protocol": "port_reliability_temporal_evidence_v1",
+  "rows": "work_dirs/port_reliability_feature_ablation_v1/20261008_size_features_v1/fit/scored_TRAIN_VAL.jsonl.gz",
+  "sampling_manifest": "crane_project/data/crane_grab_port_day2night_v1/provenance/axis_k2p1/sampling_manifest.json",
+  "scope": "complete saved TRAIN -> fixed evidence and threshold -> complete VAL; no new inference, learned head or TEST",
+  "settings": {
+    "TEST_allowed": false,
+    "diagnostic": "previous_log_edge_change",
+    "history": 3,
+    "long_error_run_min": 5,
+    "minimum_frame_step": 1,
+    "primary": "past3_log_edge_deviation",
+    "train_correct_retention": 0.95,
+    "training_updates": 0
+  }
+}

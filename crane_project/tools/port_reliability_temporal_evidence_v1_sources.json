@@ -1,0 +1,18 @@
+{
+  "protocol": "port_reliability_temporal_evidence_v1",
+  "sources": {
+    "crane_project/tools/cleanup_port_closed_oof_v1.py": "b8d9dcce5d46b79a34b3a1d27379b03f14f7dbe2238a461b031e1d96e38eaafe",
+    "crane_project/tools/port_reliability_temporal_evidence_v1_protocol.json": "fa04f73a17fb19fff118e624d6f718fd0c97835f8b5cc6539d44b134cbb7c507",
+    "crane_project/tools/review_port_reliability_temporal_evidence_v1.py": "33729ec167e5ae8fe44912ae969f96bda0324930b9a1087f3e80a2d5c58427e5",
+    "crane_project/tools/run_port_reliability_temporal_evidence_v1.py": "4c2d1bdfd1c813adfe89732dd380f08de8572c97344bfb7c08a7cd9ad604aaff",
+    "crane_project/utils/port_closed_oof_cleanup_v1.py": "34c0fa227571f42a2b36fcbb33796f93060529669557e86e2b725ec3d5449e98",
+    "crane_project/utils/port_midpoint_sigma15_reliability_v1.py": "d4b21b17b316a43e58ac547a7e03cbfdabe0a561cc05c15a6a6fad7cbd25ecd5",
+    "crane_project/utils/port_reliability_complementarity_v1.py": "a296d1fa13b514c3f299cd72af75103f84eb06eb9a198bc2203ae5c46286175c",
+    "crane_project/utils/port_reliability_state_continuity_v1.py": "443efc73e7e6069a960f81962d4dea032bedadd0901943284e6647b29f138c9c",
+    "crane_project/utils/port_reliability_temporal_evidence_v1.py": "afc191fd3cd479894a8c59dba81a0f7293129f182ad81995da08534427c0e9b6",
+    "crane_project/utils/port_simple_component_reliability_v1.py": "05cb0fb1f59fd353725134471bc98bc0026d5beb789526618add08eb46837309",
+    "tests/test_port_closed_oof_cleanup_v1.py": "e11cb7cf41f8ab5934a0a33eb6f483437db9573e5b5b56384f10f2a33f3269d3",
+    "tests/test_port_reliability_temporal_evidence_v1.py": "31523df696a0ca7bdd1e09f5f12b2cc3f72221ba396883ad08e4bd5e59ef3217",
+    "tools/run_port_reliability_temporal_evidence_v1.sh": "54bf435ce2013235ee03ab7e05fa5f5913f1a0ef4756cc5e3d251fa73b8a9413"
+  }
+}
