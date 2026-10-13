@@ -1,0 +1,21 @@
+{
+  "crossfit_result": "work_dirs/port_reliability_image_temporal_crossfit_v1/20261013_cached_crossfit_v1/result",
+  "frozen_cutoffs": {
+    "fallback": 0.4094748402105834,
+    "supported": 0.5317310050227115
+  },
+  "gate": "Retain strict same-count/same-CR group95 and correct-FR continuity contract; failure stops. No adoption or TEST in this run.",
+  "input_pins": {
+    "work_dirs/port_reliability_image_temporal_crossfit_v1/20261013_cached_crossfit_v1/result/calibration.json": "01184beb80a1c3a48990e3abe5231d8c8572a1991c0450f20ab8873176f8146c",
+    "work_dirs/port_reliability_image_temporal_crossfit_v1/20261013_cached_crossfit_v1/result/fusion_models.json": "44c231b3179b047f1257756b33c8f246d928d89e3cea60b91ca1af89b486bbf6",
+    "work_dirs/port_reliability_image_temporal_crossfit_v1/20261013_cached_crossfit_v1/result/mac_review.json": "1e1e70f87b676cd5b9620905b5beec2147e4138b83560a4135b003159d4d200d",
+    "work_dirs/port_reliability_image_temporal_crossfit_v1/20261013_cached_crossfit_v1/result/quality_heads.json": "0ab17022a3058bfd68f9b3c400b3aa521909b54e693c894e8a9cdd5b8d80e59e",
+    "work_dirs/port_reliability_image_temporal_crossfit_v1/20261013_cached_crossfit_v1/result/report.json": "7ecb136723d98955e45fd297decd3e991b36522e7f7b3208faa890272dea40fc",
+    "work_dirs/port_reliability_image_temporal_crossfit_v1/20261013_cached_crossfit_v1/result/scored_TRAIN.jsonl.gz": "f25e1b34cc4cf589647a1ac87ef3c7652281309863194f39c59290b78e6a8f78",
+    "work_dirs/port_reliability_image_temporal_crossfit_v1/20261013_cached_crossfit_v1/result/scored_VAL.jsonl.gz": "4ae63461d6f728b4b89256bff10b10bcd79f2fd1560a8975a470c9e960e09038",
+    "work_dirs/port_reliability_image_temporal_crossfit_v1/20261013_cached_crossfit_v1/result/server_review.json": "b862058a1fd2e3e8d4eaec0e0d5784932295d1327192f77533fcb55f99120703"
+  },
+  "mechanism": "Only unsupported-history decision restored to partial-AUC cutoff; supported fusion scores/threshold untouched.",
+  "protocol": "port_reliability_fallback_decision_v1",
+  "scope": "Complete TRAIN and previously exposed VAL; no new training/calibration/TEST; design informed by exposed VAL. No overall calibrated probability/AUROC claim."
+}

@@ -1,0 +1,10 @@
+{
+  "sources": {
+    "crane_project/tools/port_reliability_fallback_decision_v1_protocol.json": "de9804fbc94b1823b7d0dbb62ec3956dc8f81acf24abf72c8cea37af78b19c72",
+    "crane_project/tools/review_port_reliability_fallback_decision_v1.py": "110c54e52de3e9cdf3f2314f71ed88d5a46def0709a552c69042a74c45da6763",
+    "crane_project/tools/run_port_reliability_fallback_decision_v1.py": "3d59f19b4d7a3f9bb7e50ae02b6ddcdbe099edec63b12f0801d5d00bf960cf7c",
+    "crane_project/utils/port_reliability_fallback_decision_v1.py": "908105fd9306e313924d26d1d0db17a79f4906205ac99e96d42a472dd8465a8f",
+    "tests/test_port_reliability_fallback_decision_v1.py": "7edf3f94071456018edbbe09a9049eaefb687bb5178b6ad9c8d434103000ebd7",
+    "tools/run_port_reliability_fallback_decision_v1.sh": "b7680810f5ce14867e8b4f089939a82579f78ecd9e34e43db22087a47dbfbf15"
+  }
+}
