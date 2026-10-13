@@ -1,0 +1,55 @@
+{
+  "boundaries": {
+    "real_seq12": [
+      122
+    ]
+  },
+  "formula": "h_j=mean_wrong softplus(w.(z_good_j-z_wrong_i)); J=tau+T/(beta*n_good)*sum_j softplus((h_j-tau)/T)+l2/2||w||2; beta=.05,T=.1. Biased smooth surrogate, not PAUCI reproduction. Maximum smoothing gap T*log2/beta, no performance or risk guarantee.",
+  "frontend_pins": {
+    "work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/epoch_24.pth": "8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23",
+    "work_dirs/crane_symeood_k1_port_day2night_midpoint_sigma_v1/sigma_1p5/head_epoch_03.pth": "16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7"
+  },
+  "gate": "Group95 correct retention. Strict overall same-count and same-CR FA improvement vs frozen4/simple/score; per-domain/video nonincrease; longest correct-FR no worse vs each matched control. Static3 and old veto sharedCR reported separately. No automatic adoption/TEST; failure stops this sole objective, no temperature/l2/beta/window/budget search.",
+  "increment": "Same 4 standardized features and linear ranking class. Control reproduced from zero with original balanced BCE. Candidate zero4 slopes + offline tau; smooth upper5percent correct pairwise logistic tail. Online intercept frozen to control for shared fallback alignment; tau cancels in ranking and never online. Only training objective differs; no new interaction/info.",
+  "input_pins": {
+    "crane_project/data/crane_grab_port_day2night_v1/manifest.json": "128bd9aac390ad878a46c005a22f44d322a5acf61a47ad128991eb7444a4886f",
+    "crane_project/data/crane_grab_port_day2night_v1/provenance/axis_k2p1/sampling_manifest.json": "83b89a4f4e541ef0009a134317ecf5c60f4feaaf5733f8a4191e9b7a9101d31e",
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f",
+    "work_dirs/port_reliability_feature_ablation_v1/20261008_size_features_v1/fit/scored_TRAIN_VAL.jsonl.gz": "e804241c2b7d529ed816f9d2f33dedad1e2961a5b132426bc816777b324c03b4",
+    "work_dirs/port_reliability_temporal_fusion_v1/20261013_fusion_cpu_v1/result/calibration.json": "cfe8ca2d6a6b9e9a99073627132c9b78a5cb6eac2b8a4cffccb314ec601bb0d2",
+    "work_dirs/port_reliability_temporal_fusion_v1/20261013_fusion_cpu_v1/result/models.json": "17d524567a620d9a51935a1906d147b0e7f4be210014be3ad6b5272211373469",
+    "work_dirs/port_reliability_temporal_fusion_v1/20261013_fusion_cpu_v1/result/report.json": "1c6aba1cffddc002b627b2c4c3a5250780738541cf0acfe9db6129660441e29a",
+    "work_dirs/port_reliability_temporal_fusion_v1/20261013_fusion_cpu_v1/result/scored_TRAIN.jsonl.gz": "07581783dd1a2fda5063f9e8ff7ac80c21c40ca9c5294988dd30c582249f4c69",
+    "work_dirs/port_reliability_temporal_fusion_v1/20261013_fusion_cpu_v1/result/scored_VAL.jsonl.gz": "e0dc15693286c06afac803f995a9e5d277e5ae75ecc84069e286388cd9288d4f",
+    "work_dirs/port_reliability_temporal_fusion_v1/20261013_fusion_cpu_v1/result/server_review.json": "568d35d30349e3fad902433a58badff08444e60b5810340caf1257c11bcc4336"
+  },
+  "limitations": [
+    "Same four inputs add no new image information.",
+    "71 genuine TRAIN errors; class balance does not increase support.",
+    "Pooled gradient is training-loss evidence, not held-out-video performance.",
+    "VAL previously exposed, not independent validation.",
+    "Balanced sigmoid is ranking risk, not calibrated error probability.",
+    "No detection geometry or depth formula changes.",
+    "Pooled TRAIN low-FPR optimization does not ensure each video protected or match exact endpoint.",
+    "Smooth tail can include more than5percent correct; report exact empirical pAUC and actual delivered flags.",
+    "Ranking intercept unidentifiable; freeze original BCE intercept, shared fallback absolute alignment remains a limitation."
+  ],
+  "previous_result": "work_dirs/port_reliability_temporal_fusion_v1/20261013_fusion_cpu_v1/result",
+  "protocol": "port_reliability_partial_auc_v1",
+  "rationale": "TRAIN loss/AUROC gains have not reliably improved protected working points; test objective mismatch once, not asserted root cause.",
+  "references": [
+    "https://arxiv.org/abs/2512.01213",
+    "https://jmlr.org/papers/v25/22-0795.html",
+    "https://proceedings.mlr.press/v244/kassem-sbeyti24a.html"
+  ],
+  "roles": "Full TRAIN2558 with same2528 history-supported71wrong/2457good. Both models saved before parsing VAL887. Shared frozen fallback3. Exposed VAL single group95 cutoff, no TEST.",
+  "settings": {
+    "beta": 0.05,
+    "correct_retention": 0.95,
+    "gradient_tolerance": 1e-08,
+    "initialization": 0.0,
+    "l2": 0.1,
+    "max_iterations": 100,
+    "temperature": 0.1
+  }
+}
