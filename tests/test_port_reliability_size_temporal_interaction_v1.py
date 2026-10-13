@@ -128,5 +128,12 @@ class Tests(unittest.TestCase):
         self.assertFalse(enriched[4]['temporal']['available'])
         self.assertTrue(enriched[5]['temporal']['available'])
 
+    def test_metric_histogram_roundtrip_keeps_counts_exact(self):
+        from crane_project.tools.review_port_reliability_size_temporal_interaction_v1 import equivalent_metrics
+        raw={'histogram':{1:3,2:4},'states':{'FA':3},'image':'a'}
+        saved=json.loads(json.dumps(raw,sort_keys=True))
+        self.assertTrue(equivalent_metrics(saved,raw))
+        saved['states']['FA']=4;self.assertFalse(equivalent_metrics(saved,raw))
+
 
 if __name__=='__main__':unittest.main()

@@ -36,11 +36,28 @@ def scalar_check(model,rows,base):
     return gradient
 
 
-def review(result,allow_absent=False):
+def equivalent_metrics(left,right):
+    # JSON converts integer histogram keys to strings. Normalize representation,
+    # while the shared comparator keeps all counts/identities exact.
+    normalize=lambda x:json.loads(json.dumps(x,sort_keys=True,allow_nan=False))
+    return equivalent_payload(normalize(left),normalize(right))
+
+
+def review(result,allow_absent=False,original_review=None):
     p,pins,absent,models,oldcutoffs=runner.load(allow_absent)
     report=json.loads((result/'report.json').read_text());model=json.loads((result/'scalar_model.json').read_text())
     cutoff=json.loads((result/'calibration.json').read_text())
-    if report['input_pins']!=pins or report['model']!=model or report['calibration']!=cutoff or report['base_models']!=models:raise ValueError('Saved artifacts/pins differ')
+    if set(report['input_pins'])!=set(pins) or report['model']!=model or report['calibration']!=cutoff or report['base_models']!=models:raise ValueError('Saved artifacts/pins differ')
+    repairs={}
+    for name,digest in pins.items():
+        if report['input_pins'][name]==digest:continue
+        allowed={'crane_project/tools/review_'+core.VERSION+'.py':'original_review.py',
+                 'tests/test_'+core.VERSION+'.py':'original_tests.py'}
+        if original_review is None or name not in allowed:raise ValueError('Non-review source changed')
+        original=original_review if name.startswith('crane_project/') else result/allowed[name]
+        if original.is_symlink() or original.resolve().parent!=result.resolve() or runner.io.sha(original)!=report['input_pins'][name]:raise ValueError('Original audit source not preserved')
+        repairs[name]=dict(original_sha256=report['input_pins'][name],current_sha256=digest,
+                           scope='audit JSON key normalization only; no refit/rescore/calibration')
     if not set(report['absent_frontend'])<=set(p['frontend_pins']) or (not allow_absent and report['absent_frontend']):raise ValueError('Unverified frontend')
     previous=ROOT/p['previous_result'];parts={role:runner.io.read(result/('scored_'+role+'.jsonl.gz')) for role in ('TRAIN','VAL')}
     checks=0;maxdiff=0.
@@ -83,7 +100,7 @@ def review(result,allow_absent=False):
                 for kind,target in [('same_count',len(ids)),('same_CR',data['candidate']['states']['CR'])]:
                     matched=rank_ids(part,method,count=target) if kind=='same_count' else rank_ids(part,method,correct=target)
                     check_summary(part,matched,matches[kind]);checks+=1
-        if not equivalent_payload(report['roles'][role],core.evaluate(rows,cutoff['risk_le'],oldcutoffs['fusion4']['risk_le'])):raise ValueError('Full metrics, ties, AUROC or old comparison differs')
+        if not equivalent_metrics(report['roles'][role],core.evaluate(rows,cutoff['risk_le'],oldcutoffs['fusion4']['risk_le'])):raise ValueError('Full metrics, ties, AUROC or old comparison differs')
     def normalized(g):
         g=dict(g);g['failures']=sorted(g['failures'],key=lambda x:json.dumps(x,sort_keys=True));return g
     if normalized(report['gate'])!=normalized(core.gate(report['roles']['VAL'])):raise ValueError('Gate differs')
@@ -92,13 +109,13 @@ def review(result,allow_absent=False):
         or report['candidate_adopted'] or not report['scalar_saved_before_VAL']):raise ValueError('Run scope differs')
     return dict(passed=True,rows=sum(len(x) for x in parts.values()),independent_checks=checks,
                 scalar_gradient=gradient,max_score_difference=maxdiff,absent_frontend=absent,
-                report_sha256=runner.io.sha(result/'report.json'),TEST_opened=False)
+                report_sha256=runner.io.sha(result/'report.json'),TEST_opened=False,review_only_repairs=repairs)
 
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('--result',type=Path,required=True);p.add_argument('--out',type=Path,required=True)
-    p.add_argument('--allow-absent-frontend',action='store_true');a=p.parse_args()
-    runner.io.write(a.out,review(a.result,a.allow_absent_frontend));print('Independent scalar review passed',flush=True)
+    p.add_argument('--allow-absent-frontend',action='store_true');p.add_argument('--original-review-source',type=Path);a=p.parse_args()
+    runner.io.write(a.out,review(a.result,a.allow_absent_frontend,a.original_review_source));print('Independent scalar review passed',flush=True)
 
 
 if __name__=='__main__':main()
