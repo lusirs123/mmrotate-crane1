@@ -1,0 +1,67 @@
+{
+  "alignment": "No posthoc OOF/full score correction. Same score anchor/architecture/seed/training rule, raw logits clipped12; candidate standardized on OOF TRAIN, final-head score at VAL. Record OOF vs full TRAIN score distribution drift. Score mismatch remains known limitation, no guarantee.",
+  "boundaries": {
+    "real_seq12": [
+      122
+    ]
+  },
+  "frontend_pins": {
+    "work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/epoch_24.pth": "8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23",
+    "work_dirs/crane_symeood_k1_port_day2night_midpoint_sigma_v1/sigma_1p5/head_epoch_03.pth": "16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7"
+  },
+  "fusion": "Supported2528 TRAIN two clipped risk logits [+/-12], their TRAIN-only mean/std per arm; anchored logit(r_partial)+delta0+delta1*z_partial+delta2*z_image. Zero delta exact identity. Balanced BCE l2=.1 on slopes, Newton100/tol1e-8/line-search30. No interactions/domain/video feature.",
+  "gate": "Only crossfit eligible. Overall strict same-count and exact same-CR FA improvement vs in-sample fusion,partial_auc4,simple,score; every domain/video FA nonincrease and correct retention>=95%, continuous correct FR no worse. Old4/static3 also reported. Failure stops, no folds/seeds/weights/budget search, no automatic TEST/adoption.",
+  "input_pins": {
+    "crane_project/data/crane_grab_port_day2night_v1/manifest.json": "128bd9aac390ad878a46c005a22f44d322a5acf61a47ad128991eb7444a4886f",
+    "crane_project/data/crane_grab_port_day2night_v1/provenance/axis_k2p1/sampling_manifest.json": "83b89a4f4e541ef0009a134317ecf5c60f4feaaf5733f8a4191e9b7a9101d31e",
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f",
+    "work_dirs/port_reliability_feature_ablation_v1/20261008_size_features_v1/fit/scored_TRAIN_VAL.jsonl.gz": "e804241c2b7d529ed816f9d2f33dedad1e2961a5b132426bc816777b324c03b4",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/mac_review.json": "077836f072ab88d8b32dab166641165dd366b1248731fc25be0ed165a4ff11b2",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/pca.json": "2c7c690e29828b3599acf468f54e6da231e9a88d2297e7ffd0083bb67daa539d",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/report.json": "9231b9344c3aa7665479f2ae2e0fcbd4df3a3678815c139fbae6d42e966c4203",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/train_native_projected.npz": "909e0831a5e3ca926238bd773172a89c8d4143f9611f77c4bc1ed0756cb35a67",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/val_native_projected.npz": "de5d8d24e269ed593f1d5f4e4e192efca4eb1cdc2b14db7356a4d11c1ca03659",
+    "work_dirs/port_reliability_partial_auc_v1/20261013_pauc_cpu_v1/result/calibration.json": "61ebb3e8ef3a8b9c7b496ae4e657da5168749bb97bd9815aff00ce4697818cc5",
+    "work_dirs/port_reliability_partial_auc_v1/20261013_pauc_cpu_v1/result/model.json": "8ad35c057cb8da8a4c360f50879c696efcfa1ab991dcdb466b1589f94dd6ae88",
+    "work_dirs/port_reliability_partial_auc_v1/20261013_pauc_cpu_v1/result/report.json": "f888c52163363caf21fc5165e7bc383d9381d961ee1d6bbebb97c10f59b0fcef",
+    "work_dirs/port_reliability_partial_auc_v1/20261013_pauc_cpu_v1/result/scored_TRAIN.jsonl.gz": "555dfcfc82a0dfab9e10a889ff4833eabc678d7826afcb702f654c1d011ee041",
+    "work_dirs/port_reliability_partial_auc_v1/20261013_pauc_cpu_v1/result/scored_VAL.jsonl.gz": "1aece9ac25bbc6621046bcaa82cb5ed91737978bd2d4e51a1fad0827243f3160",
+    "work_dirs/port_reliability_partial_auc_v1/20261013_pauc_cpu_v1/result/server_review.json": "ba592033ab5eea9d64957dcaa6c036381648986c88be79a2094734c2ea4cbaf5",
+    "work_dirs/port_reliability_temporal_fusion_v1/20261013_fusion_cpu_v1/result/calibration.json": "cfe8ca2d6a6b9e9a99073627132c9b78a5cb6eac2b8a4cffccb314ec601bb0d2",
+    "work_dirs/port_reliability_temporal_fusion_v1/20261013_fusion_cpu_v1/result/models.json": "17d524567a620d9a51935a1906d147b0e7f4be210014be3ad6b5272211373469",
+    "work_dirs/port_reliability_temporal_fusion_v1/20261013_fusion_cpu_v1/result/report.json": "1c6aba1cffddc002b627b2c4c3a5250780738541cf0acfe9db6129660441e29a",
+    "work_dirs/port_reliability_temporal_fusion_v1/20261013_fusion_cpu_v1/result/scored_TRAIN.jsonl.gz": "07581783dd1a2fda5063f9e8ff7ac80c21c40ca9c5294988dd30c582249f4c69",
+    "work_dirs/port_reliability_temporal_fusion_v1/20261013_fusion_cpu_v1/result/scored_VAL.jsonl.gz": "e0dc15693286c06afac803f995a9e5d277e5ae75ecc84069e286388cd9288d4f",
+    "work_dirs/port_reliability_temporal_fusion_v1/20261013_fusion_cpu_v1/result/server_review.json": "568d35d30349e3fad902433a58badff08444e60b5810340caf1257c11bcc4336"
+  },
+  "limitations": [
+    "Same frozen detector TRAIN errors still only71; no new error material.",
+    "PCA is frozen transductive over all TRAIN; no claim full pipeline unseen video.",
+    "Tiny image head still may overfit, OOF/full predictions may differ.",
+    "Temporal model itself fitted full TRAIN, not crossfit; this experiment isolates only image-head self-fit bias.",
+    "VAL repeatedly exposed; no statistical risk guarantee or independent generalization claim.",
+    "FP32 training and FP64 NumPy replay checked <=1e-4; no perfect bitwise inference claim."
+  ],
+  "mechanism": "Freeze partial_auc4. Six TRAIN video leave-one-video-out small image heads generate OOF quality predictions; one final full-TRAIN head delivers images. Control anchored linear fusion uses in-sample final-head predictions; sole eligible candidate uses OOF predictions. No auxiliary detector or fresh image features.",
+  "native_result": "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result",
+  "online": "Single frozen detector, native selected B FPN input patch2304, frozen PCA and one full small quality head plus3parameterfusion. Missing output None. Insufficient history retains partial_auc4 static fallback risk; no fakezero. Geometry/score/count/center/angle unchanged; no GT input. No deployment timing claim.",
+  "preprocessing": "Frozen prior full-TRAIN PCA256 reused, including heldout video unsupervised features. Per-quality-head259 normalizer fitted only included TRAIN videos; raw score logit separate. Detector and PCA have seen all TRAIN; OOF guarantees quality labels excluded only, not detector unseen-event prediction.",
+  "protocol": "port_reliability_image_temporal_crossfit_v1",
+  "quality_head": "Existing score-anchored 258->16->8->1 ReLU+beta4290 FP32; original seed1701, neutral -scorelogit; fresh init each fold/final; class-balanced BCE per fit fold, AdamW.001 weight decay1e-4 on weights only, clip5, batch256 each100epochs. No checkpoint selection.",
+  "roles": "Complete TRAIN2558 internal6 folds, not new external dataset roles. Both fusion/final-head artifacts saved before parsing full exposed VAL887. TRAIN delivered diagnostic uses final-head in-sample score, OOF only fits candidate. Full VAL one group95 threshold each arm; no TEST.",
+  "settings": {
+    "batch_size": 256,
+    "clip_norm": 5.0,
+    "correct_retention": 0.95,
+    "epochs": 100,
+    "gradient_tolerance": 1e-08,
+    "l2": 0.1,
+    "logit_clip": 12.0,
+    "lr": 0.001,
+    "max_iterations": 100,
+    "parameter_count": 4290,
+    "seed": 1701,
+    "weight_decay": 0.0001
+  },
+  "temporal_result": "work_dirs/port_reliability_partial_auc_v1/20261013_pauc_cpu_v1/result"
+}
