@@ -1,0 +1,41 @@
+{
+  "protocol": "port_reliability_actual_fr_bound_v1",
+  "settings": {
+    "correct_retention": 0.95,
+    "coefficient_bound": 10.0,
+    "classification_margin": 0.0001,
+    "time_limit_seconds": 60.0,
+    "node_limit": 100000,
+    "mip_relative_gap": 0.0,
+    "presolve": true,
+    "verification_tolerance": 1e-07,
+    "integrality_tolerance": 1e-06,
+    "arms": [
+      "control3",
+      "actual_count3"
+    ],
+    "fitting_FA_upper": 59,
+    "solver_calls": 1,
+    "known_solution_warm_start": false,
+    "fallback_is_new_candidate": false
+  },
+  "purpose": "Verified FA59 feasible objective cut, one full TRAIN solve then complete frozen VAL for any incumbent",
+  "continues_to_VAL": "Every valid solver candidate; never the witness fallback",
+  "stops_if_no_candidate": true,
+  "unchanged": [
+    "frontend",
+    "features",
+    "normalizer",
+    "coefficient box",
+    "sign margin",
+    "FR budgets",
+    "zero cutoff",
+    "time and node budget"
+  ],
+  "limitations": [
+    "Objective cut is not warm start and does not guarantee faster solving.",
+    "Optimality not required for frozen descriptive VAL, but status and bounds retained.",
+    "TRAIN objective improvement is not same-CR improvement or a future-video guarantee.",
+    "No TEST selection or evaluation."
+  ]
+}
