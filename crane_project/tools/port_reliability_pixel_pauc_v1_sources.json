@@ -1,0 +1,30 @@
+{
+  "protocol": "port_reliability_pixel_pauc_v1",
+  "sources": {
+    "crane_project/tools/port_reliability_pixel_pauc_v1_protocol.json": "12b47b51b3f6d3b91a0f7a0511a35371982d4ebd86a371a7432ca5f2a2454ac3",
+    "crane_project/tools/review_port_reliability_conditional_evidence_v1.py": "46815698ecd98e99547095b27802c011653778e5a29a1d98d8353c3eb0965a86",
+    "crane_project/tools/review_port_reliability_partial_auc_v1.py": "18319c4a1e6994be2e5bfb0b673fd01f819e3ae069aa93f28074c8f8bd7f35da",
+    "crane_project/tools/review_port_reliability_pixel_pauc_v1.py": "6bec17f53c067de6f2be3180649468fa6f6451a8781978cf21d72d96ce349555",
+    "crane_project/tools/review_port_reliability_temporal_fusion_v1.py": "13711815f00dccc7c813c9cd36429035b3358f6f8d4adec00cea67c1ef53d515",
+    "crane_project/tools/review_port_reliability_temporal_history_gate_v1.py": "383ef292203579a3d414bc62d8191429cdc3e8d3d78539cb4d60820bd0e1f02b",
+    "crane_project/tools/run_port_reliability_conditional_evidence_v1.py": "5dfd5d40921302d25b6fd3046779dea72ffa1aba8c187351241cbd015d319469",
+    "crane_project/tools/run_port_reliability_partial_auc_v1.py": "76a5bf73b9dcb7a38a1bedb38fa7112f68412370cf11a75ce37efad0793e2c17",
+    "crane_project/tools/run_port_reliability_pixel_pauc_v1.py": "c516db39efcdc06c14f0561b45b47e0ef471b215422d507400d1d2e3ac9badad",
+    "crane_project/utils/port_reliability_complementarity_v1.py": "a296d1fa13b514c3f299cd72af75103f84eb06eb9a198bc2203ae5c46286175c",
+    "crane_project/utils/port_reliability_conditional_evidence_v1.py": "58e42f447a284734c0a6b12ba65c1003f7c377bbdd79b46aef683c9d98f59b40",
+    "crane_project/utils/port_reliability_partial_auc_v1.py": "bb32b30f7109b43fb9634a840c81e4a606c611efc9ea1644a2c442a2d0d3200f",
+    "crane_project/utils/port_reliability_pixel_border_v1.py": "1821e26267d8724f3a61bb79c33f03af5fd391fc1535761c85f29d9f4c6a1d21",
+    "crane_project/utils/port_reliability_pixel_pauc_v1.py": "b3cc0615880c7bb01308fc0f970e3b1bb6be880570b8f071e09c1a32ffb5f927",
+    "crane_project/utils/port_reliability_sparse_candidate_v1.py": "83476739289902bfb97cf24bdea776668588001738c2002cc193be657df169ae",
+    "crane_project/utils/port_reliability_state_continuity_v1.py": "443efc73e7e6069a960f81962d4dea032bedadd0901943284e6647b29f138c9c",
+    "crane_project/utils/port_reliability_temporal_evidence_v1.py": "56d567e42a833dc57697c6d0745cf94806d24815a8a343b949ed120525c48a3e",
+    "crane_project/utils/port_reliability_temporal_fusion_v1.py": "6abf5843eb471dd7a206ffb0cc196b740eb97759bb7fb807f47a1afcd489fffd",
+    "crane_project/utils/port_reliability_temporal_history_gate_v1.py": "12293a8de74b05c96cbf30b51657cc830ef86d80d2fbc2dc9dfbf5b0687337d3",
+    "crane_project/utils/port_reliability_temporal_trend_v1.py": "68f93f7477fdeebf264f37640b3a68fcc2a08358f3523222a1e98527b4445c54",
+    "crane_project/utils/port_simple_component_reliability_v1.py": "05cb0fb1f59fd353725134471bc98bc0026d5beb789526618add08eb46837309",
+    "tests/test_port_reliability_pixel_pauc_v1.py": "b8dcf80c742977b2635154e4480e4eb79921b536102489b68ee28856efdff26e",
+    "tests/test_port_reliability_temporal_evidence_v1.py": "7b33c5818edb06fbe71481b67ca4156d99b1266f322cfa8d560028d280610f94",
+    "tests/test_port_reliability_temporal_fusion_v1.py": "fcde53d00620028eee4168c8401c9debdb5f9a338b406b3b97146f0f02ae367b",
+    "tools/run_port_reliability_pixel_pauc_v1.sh": "3361839543dd8235a033d78235ac73903b5beb6c20ff2b3d8315d68680e57700"
+  }
+}
