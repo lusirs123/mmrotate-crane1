@@ -1,0 +1,32 @@
+{
+  "protocol": "port_reliability_actual_fr_v1",
+  "settings": {
+    "correct_retention": 0.95,
+    "coefficient_bound": 10.0,
+    "classification_margin": 0.0001,
+    "time_limit_seconds": 60.0,
+    "node_limit": 100000,
+    "mip_relative_gap": 0.0,
+    "presolve": true,
+    "verification_tolerance": 1e-07,
+    "integrality_tolerance": 1e-06,
+    "arms": [
+      "control3",
+      "actual_count3"
+    ]
+  },
+  "scope": "Complete frozen TRAIN2558; 7 linear mixed-integer fits; reviewed prior balanced 3D controls reused exactly; 6 judge-only internal video exclusions. No new data roles, geometry or detector inference.",
+  "objective": "min actual FA = number_wrong - sum(reject for wrong); reject iff s>=0. Each fitting video correct reject count <=floor(.05*correct_count). Both sign inequalities with fixed symmetric margin classify every training row consistently.",
+  "parameter_domain": "4 standardized linear coefficients including intercept in [-10,10]; every fitting signed logit magnitude>=.0001. Big M_i=10*sum(abs(design_i))+.0001. Feasible all-accept exists. Restricted numerical class, not unrestricted linear capacity.",
+  "solver": "SciPy milp/HiGHS; presolve true, time limit60 seconds per context, node limit100000, relative gap0. No retries/search/budget extension. Save incumbent, integer lower/upper FA, gap, status/runtime. No incumbent uses explicitly marked feasible all-accept reference, not a trained candidate. Independent review verifies signs/counts but does not reconstruct a branch-and-bound proof.",
+  "control": "Exact prior 3D weights/normalization/cutoffs from reviewed fr_constraint report; same fitting rows/fold membership; full control matches formal simple. Control cutoff max fitting-video correct95 quantile; historical full_simple trained all TRAIN is not a fair leave-video-out judge.",
+  "gate": "Full TRAIN strict FA improvement at same CR against control; every held-video correct retention>=95%; pooled per-video offline correct95 FA strictly below control54; no per-video same-correct95/count/CR FA or same-CR continuous FR regression vs stated controls; any no-incumbent reference fails. Feasible but unresolved solver can be scored, never claims global optimum. Gate failure stops before VAL.",
+  "limitations": [
+    "NP error-control idea adaptation, not reproduction or future-video statistical guarantee.",
+    "TRAIN detector already saw all videos. Internal exclusions only test judge transfer.",
+    "Historical VAL/TEST repeatedly exposed; neither parsed for this TRAIN premise.",
+    "Ties at zero reject; no per-video online routing, GT online or automatic adoption.",
+    "Margin/bounds restrict search; timeout not evidence of model upper limit. Multiple primary optimal solutions may have different score orderings.",
+    "Formal M, simple policy, score, boxes, output and center/angle/depth unchanged. Native cache only inherited loader verification."
+  ]
+}
