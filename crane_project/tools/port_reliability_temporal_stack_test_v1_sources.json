@@ -1,0 +1,30 @@
+{
+  "protocol": "port_reliability_temporal_stack_test_v1",
+  "sources": {
+    "crane_project/tools/eval_port_reliability_temporal_stack_test_v1.py": "abd7a05d65e99f4be392ab9e98db6c24179d17aa0d93c8e43c4b915cac0b51d4",
+    "crane_project/tools/port_reliability_temporal_stack_test_v1_protocol.json": "48ac85eaec7170c6bf6a681d962f2699df489f92d9561cff0d81f05b267cdb80",
+    "crane_project/tools/review_port_reliability_temporal_stack_test_v1.py": "99cf50ac7ba80d82c8b2c5a1b83f33110ae0009616caca9b6edce225473086f4",
+    "crane_project/tools/run_port_reliability_conditional_evidence_v1.py": "5dfd5d40921302d25b6fd3046779dea72ffa1aba8c187351241cbd015d319469",
+    "crane_project/utils/port_midpoint_sigma15_reliability_v1.py": "d4b21b17b316a43e58ac547a7e03cbfdabe0a561cc05c15a6a6fad7cbd25ecd5",
+    "crane_project/utils/port_reliability_complementarity_v1.py": "a296d1fa13b514c3f299cd72af75103f84eb06eb9a198bc2203ae5c46286175c",
+    "crane_project/utils/port_reliability_conditional_evidence_v1.py": "58e42f447a284734c0a6b12ba65c1003f7c377bbdd79b46aef683c9d98f59b40",
+    "crane_project/utils/port_reliability_fallback_decision_v1.py": "908105fd9306e313924d26d1d0db17a79f4906205ac99e96d42a472dd8465a8f",
+    "crane_project/utils/port_reliability_feature_ablation_v1.py": "673ec3169a1704b6ff27256cb4817326cb95a6a5e3e42410c70e21d0d6c2e4ec",
+    "crane_project/utils/port_reliability_feature_source_v1.py": "3fe48fd240b2d5b60afffdf21f67fa3de6c20cccbe4df509c448304385117866",
+    "crane_project/utils/port_reliability_image_temporal_crossfit_v1.py": "940be263f0b457787d04d84684e662335af0acc2551dfeb6e05b724ad983b782",
+    "crane_project/utils/port_reliability_partial_auc_v1.py": "bb32b30f7109b43fb9634a840c81e4a606c611efc9ea1644a2c442a2d0d3200f",
+    "crane_project/utils/port_reliability_readout_compare_v1.py": "d523233aa9b846e28875678648638c09a0117e7754d723bb5d4a0c1730456289",
+    "crane_project/utils/port_reliability_readout_test_v1.py": "ecdf5d86773fdeed1138aa4b638b4be578e1997e078d41a116bd88bab815c25d",
+    "crane_project/utils/port_reliability_redc_size_v1.py": "e6d8e0deb0a535947db6858ac13400e98b2ad0954a980c620fb529164bd7437c",
+    "crane_project/utils/port_reliability_separability_v1.py": "15507b41ac132248355cc62b9cd08f78bfb6e2b0970231f01cd0c08ddb2d9cdd",
+    "crane_project/utils/port_reliability_state_continuity_v1.py": "443efc73e7e6069a960f81962d4dea032bedadd0901943284e6647b29f138c9c",
+    "crane_project/utils/port_reliability_temporal_evidence_v1.py": "56d567e42a833dc57697c6d0745cf94806d24815a8a343b949ed120525c48a3e",
+    "crane_project/utils/port_reliability_temporal_fusion_v1.py": "6abf5843eb471dd7a206ffb0cc196b740eb97759bb7fb807f47a1afcd489fffd",
+    "crane_project/utils/port_reliability_temporal_stack_test_v1.py": "51b3f089b8e8732bf963b193f4ce0b8138182858cebb1548bb407f610c86be34",
+    "crane_project/utils/port_reliability_temporal_trend_v1.py": "68f93f7477fdeebf264f37640b3a68fcc2a08358f3523222a1e98527b4445c54",
+    "crane_project/utils/port_reliability_tradeoff_v1.py": "6dfc5044bca05ea68c7f99e1448e813feb98d26f09748ec93774aaf10b41340e",
+    "crane_project/utils/port_simple_component_reliability_v1.py": "05cb0fb1f59fd353725134471bc98bc0026d5beb789526618add08eb46837309",
+    "tests/test_port_reliability_temporal_stack_test_v1.py": "dfc076954e3ab712561cf2414e09e644a9be0991be5d1be67f5e852b91fd2916",
+    "tools/run_port_reliability_temporal_stack_test_v1.sh": "d9867d0d6731a00b49167d64795b0c914a40a4011ec2a712f8b01f7a6b18d013"
+  }
+}

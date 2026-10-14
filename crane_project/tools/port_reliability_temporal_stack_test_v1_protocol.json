@@ -1,0 +1,77 @@
+{
+  "authorization": "2026-10-14 user requests frozen TEST supplement for useful temporal/pAUC/corrected-fallback versions; no TEST-based selection",
+  "counts": {
+    "real_seq03": 200,
+    "real_seq04": 668,
+    "sim_seq09": 572
+  },
+  "frontend_pins": {
+    "work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/epoch_24.pth": "8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23",
+    "work_dirs/crane_symeood_k1_port_day2night_midpoint_sigma_v1/sigma_1p5/head_epoch_03.pth": "16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7"
+  },
+  "frozen_cutoffs": {
+    "crossfit_fusion": 0.5317310050227115,
+    "fallback_margin": 1.0,
+    "fusion4": 0.5651616450647643,
+    "partial_auc4": 0.4094748402105834,
+    "temporal_veto": 0.0785511443740936
+  },
+  "input_pins": {
+    "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/collect/port_test/predictions.jsonl": "f39d60b35f6628cd1142299cb55d81a33b53ece3fc8607bd6142379aba3efb93",
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f",
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/frozen_test_20261007_163625_1260566/test_decisions.jsonl": "8d6755cc73f5e849b0dadc288bc0588878c9b6b835b7361406fe80f1610c6520",
+    "work_dirs/port_reliability_fallback_decision_v1/20261013_frozen_fallback_v1/result/report.json": "64f49ecbeed092c178ffecefaebf6cae271c2192fb1a0ef9bd4ad6d3c83df08e",
+    "work_dirs/port_reliability_fallback_decision_v1/20261013_frozen_fallback_v1/result/scored_VAL.jsonl.gz": "a4145a05c426924ac272b2efb97cb1dd8e1ca0696e8e2d8b9c6bef4693745f5a",
+    "work_dirs/port_reliability_fallback_decision_v1/20261013_frozen_fallback_v1/result/server_review.json": "c4d1591db56a1b88eaf8385167c67d18250efa10096c4713c16ac6d1a1606226",
+    "work_dirs/port_reliability_feature_source_test_v1/20261009_source_frozen_test_v1/result/completion.json": "ed78c9b879f19024a4cc01bb46858fe026319968db15708ca50a549268d0e0cf",
+    "work_dirs/port_reliability_feature_source_test_v1/20261009_source_frozen_test_v1/result/mac_review.json": "01ae30ed4fe293a6f0d2925dee07b12dd02f291568c1600719858dd6c8042e43",
+    "work_dirs/port_reliability_feature_source_test_v1/20261009_source_frozen_test_v1/result/report.json": "7ef176a6a6d926fd11d4ca422039796381a75a88a08eaf08d1b3a2fbffa0f43b",
+    "work_dirs/port_reliability_feature_source_test_v1/20261009_source_frozen_test_v1/result/scored_TEST.jsonl.gz": "d0ebe1d2f16531fbd7a94fbbeb3657f8eafee080176dc47f0c242bdb19b8770e",
+    "work_dirs/port_reliability_feature_source_test_v1/20261009_source_frozen_test_v1/result/test_native_projected.npz": "e8144b55cca14b83717ad7720a26697ab723e7d5414cff424e33df7bcd6b5962",
+    "work_dirs/port_reliability_image_temporal_crossfit_v1/20261013_cached_crossfit_v1/result/calibration.json": "01184beb80a1c3a48990e3abe5231d8c8572a1991c0450f20ab8873176f8146c",
+    "work_dirs/port_reliability_image_temporal_crossfit_v1/20261013_cached_crossfit_v1/result/fusion_models.json": "44c231b3179b047f1257756b33c8f246d928d89e3cea60b91ca1af89b486bbf6",
+    "work_dirs/port_reliability_image_temporal_crossfit_v1/20261013_cached_crossfit_v1/result/quality_heads.json": "0ab17022a3058bfd68f9b3c400b3aa521909b54e693c894e8a9cdd5b8d80e59e",
+    "work_dirs/port_reliability_image_temporal_crossfit_v1/20261013_cached_crossfit_v1/result/report.json": "7ecb136723d98955e45fd297decd3e991b36522e7f7b3208faa890272dea40fc",
+    "work_dirs/port_reliability_image_temporal_crossfit_v1/20261013_cached_crossfit_v1/result/server_review.json": "b862058a1fd2e3e8d4eaec0e0d5784932295d1327192f77533fcb55f99120703",
+    "work_dirs/port_reliability_partial_auc_v1/20261013_pauc_cpu_v1/result/calibration.json": "61ebb3e8ef3a8b9c7b496ae4e657da5168749bb97bd9815aff00ce4697818cc5",
+    "work_dirs/port_reliability_partial_auc_v1/20261013_pauc_cpu_v1/result/model.json": "8ad35c057cb8da8a4c360f50879c696efcfa1ab991dcdb466b1589f94dd6ae88",
+    "work_dirs/port_reliability_partial_auc_v1/20261013_pauc_cpu_v1/result/report.json": "f888c52163363caf21fc5165e7bc383d9381d961ee1d6bbebb97c10f59b0fcef",
+    "work_dirs/port_reliability_partial_auc_v1/20261013_pauc_cpu_v1/result/server_review.json": "ba592033ab5eea9d64957dcaa6c036381648986c88be79a2094734c2ea4cbaf5",
+    "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/result/report.json": "b82ac466add62fa62085649894e5a7ce17a3a6f7198ee8170e69a975a1779b5b",
+    "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/result/server_review.json": "ab2d89da1c4705bcc4e8d84e561af37c19bbf587dc9064523bb80510b2506557",
+    "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/result/train_cutoff.json": "6e87ec62dad2987a647b161eb5f97001eb542a808e046029198a73aff6d8c591",
+    "work_dirs/port_reliability_temporal_fusion_v1/20261013_fusion_cpu_v1/result/calibration.json": "cfe8ca2d6a6b9e9a99073627132c9b78a5cb6eac2b8a4cffccb314ec601bb0d2",
+    "work_dirs/port_reliability_temporal_fusion_v1/20261013_fusion_cpu_v1/result/models.json": "17d524567a620d9a51935a1906d147b0e7f4be210014be3ad6b5272211373469",
+    "work_dirs/port_reliability_temporal_fusion_v1/20261013_fusion_cpu_v1/result/report.json": "1c6aba1cffddc002b627b2c4c3a5250780738541cf0acfe9db6129660441e29a",
+    "work_dirs/port_reliability_temporal_fusion_v1/20261013_fusion_cpu_v1/result/server_review.json": "568d35d30349e3fad902433a58badff08444e60b5810340caf1257c11bcc4336"
+  },
+  "methods": [
+    "simple",
+    "temporal_veto",
+    "fusion4",
+    "partial_auc4",
+    "crossfit_fusion",
+    "fallback_margin"
+  ],
+  "output": "work_dirs/version/RUN_ID/result; CPU only; compare full frozen VAL and TEST; preserve formal M/simple",
+  "paths": {
+    "crossfit": "work_dirs/port_reliability_image_temporal_crossfit_v1/20261013_cached_crossfit_v1/result",
+    "fallback": "work_dirs/port_reliability_fallback_decision_v1/20261013_frozen_fallback_v1/result",
+    "native_test": "work_dirs/port_reliability_feature_source_test_v1/20261009_source_frozen_test_v1/result",
+    "pauc": "work_dirs/port_reliability_partial_auc_v1/20261013_pauc_cpu_v1/result",
+    "policy": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json",
+    "temporal": "work_dirs/port_reliability_temporal_fusion_v1/20261013_fusion_cpu_v1/result",
+    "veto": "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/result"
+  },
+  "protocol": "port_reliability_temporal_stack_test_v1",
+  "ranking": "Fallback uses risk divided by its frozen branch cutoff; margin<=1 exactly reproduces delivery. This declared operational ordering is not a calibrated probability. Same-count/whole-tie same-CR comparisons use TEST GT offline only.",
+  "ranking_controls": [
+    "full_simple",
+    "score_only",
+    "fusion4",
+    "partial_auc4",
+    "crossfit_fusion",
+    "fallback_margin"
+  ],
+  "scope": "No fits, calibration, new feature extraction, detector inference, model/threshold selection or adoption; previous VAL failures retained. TEST repeatedly exposed."
+}
