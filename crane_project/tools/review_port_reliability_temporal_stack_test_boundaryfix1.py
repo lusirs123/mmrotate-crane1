@@ -99,7 +99,9 @@ def verify(out,allow_absent=False):
                     if runner.core.summary(part,ids)['states']!=pair['same_CR']['states']:raise ValueError('Matched CR differs')
                     checks+=2
         # Full saved continuity/AUC/coverage/tie payload replay supplements independent counts.
-        if runner.core.evaluate(rows)!=report['roles'][role]:raise ValueError('Metric payload differs')
+        # JSON object keys (e.g. run-length histogram) are strings on disk.
+        replay=json.loads(json.dumps(runner.core.evaluate(rows),sort_keys=True,allow_nan=False))
+        if replay!=report['roles'][role]:raise ValueError('Metric payload differs')
     return dict(passed=True,rows=total,independent_checks=checks,report_sha256=io.sha(out/'report.json'),absent_frontend=absent,
         independently_verified=['history','linear/slopes','TEST quality head','fusion','fallback branch','four states','same-count','same-CR'],
         reused_metric_replay=['continuity','coverage','AUC','ties'],TEST_selected=False,
