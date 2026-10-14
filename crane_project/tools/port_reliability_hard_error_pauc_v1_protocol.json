@@ -1,0 +1,38 @@
+{
+  "fallback_cutoff": 0.4094748402105834,
+  "formula": "h_good=sum_wrong q_wrong*softplus(w.(z_good-z_wrong)); original upper-correct-tail pAUC proxy unchanged. q=2 for lowest25percent frozen TRAIN error risks (all boundary ties), else1; normalize to sum1.",
+  "frontend_pins": {
+    "work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/epoch_24.pth": "8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23",
+    "work_dirs/crane_symeood_k1_port_day2night_midpoint_sigma_v1/sigma_1p5/head_epoch_03.pth": "16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7"
+  },
+  "fusion_cutoff": 0.5317310050227115,
+  "gate": "Same-count and same-CR overall strict FA gain vs uniform, partialAUC, fallback-corrected fusion, old4, simple and score; per-group FA nonincrease, group95 and continuous correct-FR protection. No auto-adoption or searches.",
+  "group_ids_offline_only": true,
+  "input_pins": {
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f",
+    "work_dirs/port_reliability_fallback_decision_v1/20261013_frozen_fallback_v1/result/report.json": "64f49ecbeed092c178ffecefaebf6cae271c2192fb1a0ef9bd4ad6d3c83df08e",
+    "work_dirs/port_reliability_fallback_decision_v1/20261013_frozen_fallback_v1/result/scored_TRAIN.jsonl.gz": "f948b33c6b755676f703f46dd7de64acfe7667a67da6afbfb95ed1b94c62c8da",
+    "work_dirs/port_reliability_fallback_decision_v1/20261013_frozen_fallback_v1/result/scored_VAL.jsonl.gz": "a4145a05c426924ac272b2efb97cb1dd8e1ca0696e8e2d8b9c6bef4693745f5a",
+    "work_dirs/port_reliability_fallback_decision_v1/20261013_frozen_fallback_v1/result/server_review.json": "c4d1591db56a1b88eaf8385167c67d18250efa10096c4713c16ac6d1a1606226",
+    "work_dirs/port_reliability_partial_auc_v1/20261013_pauc_cpu_v1/result/model.json": "8ad35c057cb8da8a4c360f50879c696efcfa1ab991dcdb466b1589f94dd6ae88",
+    "work_dirs/port_reliability_partial_auc_v1/20261013_pauc_cpu_v1/result/report.json": "f888c52163363caf21fc5165e7bc383d9381d961ee1d6bbebb97c10f59b0fcef",
+    "work_dirs/port_reliability_partial_auc_v1/20261013_pauc_cpu_v1/result/server_review.json": "ba592033ab5eea9d64957dcaa6c036381648986c88be79a2094734c2ea4cbaf5"
+  },
+  "not_new_image_information": true,
+  "objective_is_hypothesis": true,
+  "pauc_result": "work_dirs/port_reliability_partial_auc_v1/20261013_pauc_cpu_v1/result",
+  "protocol": "port_reliability_hard_error_pauc_v1",
+  "reference_result": "work_dirs/port_reliability_fallback_decision_v1/20261013_frozen_fallback_v1/result",
+  "scope": "Full TRAIN2558, same2528 history-supported frames; hard set and uniform/weighted models saved before parsing full exposed VAL887. One calibration per arm with frozen unsupported-history decisions. No TEST.",
+  "settings": {
+    "beta": 0.05,
+    "correct_retention": 0.95,
+    "gradient_tolerance": 1e-08,
+    "hard_fraction": 0.25,
+    "hard_multiplier": 2.0,
+    "initialization": 0.0,
+    "l2": 0.1,
+    "max_iterations": 100,
+    "temperature": 0.1
+  }
+}
