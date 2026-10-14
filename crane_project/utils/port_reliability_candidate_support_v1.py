@@ -189,7 +189,7 @@ def evaluate(rows,cutoffs):
             controls={m:dict(same_count=parent.base.level.point(part,m,count=len(ids)),
                             same_CR=parent.base.level.point(part,m,correct=cr)) for m in methods}
             data[name]=dict(candidate=c,controls=controls,FA_regimes={kind:sum(r['image'] in ids and parent.base.level.metrics.bad(r) is True and
-                ('unsupported' if not r['temporal']['available'] else 'low' if r['temporal']['primary']<=parent.base.LEVEL_CUTOFF else 'high')==kind for r in part)})
+                ('unsupported' if not r['temporal']['available'] else 'low' if r['temporal']['primary']<=parent.base.LEVEL_CUTOFF else 'high')==kind for r in part) for kind in ('low','high','unsupported')})
         # Paired 4D control preserves the exact same support/fallback contract.
         groups[group]=data
     return dict(groups=groups,center=parent.base.level.metrics.center(rows))

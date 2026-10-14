@@ -132,6 +132,22 @@ class Tests(unittest.TestCase):
         changed=deepcopy(m);changed['weights'][1]+=.1
         with self.assertRaises(ValueError):fit_check(changed,rows,6)
 
+    def test_optional_calibration_evaluation_and_gate_path(self):
+        from crane_project.tools.review_port_reliability_temporal_fusion_v1 import check_summary
+        rows,base=self.enriched()
+        models={name:c.fit(rows,dim,base['fusion4']['weights'][0]) for name,dim in ((c.CONTROL,4),(c.METHOD,6))}
+        val=deepcopy(rows)
+        for r in val:r['split']='val';r['reliability_role']='val'
+        scored=c.score(val,models);cuts={name:c.calibrate(scored,name,1.) for name in models}
+        e=c.evaluate(scored,cuts)
+        for group,arms in e['groups'].items():
+            part=c.parent.base.level.metrics.grouped(scored)[group]
+            for method,arm in arms.items():
+                cut=cuts[method];ids=c.accepted(part,method,cut['risk_le'],cut['fallback_risk_le'])
+                check_summary(part,ids,arm['candidate'])
+                self.assertEqual(sum(arm['FA_regimes'].values()),arm['candidate']['states']['FA'])
+        self.assertIn('passed',c.gate(e))
+
     def test_screen_requires_real_video_increment_not_pooled_only(self):
         rows,_=self.enriched();rows=[deepcopy(r) for r in (rows*86)[:2558]]
         for i,r in enumerate(rows):
