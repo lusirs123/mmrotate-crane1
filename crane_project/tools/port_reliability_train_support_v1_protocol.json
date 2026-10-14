@@ -1,0 +1,45 @@
+{
+  "boundaries": {
+    "real_seq12": [
+      122
+    ]
+  },
+  "frontend_pins": {
+    "work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/epoch_24.pth": "8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23",
+    "work_dirs/crane_symeood_k1_port_day2night_midpoint_sigma_v1/sigma_1p5/head_epoch_03.pth": "16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7"
+  },
+  "input_pins": {
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f",
+    "work_dirs/port_reliability_fallback_decision_v1/20261013_frozen_fallback_v1/result/report.json": "64f49ecbeed092c178ffecefaebf6cae271c2192fb1a0ef9bd4ad6d3c83df08e",
+    "work_dirs/port_reliability_fallback_decision_v1/20261013_frozen_fallback_v1/result/scored_TRAIN.jsonl.gz": "f948b33c6b755676f703f46dd7de64acfe7667a67da6afbfb95ed1b94c62c8da",
+    "work_dirs/port_reliability_fallback_decision_v1/20261013_frozen_fallback_v1/result/server_review.json": "c4d1591db56a1b88eaf8385167c67d18250efa10096c4713c16ac6d1a1606226",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/mac_review.json": "077836f072ab88d8b32dab166641165dd366b1248731fc25be0ed165a4ff11b2",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/report.json": "9231b9344c3aa7665479f2ae2e0fcbd4df3a3678815c139fbae6d42e966c4203",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/train_native_projected.npz": "909e0831a5e3ca926238bd773172a89c8d4143f9611f77c4bc1ed0756cb35a67"
+  },
+  "limitations": [
+    "GT-based donor matching is descriptive and cannot become online routing.",
+    "Video-correlated frames/error runs are not independent collected events.",
+    "TRAIN/PCA/detector have seen this data; no unseen-video guarantee.",
+    "Historical VAL/TEST exposure disclosed, neither is accessed in this audit."
+  ],
+  "matching": "First report all same GT canonical-axis sign signature ED, including other videos. Strict donor subset: same video/history regime/relative-log-size distance<=.1, frame distance>3, different maximal true-error run. CR controls same video/history/size band/frame exclusion. Sign match uses GT offline only.",
+  "native": "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result",
+  "normalization": "Full TRAIN cache259 only; independent static3/native256 distances are RMS of per-column standardized differences. std<1e-8 becomes1. No new PCA, classifier, coefficients or direction selection.",
+  "output": "One work_dirs/version/RUN_ID/result; CPU; keep frozen flags/geometry/score/center/angle/output identity",
+  "policy": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json",
+  "previous": "work_dirs/port_reliability_fallback_decision_v1/20261013_frozen_fallback_v1/result",
+  "protocol": "port_reliability_train_support_v1",
+  "purpose": "Compare 13 simple-accepted errors with 58 simple-rejected errors; size-axis/sign/continuity/history support and frozen static/native feature proximity.",
+  "scope": "Full frozen TRAIN2558 only; labels offline; no VAL/TEST parsing, model fitting, scoring candidate, threshold updates or adoption.",
+  "screen": "Conservative descriptive MATERIAL count condition only: accepted FA plus unique strictly matched ED>=20, >=2Real videos each>=5 errors in>=2maximal error runs. Also report directFA-only count condition. Neither is a feature separability/performance guarantee or automatic training authorization.",
+  "settings": {
+    "level_cutoff": 0.0785511443740936,
+    "local_exclusion": 3,
+    "minimum_error_runs_per_video": 2,
+    "minimum_errors": 20,
+    "minimum_errors_per_video": 5,
+    "minimum_real_videos": 2,
+    "size_log_tolerance": 0.1
+  }
+}
