@@ -1,0 +1,11 @@
+{
+  "protocol": "port_reliability_sparse_candidate_v1",
+  "sources": {
+    "crane_project/tools/port_reliability_sparse_candidate_v1_protocol.json": "4b0556fc8d27a178871f8dcebed4c7452dc8bcbf43d63bedab78c401e3fdded6",
+    "crane_project/tools/review_port_reliability_sparse_candidate_v1.py": "eac2862a8a3378c738420d61aa79b60659223b124f3b1fe61645c8c516554850",
+    "crane_project/tools/run_port_reliability_sparse_candidate_v1.py": "0ba59b5e2e0db75c219f9122fc9451308c6d3b2d1a49dc546bdbeab9841d2e8e",
+    "crane_project/utils/port_reliability_sparse_candidate_v1.py": "83476739289902bfb97cf24bdea776668588001738c2002cc193be657df169ae",
+    "tests/test_port_reliability_sparse_candidate_v1.py": "8d8bc9de2968aed5c675b5d69ff74c55f11ff8f559e6cb8d1076d82343534f38",
+    "tools/run_port_reliability_sparse_candidate_v1.sh": "a1b43ea9c849a5229686c5402a65e601a353c4e4cf9776fd1f403993b3c15e5e"
+  }
+}

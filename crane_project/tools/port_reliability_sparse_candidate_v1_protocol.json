@@ -1,0 +1,29 @@
+{
+  "candidate_result": "work_dirs/port_reliability_candidate_support_v1/20261014_native_candidates_gpu3_fix1/result",
+  "conditional_description": "Compare remaining FA versus CR in same video and label-free TRAIN risk quartile. Report both signed directions; select neither. Pair-weighted within-strata AUC is descriptive only.",
+  "continuation": "Human review of multi-video conditional evidence required. This executable has no fitter, no threshold search, no VAL/TEST opening and no adoption gate.",
+  "cutoffs": {
+    "fallback": 0.4094748402105834,
+    "supported": 0.5317310050227115
+  },
+  "features": [
+    "neighbor1_log_L",
+    "neighbor1_log_S",
+    "neighbor2_log_L",
+    "neighbor2_log_S"
+  ],
+  "grouping": "Original TRAIN domains/videos. No new roles. Neighbor counts 0,1,2,>=3.",
+  "input_pins": {
+    "crane_project/tools/port_reliability_fallback_decision_v1_protocol.json": "de9804fbc94b1823b7d0dbb62ec3956dc8f81acf24abf72c8cea37af78b19c72",
+    "work_dirs/port_reliability_candidate_support_v1/20261014_native_candidates_gpu3_fix1/result/candidates_TRAIN.jsonl.gz": "4fd6e960ac312c1ec6237050112b6af8bd16c03b47498d75df9a8f2bb4669081",
+    "work_dirs/port_reliability_candidate_support_v1/20261014_native_candidates_gpu3_fix1/result/report.json": "2663a8bdbdb9d77fc1b627d5ebf939d681e569a55ac073f9fb473ed34ddfa443",
+    "work_dirs/port_reliability_candidate_support_v1/20261014_native_candidates_gpu3_fix1/result/server_review.json": "64bbfa3b452158c75ffc485cd1c9ee4a4cf2c4dba7da10af5dbe30ba028b9e00",
+    "work_dirs/port_reliability_fallback_decision_v1/20261013_frozen_fallback_v1/result/report.json": "64f49ecbeed092c178ffecefaebf6cae271c2192fb1a0ef9bd4ad6d3c83df08e",
+    "work_dirs/port_reliability_fallback_decision_v1/20261013_frozen_fallback_v1/result/scored_TRAIN.jsonl.gz": "f948b33c6b755676f703f46dd7de64acfe7667a67da6afbfb95ed1b94c62c8da",
+    "work_dirs/port_reliability_fallback_decision_v1/20261013_frozen_fallback_v1/result/server_review.json": "c4d1591db56a1b88eaf8385167c67d18250efa10096c4713c16ac6d1a1606226"
+  },
+  "parent": "Keep fallback-corrected temporal/image research reference, partial-AUC4 comparator and formal simple unchanged. Sparse features do not alter frozen decisions.",
+  "protocol": "port_reliability_sparse_candidate_v1",
+  "reference_result": "work_dirs/port_reliability_fallback_decision_v1/20261013_frozen_fallback_v1/result",
+  "scope": "TRAIN_CACHE_ONLY_NO_FIT"
+}
