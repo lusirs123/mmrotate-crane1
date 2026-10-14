@@ -1,0 +1,27 @@
+{
+  "protocol": "port_reliability_video_transfer_v1",
+  "sources": {
+    "crane_project/tools/port_reliability_remaining_error_support_v1_protocol.json": "5c348a2af831b9faebba77c947e24275c6e9ba1e8fe4cb2f293ca6cfc0b36d3a",
+    "crane_project/tools/port_reliability_video_transfer_v1_protocol.json": "bd1e8b5830b4d7cba00ede169dc581b45b9069b6174944e34433036d34aacd06",
+    "crane_project/tools/review_port_reliability_conditional_evidence_v1.py": "46815698ecd98e99547095b27802c011653778e5a29a1d98d8353c3eb0965a86",
+    "crane_project/tools/review_port_reliability_remaining_error_support_v1.py": "d03b3bfa48bd7251b3712fb76301ae2250680e703e995f1457b954f859117d33",
+    "crane_project/tools/review_port_reliability_video_transfer_v1.py": "98d60f7f97f56deec00a46dd29b53f5a4fdd678c372c2ec96f9401cc6a226056",
+    "crane_project/tools/run_port_reliability_conditional_evidence_v1.py": "5dfd5d40921302d25b6fd3046779dea72ffa1aba8c187351241cbd015d319469",
+    "crane_project/tools/run_port_reliability_remaining_error_support_v1.py": "c805748c6f2dd2f0b8a0efb4bac4ef8cc1200eb4503f10f9d49667264fbfdb55",
+    "crane_project/tools/run_port_reliability_video_transfer_v1.py": "57488bfd2569065f51cd61355a8be991437631c83154dc105c1ab65bd58e76f4",
+    "crane_project/utils/port_midpoint_sigma15_reliability_v1.py": "d4b21b17b316a43e58ac547a7e03cbfdabe0a561cc05c15a6a6fad7cbd25ecd5",
+    "crane_project/utils/port_reliability_complementarity_v1.py": "a296d1fa13b514c3f299cd72af75103f84eb06eb9a198bc2203ae5c46286175c",
+    "crane_project/utils/port_reliability_conditional_evidence_v1.py": "58e42f447a284734c0a6b12ba65c1003f7c377bbdd79b46aef683c9d98f59b40",
+    "crane_project/utils/port_reliability_remaining_error_support_v1.py": "741517ad50ba10fbf8aef3477f1603703456c339e49f662440ef39cc6d65c21f",
+    "crane_project/utils/port_reliability_state_continuity_v1.py": "443efc73e7e6069a960f81962d4dea032bedadd0901943284e6647b29f138c9c",
+    "crane_project/utils/port_reliability_temporal_evidence_v1.py": "56d567e42a833dc57697c6d0745cf94806d24815a8a343b949ed120525c48a3e",
+    "crane_project/utils/port_reliability_temporal_fusion_v1.py": "6abf5843eb471dd7a206ffb0cc196b740eb97759bb7fb807f47a1afcd489fffd",
+    "crane_project/utils/port_reliability_temporal_trend_v1.py": "68f93f7477fdeebf264f37640b3a68fcc2a08358f3523222a1e98527b4445c54",
+    "crane_project/utils/port_reliability_video_transfer_v1.py": "d7cf7a1c63ac2a80178ddb07e7f8a4bcc3d26b4ffa19b8d35f3d52f3b2fa9800",
+    "crane_project/utils/port_simple_component_reliability_v1.py": "05cb0fb1f59fd353725134471bc98bc0026d5beb789526618add08eb46837309",
+    "tests/test_port_reliability_remaining_error_support_v1.py": "4f112d7e0d3ca2b8e0350d1e7c1b84413056f1debb68e6af2a73889f2986b038",
+    "tests/test_port_reliability_video_transfer_v1.py": "c2cf73eb5ea9ce86ac1f6e44cc87fc08a12833e8f8d786af68a6c9edd206ab21",
+    "tools/run_port_reliability_remaining_error_support_v1.sh": "d9df5f959b0878bb193eba35d5f3ae32e6ecd91e453ed6241b7963935f6c1ff4",
+    "tools/run_port_reliability_video_transfer_v1.sh": "997d89238939d90633c93e8fa6263db0badbb231a17294d10aa425709361c255"
+  }
+}

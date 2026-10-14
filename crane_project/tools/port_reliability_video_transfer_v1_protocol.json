@@ -1,0 +1,26 @@
+{
+  "controls": "full_simple is historical all-TRAIN-trained reference, not an honest held-out judge. score-only uses detector score; static3/fusion4 are fit without held-video rows. Full TRAIN reference static model must reproduce formal simple.",
+  "fitting": "Reuse original balanced float64 Newton/L2=.1 settings. Per full fit or fold: full-output fallback3, history-supported static3 and fusion4. Reported static3 uses full-output fallback3; supported static3 kept for exact original fitting reproducibility. Seven contexts x three optimizations=21, twelve held-arm evaluations.",
+  "limitations": [
+    "Detector already saw all TRAIN; this is only judgment-rule video transfer, not unseen-detector validation.",
+    "Video frames and runs are dependent; one-error videos cannot establish a statistically stable gain.",
+    "Historical VAL/TEST repeatedly exposed; neither row set is parsed here.",
+    "Old native cache is verified by shared source loader only; no native-feature training, PCA refit or image evidence used.",
+    "Pooled delivery has fold-specific diagnostic models/cutoffs; no pooled cross-fold AUC, global policy or deployable result.",
+    "FIT video correct95 thresholds are a diagnostic working point distinct from original VAL all-frame95 policy. No policy overwrite.",
+    "No automatic next-method selection or threshold/feature/loss search from the results."
+  ],
+  "protocol": "port_reliability_video_transfer_v1",
+  "scope": "Complete frozen TRAIN2558; six internal video exclusions; two judgment arms. No detector/neural updates or new VAL/TEST evaluation. No deployment or adoption.",
+  "settings": {
+    "arms": [
+      "static3",
+      "fusion4"
+    ],
+    "correct_retention": 0.95,
+    "gradient_tolerance": 1e-08,
+    "l2": 0.1,
+    "max_iterations": 100
+  },
+  "thresholds": "Diagnostic single global threshold is max of each FIT video 95%-correct quantile, including full_simple/score controls. Leave-out labels never select a threshold. Whole cutoff ties accepted. Offline evaluation correct95/same-CR points do not become online thresholds."
+}
