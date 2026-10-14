@@ -78,7 +78,7 @@ def solve(rows):
     result=milp(c=objective,integrality=np.r_[np.zeros(4),np.ones(n)],
         bounds=Bounds(np.r_[np.full(4,-SETTINGS['coefficient_bound']),np.zeros(n)],
                       np.r_[np.full(4,SETTINGS['coefficient_bound']),np.ones(n)]),
-        constraints=constraints,options=options)
+        constraints=constraints,options=options.copy())
     elapsed=time.monotonic()-started
     incumbent=result.x is not None
     if incumbent:

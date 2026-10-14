@@ -65,7 +65,18 @@ class TestActualFR(unittest.TestCase):
 
     @unittest.skipUnless(importlib.util.find_spec('scipy') is not None,'Local numeric runtime has no SciPy; solver integration is mandatory on server')
     def test_solver_known_separable_and_identical_features(self):
-        data=self.material();m=c.solve(data)
+        from unittest.mock import patch
+        from types import SimpleNamespace
+        data=self.material()
+        def mutating_solver(**kw):
+            kw['options'].pop('node_limit')
+            n=len(data)
+            return SimpleNamespace(x=np.r_[[-1e-4,0.,0.,0.],np.zeros(n)],status=1,
+                fun=0.,message='mock time limit',mip_dual_bound=-2.,mip_node_count=0)
+        with patch('scipy.optimize.milp',side_effect=mutating_solver):
+            logged=c.solve(data)
+        self.assertEqual(logged['solver']['options']['node_limit'],100000)
+        m=c.solve(data)
         self.assertTrue(m['solver']['incumbent']);self.assertTrue(m['solver']['optimal_within_fixed_domain']);self.assertEqual(m['certificate']['FA'],0)
         for r in data:
             r['pred']=[0.,0.,100.,40.,0.,.8];r['gt'][2]=80. if r['frame_id'] in (0,21) else 100.
