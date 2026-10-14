@@ -1,0 +1,64 @@
+{
+  "cache_manifest": "work_dirs/port_results/geometry/port_geometry_midpoint_formal_v1_roi_cache/cache_manifest.json",
+  "fallback": "If candidate or history unavailable preserve exact partial_auc4 flag at frozen .4094748402105834; calibrate active cutoff once on VAL respecting each group95 total correct retention. Two branches are not a shared calibrated probability.",
+  "features": "Median log(candidate_long/M_long), median log(candidate_short/M_short). Candidate count is availability only. B alternative predictions are not independently trusted boxes. M reused from byte-pinned outputs, native B replay checked.",
+  "fit_settings": {
+    "beta": 0.05,
+    "correct_retention": 0.95,
+    "gradient_tolerance": 1e-08,
+    "initialization": 0.0,
+    "l2": 0.1,
+    "max_iterations": 100,
+    "temperature": 0.1
+  },
+  "frontend_pins": {
+    "work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/epoch_24.pth": "8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23",
+    "work_dirs/crane_symeood_k1_port_day2night_midpoint_sigma_v1/sigma_1p5/head_epoch_03.pth": "16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7",
+    "work_dirs/port_results/geometry/port_geometry_midpoint_formal_v1_roi_cache/cache_manifest.json": "046c5998dee0ba3703f1ae4e08fc6a02e9804d216ea12241357f69f2a4afd1e3"
+  },
+  "gate": "Strict overall same-count/same-CR FA gain against partial_auc4/fusion4/simple/score with each-domain/video FA and continuous correct-FR protection; paired4 delivery FA decreases with CR nondecrease and per-group protection; low-temporal FA decreases. No automatic adoption/TEST, no changing candidates, objective, window or cutoff search after failure.",
+  "input_pins": {
+    "crane_project/data/crane_grab_port_day2night_v1/manifest.json": "128bd9aac390ad878a46c005a22f44d322a5acf61a47ad128991eb7444a4886f",
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/scored_TRAIN.jsonl.gz": "f702b6bca6e1bda7168000d67fb157515e9caa5a26b1fa680aad2e86a26eb236",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/scored_VAL.jsonl.gz": "040f1a59448573968a2fb71513ab05cb4ad581aecc2eb321110607b06356ee65",
+    "work_dirs/port_reliability_partial_auc_v1/20261013_pauc_cpu_v1/result/calibration.json": "61ebb3e8ef3a8b9c7b496ae4e657da5168749bb97bd9815aff00ce4697818cc5",
+    "work_dirs/port_reliability_partial_auc_v1/20261013_pauc_cpu_v1/result/model.json": "8ad35c057cb8da8a4c360f50879c696efcfa1ab991dcdb466b1589f94dd6ae88",
+    "work_dirs/port_reliability_partial_auc_v1/20261013_pauc_cpu_v1/result/report.json": "f888c52163363caf21fc5165e7bc383d9381d961ee1d6bbebb97c10f59b0fcef",
+    "work_dirs/port_reliability_partial_auc_v1/20261013_pauc_cpu_v1/result/scored_TRAIN.jsonl.gz": "555dfcfc82a0dfab9e10a889ff4833eabc678d7826afcb702f654c1d011ee041",
+    "work_dirs/port_reliability_partial_auc_v1/20261013_pauc_cpu_v1/result/scored_VAL.jsonl.gz": "1aece9ac25bbc6621046bcaa82cb5ed91737978bd2d4e51a1fad0827243f3160",
+    "work_dirs/port_reliability_partial_auc_v1/20261013_pauc_cpu_v1/result/server_review.json": "ba592033ab5eea9d64957dcaa6c036381648986c88be79a2094734c2ea4cbaf5"
+  },
+  "limitations": [
+    "Project adaptation of LMD candidate statistics, not reproduction of LiDAR/NMS method.",
+    "O2O trains sparse positives; unselected boxes may have inadequate localization support.",
+    "Repeatedly exposed VAL; TEST remains reporting-only.",
+    "Low-count video AUC is descriptive only.",
+    "Timing includes Python tracing and is not deployment latency."
+  ],
+  "manifest": "crane_project/data/crane_grab_port_day2night_v1/manifest.json",
+  "prerequisite": "Before fitting: >=50% candidate coverage in each domain; >=20 genuine TRAIN errors with history/candidate support; at least one signed axis, direction determined on pooled TRAIN, directed AUC>=.55 in >=2 Real videos each>=3 errors/>=20 correct. These are prospective feasibility constants, not confidence guarantees or VAL selected thresholds. Fail stops without fitting or VAL inference.",
+  "previous_result": "work_dirs/port_reliability_partial_auc_v1/20261013_pauc_cpu_v1/result",
+  "proposal_contract": "Observe original B decoder post-padding/post-scoreThr.05 pre-Top1 pools in original coordinates. Exclude actual selected source index, retain centers inside final M OBB and canonical axis within15deg, top8 by score/index; require3. No score relaxation, replacement, re-ranking or extra forward.",
+  "protocol": "port_reliability_candidate_support_v1",
+  "reference_rows": {
+    "TRAIN": "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/scored_TRAIN.jsonl.gz",
+    "VAL": "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/scored_VAL.jsonl.gz"
+  },
+  "references": [
+    "https://link.springer.com/article/10.1007/s11263-025-02377-8"
+  ],
+  "roles": "Complete TRAIN2558. Only if fixed prerequisite screen passes fit paired4/6 and freeze before complete previously exposed VAL887. No new fit/probe roles, no TEST.",
+  "settings": {
+    "angle_degrees": 15.0,
+    "max_neighbors": 8,
+    "min_direction_auc": 0.55,
+    "min_domain_coverage": 0.5,
+    "min_neighbors": 3,
+    "min_real_videos": 2,
+    "min_video_good": 20,
+    "min_video_wrong": 3,
+    "min_wrong": 20
+  },
+  "training": "Same genuine supported/history TRAIN identities, TRAIN-only mean/std, zero slopes, fixed inherited intercept, smooth partial-AUC beta.05/T.1/ridge.1/maxNewton100. Pair4 vs6; no neural network, pseudo boxes or budget search."
+}
