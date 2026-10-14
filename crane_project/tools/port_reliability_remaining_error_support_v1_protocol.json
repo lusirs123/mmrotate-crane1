@@ -29,7 +29,7 @@
   "output": "One work_dirs/version/RUN_ID/result; CPU; keep frozen flags/geometry/score/center/angle/output identity",
   "policy": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json",
   "previous": "work_dirs/port_reliability_fallback_decision_v1/20261013_frozen_fallback_v1/result",
-  "protocol": "port_reliability_train_support_v1",
+  "protocol": "port_reliability_remaining_error_support_v1",
   "purpose": "Compare 13 simple-accepted errors with 58 simple-rejected errors; size-axis/sign/continuity/history support and frozen static/native feature proximity.",
   "scope": "Full frozen TRAIN2558 only; labels offline; no VAL/TEST parsing, model fitting, scoring candidate, threshold updates or adoption.",
   "screen": "Conservative descriptive MATERIAL count condition only: accepted FA plus unique strictly matched ED>=20, >=2Real videos each>=5 errors in>=2maximal error runs. Also report directFA-only count condition. Neither is a feature separability/performance guarantee or automatic training authorization.",

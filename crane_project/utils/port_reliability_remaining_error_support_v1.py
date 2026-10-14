@@ -5,7 +5,7 @@ import math
 import numpy as np
 from crane_project.utils import port_reliability_temporal_evidence_v1 as temporal
 from crane_project.utils import port_simple_component_reliability_v1 as simple
-VERSION='port_reliability_train_support_v1'
+VERSION='port_reliability_remaining_error_support_v1'
 SETTINGS=dict(size_log_tolerance=.1,local_exclusion=3,level_cutoff=.0785511443740936,
     minimum_errors=20,minimum_real_videos=2,minimum_errors_per_video=5,minimum_error_runs_per_video=2)
 STATES=('FA','FR','ED','CR','MISSING')
