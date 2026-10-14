@@ -1,0 +1,42 @@
+{
+  "protocol": "port_reliability_fr_constraint_v1",
+  "settings": {
+    "l2": 0.1,
+    "correct_retention": 0.95,
+    "surrogate_FR_limit": 0.05,
+    "barrier_schedule": [
+      0.1,
+      0.01,
+      0.001,
+      0.0001,
+      1e-05,
+      1e-06,
+      1e-07
+    ],
+    "max_iterations_per_stage": 100,
+    "gradient_tolerance": 2e-07,
+    "max_backtracks": 60,
+    "stationarity_tolerance": 5e-06,
+    "feasibility_tolerance": 1e-10,
+    "duality_gap_tolerance": 1e-06,
+    "control_max_iterations": 100,
+    "control_gradient_tolerance": 1e-08,
+    "arms": [
+      "control3",
+      "constrained3"
+    ]
+  },
+  "scope": "Complete frozen TRAIN + six internal judge-only video exclusions; size flag only; CPU; no detector/GPU training.",
+  "objective": "wrong mean softplus(-s)+0.1/2||w||^2, intercept unpenalized; each fitting video correct mean softplus(s)/log(2)<=.05. Candidate accepts s<0, rejects s>=0.",
+  "solver": "float64 strictly feasible log barrier Newton. Seven fixed mu stages .1 to 1e-7, <=100 iterations each; analytic derivatives, Armijo .0001, <=60 backtracks; independent KKT feasibility/stationarity/gap certificate. No search/restarts.",
+  "control": "same three descriptors, fitting-only standardization and rows; original balanced Newton l2=.1 max100 grad1e-8; cutoff max FIT-video correct95 quantile. full_simple is historical all-TRAIN trained reference, not an honest held-out judge.",
+  "gate": "Every held video correct retention>=95%; sum per-video offline correct95 FA strictly below current matching 3D control54; per-video same-correct95 FA no worse than control; actual working point FA no worse than controls at same count and same CR; longest correct FR no worse at same CR. Feasible all-accept alone is failure. Equality allowed per video but total FA must improve.",
+  "next_stage": "Only fixed candidate passing TRAIN gate can proceed to complete VAL in a separately recorded stage; failure stops. No TEST selection or automatic deployment.",
+  "limitations": [
+    "Historical VAL/TEST repeatedly exposed, neither parsed here. TRAIN detector saw all videos; exclusion tests judge transfer only.",
+    "Empirical bound applies only fitting-video FR. No future-video guarantee; dependent frames not iid.",
+    "Conservative surrogate can force all accept and cannot add information. Not a complete Neyman-Pearson implementation.",
+    "Offline sameCR/count and correct95 are GT comparisons, never online GT thresholds. Fold-specific scores not pooled into AUC.",
+    "Formal boxes/score/count/center/angle/policy/depth unchanged. Native cache merely checked by inherited loader, not fitted."
+  ]
+}
