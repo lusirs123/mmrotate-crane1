@@ -1,0 +1,37 @@
+{
+  "version": "port_reliability_pixel_border_v1",
+  "settings": {
+    "tangents": 7,
+    "tangent_extent": 0.3,
+    "radial_points": 129,
+    "radial_min": 0.25,
+    "radial_max": 0.75,
+    "derivative_pixels": 1.0,
+    "min_valid_profiles": 5,
+    "low_temporal": 0.0785511443740936
+  },
+  "manifest": "crane_project/data/crane_grab_port_day2night_v1/manifest.json",
+  "rows": "work_dirs/port_reliability_fallback_decision_v1/20261013_frozen_fallback_v1/result/scored_TRAIN.jsonl.gz",
+  "pins": {
+    "crane_project/utils/port_reliability_pixel_border_v1.py": "1821e26267d8724f3a61bb79c33f03af5fd391fc1535761c85f29d9f4c6a1d21",
+    "crane_project/utils/port_reliability_sparse_candidate_v1.py": "83476739289902bfb97cf24bdea776668588001738c2002cc193be657df169ae",
+    "crane_project/tools/run_port_reliability_pixel_border_v1.py": "f000d53b3fe48155e8c8e46657868797c46f9fc92936e4842837072d3f00ca35",
+    "crane_project/tools/review_port_reliability_pixel_border_v1.py": "938c88735d97d68254485c8c0190f82efbd84fe72c16275f29bc892e9effbacd",
+    "tests/test_port_reliability_pixel_border_v1.py": "a0e147dcd9d449ea38ba883053d90f89e0ac2afacaeb6af9fdf0b3fd56b7c136",
+    "tools/run_port_reliability_pixel_border_v1.sh": "7de4bdcd2930ea162b9af898e8baef882638d04f5cdd4b7080863f84cca60fdf",
+    "crane_project/data/crane_grab_port_day2night_v1/manifest.json": "128bd9aac390ad878a46c005a22f44d322a5acf61a47ad128991eb7444a4886f",
+    "work_dirs/port_reliability_fallback_decision_v1/20261013_frozen_fallback_v1/result/scored_TRAIN.jsonl.gz": "f948b33c6b755676f703f46dd7de64acfe7667a67da6afbfb95ed1b94c62c8da",
+    "work_dirs/port_reliability_fallback_decision_v1/20261013_frozen_fallback_v1/result/report.json": "64f49ecbeed092c178ffecefaebf6cae271c2192fb1a0ef9bd4ad6d3c83df08e",
+    "work_dirs/port_reliability_fallback_decision_v1/20261013_frozen_fallback_v1/result/server_review.json": "c4d1591db56a1b88eaf8385167c67d18250efa10096c4713c16ac6d1a1606226"
+  },
+  "scope": "TRAIN_ONLY_NO_FIT",
+  "proposal": "Native gray gradients at +/-1 original pixel; seven tangents per side at +/-0.3 orthogonal edge, 129 radial positions from 0.25 to 0.75 predicted edge. No semantic boundary claim. Peak is median of ties. Require five valid nonflat full profiles each side; otherwise explicitly unavailable. No rescale, no box or decision changes.",
+  "difference": "Original grayscale spatial detail replaces old 256x9x9 learned-ROI channel statistics.",
+  "screen": "Fixed higher mismatch is worse. >=20 supported low-deviation TRAIN errors and >=2 Real videos each >=3 errors, >=20 correct and same-video predicted-scale matched AUC>=0.55. Both axes reported, no automatically selected model, threshold or next stage.",
+  "limitations": [
+    "Native strongest gradient may be texture/background/occluder, not target edge.",
+    "Source pixels add evidence but do not establish independent errors.",
+    "Previously exposed TRAIN only; correlated pairs are not independent samples.",
+    "No VAL/TEST, no fitting or claimed FA improvement; descriptive feasibility requires subsequent design review."
+  ]
+}
