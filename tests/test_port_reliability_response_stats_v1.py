@@ -44,8 +44,12 @@ class ResponseTests(unittest.TestCase):
             self.assertEqual(sum(p.numel() for p in b.parameters()), 169)
             x = torch.randn(7, 3, dtype=torch.float64)
             extra = torch.randn(7, 16, dtype=torch.float64)
-            self.assertTrue(torch.equal(a(x), b(torch.cat((x, extra), 1))))
+            # Different GEMM reduction widths may change only FP64 roundoff.
+            self.assertTrue(torch.allclose(a(x), b(torch.cat((x, extra), 1)), atol=1e-14, rtol=0))
             self.assertTrue(torch.equal(a.network[0].weight, b.network[0].weight[:, :3]))
+            self.assertTrue(torch.equal(a.network[0].bias, b.network[0].bias))
+            self.assertTrue(torch.equal(a.network[2].weight, b.network[2].weight))
+            self.assertTrue(torch.equal(a.network[2].bias, b.network[2].bias))
 
     def test_gradient_finite_difference_and_extra_learning(self):
         torch.set_num_threads(1)
