@@ -1,0 +1,100 @@
+{
+  "date": "2026-10-15",
+  "scope": "local aggregation of saved frozen reports; no fit/inference/rescore/new_threshold/remote_run",
+  "formal_M": "B24_sigma1p5_epoch03",
+  "formal_policy_sha256": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f",
+  "sources": {
+    "temporal": {
+      "path": "work_dirs/port_reliability_temporal_stack_test_v1/20261014_frozen_stack_test_v1/result/report.json",
+      "sha256": "a5c29f7aa3cad07900f414d425ad6babe304bd58f834292b45874673c0a1e7c9"
+    },
+    "source_test": {
+      "path": "work_dirs/port_reliability_feature_source_test_v1/20261009_source_frozen_test_v1/result/report.json",
+      "sha256": "7ef176a6a6d926fd11d4ca422039796381a75a88a08eaf08d1b3a2fbffa0f43b"
+    },
+    "readout_test": {
+      "path": "work_dirs/port_reliability_readout_test_v1/20261009_frozen_test_v1/result/report.json",
+      "sha256": "1a432a20042d94f4439e19338d10519d62128a8b310647750aa311fb5072b2bd"
+    },
+    "paired": {
+      "path": "work_dirs/port_reliability_paired_ranking_audit_v1/20261015_saved_pairs_server_v1_fix1/result/report.json",
+      "sha256": "121e8fbdb42691754e6bb4c7ac353847b5ce70af1e0d77fd45f833f82e192eb3"
+    },
+    "formal_val": {
+      "path": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/fit_report.json",
+      "sha256": "8c245cf5d2c5f5178dba33436ee5f49f0b5918c90fb1ac66473398346eb4f3af"
+    },
+    "formal_test": {
+      "path": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/frozen_test_20261007_163625_1260566/summary.json",
+      "sha256": "152cf0b32eff0ed0117bb1a97ba23a35f4cbbd355d33758c109a6bfff97bbe94"
+    },
+    "policy": {
+      "path": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json",
+      "sha256": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f"
+    }
+  },
+  "source_experiment_cutoffs": {
+    "midpoint": 0.9797210788609376,
+    "native": 0.5361259910005223,
+    "full_simple": 0.43131551898452714,
+    "score_only": 0.7688139975070953
+  },
+  "rows": 180,
+  "matched_rows": 144,
+  "missing_TEST": [
+    {
+      "method": "rank/within_video_rank",
+      "label": "视频内排序候选",
+      "status": "NO_COMPLETED_TEST_IN_REVIEWED_RECORDS"
+    },
+    {
+      "method": "rank/bce_control",
+      "label": "视频内排序BCE控制",
+      "status": "NO_COMPLETED_TEST_IN_REVIEWED_RECORDS"
+    },
+    {
+      "method": "redc/linear",
+      "label": "ReDC同输入linear控制",
+      "status": "NO_COMPLETED_TEST_IN_REVIEWED_RECORDS"
+    },
+    {
+      "method": "spatial/coarse_bce",
+      "label": "coarse BCE",
+      "status": "NO_COMPLETED_TEST_IN_REVIEWED_RECORDS"
+    },
+    {
+      "method": "spatial/spatial_bce",
+      "label": "spatial BCE",
+      "status": "NO_COMPLETED_TEST_IN_REVIEWED_RECORDS"
+    },
+    {
+      "method": "spatial/spatial_axis",
+      "label": "spatial axis",
+      "status": "NO_COMPLETED_TEST_IN_REVIEWED_RECORDS"
+    }
+  ],
+  "qualifications": [
+    "TEST repeatedly exposed; no model/cutoff selection",
+    "Different frozen operating points; matching is offline only",
+    "No pure-capacity attribution",
+    "Per-group matched thresholds are not additive",
+    "Sources already checked historically; current verification is saved-report accounting, not a new per-frame replay"
+  ],
+  "checks": [
+    "all group frame/output/state arithmetic",
+    "per-sequence frozen count sum to all",
+    "correct/error/missing identity per split",
+    "formal VAL vs saved paired audit identical",
+    "formal VAL/TEST vs temporal report identical",
+    "full_simple source/readout thresholds identical",
+    "all source hashes unchanged"
+  ],
+  "json_key_format": "JSON Pointer: leading /, ~1 escapes slash in a dictionary key, ~0 escapes tilde",
+  "verification_result": {
+    "status": "PASS",
+    "actual_rows_retrieved_from_source": 180,
+    "comparison_rows_retrieved_from_source": 144,
+    "source_sha_verified": 7,
+    "original_sources_unchanged": true
+  }
+}
