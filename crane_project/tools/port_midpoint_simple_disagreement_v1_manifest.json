@@ -1,0 +1,30 @@
+{
+  "version": "port_midpoint_simple_disagreement_v1",
+  "pins": {
+    "work_dirs/port_reliability_complementarity_v1/20261009_complementarity_v1/result/report.json": "ec636fa51dcc97870f570642c383a70935cc22b88c6f9998778994ec1e41002f",
+    "work_dirs/port_reliability_complementarity_v1/20261009_complementarity_v1/result/completion.json": "773d0cbe728a317fb3bb87e5ee3b5bc0403f7ee14b07a95082afee9a31433a16",
+    "work_dirs/port_reliability_complementarity_v1/20261009_complementarity_v1/result/joined_TRAIN.jsonl.gz": "b170c9c2281d4ac4e127d15dca1d392fcaf6d1ef3ae495af33c89fccd6e219c0",
+    "work_dirs/port_reliability_complementarity_v1/20261009_complementarity_v1/result/joined_VAL.jsonl.gz": "3f1e74838dc08eb2d580c6b7629a12a12dc1a36d65a6345ddda49ff2b645ee82",
+    "work_dirs/port_reliability_paired_ranking_audit_v1/20261015_saved_pairs_server_v1_fix1/result/report.json": "121e8fbdb42691754e6bb4c7ac353847b5ce70af1e0d77fd45f833f82e192eb3",
+    "work_dirs/port_reliability_paired_ranking_audit_v1/20261015_saved_pairs_server_v1_fix1/result/completion.json": "6c0353b52222d0c678c362de0310a09f250136362dee1f9a2461506d6554d5ff",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/report.json": "9231b9344c3aa7665479f2ae2e0fcbd4df3a3678815c139fbae6d42e966c4203",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/completion.json": "d0e8117b1845b2a626a73758be81fffe1fec8f589de0856ab9ad4e7864648f5c",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/scored_TRAIN.jsonl.gz": "f702b6bca6e1bda7168000d67fb157515e9caa5a26b1fa680aad2e86a26eb236",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/scored_VAL.jsonl.gz": "040f1a59448573968a2fb71513ab05cb4ad581aecc2eb321110607b06356ee65",
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f",
+    "crane_project/utils/port_reliability_paired_ranking_audit_v1.py": "7fea829e8346ab232d452cda8502bdf4dde8fe058edaa5e670e57df42198d830",
+    "tests/test_port_reliability_paired_ranking_audit_v1.py": "30e545a59fd1784507ed7846f75ba433eae76adff37db388192cea2d0eb1b1d6"
+  },
+  "policy": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json",
+  "scope": {
+    "training_updates": 0,
+    "detector_inferences": 0,
+    "feature_extractions": 0,
+    "TEST_opened": false,
+    "policy_updates": 0,
+    "calibration_search": false
+  },
+  "evidence_contract": "TRAIN complementary errors, VAL same-direction benefit not confined to one video, and current two scores distinguish helpful from harmful disagreement; no oracle-based or automatic training approval.",
+  "new_features": false,
+  "new_roles": false
+}
