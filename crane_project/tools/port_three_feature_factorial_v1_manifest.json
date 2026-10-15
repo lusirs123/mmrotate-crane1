@@ -1,0 +1,82 @@
+{
+  "version": "port_three_feature_factorial_v1",
+  "roles": {
+    "TRAIN": {
+      "rows": "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/scored_TRAIN.jsonl.gz",
+      "frames": 2558
+    },
+    "VAL": {
+      "rows": "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/scored_VAL.jsonl.gz",
+      "frames": 887
+    },
+    "TEST": {
+      "rows": "work_dirs/port_reliability_feature_source_test_v1/20261009_source_frozen_test_v1/result/scored_TEST.jsonl.gz",
+      "frames": 1440
+    },
+    "PILOT": {
+      "rows": "work_dirs/port_pilot_size_support_v1/20261015_train203_server_v1/result/scored_PILOT_TRAIN.jsonl.gz",
+      "frames": 203
+    }
+  },
+  "linear_result": "work_dirs/port_simple_pilot_increment_v1/20261015_train203_server_v1/result",
+  "development_pins": {
+    "crane_project/utils/port_three_feature_factorial_v1.py": "e42600647c55cf4b48f252f9ed6597938143f26cccf7af288f377da0178a3a5b",
+    "crane_project/tools/run_port_three_feature_factorial_v1.py": "1a7dae57615208da987d46c09814f945c30967cb092f13f48a9ab52f03374a8a",
+    "crane_project/tools/review_port_three_feature_factorial_v1.py": "ac8f5797efb616f3bccaf400dd223dbf6e0d286c5d4a272f1e5318ac52b33182",
+    "tests/test_port_three_feature_factorial_v1.py": "3bce9b50ca63c4a72e8b264a65d3580fe6ffeca8821d5368fe6387680603811d",
+    "tools/run_port_three_feature_factorial_v1.sh": "8e2d9bf780896ba65ee009523589a98b8b26302aee6f021a3f5b945b210cd353",
+    "crane_project/utils/port_simple_component_reliability_v1.py": "05cb0fb1f59fd353725134471bc98bc0026d5beb789526618add08eb46837309",
+    "crane_project/utils/port_simple_pilot_increment_v1.py": "d24283ec78d9b7552adfc1b207de68ddc52690433014a89749df5c22618a7f1c",
+    "crane_project/utils/port_reliability_paired_ranking_audit_v1.py": "7fea829e8346ab232d452cda8502bdf4dde8fe058edaa5e670e57df42198d830",
+    "crane_project/tools/review_port_simple_pilot_increment_v1.py": "e7167ec46ccc33316baab368450c83290514d65ad5804223b0fe0ae8beb5eb63",
+    "crane_project/tools/port_simple_pilot_increment_v1_manifest.json": "c3278002c4c32e1ba4b009299e85b2a4e56d3e3f4b08d265279d8db4aa370aa3",
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/scored_TRAIN.jsonl.gz": "f702b6bca6e1bda7168000d67fb157515e9caa5a26b1fa680aad2e86a26eb236",
+    "work_dirs/port_pilot_size_support_v1/20261015_train203_server_v1/result/scored_PILOT_TRAIN.jsonl.gz": "1549d98914203388de51580729873c08fbd53a0387d0bc9cb306627ebc9539f7",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/scored_VAL.jsonl.gz": "040f1a59448573968a2fb71513ab05cb4ad581aecc2eb321110607b06356ee65",
+    "work_dirs/port_simple_pilot_increment_v1/20261015_train203_server_v1/result/models.json": "4b7274faf443e47e230fdde223993ec2e2865f45ecf44f1ad60965d67cd8071f",
+    "work_dirs/port_simple_pilot_increment_v1/20261015_train203_server_v1/result/report.json": "870cce28071d8a36e8eb73e2b2536e47020e67ac149da1a8d68007cbfcd747fd",
+    "work_dirs/port_simple_pilot_increment_v1/20261015_train203_server_v1/result/freeze.json": "3505576fce1636d2768656ada6886a01af6eb005c03bb42005198e88242801df"
+  },
+  "test_pins": {
+    "work_dirs/port_reliability_feature_source_test_v1/20261009_source_frozen_test_v1/result/scored_TEST.jsonl.gz": "d0ebe1d2f16531fbd7a94fbbeb3657f8eafee080176dc47f0c242bdb19b8770e"
+  },
+  "seeds": [
+    1701,
+    1702,
+    1703
+  ],
+  "architecture": [
+    3,
+    8,
+    1
+  ],
+  "parameters": 41,
+  "fitting": {
+    "l2": 0.1,
+    "max_iterations": 1000,
+    "max_evaluations": 1250,
+    "gradient_tolerance": 1e-08,
+    "change_tolerance": 1e-12,
+    "stationarity_limit": 1e-05
+  },
+  "optimizer": "CPU float64 full-batch L-BFGS lr1 strong_wolfe history20. Fixed TRAIN-only stopping rules, same max budget both arms, no VAL epoch/seed selection.",
+  "objective": "0.5*mean(BCE on errors)+0.5*mean(BCE on corrects)+0.5*L2*sum(all layer kernel weights squared). Biases unpenalized; same coefficient as linear, different parameterization so not identical function regularization.",
+  "normalizer": "Each material complete TRAIN mean/std, exactly same as its archived linear arm. Pilot MISSING excluded; all61correct+111errors kept. No aux48.",
+  "primary_VAL_CR": 653,
+  "minimum_Real_CR": 189,
+  "gate": "All3 seeds augmented MLP must FA<paired old-data MLP and formal190 at pooled CR>=653, RealCR>=189; both TRAIN fits gradient max<=1e-5. Report continuity; no all-video-win requirement. Fixed1701 TEST representative if passed.",
+  "test_rule": "Freeze design, all trained weights/cutoffs and gate BEFORE TEST read/hash. Report frozen formal/old/augmented linear on exposed TEST regardless MLP gate (explicit reporting extension). New MLP TEST only if gate passes; no post-TEST training/selection.",
+  "scope": {
+    "new_MLP_heads": 6,
+    "new_linear_fits": 0,
+    "detector_training": false,
+    "detector_inference": false,
+    "feature_extraction": false,
+    "center_angle_refit": false,
+    "policy_export": false,
+    "GT_online": false,
+    "device": "CPU",
+    "pure_capacity_ablation": false
+  }
+}
