@@ -1,0 +1,86 @@
+{
+  "version": "port_reliability_capacity_v1",
+  "roles": {
+    "TRAIN": {
+      "rows": "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/scored_TRAIN.jsonl.gz",
+      "features": "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/train_midpoint_projected.npz"
+    },
+    "VAL": {
+      "rows": "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/scored_VAL.jsonl.gz",
+      "features": "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/val_midpoint_projected.npz"
+    },
+    "TEST": {
+      "rows": "work_dirs/port_reliability_feature_source_test_v1/20261009_source_frozen_test_v1/result/scored_TEST.jsonl.gz",
+      "features": "work_dirs/port_reliability_feature_source_test_v1/20261009_source_frozen_test_v1/result/test_midpoint_projected.npz"
+    }
+  },
+  "development_pins": {
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/scored_TRAIN.jsonl.gz": "f702b6bca6e1bda7168000d67fb157515e9caa5a26b1fa680aad2e86a26eb236",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/train_midpoint_projected.npz": "7731a48a60e06530e363596d8b37fd17115c413378c0fb7eef8e9e41568e2ae3",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/scored_VAL.jsonl.gz": "040f1a59448573968a2fb71513ab05cb4ad581aecc2eb321110607b06356ee65",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/val_midpoint_projected.npz": "80e6723d2579a3cc67157a9994092d2643c6e7f264f60099ea6033ba00f4ab41",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/models.json": "338b7d514135a1e66dc371829ac5b2c8c060fd7ae0347c35174266d2de5b2851",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/pca.json": "2c7c690e29828b3599acf468f54e6da231e9a88d2297e7ffd0083bb67daa539d",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/report.json": "9231b9344c3aa7665479f2ae2e0fcbd4df3a3678815c139fbae6d42e966c4203",
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f",
+    "crane_project/utils/port_reliability_feature_source_v1.py": "3fe48fd240b2d5b60afffdf21f67fa3de6c20cccbe4df509c448304385117866",
+    "crane_project/utils/port_reliability_feature_source_v1_torch.py": "63d2e6bfc993528f838c080df50c18c92269596208091b61ca5fe55950b5adf0",
+    "crane_project/utils/port_reliability_redc_size_v1_torch.py": "4d1ec52b7035054ed5c87d7200037cae83a647c7af943b9018d457aca90b4909",
+    "crane_project/utils/port_reliability_redc_size_v1.py": "e6d8e0deb0a535947db6858ac13400e98b2ad0954a980c620fb529164bd7437c",
+    "crane_project/utils/port_simple_component_reliability_v1.py": "05cb0fb1f59fd353725134471bc98bc0026d5beb789526618add08eb46837309",
+    "crane_project/utils/port_reliability_paired_ranking_audit_v1.py": "7fea829e8346ab232d452cda8502bdf4dde8fe058edaa5e670e57df42198d830",
+    "crane_project/utils/port_reliability_capacity_v1.py": "2a3e3f0c5289ec22e4d52315f60aa65afd509d66b2f857f76788bce57376053a",
+    "crane_project/tools/run_port_reliability_capacity_v1.py": "ba22521410a81774fdc253153a08f7291a8de0fdabfbc2edbe813a90e8ce5a5d",
+    "tests/test_port_reliability_capacity_v1.py": "6d80a72f8fe64e803bcc26b4376cd791aab2025ba1dd24fbefc20fe12278c13b",
+    "tools/run_port_reliability_capacity_v1.sh": "33f6615daec57d8e6cbebd0f5a4ded7e36a2ed2fab0d590caf5d1ac84ddde92c"
+  },
+  "test_pins": {
+    "work_dirs/port_reliability_feature_source_test_v1/20261009_source_frozen_test_v1/result/scored_TEST.jsonl.gz": "d0ebe1d2f16531fbd7a94fbbeb3657f8eafee080176dc47f0c242bdb19b8770e",
+    "work_dirs/port_reliability_feature_source_test_v1/20261009_source_frozen_test_v1/result/test_midpoint_projected.npz": "775e5a54890954d4b27803bfbae361a19efe0bff447227390e2753fdb58cb139"
+  },
+  "original_models": "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/models.json",
+  "simple_cutoff": 0.41665113433410333,
+  "seeds": [
+    1701,
+    1702,
+    1703
+  ],
+  "widths": {
+    "small": [
+      258,
+      16,
+      8,
+      1
+    ],
+    "large": [
+      258,
+      32,
+      16,
+      1
+    ]
+  },
+  "parameters": {
+    "small": 4290,
+    "large": 8834
+  },
+  "epochs": 100,
+  "batch_size": 256,
+  "updates_per_head": 1000,
+  "loss": "original class-balanced BCE",
+  "optimizer": "original AdamW lr0.001, weights decay0.0001, no bias decay, clip5",
+  "primary_VAL_CR": 653,
+  "auxiliary_retention": [
+    0.95,
+    0.97
+  ],
+  "gate": "All3 paired seeds large FA strictly below small and formal simple at pooled CR>=653 with whole tie. Real CR>=formal simple189. No per-video-win requirement. Inspect continuity; no best-seed or best-epoch selection.",
+  "test_rule": "Only after VAL PASS freeze predeclared seed1701 large (and its paired small control) and unified VAL cutoff before opening TEST. Fail stops without TEST. TEST repeatedly exposed; no tuning.",
+  "scope": {
+    "detector_training": false,
+    "new_feature_extraction": false,
+    "PCA_refit": false,
+    "calibration": "single pooled VAL CR653 cutoff",
+    "device": "CPU cached-feature heads only",
+    "no_training_threshold_search": true
+  }
+}
