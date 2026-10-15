@@ -1,0 +1,62 @@
+{
+  "version": "port_simple_pilot_increment_v1",
+  "roles": {
+    "TRAIN": {
+      "rows": "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/scored_TRAIN.jsonl.gz",
+      "frames": 2558
+    },
+    "VAL": {
+      "rows": "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/scored_VAL.jsonl.gz",
+      "frames": 887
+    },
+    "TEST": {
+      "rows": "work_dirs/port_reliability_feature_source_test_v1/20261009_source_frozen_test_v1/result/scored_TEST.jsonl.gz",
+      "frames": 1440
+    },
+    "PILOT": {
+      "rows": "work_dirs/port_pilot_size_support_v1/20261015_train203_server_v1/result/scored_PILOT_TRAIN.jsonl.gz",
+      "frames": 203
+    }
+  },
+  "policy": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json",
+  "development_pins": {
+    "crane_project/utils/port_simple_pilot_increment_v1.py": "d24283ec78d9b7552adfc1b207de68ddc52690433014a89749df5c22618a7f1c",
+    "crane_project/tools/run_port_simple_pilot_increment_v1.py": "a4c9a95f82584f116436076888d264145cbe467ab939401ac77a21544b6dd23b",
+    "crane_project/tools/review_port_simple_pilot_increment_v1.py": "e7167ec46ccc33316baab368450c83290514d65ad5804223b0fe0ae8beb5eb63",
+    "tests/test_port_simple_pilot_increment_v1.py": "8624e6dbc0f836b925e48497238208ad03c6a5f4f7957ebaee6bd6f24b0db342",
+    "tools/run_port_simple_pilot_increment_v1.sh": "e0d1a7a2c07bdd6ec41411d0cdf73270b09c40b526f6e786882012ef46b7a234",
+    "crane_project/utils/port_simple_component_reliability_v1.py": "05cb0fb1f59fd353725134471bc98bc0026d5beb789526618add08eb46837309",
+    "crane_project/utils/port_reliability_paired_ranking_audit_v1.py": "7fea829e8346ab232d452cda8502bdf4dde8fe058edaa5e670e57df42198d830",
+    "crane_project/tools/port_simple_reliability_v1_protocol.json": "d9e91ea72ea1d0543206d73fedab2a957aa3d18dbb880e118b62bf18f2409b61",
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f",
+    "work_dirs/port_pilot_size_support_v1/20261015_train203_server_v1/result/report.json": "42ea6f5b4ab3248ed29b2682dab10bc2ee62e61f69fe193fd0cdcf767f54072e",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/scored_TRAIN.jsonl.gz": "f702b6bca6e1bda7168000d67fb157515e9caa5a26b1fa680aad2e86a26eb236",
+    "work_dirs/port_pilot_size_support_v1/20261015_train203_server_v1/result/scored_PILOT_TRAIN.jsonl.gz": "1549d98914203388de51580729873c08fbd53a0387d0bc9cb306627ebc9539f7",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/scored_VAL.jsonl.gz": "040f1a59448573968a2fb71513ab05cb4ad581aecc2eb321110607b06356ee65"
+  },
+  "test_pins": {
+    "work_dirs/port_reliability_feature_source_test_v1/20261009_source_frozen_test_v1/result/scored_TEST.jsonl.gz": "d0ebe1d2f16531fbd7a94fbbeb3657f8eafee080176dc47f0c242bdb19b8770e"
+  },
+  "fitting": {
+    "l2": 0.1,
+    "max_iterations": 100,
+    "gradient_tolerance": 1e-08
+  },
+  "formal_cutoff": 0.41665113433410333,
+  "primary_VAL_CR": 653,
+  "minimum_Real_CR": 189,
+  "gate": "Augmented VAL FA strictly below formal190 at pooled CR>=653 and Real CR>=189. Continuity reported, no posthoc threshold selection. No per-video policy.",
+  "test_rule": "Freeze all models, unified VAL cutoffs and decision before any TEST file read/hash. TEST only after VAL gate passes; exposed TEST reporting, no tuning.",
+  "scope": {
+    "fit": "size only; same original three-feature float64 balanced logistic Newton",
+    "normalization": "each arm fits complete own TRAIN; same rule, no VAL normalization",
+    "class_balance": "original inverse class count rule; changed class counts explicitly recorded",
+    "missing": "31 pilot MISSING retained in records, excluded from binary training",
+    "front_end": "frozen M B24+sigma1.5/epoch03",
+    "pilot_role": "historical TRAIN203 only; no auxiliary48",
+    "policy": "formal immutable; experimental models and freeze only",
+    "detector_training": false,
+    "feature_extraction": false,
+    "capacity_search": false
+  }
+}
