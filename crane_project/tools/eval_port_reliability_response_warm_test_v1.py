@@ -55,7 +55,7 @@ def run(out):
         source_freeze_sha256=warm.sha(SOURCE/'freeze.json'), frozen_cutoffs=cuts,
         scorer_fits=0, TEST_repeatedly_exposed=True, TEST_used_for_selection=False,
         old_VAL_gate_overridden_for_reporting_by_user=True,
-        source_pins={str(p.relative_to(ROOT)):warm.sha(p) for p in [Path(__file__), SOURCE/'models.json', SOURCE/'train_log.jsonl']}))
+        source_pins={str(p.relative_to(ROOT)):warm.sha(p) for p in [Path(__file__).resolve(), SOURCE/'models.json', SOURCE/'train_log.jsonl']}))
     warm.write(out/'models.json', models)
     # Save evaluation contract before opening any TEST row/cache. Never select seed/model/cut from TEST.
     warm.write(out/'freeze.json', dict(cutoffs=cuts, models_sha256=warm.sha(out/'models.json'), seed=SEED, TEST_read=False))
