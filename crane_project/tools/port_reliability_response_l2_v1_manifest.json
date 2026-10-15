@@ -1,0 +1,58 @@
+{
+  "settings": {
+    "steps": 5000,
+    "learning_rate": 0.001,
+    "l2": 0.0,
+    "tail_fraction": 0.02,
+    "temperature_log_bounds": [
+      -18.0,
+      10.0
+    ],
+    "temperature_bisections": 64,
+    "primary_CR": 653,
+    "minimum_Real_CR": 189,
+    "minimum_FA_gain": 3,
+    "hidden": 8,
+    "optimizer": "Adam",
+    "betas": [
+      0.9,
+      0.999
+    ],
+    "eps": 1e-08,
+    "dtype": "float64",
+    "final_step_only": true,
+    "training_device": "cuda:0"
+  },
+  "seed": 1701,
+  "arms": [
+    "bce",
+    "soft"
+  ],
+  "L2_controls": 0.1,
+  "L2_new": 0.0,
+  "source_pins": {
+    "crane_project/utils/port_reliability_response_l2_v1.py": "3829491e6d2c155279e636aebf7030106d132ad64ecb00d7aae1b665847468f0",
+    "crane_project/tools/run_port_reliability_response_l2_v1.py": "eba1b2b877b8fdfead136b7c95ac5ca95568735cb2196bbe20422652385b21a4",
+    "tests/test_port_reliability_response_l2_v1.py": "e85b6990fe8fbef02431e5672365bb086e80ac65ab52e3e93e98ae3d58e3b57d",
+    "tools/run_port_reliability_response_l2_v1.sh": "9e736860b90ea0715a1655faa310f6139011fc261e48d94d9e6ed0092029255c",
+    "crane_project/tools/eval_port_reliability_response_warm_test_v1.py": "bc68c0bfa4e76786cb949255b0a8085bc705ef5288e5d5e3d2776ab95d985999"
+  },
+  "saved_artifacts": {
+    "TRAIN": {
+      "scored_TRAIN.jsonl.gz": "2b2d269c3c3a2a7badb26ffe78092ca72f4ebc01660ea95ca3933c9888964b71",
+      "train_responses.npz": "f98bb46eefea9e83995a07187a219cb17431de938bf9d056582aea6bfd053b9a"
+    },
+    "VAL": {
+      "scored_VAL.jsonl.gz": "dc16aa27fc72582d346ba83bff2d0123557d0dd10af8dae9b6ea234594ee507e",
+      "val_responses.npz": "36c8f25030b08d81c7880e2f266c2cbb3d316882863e8d57f33129fbfd0fc475"
+    },
+    "TEST": {
+      "scored_TEST.jsonl.gz": "15799cd6f364817562131ae7ca86ad75445c8de0f604eff0c47b4a6b0d8616ad",
+      "test_responses.npz": "50a9996db70bb11447a0c88029bed5435a6f31f7543db219fdd1bb922f9f701b"
+    }
+  },
+  "purpose": "One bounded constraint removal comparison; not a new algorithm or hyperparameter sweep.",
+  "selection": "Only final5000 models; VAL CR>=653 Real>=189 unified threshold; at least3FA gain vs formal and gain vs paired L2 and same-count formal; no TEST selection.",
+  "history": "TRAIN snapshots every250 including0/5000, weights and logits; not VAL checkpoint selection.",
+  "TEST": "Reuse saved verified response NPZ after all fits/cutoffs freeze; report all fixed1701 variants regardless VAL; exposed diagnostic."
+}
