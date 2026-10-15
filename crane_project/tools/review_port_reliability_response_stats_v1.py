@@ -60,7 +60,7 @@ def review(out, receipt):
     models = json.loads((out/'models.json').read_text()); cuts = report['cutoffs']
     if sha(out/'models.json') != freeze['models_sha256'] or cuts != freeze['cutoffs']:
         raise ValueError('Freeze mismatch')
-    checks = []; statistic_error = 0.; model_error = 0.; train_gradients = {}
+    checks = []; statistic_error = 0.; descriptor_error = 0.; model_error = 0.; train_gradients = {}
     for role, results in report['results'].items():
         with gzip.open(out/('scored_'+role+'.jsonl.gz'), 'rt') as f:
             rows = [json.loads(s) for s in f]
@@ -78,12 +78,18 @@ def review(out, receipt):
                     raise ValueError('Candidate size/other flags mismatch')
         cache = np.load(out/(role.lower()+'_responses.npz'))
         ids, raw = list(cache['images']), cache['features']
+        # NpzFile decompresses on each __getitem__; load large arrays once.
+        probabilities, priors = cache['probability'], cache['prior']
+        cache.close()
         outputs = {r['image']: r for r in rows if r['pred'] is not None}
         if set(ids) != set(outputs) or len(ids) != len(outputs):
             raise ValueError('Response completeness mismatch')
         for i, name in enumerate(ids):
-            np.testing.assert_array_equal(raw[i, :3], simple.descriptor(outputs[name]['pred'], outputs[name]['image_size']))
-            p, q = cache['probability'][i], cache['prior'][i]
+            descriptor = simple.descriptor(outputs[name]['pred'], outputs[name]['image_size'])
+            descriptor_error = max(descriptor_error, float(np.max(np.abs(raw[i, :3]-descriptor))))
+            # libm log/log1p may differ in the last FP64 bit across macOS/Linux.
+            np.testing.assert_allclose(raw[i, :3], descriptor, atol=1e-12, rtol=0)
+            p, q = probabilities[i], priors[i]
             expected = np.array([a-b for pm, qm in zip(p, q)
                 for a, b in zip(scalar_statistics(pm), scalar_statistics(qm))])
             statistic_error = max(statistic_error, float(np.max(np.abs(expected-raw[i, 3:]))))
@@ -110,7 +116,8 @@ def review(out, receipt):
     proof = dict(status='INDEPENDENT_REVIEW_PASS', groups=len(checks),
         AUROC_pair_comparisons=sum(c['pair_comparisons'] for c in checks),
         curve_points=sum(c['curve_points'] for c in checks),
-        scalar_statistics_max_abs=statistic_error, model_risk_max_abs=model_error,
+        scalar_statistics_max_abs=statistic_error, descriptor_max_abs=descriptor_error,
+        model_risk_max_abs=model_error, review_source_sha256=sha(Path(__file__)),
         train_objective_gradients=train_gradients, report_sha256=sha(out/'report.json'))
     write(out/receipt, proof); print(json.dumps(proof, ensure_ascii=False), flush=True)
 
