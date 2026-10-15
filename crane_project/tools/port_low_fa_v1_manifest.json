@@ -1,0 +1,33 @@
+{
+  "roles": {
+    "TRAIN": {
+      "source": "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/scored_TRAIN.jsonl.gz",
+      "temporal": "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1_r2/result/scored_TRAIN.jsonl.gz"
+    },
+    "VAL": {
+      "source": "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/scored_VAL.jsonl.gz",
+      "temporal": "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1_r2/result/scored_VAL.jsonl.gz"
+    },
+    "TEST": {
+      "source": "work_dirs/port_reliability_feature_source_test_v1/20261009_source_frozen_test_v1/result/scored_TEST.jsonl.gz",
+      "temporal": "work_dirs/port_reliability_temporal_stack_test_v1/20261014_frozen_stack_test_v1/result/scored_TEST.jsonl.gz"
+    }
+  },
+  "pins": {
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/scored_TRAIN.jsonl.gz": "f702b6bca6e1bda7168000d67fb157515e9caa5a26b1fa680aad2e86a26eb236",
+    "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1_r2/result/scored_TRAIN.jsonl.gz": "fa14bfb7f968c4d061c2df49cca14e379ab4b03e2990ac702b28c0b71b5a5788",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/scored_VAL.jsonl.gz": "040f1a59448573968a2fb71513ab05cb4ad581aecc2eb321110607b06356ee65",
+    "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1_r2/result/scored_VAL.jsonl.gz": "ca1fb752a294a2dfcd4bb3aef8e6bd0e501249e7abe64e7bb39be48c9e6ece5f",
+    "work_dirs/port_reliability_feature_source_test_v1/20261009_source_frozen_test_v1/result/scored_TEST.jsonl.gz": "d0ebe1d2f16531fbd7a94fbbeb3657f8eafee080176dc47f0c242bdb19b8770e",
+    "work_dirs/port_reliability_temporal_stack_test_v1/20261014_frozen_stack_test_v1/result/scored_TEST.jsonl.gz": "03ddf68d16d2178ebbd9c2e288b3f9266a428f5552642eaa1aa35461a0710660",
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/report.json": "9231b9344c3aa7665479f2ae2e0fcbd4df3a3678815c139fbae6d42e966c4203",
+    "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1_r2/result/train_cutoff.json": "6e87ec62dad2987a647b161eb5f97001eb542a808e046029198a73aff6d8c591",
+    "work_dirs/port_reliability_temporal_stack_test_v1/20261014_frozen_stack_test_v1/result/frozen_bundle.json": "6291bcb0e3a2d893c2ed7783e8677c89968e2585b6b501769c54f2470a7bf43f",
+    "crane_project/utils/port_reliability_paired_ranking_audit_v1.py": "7fea829e8346ab232d452cda8502bdf4dde8fe058edaa5e670e57df42198d830"
+  },
+  "simple_cutoff": 0.41665113433410333,
+  "midpoint_cutoff": 0.9797210788609376,
+  "temporal_cutoff": 0.0785511443740936,
+  "protocol": "Whole-tie ascending saved risk. CR targets use first cutoff meeting retention; ED targets use largest acceptance meeting error detection. Exact 243/342 target. Temporal fixed gate retains original unavailable-history fallback and varies only simple cutoff. No TEST-based candidate selection or policy export."
+}
