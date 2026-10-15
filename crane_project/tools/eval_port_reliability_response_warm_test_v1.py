@@ -24,13 +24,15 @@ def selected(models, cuts):
     return {k: models[k] for k in names}, {k: cuts[k] for k in METHODS}
 
 
-def source_check():
+def source_check(offline=False):
     if warm.sha(SOURCE/'report.json') != REPORT_SHA:
         raise ValueError('Frozen parent report changed')
     complete = json.loads((SOURCE/'completion.json').read_text())
     warm.pins({str(SOURCE/k): v for k,v in complete['artifacts'].items()})
     manifest = json.loads((SOURCE/'protocol.json').read_text())
-    warm.pins(manifest['source_pins']); warm.pins(manifest['development_pins']); warm.pins(manifest['val_pins'])
+    warm.pins(manifest['source_pins'])
+    runtime_pins={**manifest['development_pins'], **manifest['val_pins']}
+    warm.pins({p:v for p,v in runtime_pins.items() if not offline or (ROOT/p).exists()})
     freeze = json.loads((SOURCE/'freeze.json').read_text())
     if warm.sha(SOURCE/'models.json') != freeze['models_sha256']:
         raise ValueError('Frozen weights changed')
@@ -97,8 +99,13 @@ def run(out):
     warm.write(out/'completion.json',dict(artifacts={p.name:warm.sha(p) for p in out.iterdir() if p.is_file()}))
 
 
-def review(out, receipt):
-    manifest,freeze=source_check()
+def stable_identity(row, role):
+    # Historical TEST lacks this optional metadata; preserve its TEST identity.
+    return identity(dict(row,reliability_role=row.get('reliability_role',role.lower())))
+
+
+def review(out, receipt, offline=False):
+    manifest,freeze=source_check(offline)
     complete=json.loads((out/'completion.json').read_text())
     warm.pins({str(out/k):v for k,v in complete['artifacts'].items()})
     report=json.loads((out/'report.json').read_text())
@@ -112,7 +119,7 @@ def review(out, receipt):
         original={r['image']:r for r in warm.load_rows(role,manifest)}
         if len(rows)!=len(original) or {r['image'] for r in rows}!=set(original): raise ValueError('Membership differs')
         for r in rows:
-            if identity(r)!=identity(original[r['image']]): raise ValueError('Output/GT identity changed')
+            if stable_identity(r,role)!=stable_identity(original[r['image']],role): raise ValueError('Output/GT identity changed')
             for name,d in r['response_decisions'].items():
                 if d!=response.size_decision(r['original_simple_decision'],r['audit_risks'][name],cuts[name]): raise ValueError('Component flag changed')
         with np.load(out/(role.lower()+'_responses.npz')) as data:
@@ -133,7 +140,13 @@ def review(out, receipt):
             parent=json.loads((SOURCE/'report.json').read_text())['results'][role]
             if results!={k:parent[k] for k in METHODS}: raise ValueError('TRAIN/VAL changed')
     if error>1e-11 or max(staterror,descerror)>1e-12: raise ValueError('Independent scoring/statistics failed')
+    omitted=[p for p in {**manifest['development_pins'],**manifest['val_pins']} if not (ROOT/p).exists()] if offline else []
+    if omitted:
+        server=json.loads((out/'independent_review_server.json').read_text())
+        if server['status']!='INDEPENDENT_REVIEW_PASS' or server['report_sha256']!=warm.sha(out/'report.json'):
+            raise ValueError('Missing full server review')
     warm.write(out/receipt,dict(status='INDEPENDENT_REVIEW_PASS',groups=len(checks),
+        omitted_local_runtime_inputs_previously_verified_on_server=omitted,
         pairs=sum(c['pair_comparisons'] for c in checks),curve_points=sum(c['curve_points'] for c in checks),
         model_risk_max_abs=error,statistics_max_abs=staterror,descriptor_max_abs=descerror,report_sha256=warm.sha(out/'report.json')))
     print('INDEPENDENT_REVIEW_PASS',len(checks),flush=True)
@@ -141,7 +154,7 @@ def review(out, receipt):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--out',type=Path,required=True)
-    parser.add_argument('--review',action='store_true');parser.add_argument('--receipt',default='independent_review.json')
+    parser.add_argument('--offline-review',action='store_true');parser.add_argument('--review',action='store_true');parser.add_argument('--receipt',default='independent_review.json')
     args=parser.parse_args()
-    if args.review: review(args.out.resolve(),args.receipt)
+    if args.review: review(args.out.resolve(),args.receipt,args.offline_review)
     else: run(args.out.resolve())
