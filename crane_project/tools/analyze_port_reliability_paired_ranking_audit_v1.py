@@ -34,6 +34,14 @@ def write(path, value):
         f.write('\n')
 
 
+def source_pins(main_file):
+    # Python3.8 preserves relative __file__ when invoked as `python path.py`.
+    paths = (Path(main_file).resolve(),ROOT/'crane_project/utils'/(VERSION+'.py'),
+             MANIFEST,ROOT/'tests'/('test_'+VERSION+'.py'),
+             ROOT/'tools'/('run_'+VERSION+'.sh'))
+    return {str(p.relative_to(ROOT)):sha(p) for p in paths}
+
+
 def load_rows(path):
     # This entry point intentionally has no TEST role or arbitrary input glob.
     with gzip.open(path, 'rt') as f:
@@ -342,9 +350,7 @@ def run(out):
     report['input_pins']=manifest['pins']
     report['manifest_sha256']=sha(MANIFEST)
     report['git_commit']=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
-    report['source_pins']={str(p.relative_to(ROOT)):sha(p) for p in
-        (Path(__file__),ROOT/'crane_project/utils'/ (VERSION+'.py'),MANIFEST,
-         ROOT/'tests'/('test_'+VERSION+'.py'),ROOT/'tools'/('run_'+VERSION+'.sh'))}
+    report['source_pins']=source_pins(__file__)
     write(out/'report.json',report)
     export_csv(out,report)
     with gzip.open(out/'curves.jsonl.gz','xt') as f:

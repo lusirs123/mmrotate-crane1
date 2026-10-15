@@ -19,6 +19,12 @@ def row(i, wrong=False, risk=.5, missing=False):
 
 
 class SavedRankingTests(unittest.TestCase):
+    def test_python38_relative_script_source_pin(self):
+        from crane_project.tools import analyze_port_reliability_paired_ranking_audit_v1 as cli
+        pins=cli.source_pins('crane_project/tools/analyze_port_reliability_paired_ranking_audit_v1.py')
+        self.assertEqual(len(pins),5)
+        self.assertIn('crane_project/tools/analyze_port_reliability_paired_ranking_audit_v1.py',pins)
+
     def test_tie_auc_and_count_bounds(self):
         rows=[row(0,False,.1),row(1,True,.2),row(2,False,.2),row(3,True,.8)]
         rank=m.Ranking(rows,'a')
