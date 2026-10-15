@@ -1,0 +1,278 @@
+{
+  "version": "port_reliability_paired_ranking_audit_v1",
+  "experiments": [
+    {
+      "id": "redc",
+      "directory": "work_dirs/port_reliability_redc_size_v1/20261008_redc_v1/result",
+      "arms": [
+        "linear",
+        "redc"
+      ],
+      "risk_field": "experiment_risks",
+      "control": "linear",
+      "candidate": "redc",
+      "pure_capacity_pair": false,
+      "attribution": "相同可用291维描述量、材料、二值监督和预算；linear直接线性读出，redc为正温度受限读出，模型函数形式同时变化，不能隔离纯容量。",
+      "features": "stem288+M三描述量；linear291->1，redc290->16->8->1加raw-score温度读出",
+      "training": "balanced BCE; AdamW .001, wd .0001(weights), clip5; seed1701, 100epoch/1000updates/finalepoch100",
+      "parameter_counts": {
+        "linear": 292,
+        "redc": 4802
+      },
+      "historical_status": "VAL_FAILED_STOP",
+      "frontend": "B24+midpoint sigma1.5/epoch03",
+      "identical_input_to_simple": false,
+      "material": "complete TRAIN2558 and VAL887",
+      "target": "canonical both edges <=10%"
+    },
+    {
+      "id": "readout",
+      "directory": "work_dirs/port_reliability_readout_compare_v1/20261008_readout_v1/result",
+      "arms": [
+        "temperature",
+        "residual"
+      ],
+      "risk_field": "experiment_risks",
+      "control": "temperature",
+      "candidate": "residual",
+      "pure_capacity_pair": false,
+      "attribution": "相同输入、材料、容量和预算；改变温度/残差输出公式，属于读出对照。",
+      "features": "same stem288+M descriptors; two 4802-parameter heads, temperature vs signed residual",
+      "training": "same balanced BCE/optimizer/seed/batches/1000updates/finalepoch100",
+      "parameter_counts": {
+        "temperature": 4802,
+        "residual": 4802
+      },
+      "historical_status": "VAL_FAILED_STOP",
+      "frontend": "B24+midpoint sigma1.5/epoch03",
+      "identical_input_to_simple": false,
+      "material": "complete TRAIN2558 and VAL887",
+      "target": "canonical both edges <=10%"
+    },
+    {
+      "id": "native",
+      "directory": "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result",
+      "arms": [
+        "midpoint",
+        "native"
+      ],
+      "risk_field": "experiment_risks",
+      "control": "midpoint",
+      "candidate": "native",
+      "pure_capacity_pair": false,
+      "attribution": "相同材料、监督、容量和预算；PCA前的特征来源不同，属于来源对照。",
+      "features": "midpoint stem pool vs native winning regression patch; separate TRAIN PCA256; same 4290-param residual MLP",
+      "training": "same balanced BCE/AdamW/seed/batches/1000updates/finalepoch100",
+      "parameter_counts": {
+        "midpoint": 4290,
+        "native": 4290
+      },
+      "historical_status": "VAL_FAILED_STOP",
+      "frontend": "B24+midpoint sigma1.5/epoch03",
+      "identical_input_to_simple": false,
+      "material": "complete TRAIN2558 and VAL887",
+      "target": "canonical both edges <=10%"
+    },
+    {
+      "id": "rank",
+      "directory": "work_dirs/port_reliability_within_video_rank_v1/20261009_within_video_rank_v1/result",
+      "arms": [
+        "bce_control",
+        "within_video_rank"
+      ],
+      "risk_field": "risks",
+      "control": "bce_control",
+      "candidate": "within_video_rank",
+      "pure_capacity_pair": false,
+      "attribution": "相同输入、材料、容量、初始化和更新数；增加视频内排序损失，反向成本不同，属于目标对照。",
+      "features": "same frozen native PCA256+M descriptors, simple anchor and bounded residual;4290 params",
+      "training": "balanced BCE vs BCE+.25 within-video rank;1000updates/finalepoch100; same seed/batches",
+      "parameter_counts": {
+        "bce_control": 4290,
+        "within_video_rank": 4290
+      },
+      "historical_status": "VAL_FAILED_STOP",
+      "frontend": "B24+midpoint sigma1.5/epoch03",
+      "identical_input_to_simple": false,
+      "material": "complete TRAIN2558 and VAL887",
+      "target": "canonical both edges <=10%"
+    },
+    {
+      "id": "spatial",
+      "directory": "work_dirs/port_reliability_spatial_axis_v1/20261009_spatial_axis_v1_fix2/result",
+      "arms": [
+        "coarse_bce",
+        "spatial_bce",
+        "spatial_axis"
+      ],
+      "risk_field": "risks",
+      "control": "spatial_bce",
+      "candidate": "spatial_axis",
+      "pure_capacity_pair": false,
+      "attribution": "B/C输入和容量相同但增加连续分轴辅助监督；A/B容量相同但输入空间细节不同，均非纯容量对照。",
+      "features": "P3 256x9x9+support+2 geometry, simple anchor; conv13115 total params; BCE arms update13081 vs axis13115",
+      "training": "balanced BCE vs BCE+.25 SmoothL1;FP32 spatial/FP64 risk;1000updates/finalepoch100",
+      "parameter_counts": {
+        "coarse_bce": 13115,
+        "spatial_axis": 13115,
+        "spatial_bce": 13115
+      },
+      "historical_status": "VAL_FAILED_STOP",
+      "frontend": "B24+midpoint sigma1.5/epoch03",
+      "identical_input_to_simple": false,
+      "material": "complete TRAIN2558 and VAL887",
+      "target": "canonical both edges <=10%"
+    }
+  ],
+  "pins": {
+    "work_dirs/port_reliability_redc_size_v1/20261008_redc_v1/result/report.json": "e18466a22f053501db264a8201421c0ffdcdcb519ac5978bf287b91e3ef981f8",
+    "work_dirs/port_reliability_redc_size_v1/20261008_redc_v1/result/models.json": "1e648ace3f2f350c284dc27a61f8a356f366f95a088b8569900492a71c1c4417",
+    "work_dirs/port_reliability_redc_size_v1/20261008_redc_v1/result/completion.json": "faebcd5ef0b64bbe86ebc86027eb2503aea7fa25969da06b99c895131f122880",
+    "work_dirs/port_reliability_redc_size_v1/20261008_redc_v1/result/cutoffs.json": "81b43f22adf7dad9ab35a27d940ee7f717736507102228b502a6b848e06b49c9",
+    "work_dirs/port_reliability_redc_size_v1/20261008_redc_v1/result/scored_TRAIN.jsonl.gz": "dc1c4ebeafee9ade68594e87ca4b213bf8a5a2345196673e93f297a77ea362f9",
+    "work_dirs/port_reliability_redc_size_v1/20261008_redc_v1/result/scored_VAL.jsonl.gz": "4ca676dfdcc06bddff8dfcae808f947b2f9c4492de81e029e6ddaec720fc6dad",
+    "crane_project/utils/port_reliability_redc_size_v1.py": "e6d8e0deb0a535947db6858ac13400e98b2ad0954a980c620fb529164bd7437c",
+    "crane_project/utils/port_reliability_redc_size_v1_torch.py": "4d1ec52b7035054ed5c87d7200037cae83a647c7af943b9018d457aca90b4909",
+    "crane_project/tools/run_port_reliability_redc_size_v1.py": "786fb36c867d8c06d9cd6ec86d30e3f3f54edd1a96477c7a7ef934734c0ec357",
+    "crane_project/tools/port_reliability_redc_size_v1_protocol.json": "106bdc6132b6c98020dd3d6b9f0adb9f9d917168795e8fb5df53719e2bba6387",
+    "tests/test_port_reliability_redc_size_v1.py": "bbe3eb0cab7934de70fcfabfa50d872c81a712d80d75dde633ae9b8f475668ac",
+    "tools/run_port_reliability_redc_size_v1.sh": "895a42e5a87981afd931ae17f214820cfc478acca8dbf2192ab3fda954c63bea",
+    "crane_project/utils/port_reliability_feature_ablation_v1.py": "673ec3169a1704b6ff27256cb4817326cb95a6a5e3e42410c70e21d0d6c2e4ec",
+    "crane_project/utils/port_reliability_separability_v1.py": "15507b41ac132248355cc62b9cd08f78bfb6e2b0970231f01cd0c08ddb2d9cdd",
+    "crane_project/utils/port_reliability_state_continuity_v1.py": "443efc73e7e6069a960f81962d4dea032bedadd0901943284e6647b29f138c9c",
+    "crane_project/utils/port_reliability_tradeoff_v1.py": "6dfc5044bca05ea68c7f99e1448e813feb98d26f09748ec93774aaf10b41340e",
+    "work_dirs/port_reliability_readout_compare_v1/20261008_readout_v1/result/report.json": "382f5c94ea636c1ca1a4ea6c0f63a57122f950f6be03de10f3e123e6a510a673",
+    "work_dirs/port_reliability_readout_compare_v1/20261008_readout_v1/result/models.json": "b49cc7c69ba8285cfc6f137c56b992bdc157410c070bbdbe0e7eb736922f41aa",
+    "work_dirs/port_reliability_readout_compare_v1/20261008_readout_v1/result/completion.json": "fcdd32e756a7d9292b28c5cc4f2c3e0756f69c71fb75ab42541a2605026cac58",
+    "work_dirs/port_reliability_readout_compare_v1/20261008_readout_v1/result/cutoffs.json": "208131d7afc1565e752a9e54c043accebf732d98338b2af9cb90f2401cdd8ef0",
+    "work_dirs/port_reliability_readout_compare_v1/20261008_readout_v1/result/scored_TRAIN.jsonl.gz": "796092e6f4d5a4d6d7cca2ebc81f4a2e6c4409e63b190b18651075b39a13a5b5",
+    "work_dirs/port_reliability_readout_compare_v1/20261008_readout_v1/result/scored_VAL.jsonl.gz": "ca10045864d121c3e567502704e1058a1709951be8b56fa15b53de36f613ae84",
+    "crane_project/tools/port_reliability_redc_size_v1_sources.json": "c20fd505aa3a1d78f564b71c4d98bfca22cf4cb663da3644709d7cfe2ce58da2",
+    "crane_project/utils/port_reliability_readout_compare_v1.py": "d523233aa9b846e28875678648638c09a0117e7754d723bb5d4a0c1730456289",
+    "crane_project/utils/port_reliability_readout_compare_v1_torch.py": "b1816b5d610eb6ae523804ae1e743aa8086487f7145588320055fa4e0a430b68",
+    "crane_project/tools/run_port_reliability_readout_compare_v1.py": "d1a1fe8c55a8a8ebf59c3ea190c2805ad5163afc58d447b4ce70b33a1a3b0783",
+    "crane_project/tools/review_port_reliability_readout_compare_v1.py": "fbc1083f4d3ed7f4a715931d9e6f0212518ef0196037bc4d1eea47604553d793",
+    "crane_project/tools/review_port_reliability_redc_size_v1.py": "3daf19d1f894d0d808af8bcb869ce08129935a878aeff6e56fa71b513867fa6e",
+    "crane_project/tools/port_reliability_readout_compare_v1_protocol.json": "128d01df5697893b13def28e910795574f83d147f068d9a067e92e8c27ddcc39",
+    "tests/test_port_reliability_readout_compare_v1.py": "c3820dc2b3956c6af620b2524437765556da14064ec233290f60397b42ba30be",
+    "tools/run_port_reliability_readout_compare_v1.sh": "7df5919c5ba781f2f36183b4fe7fb81366f91dc2c1f3fa04fd270796d1e6c9a1",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/report.json": "9231b9344c3aa7665479f2ae2e0fcbd4df3a3678815c139fbae6d42e966c4203",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/models.json": "338b7d514135a1e66dc371829ac5b2c8c060fd7ae0347c35174266d2de5b2851",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/completion.json": "d0e8117b1845b2a626a73758be81fffe1fec8f589de0856ab9ad4e7864648f5c",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/cutoffs.json": "8a500768076d50b29282fcbf5a6012708365d46273307117a74048daf2e4acab",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/scored_TRAIN.jsonl.gz": "f702b6bca6e1bda7168000d67fb157515e9caa5a26b1fa680aad2e86a26eb236",
+    "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/result/scored_VAL.jsonl.gz": "040f1a59448573968a2fb71513ab05cb4ad581aecc2eb321110607b06356ee65",
+    "crane_project/tools/port_reliability_readout_compare_v1_sources.json": "3282ebe4062acf7e9bc0affbc0490f408d519ca2c557600fc97f591ecbdafe7d",
+    "crane_project/utils/port_reliability_feature_source_v1.py": "3fe48fd240b2d5b60afffdf21f67fa3de6c20cccbe4df509c448304385117866",
+    "crane_project/utils/port_reliability_feature_source_v1_torch.py": "63d2e6bfc993528f838c080df50c18c92269596208091b61ca5fe55950b5adf0",
+    "crane_project/tools/run_port_reliability_feature_source_v1.py": "d0d2f3f43e910aefea3be8789cce453c2d713e0535dfee50a1f03db825b771e3",
+    "crane_project/tools/review_port_reliability_feature_source_v1.py": "1d02a104ff267f4a1a9bd5ce00fd28308e947e04006b3eebdcf29859a613944b",
+    "crane_project/tools/port_reliability_feature_source_v1_protocol.json": "d0b45038c2c7bb545a7c6a6fba4d4b00e0b5e5aaf349265d27c76091a86867ad",
+    "tests/test_port_reliability_feature_source_v1.py": "0e23f321dab0d38c7edbbe60804831fdfeccb3fbb0e0c9173887f76c0004d4b1",
+    "tools/run_port_reliability_feature_source_v1.sh": "b0feb5b426a11daa2e351ecd7da2f57f5cd6e1bb3b5c7895d87a25e3772f719a",
+    "work_dirs/port_reliability_within_video_rank_v1/20261009_within_video_rank_v1/result/report.json": "08118d6d748fa2f0baec1e07305bd519a966dc795249815fca2158036b4aa659",
+    "work_dirs/port_reliability_within_video_rank_v1/20261009_within_video_rank_v1/result/models.json": "8188a17f09cf4b131e6c4b1cf895d82c26c046d4d9ce10263f21889b6fba6710",
+    "work_dirs/port_reliability_within_video_rank_v1/20261009_within_video_rank_v1/result/completion.json": "d3f34d0c6b32dc183311a531c3d5cd1765badd5a6d1e5e42efdd71b753fee841",
+    "work_dirs/port_reliability_within_video_rank_v1/20261009_within_video_rank_v1/result/cutoffs.json": "563fabcc3a2ef2ced222af07ddd20fbce7c454f9882cd2be25c82425dda53c7e",
+    "work_dirs/port_reliability_within_video_rank_v1/20261009_within_video_rank_v1/result/scored_TRAIN.jsonl.gz": "c6a238b847e48067668dea5b63453e20d63f418344c4a06d8a11af0b472ee613",
+    "work_dirs/port_reliability_within_video_rank_v1/20261009_within_video_rank_v1/result/scored_VAL.jsonl.gz": "23209f39df17522f691243fd539abae08fa9e0b250ade4a1c350000d98043a93",
+    "crane_project/tools/port_reliability_within_video_rank_v1_protocol.json": "04395590cc38903216eb368374784bc81cba64b765d583cec9e83da5adf96d0a",
+    "crane_project/tools/review_port_reliability_within_video_rank_v1.py": "88b62c3556f86b065c926e348668d1a66a5e244bdd874897b761e814e60b12f8",
+    "crane_project/tools/run_port_reliability_within_video_rank_v1.py": "e2a1c8854f74bdb7e433784c92ba24f68fec0f007b171c039c1835d84a131c86",
+    "crane_project/utils/port_reliability_complementarity_v1.py": "a296d1fa13b514c3f299cd72af75103f84eb06eb9a198bc2203ae5c46286175c",
+    "crane_project/utils/port_reliability_within_video_rank_v1.py": "711b338b40f27dd680debaa624d4e1cbf417def2f73f47903a0c12b9a6799c89",
+    "crane_project/utils/port_reliability_within_video_rank_v1_torch.py": "1b9ef9523eaa0388bb3029ab73bdffe28e5b4910072e909de2550d5faebf4b38",
+    "tests/test_port_reliability_within_video_rank_v1.py": "baf36f7a3a0195da5e2e6a8fcc44d98f343e4508f3d38072ceaf109929ff0c97",
+    "tests/test_port_reliability_within_video_rank_v1_torch.py": "7fb838f66a6474e72b116ff2087a8fc0051ed4a3fe8e77096a00a65d35e65a42",
+    "tools/run_port_reliability_within_video_rank_v1.sh": "e682d45623d1f22794a0a588616d4d53ea64bc11df8f76da175c048012ae21f4",
+    "work_dirs/port_reliability_spatial_axis_v1/20261009_spatial_axis_v1_fix2/result/report.json": "0132ecb84daa0f3d9a17a398eb3d3e1d663b4aab14745e27023635ab4a3f2b2c",
+    "work_dirs/port_reliability_spatial_axis_v1/20261009_spatial_axis_v1_fix2/result/models.json": "dc860f545383ab6506ac374846397f569891172e84a7b915c0ec29d8a8f5c4db",
+    "work_dirs/port_reliability_spatial_axis_v1/20261009_spatial_axis_v1_fix2/result/completion.json": "32169f03b81793ce740e0a1bf5b6b608e12ad5f0016c1c32ce58dcfaf8f304f6",
+    "work_dirs/port_reliability_spatial_axis_v1/20261009_spatial_axis_v1_fix2/result/cutoffs.json": "5785b7c1b8401a862ef4f575c6fb7fe9fcfe75a5eb4878d4f72b3bb510ef72a3",
+    "work_dirs/port_reliability_spatial_axis_v1/20261009_spatial_axis_v1_fix2/result/scored_TRAIN.jsonl.gz": "e8945777e43eb0961fc160204ccaaa7284a98f15b3b316cf412ba5b7d0061df6",
+    "work_dirs/port_reliability_spatial_axis_v1/20261009_spatial_axis_v1_fix2/result/scored_VAL.jsonl.gz": "23fd7664408fa176c0b08731582bf739c9cbf8336a861c80bbff5ef6239c2e7b",
+    "crane_project/tools/port_reliability_box_contrast_v1_protocol.json": "d24695a15681b1eec751c86ef1aa7909873cdc1e08fc8fe7a317937109fb8fe8",
+    "crane_project/tools/port_reliability_box_contrast_v1_sources.json": "8efb6fa456e2e3f2299c0f7d552d33fc2953525f8d4fa46d5abaff1abfb93a7f",
+    "crane_project/tools/port_reliability_feature_source_v1_sources.json": "b2ed9a92a574d8ecc0f1b8d20b589ee0eb4626c1a5b61f724546a29940f1adc8",
+    "crane_project/tools/port_reliability_spatial_axis_v1_protocol.json": "5c77ab795d2bcc72a3b2f0e13a9f4e047441f214fa441f7d1af05367fe05e015",
+    "crane_project/tools/review_port_reliability_box_contrast_v1.py": "7b4c2db0e670e743664e17ee8427938846de22a12f440bd14de3a60bc5337af2",
+    "crane_project/tools/review_port_reliability_spatial_axis_v1.py": "8c76d1b448e43d4ce5ebad876e74fdd4e7c0ca675603fa5b09ebf431be471393",
+    "crane_project/tools/run_port_reliability_box_contrast_v1.py": "f77b67913f976e8904b4698275087a3ba1425c76f29a59e9d27a71c38c6fe53d",
+    "crane_project/tools/run_port_reliability_spatial_axis_v1.py": "6bf1e3adb5e82e7b891af59562fca80f7f101b24b6b87b769fc3723892c04733",
+    "crane_project/utils/port_reliability_box_contrast_v1.py": "5a14d0fe4f37311e3907712497c88cad8fa37475d11b798853ef77a1bf04347a",
+    "crane_project/utils/port_reliability_box_contrast_v1_torch.py": "ef551352316522280f96c3f6be6d88cd6ad0006cc3c195f71a9c4df985b2f3d3",
+    "crane_project/utils/port_reliability_spatial_axis_v1.py": "553fdbbcdba3f46b5ae21663f35cf7f791d27b498fc7a86fa7bf5c847cbafb5a",
+    "crane_project/utils/port_reliability_spatial_axis_v1_torch.py": "cfa6def027b13e58b64ebbe05100208a4abee680ceb1ff6e44218660f0fd8c0a",
+    "tests/test_port_reliability_box_contrast_v1.py": "9525122fa0406bef59e7eec52f43b2104471c6cebf5725605fc025e52419788e",
+    "tests/test_port_reliability_spatial_axis_v1.py": "a9840c348f6b78343089080cc2698e62b80c8c1a16a9a872dabeb032df88e39b",
+    "tests/test_port_reliability_spatial_axis_v1_torch.py": "7eae20d902479a999ace80fcccbd7045a51c7fcfb9f72c3b4d583c0672c94613",
+    "tools/run_port_reliability_box_contrast_v1.sh": "11ffa68431dafc7e9efa7c66cc1335d74b2eebb7148aa79294f2e77fa41cdcea",
+    "tools/run_port_reliability_spatial_axis_v1.sh": "3289984aa1387e072cbf1cae1110cdfed38eb1c9dfc1fc6ea23fc135e9a28b14",
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f"
+  },
+  "policy": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json",
+  "historical_source_drift": [
+    {
+      "path": "crane_project/tools/review_port_reliability_feature_source_v1.py",
+      "historical_sha256": "e8f198b93138df82b95939478c8d5c285a0dd560eba29a865e8a91e8a6c2e56f",
+      "current_sha256": "1d02a104ff267f4a1a9bd5ce00fd28308e947e04006b3eebdcf29859a613944b",
+      "experiment": "native"
+    }
+  ],
+  "diagnostic_retention_grid": [
+    0.95,
+    0.975,
+    0.99,
+    1.0
+  ],
+  "high_region": [
+    0.95,
+    1.0
+  ],
+  "excluded": [
+    {
+      "id": "historical_B_geometry_ROI_structure_MLP",
+      "source": "work_dirs/port_reliability_branches_v1_server_review_20261003/contract.json",
+      "source_scope": "local archived metadata; not required on server",
+      "source_sha256": "dbbea6b914a185c02e07f2ba4738f843def29828dd7a1ba1e1be4205653fe9ab",
+      "frozen_b": {
+        "selected_epoch": "epoch_24",
+        "checkpoint_sha256": "8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23",
+        "config_sha256": "9da972b7010540e12b2501d1c400db13c159381f495f539d6315e7adb498e345",
+        "pkl_sha256": "cbfa341c53faf859a4eb96ab62a2470611cde0493896f50fcc7f805f53020725",
+        "selection_sha256": "ccaa55376d3d40175c86386fbb7c6e2e8db54a1e13b9b1611783c7255fb54352",
+        "annotation_sha256": "8bd2e2da86d52b555e2cac5e1098361bd01a4ca09f9df9cb0642e07accc1f6be"
+      },
+      "architecture": {
+        "geometry": {
+          "parameters": 771,
+          "trainable_parameters": 771,
+          "structure_input": false,
+          "structure_loss": false
+        },
+        "roi": {
+          "parameters": 52293,
+          "trainable_parameters": 52227,
+          "structure_input": false,
+          "structure_loss": false
+        },
+        "structure": {
+          "parameters": 52293,
+          "trainable_parameters": 52293,
+          "structure_input": true,
+          "structure_loss": true
+        }
+      },
+      "reason": "冻结B24原框，非当前M；不拼接成绩，不读取旧TEST。当前M也无相同三维输入/simple训练合同的纯容量MLP配对。"
+    }
+  ],
+  "strict_capacity_conclusion": "No eligible pure-capacity pair located; do not attribute feature/readout/objective changes to capacity.",
+  "scope": {
+    "fits": 0,
+    "detector_inferences": 0,
+    "TEST_opened": false,
+    "policy_updates": 0,
+    "feature_extractions": 0,
+    "missing_scores_action": "record unavailable, never rerun"
+  }
+}
