@@ -1,0 +1,62 @@
+{
+  "frontend_pins": {
+    "work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/epoch_24.pth": "8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23",
+    "work_dirs/crane_symeood_k1_port_day2night_midpoint_sigma_v1/sigma_1p5/head_epoch_03.pth": "16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7"
+  },
+  "input_pins": {
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f",
+    "work_dirs/port_reliability_fallback_decision_v1/20261013_frozen_fallback_v1/result/scored_TRAIN.jsonl.gz": "f948b33c6b755676f703f46dd7de64acfe7667a67da6afbfb95ed1b94c62c8da",
+    "work_dirs/port_reliability_temporal_stack_test_v1/20261014_frozen_stack_test_v1/result/scored_VAL.jsonl.gz": "7bcd34372fe4bb3095b513dd01f8d92c5d8ea200398627d9d6ee9ea3c0b7341b"
+  },
+  "limitations": [
+    "Descriptive only; correlated video frames do not establish significance or unique causes.",
+    "Same-CR and per-group points use evaluation GT offline; no new policy.",
+    "Old TEST cache is never opened; VAL has prior development exposure."
+  ],
+  "policy": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json",
+  "protocol": "port_reliability_severity_v1",
+  "rows": {
+    "TRAIN": "work_dirs/port_reliability_fallback_decision_v1/20261013_frozen_fallback_v1/result/scored_TRAIN.jsonl.gz",
+    "VAL": "work_dirs/port_reliability_temporal_stack_test_v1/20261014_frozen_stack_test_v1/result/scored_VAL.jsonl.gz"
+  },
+  "settings": {
+    "TEST_opened": false,
+    "correct_retention": 0.95,
+    "diagnostic_only": true,
+    "error": "max(abs(pred_axis-GT_axis)/GT_axis)",
+    "fits": 0,
+    "methods": [
+      "simple",
+      "score"
+    ],
+    "quantile_method": "linear",
+    "severity_upper_bounds": [
+      0.1,
+      0.15,
+      0.25
+    ],
+    "sparse_error_warning_below": 10,
+    "threshold_updates": 0
+  },
+  "sources": {
+    "crane_project/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "crane_project/tools/analyze_port_reliability_severity_v1.py": "8752a00d1bed30aba7606e421c73a5970021b0a296f5dfda9eed3b5e2cea85a6",
+    "crane_project/tools/review_port_reliability_conditional_evidence_v1.py": "46815698ecd98e99547095b27802c011653778e5a29a1d98d8353c3eb0965a86",
+    "crane_project/tools/review_port_reliability_video_transfer_v1.py": "98d60f7f97f56deec00a46dd29b53f5a4fdd678c372c2ec96f9401cc6a226056",
+    "crane_project/tools/run_port_reliability_conditional_evidence_v1.py": "5dfd5d40921302d25b6fd3046779dea72ffa1aba8c187351241cbd015d319469",
+    "crane_project/tools/run_port_reliability_remaining_error_support_v1.py": "c805748c6f2dd2f0b8a0efb4bac4ef8cc1200eb4503f10f9d49667264fbfdb55",
+    "crane_project/tools/run_port_reliability_video_transfer_v1.py": "57488bfd2569065f51cd61355a8be991437631c83154dc105c1ab65bd58e76f4",
+    "crane_project/utils/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "crane_project/utils/port_reliability_complementarity_v1.py": "a296d1fa13b514c3f299cd72af75103f84eb06eb9a198bc2203ae5c46286175c",
+    "crane_project/utils/port_reliability_conditional_evidence_v1.py": "58e42f447a284734c0a6b12ba65c1003f7c377bbdd79b46aef683c9d98f59b40",
+    "crane_project/utils/port_reliability_remaining_error_support_v1.py": "741517ad50ba10fbf8aef3477f1603703456c339e49f662440ef39cc6d65c21f",
+    "crane_project/utils/port_reliability_state_continuity_v1.py": "443efc73e7e6069a960f81962d4dea032bedadd0901943284e6647b29f138c9c",
+    "crane_project/utils/port_reliability_temporal_evidence_v1.py": "56d567e42a833dc57697c6d0745cf94806d24815a8a343b949ed120525c48a3e",
+    "crane_project/utils/port_reliability_temporal_fusion_v1.py": "6abf5843eb471dd7a206ffb0cc196b740eb97759bb7fb807f47a1afcd489fffd",
+    "crane_project/utils/port_reliability_temporal_trend_v1.py": "68f93f7477fdeebf264f37640b3a68fcc2a08358f3523222a1e98527b4445c54",
+    "crane_project/utils/port_reliability_video_transfer_v1.py": "d7cf7a1c63ac2a80178ddb07e7f8a4bcc3d26b4ffa19b8d35f3d52f3b2fa9800",
+    "crane_project/utils/port_simple_component_reliability_v1.py": "05cb0fb1f59fd353725134471bc98bc0026d5beb789526618add08eb46837309",
+    "tests/test_port_reliability_severity_v1.py": "ddc90e0773888004298eb4615952f28391e64c3be08e49611a9aa2fde25b59aa",
+    "tools/run_port_reliability_severity_v1.sh": "774b40de62868cdce062d6a5eeb504d1858a9d12b9595b3e3e6d0a5d617af072"
+  }
+}
