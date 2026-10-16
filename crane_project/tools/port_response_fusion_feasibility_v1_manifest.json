@@ -1,0 +1,36 @@
+{
+  "seed": 1701,
+  "methods": [
+    "formal",
+    "bce_1701",
+    "soft_1701",
+    "bce0_1701",
+    "soft0_1701"
+  ],
+  "pins": {
+    "crane_project/tools/analyze_port_response_fusion_feasibility_v1.py": "44598539316e8d7f9cbf20547857d4a9a58e29db84a457a4dc729ad9d84fed2c",
+    "tests/test_port_response_fusion_feasibility_v1.py": "659eaf246ba4e7a70a0b4fd603cb0f5f437f259187ae1398f297c92b89a25216",
+    "tools/run_port_response_fusion_feasibility_v1.sh": "8463b14f708e93a36dea216ec64128f09c9fb6c26630a1b78adc554a190adf1d",
+    "crane_project/utils/port_reliability_paired_ranking_audit_v1.py": "7fea829e8346ab232d452cda8502bdf4dde8fe058edaa5e670e57df42198d830",
+    "crane_project/tools/analyze_port_midpoint_simple_disagreement_v1.py": "0ecc77c65069cd38624abb45d5d2170e904baf34da55d21565845ccc8f9e81e0",
+    "work_dirs/port_reliability_response_l2_v1/20261015_l2zero_gpu_v1/result/scored_TRAIN.jsonl.gz": "117857f7be282f7c6b2ae99b7fc519e055de4a93871941992cd5b6ced03b430e",
+    "work_dirs/port_reliability_response_l2_v1/20261015_l2zero_gpu_v1/result/scored_VAL.jsonl.gz": "dca9235cca7254ef5de6c05e3a19b63ea34c4dc0a420f4d48c37ef40915f24dd",
+    "work_dirs/port_reliability_response_l2_v1/20261015_l2zero_gpu_v1/result/freeze.json": "d4013228070c60b957800986e947dcde7846848ac195b79e3f6380eba436f524",
+    "work_dirs/port_reliability_response_l2_v1/20261015_l2zero_gpu_v1/result/models.json": "b8792eb6fe4dd25d61cdcb5115fca2a2b935d5f30d8465c00f86067e1a7b0639",
+    "work_dirs/port_reliability_response_l2_v1/20261015_l2zero_gpu_v1/result/protocol.json": "ca83e1387cfa103aeed4ddd6f5d0379b89aac5bede4f39c2c1e5340ecc2ec432",
+    "work_dirs/port_reliability_response_warm_v1/20261015_response_warm_gpu_v1/result/scored_TRAIN.jsonl.gz": "2b2d269c3c3a2a7badb26ffe78092ca72f4ebc01660ea95ca3933c9888964b71",
+    "work_dirs/port_reliability_response_warm_v1/20261015_response_warm_gpu_v1/result/scored_VAL.jsonl.gz": "dc16aa27fc72582d346ba83bff2d0123557d0dd10af8dae9b6ea234594ee507e",
+    "work_dirs/port_reliability_response_warm_v1/20261015_response_warm_gpu_v1/result/freeze.json": "5c77180b0bf18b8407fedaecf78bfb3d79e1169d8bee12867d9da5bc9cd814f3",
+    "work_dirs/port_reliability_response_warm_v1/20261015_response_warm_gpu_v1/result/models.json": "23d4d5b3fabc80057218c6ca216c7b533568c2cb35485a380890e2f702b3a362",
+    "work_dirs/port_reliability_response_warm_v1/20261015_response_warm_gpu_v1/result/protocol.json": "3d501594452c1694526b7738d4e1dde76f425720125faf900d9b5b732a8a5f47",
+    "work_dirs/port_reliability_image_temporal_crossfit_v1/20261013_cached_crossfit_v1/result/quality_heads.json": "0ab17022a3058bfd68f9b3c400b3aa521909b54e693c894e8a9cdd5b8d80e59e"
+  },
+  "roles": [
+    "TRAIN",
+    "VAL"
+  ],
+  "inputs": "Saved five risks and frozen original cutoffs; no TEST files or hashes; GT only in offline labels.",
+  "comparisons": "Original cutoffs; per-group sameCR/samecount anchored on simple only offline; five-way acceptance patterns; fixed-direction conditional AUC and componentwise pair dominance; no bins/sign/weight search.",
+  "material": "Scoped artifact name inventory and current full-TRAIN model provenance; historical image/temporal crossfit is not current five-score OOF.",
+  "stop": "Audit only. No fusion fits or extra crossfit runs. Deliver conditional support/transfer and source-material limitation; no inference from absence of marginal AUC to impossibility of joint fusion."
+}
