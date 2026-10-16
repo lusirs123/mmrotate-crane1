@@ -70,10 +70,13 @@ def analyze(data,cuts):
             key='MISSING' if r['pred'] is None else ''.join('1' if r['audit_risks'][n]<=cuts[n] else '0' for n in METHODS)
             patterns.setdefault(key,[]).append(r)
         simple=accepted_at(part,'formal',cuts['formal'])
-        each={};matched={}
+        each={};matched={};pair_evidence={}
         for name in METHODS:
             keep=accepted_at(part,name,cuts[name]);each[name]=dict(delivery=rank.summarize(part,keep),changes_vs_simple=complement(part,simple,keep))
             if name!='formal':
+                pair_evidence[name]={
+                    'simple_accept_candidate_reject':evidence([r for r in part if r['image'] in simple and r['image'] not in keep]),
+                    'simple_reject_candidate_accept':evidence([r for r in part if r['image'] not in simple and r['image'] in keep])}
                 sr=rank.Ranking(part,'formal');nr=rank.Ranking(part,name)
                 cr=each['formal']['delivery']['states']['CR'];number=each['formal']['delivery']['accepted']
                 a=nr.same_cr(cr);b=nr.same_count(number)
@@ -83,7 +86,7 @@ def analyze(data,cuts):
                     matched[name][mode]=dict(point=point,changes_vs_simple=complement(part,simple,ids))
         allids={r['image'] for r in cells['all_accept']};anyids={r['image'] for r in part if r['pred'] is not None and cell(r,cuts)!='all_reject'}
         result[group]=dict(cells={c:evidence(p) for c,p in cells.items()},patterns={k:counts(v) for k,v in patterns.items()},
-            individual=each,matched=matched,intersection=rank.summarize(part,allids),union=rank.summarize(part,anyids),
+            individual=each,pair_evidence=pair_evidence,matched=matched,intersection=rank.summarize(part,allids),union=rank.summarize(part,anyids),
             oracle_fixed_decision=dict(FA_lower_bound=sum(rank.bad(r) is True for r in cells['all_accept']),CR_upper_bound=sum(rank.bad(r) is False for r in part if r['image'] in anyids),
                 GT_only=True,not_jointly_achievable_without_GT=True,scope='Only selecting among five original binary decisions; not a bound on continuous-score fusion'))
     return result
@@ -166,14 +169,18 @@ def review(out,receipt):
         if analyze(data,cuts)!=gg:raise ValueError('Analysis replay differs')
         for group,part in rank.groups(data).items():
             v=gg[group]
-            for c,d in v['cells'].items():
+            evidence_groups=list(v['cells'].items())+[(name+'::'+c,d) for name,cc in v['pair_evidence'].items() for c,d in cc.items()]
+            for c,d in evidence_groups:
                 chosen=[]
                 for r in part:
                     if r['pred'] is None:key='missing'
                     else:
                         accepts=sum(r['audit_risks'][n]<=cuts[n] for n in METHODS)
                         key='all_accept' if accepts==5 else ('all_reject' if accepts==0 else 'disagreement')
-                    if key==c:chosen.append(r)
+                    if '::' in c:
+                        name,side=c.split('::');simple_accept=r['pred'] is not None and r['audit_risks']['formal']<=cuts['formal'];candidate_accept=r['pred'] is not None and r['audit_risks'][name]<=cuts[name]
+                        if (simple_accept and not candidate_accept) if side=='simple_accept_candidate_reject' else (candidate_accept and not simple_accept):chosen.append(r)
+                    elif key==c:chosen.append(r)
                 if counts(chosen)!={k:d[k] for k in counts(chosen)}:raise ValueError('Cell count differs')
                 good=[r for r in chosen if rank.bad(r) is False];wrong=[r for r in chosen if rank.bad(r) is True]
                 totals={n:0. for n in METHODS};dominance=dict(error_higher_all=0,error_lower_all=0,conflicting=0,identical=0)

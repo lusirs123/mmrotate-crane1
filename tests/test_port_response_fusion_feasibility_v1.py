@@ -26,4 +26,6 @@ class FeasibilityTests(unittest.TestCase):
         self.assertEqual(v['intersection']['states']['FA'],1);self.assertEqual(v['union']['states']['CR'],2)
         self.assertEqual(v['individual']['bce_1701']['changes_vs_simple'],dict(new_ED=1,new_FR=0,rescued_CR=1,released_FA=0))
         self.assertEqual(v['oracle_fixed_decision']['FA_lower_bound'],1)
+        self.assertEqual(v['pair_evidence']['bce_1701']['simple_accept_candidate_reject']['wrong'],1)
+        self.assertEqual(v['pair_evidence']['bce_1701']['simple_reject_candidate_accept']['correct'],1)
         self.assertEqual(v['cells']['missing']['missing'],1)
