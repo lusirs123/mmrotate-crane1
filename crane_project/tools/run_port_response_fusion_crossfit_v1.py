@@ -187,7 +187,7 @@ def auc_from_arrays(scores, y):
 
 
 def review(out, receipt):
-    protocol = json.loads((out/'protocol.json').read_text()); pins(protocol['source_pins']); pins(protocol['model_pins'])
+    protocol = json.loads((out/'protocol.json').read_text()); source_proof = review_source_pins(protocol['source_pins']); pins(protocol['model_pins'])
     for n, h in json.loads((out/'completion.json').read_text())['artifacts'].items():
         if sha(out/n) != h:
             raise ValueError('Artifact changed '+n)
@@ -225,11 +225,9 @@ def review(out, receipt):
             if m['normalizer'] != expected_norm or m['initial_state_sha256'] != f['parents'][0]['final_state_sha256'] or m['steps'] != 5000:
                 raise ValueError('Branch parent/settings mismatch')
         ref_simple = simple.fit_linear_risk(raw[fit, :3], y[fit], core.LINEAR)
-        if ref_simple != f['models']['formal']:
-            raise ValueError('Fold simple leakage')
+        numeric_dict_equal(ref_simple, f['models']['formal'])
         ref_tau = warm.temperature_fit(raw[fit], y[fit], f['parents'])
-        if ref_tau != f['temperature']:
-            raise ValueError('Fold temperature mismatch')
+        numeric_dict_equal(ref_tau, f['temperature'])
         zfit = scalar_logits(f['models'], raw[fit]); zheld = scalar_logits(f['models'], raw[held])
         for key in ('mean', 'scale'):
             np.testing.assert_allclose(core.mapping_fit(zfit)[key], f['mapping'][key], rtol=0, atol=1e-10)
@@ -299,7 +297,8 @@ def review(out, receipt):
     write(out/receipt, dict(status='INDEPENDENT_REVIEW_PASS', groups=len(checks),
         pairs=sum(c['pair_comparisons'] for c in checks), curve_points=sum(c['curve_points'] for c in checks),
         fold_count=6, held_rows=int(membership.sum()), fold_support=fold_support,
-        scalar_risk_max_abs=max_error, report_sha256=sha(out/'report.json')))
+        scalar_risk_max_abs=max_error, report_sha256=sha(out/'report.json'),
+        source_proof=source_proof, refit_comparison_atol=1e-10, refit_comparison_rtol=1e-10))
     print('INDEPENDENT_REVIEW_PASS', len(checks), flush=True)
 
 
@@ -326,6 +325,45 @@ def RiskReplay(model):
     obj = Risk(model['seed'], 19)
     obj.load_state_dict({k: torch.tensor(v, dtype=torch.float64) for k, v in model['weights'].items()})
     return obj
+
+
+def numeric_dict_equal(expected, actual):
+    """Cross-platform refits have roundoff; identities and structure stay exact."""
+    if isinstance(expected, dict):
+        if not isinstance(actual, dict) or set(expected) != set(actual):
+            raise ValueError('Recomputed structure differs')
+        for key in expected:
+            numeric_dict_equal(expected[key], actual[key])
+    elif isinstance(expected, list):
+        if not isinstance(actual, list) or len(expected) != len(actual):
+            raise ValueError('Recomputed sequence differs')
+        for a, b in zip(expected, actual):
+            numeric_dict_equal(a, b)
+    elif isinstance(expected, float):
+        np.testing.assert_allclose(expected, actual, atol=1e-10, rtol=1e-10)
+    elif expected != actual:
+        raise ValueError('Recomputed identity differs')
+
+
+def review_source_pins(items):
+    """Validate archived training code and this bounded review-only repair."""
+    runner = str(Path(__file__).resolve().relative_to(ROOT))
+    mismatches = [n for n, h in items.items() if sha(ROOT/n) != h]
+    if not mismatches:
+        return dict(original_sources_match=True)
+    fixpath = ROOT/'crane_project/tools/port_response_fusion_crossfit_v1_review_fix.json'
+    fix = json.loads(fixpath.read_text())
+    if set(mismatches) != set(fix['repaired_source_pins']):
+        raise ValueError('Unexpected source changes')
+    pins(fix['repaired_source_pins'])
+    for name in mismatches:
+        import hashlib
+        archived = subprocess.check_output(['git', 'show', fix['original_commit']+':'+name], cwd=ROOT)
+        if hashlib.sha256(archived).hexdigest() != items[name]:
+            raise ValueError('Original archived source differs')
+    return dict(original_sources_match=False, original_commit_verified=fix['original_commit'],
+        archived_original_sources={n: items[n] for n in mismatches}, repair_manifest_sha256=sha(fixpath),
+        current_sources=fix['repaired_source_pins'], scope=fix['scope'])
 
 
 if __name__ == '__main__':

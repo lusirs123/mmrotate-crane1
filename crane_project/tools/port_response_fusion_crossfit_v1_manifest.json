@@ -30,10 +30,10 @@
     "crane_project/utils/port_simple_component_reliability_v1.py": "05cb0fb1f59fd353725134471bc98bc0026d5beb789526618add08eb46837309",
     "crane_project/utils/port_simple_pilot_increment_v1.py": "d24283ec78d9b7552adfc1b207de68ddc52690433014a89749df5c22618a7f1c",
     "crane_project/utils/port_reliability_paired_ranking_audit_v1.py": "7fea829e8346ab232d452cda8502bdf4dde8fe058edaa5e670e57df42198d830",
-    "crane_project/tools/run_port_response_fusion_crossfit_v1.py": "a3d5be3afd8f2764e76cd32cf03448c6445be9b5c818f9db18fa5d288ed4092c",
+    "crane_project/tools/run_port_response_fusion_crossfit_v1.py": "e505c5b958980b4d6a624c86ebdc646f72542585cdf09b319d78052397019275",
     "crane_project/tools/run_port_reliability_response_warm_v1.py": "09d7e6d887368894079c47f4e8f2883541ff0c3fb631c89b15001c306f629ef2",
     "crane_project/tools/run_port_reliability_response_stats_v1.py": "ce6660527596300420f147bc4cd9ec0f0bffa28010ff56814edcd0c020b433f2",
-    "tests/test_port_response_fusion_crossfit_v1.py": "51ac6b4cd7e0c787f45a4ba3e3363fb98f8cc69706ace42136bb8faa14f17db5",
+    "tests/test_port_response_fusion_crossfit_v1.py": "34fb41fa2a9ef4b93ce338e7bd3e7926c329507ef5c654a1aba691bcf85b1d67",
     "tools/run_port_response_fusion_crossfit_v1.sh": "bd6a79ad95279d81b8b227589f59376072e9e55f664c0bc1051b795656ff92ef"
   },
   "model_pins": {

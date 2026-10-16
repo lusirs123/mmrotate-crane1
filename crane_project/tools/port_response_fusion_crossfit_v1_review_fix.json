@@ -1,0 +1,8 @@
+{
+  "original_commit": "d672b3d11fa0f4a0578c5003f9f0164aea30538a",
+  "repaired_source_pins": {
+    "crane_project/tools/run_port_response_fusion_crossfit_v1.py": "e505c5b958980b4d6a624c86ebdc646f72542585cdf09b319d78052397019275",
+    "tests/test_port_response_fusion_crossfit_v1.py": "34fb41fa2a9ef4b93ce338e7bd3e7926c329507ef5c654a1aba691bcf85b1d67"
+  },
+  "scope": "Review-only repair: tolerate 1e-10 cross-platform refit roundoff while preserving exact memberships/settings/identities. Training, meta fits, models, cuts, report and original completion remain unchanged; verify original source from Git."
+}

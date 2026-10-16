@@ -9,6 +9,14 @@ from crane_project.utils.port_reliability_response_stats_v1_torch import Risk
 
 
 class CrossfitTest(unittest.TestCase):
+    def test_cross_platform_review_roundoff_and_real_difference(self):
+        from crane_project.tools.run_port_response_fusion_crossfit_v1 import numeric_dict_equal
+        numeric_dict_equal({'weights': [.1], 'ids': ['frame1']}, {'weights': [.1+1e-15], 'ids': ['frame1']})
+        with self.assertRaises(AssertionError):
+            numeric_dict_equal({'weights': [.1]}, {'weights': [.11]})
+        with self.assertRaises(ValueError):
+            numeric_dict_equal({'ids': ['frame1']}, {'ids': ['frame2']})
+
     def test_whole_video_partition_and_material_isolation(self):
         seq = np.repeat(core.SEQUENCES, 4)
         ownership = np.zeros(len(seq), dtype=int)
