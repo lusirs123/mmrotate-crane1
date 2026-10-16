@@ -1,0 +1,99 @@
+{
+  "settings": {
+    "seed": 1701,
+    "aggregation": "sigmoid(mean(six fold final fusion logits))",
+    "simple_control": "sigmoid(mean(six fold original simple logits))",
+    "folds": [
+      "real_seq01",
+      "real_seq05",
+      "real_seq06",
+      "real_seq12",
+      "real_seq13",
+      "sim_seq08"
+    ],
+    "new_fits": 0,
+    "CR": 653,
+    "Real_CR": 189,
+    "equal_weights": true,
+    "subset_selection": false,
+    "TRAIN": "Original single held-video scores only; not six-fold average; meta was fitted on these labels",
+    "TEST": "All four prespecified methods after VAL cutoffs/judgement freeze; exposed reporting only"
+  },
+  "source_pins": {
+    "crane_project/utils/port_response_fusion_crossfit_v1.py": "908b1f9c9229e7df75ffb0a63469c64777b2c77367260a12a6388a53cc040a82",
+    "crane_project/utils/port_reliability_response_stats_v1.py": "e2b715620d4f9be02e072bebdd5e4d40080f9173cbbff12bae7c0c357a4ffd46",
+    "crane_project/utils/port_reliability_response_stats_v1_torch.py": "16acc43d011a46f7128e57ce4a5bf4145f8f40cadf09506444f4e1f63c729137",
+    "crane_project/utils/port_reliability_response_warm_v1.py": "c4facdbdfc919edd4dfb0e22ac9cfbb11b77bfda33c4ea76f347a85bfd7f358e",
+    "crane_project/utils/port_reliability_response_tail_v1.py": "e85c3bb2fcde254639d99851f20c5a1081c55bb8668319d483b33f51cc30523c",
+    "crane_project/utils/port_simple_component_reliability_v1.py": "05cb0fb1f59fd353725134471bc98bc0026d5beb789526618add08eb46837309",
+    "crane_project/utils/port_simple_pilot_increment_v1.py": "d24283ec78d9b7552adfc1b207de68ddc52690433014a89749df5c22618a7f1c",
+    "crane_project/utils/port_reliability_paired_ranking_audit_v1.py": "7fea829e8346ab232d452cda8502bdf4dde8fe058edaa5e670e57df42198d830",
+    "crane_project/tools/run_port_response_fusion_crossfit_v1.py": "e505c5b958980b4d6a624c86ebdc646f72542585cdf09b319d78052397019275",
+    "crane_project/tools/run_port_reliability_response_warm_v1.py": "09d7e6d887368894079c47f4e8f2883541ff0c3fb631c89b15001c306f629ef2",
+    "crane_project/tools/run_port_reliability_response_stats_v1.py": "ce6660527596300420f147bc4cd9ec0f0bffa28010ff56814edcd0c020b433f2",
+    "tests/test_port_response_fusion_crossfit_v1.py": "34fb41fa2a9ef4b93ce338e7bd3e7926c329507ef5c654a1aba691bcf85b1d67",
+    "tools/run_port_response_fusion_crossfit_v1.sh": "bd6a79ad95279d81b8b227589f59376072e9e55f664c0bc1051b795656ff92ef",
+    "crane_project/utils/port_response_fold_ensemble_v1.py": "abf072b9b5820dd7a78c5fa538a55750ce05f3173e6d8710df774f5d0f87d445",
+    "crane_project/tools/run_port_response_fold_ensemble_v1.py": "06f4f450a00475292b5d8f038e518e76b6b1748524660384744e0a7717b5b120",
+    "tests/test_port_response_fold_ensemble_v1.py": "290be13c4389ce8531a785b0ad6723a2f8a64050e89c53ff2e3d6a81b958b8a8",
+    "tools/run_port_response_fold_ensemble_v1.sh": "9ade328812baa84556d9eaabf41d073d00360d9b9756d365c9cab387a6020912"
+  },
+  "model_pins": {
+    "work_dirs/port_response_fusion_crossfit_v1/20261016_video_oof1701_v1/result/models.json": "69ee693069ba24bbc4d903ed6ccd100e25eac569f814cc4fed8dfd88033ac86a",
+    "work_dirs/port_response_fusion_crossfit_v1/20261016_video_oof1701_v1/result/freeze.json": "b0fdca5923f5d0fb30ba8cbae678164161bff7f89b1194fc3ca77baab713d31c",
+    "work_dirs/port_response_fusion_crossfit_v1/20261016_video_oof1701_v1/result/protocol.json": "785f528695002777d17f836e4a7471dc178bc1c8a84fc5c8de2bb7e9e4b54fd7",
+    "work_dirs/port_response_fusion_crossfit_v1/20261016_video_oof1701_v1/result/TRAIN_scores.npz": "388229f68d559bd81ade26506ede78199441b6bee60e2f0a64ff04d922a06b02",
+    "work_dirs/port_response_fusion_crossfit_v1/20261016_video_oof1701_v1/result/fold_real_seq01.json": "d64924db616ebb68b19fea6951a6d7234b8559a35e3c076e1d6ad94711eb5768",
+    "work_dirs/port_response_fusion_crossfit_v1/20261016_video_oof1701_v1/result/fold_real_seq05.json": "f0f079042ecab8f289e3e9874c83e613b5f5315d2c4e6568dd31dc30b13ce15d",
+    "work_dirs/port_response_fusion_crossfit_v1/20261016_video_oof1701_v1/result/fold_real_seq06.json": "62710647746422468a49389e0b66b6d610b913004536f65bf7ec47fbaccac03b",
+    "work_dirs/port_response_fusion_crossfit_v1/20261016_video_oof1701_v1/result/fold_real_seq12.json": "e8bd276a01b9e209745823d92aa73cbaf30796db6b9d7f52eedadfb21a1d1f1f",
+    "work_dirs/port_response_fusion_crossfit_v1/20261016_video_oof1701_v1/result/fold_real_seq13.json": "eb79831be009ff06f5504aa1fb8abdc026a7e764884a3eca23f5ffe51f74f155",
+    "work_dirs/port_response_fusion_crossfit_v1/20261016_video_oof1701_v1/result/fold_sim_seq08.json": "52da748c92f8e64b19b647eec4c7ffa5920dac5996c558d8f48114eeae6702d0",
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f"
+  },
+  "roles": {
+    "TRAIN": {
+      "rows": "work_dirs/port_response_fusion_crossfit_v1/20261016_video_oof1701_v1/result/scored_TRAIN.jsonl.gz",
+      "features": "work_dirs/port_reliability_response_l2_v1/20261015_l2zero_gpu_v1/result/train_responses.npz",
+      "pins": {
+        "work_dirs/port_response_fusion_crossfit_v1/20261016_video_oof1701_v1/result/scored_TRAIN.jsonl.gz": "983e9a1a4847704e2e374f430922e2bed0d424e0f19f2b56a85be61deb1f8574",
+        "work_dirs/port_reliability_response_l2_v1/20261015_l2zero_gpu_v1/result/train_responses.npz": "f98bb46eefea9e83995a07187a219cb17431de938bf9d056582aea6bfd053b9a"
+      },
+      "counts": [
+        2558,
+        2558,
+        71
+      ]
+    },
+    "VAL": {
+      "rows": "work_dirs/port_response_fusion_crossfit_v1/20261016_video_oof1701_v1/result/scored_VAL.jsonl.gz",
+      "features": "work_dirs/port_reliability_response_l2_v1/20261015_l2zero_gpu_v1/result/val_responses.npz",
+      "pins": {
+        "work_dirs/port_response_fusion_crossfit_v1/20261016_video_oof1701_v1/result/scored_VAL.jsonl.gz": "fbce293f33d8dede6a068f95a46a0ca8ffbabfb31e49d46bb8c20d6433a67496",
+        "work_dirs/port_reliability_response_l2_v1/20261015_l2zero_gpu_v1/result/val_responses.npz": "36c8f25030b08d81c7880e2f266c2cbb3d316882863e8d57f33129fbfd0fc475"
+      },
+      "counts": [
+        887,
+        886,
+        223
+      ]
+    },
+    "TEST": {
+      "rows": "work_dirs/port_response_fusion_crossfit_v1/20261016_video_oof1701_v1/result/scored_TEST.jsonl.gz",
+      "features": "work_dirs/port_reliability_response_l2_v1/20261015_l2zero_gpu_v1/result/test_responses.npz",
+      "pins": {
+        "work_dirs/port_response_fusion_crossfit_v1/20261016_video_oof1701_v1/result/scored_TEST.jsonl.gz": "bb4d70ee42015d585f04a1719d6f2c8780f7be67a408490c2607ee143c0c5cac",
+        "work_dirs/port_reliability_response_l2_v1/20261015_l2zero_gpu_v1/result/test_responses.npz": "50a9996db70bb11447a0c88029bed5435a6f31f7543db219fdd1bb922f9f701b"
+      },
+      "counts": [
+        1440,
+        1431,
+        342
+      ]
+    }
+  },
+  "protocol": "Frozen six-fold logit ensemble only; no new fits, fold/model/weight/aggregation selection, feature extraction or detector forward. Existing OOF TRAIN is single held-video scoring; reported separately from VAL/TEST six-fold average. Meta saw TRAIN labels, not nested holdout.",
+  "selection": "Fixed four methods. Keep old formal/full-fusion cuts. VAL chooses global fold_simple/fold_fusion cuts protectingCR653 andReal189. Save judgement and freeze before TEST data/hash use; report all four TEST regardlessVAL. No TEST selection.",
+  "benchmark": "Three prespecified existing TRAIN frames; batch1 cached19D CPU scoring,10warmups30alternating repeats; excludes all frontend/features/IO, no end-to-end latency claim.",
+  "stop": "If this single fixed fold ensemble does not improve protected VAL point, stop inference-source branch. No search, automatic fit or policy promotion."
+}
