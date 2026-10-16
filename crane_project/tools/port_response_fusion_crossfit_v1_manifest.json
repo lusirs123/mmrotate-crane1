@@ -1,0 +1,92 @@
+{
+  "settings": {
+    "seed": 1701,
+    "temperature_parent_seeds": [
+      1701,
+      1702,
+      1703
+    ],
+    "parent_steps": 5000,
+    "continuation_steps": 5000,
+    "continuation_lr": 0.001,
+    "linear": {
+      "l2": 0.1,
+      "max_iterations": 100,
+      "gradient_tolerance": 1e-08
+    },
+    "primary_CR": 653,
+    "minimum_Real_CR": 189,
+    "score_mapping": "per-base-model fitting-TRAIN logit mean/std; then meta TRAIN normalization",
+    "report_seed": 1701,
+    "final_steps_only": true,
+    "no_hyperparameter_search": true
+  },
+  "source_pins": {
+    "crane_project/utils/port_response_fusion_crossfit_v1.py": "908b1f9c9229e7df75ffb0a63469c64777b2c77367260a12a6388a53cc040a82",
+    "crane_project/utils/port_reliability_response_stats_v1.py": "e2b715620d4f9be02e072bebdd5e4d40080f9173cbbff12bae7c0c357a4ffd46",
+    "crane_project/utils/port_reliability_response_stats_v1_torch.py": "16acc43d011a46f7128e57ce4a5bf4145f8f40cadf09506444f4e1f63c729137",
+    "crane_project/utils/port_reliability_response_warm_v1.py": "c4facdbdfc919edd4dfb0e22ac9cfbb11b77bfda33c4ea76f347a85bfd7f358e",
+    "crane_project/utils/port_reliability_response_tail_v1.py": "e85c3bb2fcde254639d99851f20c5a1081c55bb8668319d483b33f51cc30523c",
+    "crane_project/utils/port_simple_component_reliability_v1.py": "05cb0fb1f59fd353725134471bc98bc0026d5beb789526618add08eb46837309",
+    "crane_project/utils/port_simple_pilot_increment_v1.py": "d24283ec78d9b7552adfc1b207de68ddc52690433014a89749df5c22618a7f1c",
+    "crane_project/utils/port_reliability_paired_ranking_audit_v1.py": "7fea829e8346ab232d452cda8502bdf4dde8fe058edaa5e670e57df42198d830",
+    "crane_project/tools/run_port_response_fusion_crossfit_v1.py": "a3d5be3afd8f2764e76cd32cf03448c6445be9b5c818f9db18fa5d288ed4092c",
+    "crane_project/tools/run_port_reliability_response_warm_v1.py": "09d7e6d887368894079c47f4e8f2883541ff0c3fb631c89b15001c306f629ef2",
+    "crane_project/tools/run_port_reliability_response_stats_v1.py": "ce6660527596300420f147bc4cd9ec0f0bffa28010ff56814edcd0c020b433f2",
+    "tests/test_port_response_fusion_crossfit_v1.py": "51ac6b4cd7e0c787f45a4ba3e3363fb98f8cc69706ace42136bb8faa14f17db5",
+    "tools/run_port_response_fusion_crossfit_v1.sh": "bd6a79ad95279d81b8b227589f59376072e9e55f664c0bc1051b795656ff92ef"
+  },
+  "model_pins": {
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f",
+    "work_dirs/port_reliability_response_l2_v1/20261015_l2zero_gpu_v1/result/models.json": "b8792eb6fe4dd25d61cdcb5115fca2a2b935d5f30d8465c00f86067e1a7b0639",
+    "work_dirs/port_reliability_response_l2_v1/20261015_l2zero_gpu_v1/result/freeze.json": "d4013228070c60b957800986e947dcde7846848ac195b79e3f6380eba436f524"
+  },
+  "policy": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json",
+  "full_models": "work_dirs/port_reliability_response_l2_v1/20261015_l2zero_gpu_v1/result/models.json",
+  "full_freeze": "work_dirs/port_reliability_response_l2_v1/20261015_l2zero_gpu_v1/result/freeze.json",
+  "roles": {
+    "TRAIN": {
+      "rows": "work_dirs/port_reliability_response_l2_v1/20261015_l2zero_gpu_v1/result/scored_TRAIN.jsonl.gz",
+      "features": "work_dirs/port_reliability_response_l2_v1/20261015_l2zero_gpu_v1/result/train_responses.npz",
+      "pins": {
+        "work_dirs/port_reliability_response_l2_v1/20261015_l2zero_gpu_v1/result/scored_TRAIN.jsonl.gz": "117857f7be282f7c6b2ae99b7fc519e055de4a93871941992cd5b6ced03b430e",
+        "work_dirs/port_reliability_response_l2_v1/20261015_l2zero_gpu_v1/result/train_responses.npz": "f98bb46eefea9e83995a07187a219cb17431de938bf9d056582aea6bfd053b9a"
+      },
+      "counts": [
+        2558,
+        2558,
+        71
+      ]
+    },
+    "VAL": {
+      "rows": "work_dirs/port_reliability_response_l2_v1/20261015_l2zero_gpu_v1/result/scored_VAL.jsonl.gz",
+      "features": "work_dirs/port_reliability_response_l2_v1/20261015_l2zero_gpu_v1/result/val_responses.npz",
+      "pins": {
+        "work_dirs/port_reliability_response_l2_v1/20261015_l2zero_gpu_v1/result/scored_VAL.jsonl.gz": "dca9235cca7254ef5de6c05e3a19b63ea34c4dc0a420f4d48c37ef40915f24dd",
+        "work_dirs/port_reliability_response_l2_v1/20261015_l2zero_gpu_v1/result/val_responses.npz": "36c8f25030b08d81c7880e2f266c2cbb3d316882863e8d57f33129fbfd0fc475"
+      },
+      "counts": [
+        887,
+        886,
+        223
+      ]
+    },
+    "TEST": {
+      "rows": "work_dirs/port_reliability_response_l2_v1/20261015_l2zero_gpu_v1/result/scored_TEST.jsonl.gz",
+      "features": "work_dirs/port_reliability_response_l2_v1/20261015_l2zero_gpu_v1/result/test_responses.npz",
+      "pins": {
+        "work_dirs/port_reliability_response_l2_v1/20261015_l2zero_gpu_v1/result/scored_TEST.jsonl.gz": "933d405f8f468d3a7754f65e10a39d8466b9322a3d57fe5a90183f58a52f1214",
+        "work_dirs/port_reliability_response_l2_v1/20261015_l2zero_gpu_v1/result/test_responses.npz": "50a9996db70bb11447a0c88029bed5435a6f31f7543db219fdd1bb922f9f701b"
+      },
+      "counts": [
+        1440,
+        1431,
+        342
+      ]
+    }
+  },
+  "scope": "Six leave-one-video folds only within original TRAIN; frozen M has seen detector TRAIN. Each fold refits simple, three original temperature parents, and four1701 continuations. Original full models reused. No pilot, detector inference, new features, tuning, video routing, or deployment policy.",
+  "score_mapping": "Per-fold base fitting logits standardization; final full base logits standardized by full TRAIN. Fusion is fitted separately on OOF and in-sample five scores with identical balanced BCE and L2=.1. No VAL alignment. Report remaining distribution shift.",
+  "selection": "Complete all TRAIN fits before VAL. CR>=653 and RealCR>=189 global cutoff. OOF fusion prespecified main candidate; in-sample fusion is control. Freeze all weights/cutoffs/VAL judgement before opening or hashing TEST roles. Report all eight methods on exposed TEST regardless VAL, never select using TEST.",
+  "stop": "One seed1701 report, fixed final5000 updates only, two fixed six-parameter meta fits. No architecture/subset/regularization/threshold sweeps. Stop this branch if VAL protected point has no useful gain; preserve local benefits."
+}
