@@ -1,0 +1,43 @@
+{
+  "arms": [
+    "decoded_control",
+    "distribution"
+  ],
+  "engineering": "Verify cache byte SHA and3 shards, B weight SHA, selected M SHA/context and887 cached VAL replay. New zero full TRAIN/VAL identity;2updates/supervision discarded, initial stage1 terminal and stage2 stem gradients; exact head/optimizer/RNG save-load. Freeze M and verify digest before/after. Source closure bound to current bytes, historical provenance separately reconstructed.",
+  "grid": {
+    "bins": 33,
+    "log_max": 1.0,
+    "log_min": -1.0,
+    "uniform": true
+  },
+  "inputs": "Frozen B P3 9x9 ROI/support, B raw original/model boxes, actual sx/sy, frozen M. Original M axes sampled then B-model ROI swap. No new image evidence.",
+  "limits": {
+    "automatic_promotion": false,
+    "cache_rebuilt": false,
+    "depth_access": false,
+    "detector_updates": 0,
+    "feature_extractions": 0,
+    "frozen_midpoint_updates": 0,
+    "selection_on_test": false,
+    "test_access": false
+  },
+  "outputs": "Two continuous log-size residuals from probability expectation minus same-shaped uniform expectation. M center, raw/canonical angle, score, output identity copied. Original delivery guards and whole-pair fallback. No fine branch.",
+  "parameter_count": 2712,
+  "protocol": "port_geometry_size_distribution_v1",
+  "reference": "DFL-style continuous-target distribution supervision discussed in D-FINE Eq5; not full D-FINE/FGL or a claim of novel distribution supervision.",
+  "selection": "Among TRAIN+VAL passing epochs Real longMAE, shortMAE, earliest epoch lexicographic. Mechanism requires selected distribution Real longMAE<control-1e-6 and shortMAE<=control+1e-6. Control with no admissible epoch uses best TRAIN-passing descriptive reference, explicitly not adopted. No TEST or alternate objective search.",
+  "settings": {
+    "batch_size": 8,
+    "clip_norm": 10.0,
+    "epochs": 24,
+    "lr": 0.001,
+    "seed": 1703,
+    "weight_decay": 0.0
+  },
+  "source_reference": "https://github.com/Peterande/D-FINE/blob/956d1709314c2c6a4df6f34de232054578a7449f/src/zoo/dfine/dfine_criterion.py",
+  "stop": "Bad mappings/targets/SHA/nonfinite/engineering fail stop. Complete fixed budget if engineering passes; no fitted VAL when TRAIN fails. No admissible improvement retains M, no extra module or budget.",
+  "supervision": "distribution: two-adjacent-bin barycentric soft CE for log(GT/M); decoded_control: same-forward decoded SmoothL1 beta0.1. No combined objective, IoU weights, distillation, class loss or direction balancing.",
+  "train_gate": "Each domain/scale fixed-M need_enlarge and need_shrink meanabs(a) strictly lower by>1e-6; near_correct<=3% no new joint10 errors and meanabs(a) nonincrease within1e-6; all groups present. Identity preserved. Mixed reported.",
+  "training": "Full2558 TRAIN identities at standard and existing half scale. All5112 present views, no inherited center or fit/probe filtering;4 missing retained in reports. Each present view exactly once per epoch, seed1703+epoch Python shuffle, batch8 including final partial. Both arms same schedule/init;24 epochs, no sweep/resume.",
+  "val_gate": "Complete887 VAL only fitted TRAIN-passing epochs: Real both MAE lower than M and B; Real P95/abs(a)/abs(r) no worse M; Sim both MAE/P95/a/r no worse M. Each domain joint10>=M. Real fullRIoU>M+1e-5, Sim>=M-1e-5; MCML max/mean nonincrease, TDR nondecrease. Exact center/angle/score/output. DFR/MRF disclosed, AP11 supplemental cache GT."
+}
