@@ -1,0 +1,17 @@
+{
+  "status": "completed",
+  "directories_moved": 55,
+  "root_files_moved": 14,
+  "files_sha256_verified": 1719,
+  "preserved_file_bytes": 2058615594,
+  "deleted_duplicate_archive_bytes": 904175,
+  "duplicate_members_verified": 22,
+  "empty_directories_removed": 3,
+  "existing_compatibility_links_preserved": 7,
+  "formal_policy_compatibility_link_created": true,
+  "protected_top_entries_unchanged": 146,
+  "git_status_unchanged": true,
+  "formal_policy_sha256": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f",
+  "git_head": "3274c2142b929e9f3206a098b3173ad737904274",
+  "finished_utc": "2026-10-16T08:20:06Z"
+}

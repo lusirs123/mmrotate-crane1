@@ -1,0 +1,1472 @@
+{
+  "root": "/media/omnisky/personal_files/ljj/symEOOD",
+  "created_utc": "2026-10-16T08:19:03Z",
+  "git_head": "3274c2142b929e9f3206a098b3173ad737904274",
+  "entries": [
+    {
+      "old": "work_dirs/base_v3_obb_reliability_baseline_v1",
+      "new": "work_dirs/port_results/reliability/base_v3_obb_reliability_baseline_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_low_fa_v1",
+      "new": "work_dirs/port_results/reliability/port_low_fa_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1",
+      "new": "work_dirs/port_results/reliability/port_midpoint_sigma15_reliability_v1_cachefix1",
+      "kind": "dir",
+      "compatibility_link": true
+    },
+    {
+      "old": "work_dirs/port_midpoint_simple_disagreement_v1",
+      "new": "work_dirs/port_results/reliability/port_midpoint_simple_disagreement_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_pilot_size_support_v1",
+      "new": "work_dirs/port_results/reliability/port_pilot_size_support_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_actual_fr_bound_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_actual_fr_bound_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_actual_fr_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_actual_fr_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_boundary_readout_review_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_boundary_readout_review_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_box_contrast_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_box_contrast_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_candidate_support_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_candidate_support_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_capacity_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_capacity_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_class_condition_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_class_condition_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_complementarity_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_complementarity_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_conditional_evidence_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_conditional_evidence_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_fallback_decision_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_fallback_decision_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_feature_ablation_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_feature_ablation_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_feature_source_test_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_feature_source_test_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_feature_source_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_feature_source_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_fr_constraint_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_fr_constraint_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_hard_error_pauc_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_hard_error_pauc_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_image_temporal_crossfit_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_image_temporal_crossfit_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_opposite_border_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_opposite_border_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_paired_ranking_audit_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_paired_ranking_audit_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_partial_auc_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_partial_auc_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_pixel_border_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_pixel_border_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_pixel_pauc_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_pixel_pauc_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_readout_compare_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_readout_compare_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_readout_test_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_readout_test_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_redc_size_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_redc_size_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_remaining_error_support_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_remaining_error_support_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_response_l2_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_response_l2_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_response_stats_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_response_stats_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_response_stats_v1_20261015_response_stats_server_v1_fix1_launch.log",
+      "new": "work_dirs/port_results/reliability/_root_metadata/port_reliability_response_stats_v1_20261015_response_stats_server_v1_fix1_launch.log",
+      "kind": "file",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_response_stats_v1_20261015_response_stats_server_v1_launch.log",
+      "new": "work_dirs/port_results/reliability/_root_metadata/port_reliability_response_stats_v1_20261015_response_stats_server_v1_launch.log",
+      "kind": "file",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_response_tail_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_response_tail_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_response_tail_v1_20261015_launch.log",
+      "new": "work_dirs/port_results/reliability/_root_metadata/port_reliability_response_tail_v1_20261015_launch.log",
+      "kind": "file",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_response_warm_test_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_response_warm_test_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_response_warm_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_response_warm_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_response_warm_v1_20261015_launch.log",
+      "new": "work_dirs/port_results/reliability/_root_metadata/port_reliability_response_warm_v1_20261015_launch.log",
+      "kind": "file",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_scale_asymmetry_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_scale_asymmetry_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_scale_consistency_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_scale_consistency_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_severity_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_severity_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_simple_anchor_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_simple_anchor_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_size_temporal_interaction_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_size_temporal_interaction_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_sparse_candidate_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_sparse_candidate_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_spatial_axis_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_spatial_axis_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_temporal_evidence_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_temporal_evidence_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_temporal_fusion_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_temporal_fusion_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_temporal_history_gate_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_temporal_history_gate_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_temporal_stack_test_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_temporal_stack_test_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_temporal_trend_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_temporal_trend_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_tradeoff_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_tradeoff_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_video_transfer_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_video_transfer_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_reliability_within_video_rank_v1",
+      "new": "work_dirs/port_results/reliability/port_reliability_within_video_rank_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_response_fold_ensemble_v1",
+      "new": "work_dirs/port_results/reliability/port_response_fold_ensemble_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_response_fold_ensemble_v1_index_after.sha256",
+      "new": "work_dirs/port_results/reliability/_root_metadata/port_response_fold_ensemble_v1_index_after.sha256",
+      "kind": "file",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_response_fold_ensemble_v1_index_before.sha256",
+      "new": "work_dirs/port_results/reliability/_root_metadata/port_response_fold_ensemble_v1_index_before.sha256",
+      "kind": "file",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_response_fold_ensemble_v1_sync_after.sha256",
+      "new": "work_dirs/port_results/reliability/_root_metadata/port_response_fold_ensemble_v1_sync_after.sha256",
+      "kind": "file",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_response_fold_ensemble_v1_sync_before.sha256",
+      "new": "work_dirs/port_results/reliability/_root_metadata/port_response_fold_ensemble_v1_sync_before.sha256",
+      "kind": "file",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_response_fusion_crossfit_v1",
+      "new": "work_dirs/port_results/reliability/port_response_fusion_crossfit_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_response_fusion_crossfit_v1_reviewfix_after.sha256",
+      "new": "work_dirs/port_results/reliability/_root_metadata/port_response_fusion_crossfit_v1_reviewfix_after.sha256",
+      "kind": "file",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_response_fusion_crossfit_v1_reviewfix_before.sha256",
+      "new": "work_dirs/port_results/reliability/_root_metadata/port_response_fusion_crossfit_v1_reviewfix_before.sha256",
+      "kind": "file",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_response_fusion_crossfit_v1_sync_after.sha256",
+      "new": "work_dirs/port_results/reliability/_root_metadata/port_response_fusion_crossfit_v1_sync_after.sha256",
+      "kind": "file",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_response_fusion_crossfit_v1_sync_before.sha256",
+      "new": "work_dirs/port_results/reliability/_root_metadata/port_response_fusion_crossfit_v1_sync_before.sha256",
+      "kind": "file",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_response_fusion_crossfit_v1_sync_index_after.sha256",
+      "new": "work_dirs/port_results/reliability/_root_metadata/port_response_fusion_crossfit_v1_sync_index_after.sha256",
+      "kind": "file",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_response_fusion_crossfit_v1_sync_index_before.sha256",
+      "new": "work_dirs/port_results/reliability/_root_metadata/port_response_fusion_crossfit_v1_sync_index_before.sha256",
+      "kind": "file",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_response_fusion_feasibility_v1",
+      "new": "work_dirs/port_results/reliability/port_response_fusion_feasibility_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_simple_pilot_increment_v1",
+      "new": "work_dirs/port_results/reliability/port_simple_pilot_increment_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    },
+    {
+      "old": "work_dirs/port_three_feature_factorial_v1",
+      "new": "work_dirs/port_results/reliability/port_three_feature_factorial_v1",
+      "kind": "dir",
+      "compatibility_link": false
+    }
+  ],
+  "existing_aliases_preserved": [
+    {
+      "old": "work_dirs/port_midpoint_reliability_v1_collect",
+      "target": "port_results/reliability/port_midpoint_reliability_v1_collect"
+    },
+    {
+      "old": "work_dirs/port_midpoint_reliability_v1_fit",
+      "target": "port_results/reliability/port_midpoint_reliability_v1_fit"
+    },
+    {
+      "old": "work_dirs/port_reliability_branches_v1_test_cached_v1",
+      "target": "port_results/reliability/port_reliability_branches_v1_test_cached_v1"
+    },
+    {
+      "old": "work_dirs/port_reliability_branches_v1_val_cached_v1",
+      "target": "port_results/reliability/port_reliability_branches_v1_val_cached_v1"
+    },
+    {
+      "old": "work_dirs/port_reliability_train_support_v1",
+      "target": "port_results/reliability/port_reliability_train_support_v1"
+    },
+    {
+      "old": "work_dirs/port_reliability_train_support_v1_cache",
+      "target": "port_results/reliability/port_reliability_train_support_v1_cache"
+    },
+    {
+      "old": "work_dirs/port_simple_reliability_v1_fit",
+      "target": "port_results/reliability/port_simple_reliability_v1_fit"
+    }
+  ],
+  "empty_directories_to_remove": [
+    "work_dirs/port_reliability_candidate_support_v1/20261014_native_candidates_gpu3_v1/result",
+    "work_dirs/port_reliability_paired_ranking_audit_v1/20261015_saved_pairs_server_v1/result",
+    "work_dirs/port_reliability_response_warm_test_v1/20261015_frozen1701_test_v1/result"
+  ],
+  "duplicate_archive_to_delete": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/analysis_20261006.tar.gz",
+  "duplicate_members": [
+    {
+      "member": "check/check_report.json",
+      "unpacked": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/check/check_report.json",
+      "sha256": "75fba3817b8bf6036c52f09d985f72431769ad376206d145dd7a1a64d018f4b1",
+      "size": 4868
+    },
+    {
+      "member": "check/completion.json",
+      "unpacked": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/check/completion.json",
+      "sha256": "8f4cdaa857a61f0f43e25ea634795abd3500b8a74148ac02802438e1f365a763",
+      "size": 52643
+    },
+    {
+      "member": "check/input_check.json",
+      "unpacked": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/check/input_check.json",
+      "sha256": "b9679c4b2ec586e89992c411922acc9afa250a2e66ba969bb9c96daa14615318",
+      "size": 50948
+    },
+    {
+      "member": "collect/collect_report.json",
+      "unpacked": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/collect/collect_report.json",
+      "sha256": "3c39308d481e6154e9f23ba6055c52e8d7ed707994b262d0d8546c3cdf762922",
+      "size": 673
+    },
+    {
+      "member": "collect/completion.json",
+      "unpacked": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/collect/completion.json",
+      "sha256": "9af0d982326b20fef2a49b13b5e973ba1ba6e17101207f3abafdfda25981c9ac",
+      "size": 52857
+    },
+    {
+      "member": "collect/final_rows.jsonl",
+      "unpacked": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/collect/final_rows.jsonl",
+      "sha256": "0d971bb608761ecd9df180f3e6c0dffb46ca71974431cc97375b9cc9b14c88c6",
+      "size": 2695187
+    },
+    {
+      "member": "collect/independent_B_cache_comparisons.json",
+      "unpacked": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/collect/independent_B_cache_comparisons.json",
+      "sha256": "254525cd0a2530cfd738d342b0952fb33fc135519ad542ba96414af1e35e04c3",
+      "size": 7653
+    },
+    {
+      "member": "collect/input_check.json",
+      "unpacked": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/collect/input_check.json",
+      "sha256": "b9679c4b2ec586e89992c411922acc9afa250a2e66ba969bb9c96daa14615318",
+      "size": 50948
+    },
+    {
+      "member": "fit/completion.json",
+      "unpacked": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/completion.json",
+      "sha256": "f975e2fd6fed5e75d602ac9c1043f36e06106561467b59725b89696130244189",
+      "size": 52835
+    },
+    {
+      "member": "fit/fit_report.json",
+      "unpacked": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/fit_report.json",
+      "sha256": "8c245cf5d2c5f5178dba33436ee5f49f0b5918c90fb1ac66473398346eb4f3af",
+      "size": 290990
+    },
+    {
+      "member": "fit/input_check.json",
+      "unpacked": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/input_check.json",
+      "sha256": "b9679c4b2ec586e89992c411922acc9afa250a2e66ba969bb9c96daa14615318",
+      "size": 50948
+    },
+    {
+      "member": "fit/policy.json",
+      "unpacked": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/policy.json",
+      "sha256": "38d914f114fcdb257f33f1cd6390ebcb4e103adfa1d9022628875e137c916e1f",
+      "size": 57204
+    },
+    {
+      "member": "fit/val_decisions.jsonl",
+      "unpacked": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit/val_decisions.jsonl",
+      "sha256": "d657e93f59235122a1f8e2d8341e986a8c4e51f8dd88b8f651384f846e573bc9",
+      "size": 820442
+    },
+    {
+      "member": "verify/completion.json",
+      "unpacked": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/verify/completion.json",
+      "sha256": "ccd4180e5f6c4f9c85676b962e9d4ecd3fbc133a02fa6ed354c852e66a3bb1be",
+      "size": 52764
+    },
+    {
+      "member": "verify/input_check.json",
+      "unpacked": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/verify/input_check.json",
+      "sha256": "b9679c4b2ec586e89992c411922acc9afa250a2e66ba969bb9c96daa14615318",
+      "size": 50948
+    },
+    {
+      "member": "verify/val_decisions.jsonl",
+      "unpacked": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/verify/val_decisions.jsonl",
+      "sha256": "d657e93f59235122a1f8e2d8341e986a8c4e51f8dd88b8f651384f846e573bc9",
+      "size": 820442
+    },
+    {
+      "member": "verify/verify_report.json",
+      "unpacked": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/verify/verify_report.json",
+      "sha256": "ca274d8913cec50ef6fe723a58de8df9759818af54634939bdcfe0705acd9b77",
+      "size": 116534
+    },
+    {
+      "member": "unittest.log",
+      "unpacked": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/unittest.log",
+      "sha256": "3236eaf7a95cfb9a7320d6a0f7dedfca89ebe55dc9d9f95169dbcda16024fe04",
+      "size": 3450
+    },
+    {
+      "member": "check.log",
+      "unpacked": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/check.log",
+      "sha256": "fc184b9f542aa9d3d65fb1caeb348cdd34a2e82ea46de07aa04b6ed295142494",
+      "size": 101
+    },
+    {
+      "member": "collect.log",
+      "unpacked": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/collect.log",
+      "sha256": "756c86bba987a3a446733e24acb5fcb242c57e4bf7146c6a3bc04d84ff82c685",
+      "size": 1023
+    },
+    {
+      "member": "fit.log",
+      "unpacked": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/fit.log",
+      "sha256": "c591cdea9861f4bf4f08a953180db5d231425f915f3ed11440f6f0fc6b9b1615",
+      "size": 437
+    },
+    {
+      "member": "verify.log",
+      "unpacked": "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/verify.log",
+      "sha256": "01be8a25193353062476c89cb03a36cd6fa462c9131daf3df668362228bac51e",
+      "size": 2044
+    }
+  ],
+  "protected_top_entries": {
+    "_geometry_archive": {
+      "inode": 1116291,
+      "device": 2082,
+      "mtime_ns": 1791168096049877600,
+      "symlink": null
+    },
+    "crane_eood_k1_port_day2night_aug_b_v1": {
+      "inode": 1085184,
+      "device": 2082,
+      "mtime_ns": 1790737495183330000,
+      "symlink": null
+    },
+    "crane_eood_k1_port_day2night_v1": {
+      "inode": 1025705,
+      "device": 2082,
+      "mtime_ns": 1790663381949469800,
+      "symlink": null
+    },
+    "crane_symeood_dino_anchor_fallback_attribution_v1": {
+      "inode": 910256,
+      "device": 2082,
+      "mtime_ns": 1788263338323047200,
+      "symlink": null
+    },
+    "crane_symeood_dino_conservative_takeover_v2": {
+      "inode": 822034,
+      "device": 2082,
+      "mtime_ns": 1787536219592992900,
+      "symlink": null
+    },
+    "crane_symeood_dino_distill_support_v1": {
+      "inode": 822713,
+      "device": 2082,
+      "mtime_ns": 1787617725488454800,
+      "symlink": null
+    },
+    "crane_symeood_dino_geometry_refiner_full_source_v1_seed3407": {
+      "inode": 833604,
+      "device": 2082,
+      "mtime_ns": 1787966587607660500,
+      "symlink": null
+    },
+    "crane_symeood_dino_k1_retentive_causal_phase_fixed_test": {
+      "inode": 883742,
+      "device": 2082,
+      "mtime_ns": 1788179191226913400,
+      "symlink": null
+    },
+    "crane_symeood_dino_k1_retentive_causal_phase_refiner_source_v3_seed3407": {
+      "inode": 882376,
+      "device": 2082,
+      "mtime_ns": 1788767743366926800,
+      "symlink": null
+    },
+    "crane_symeood_dino_k1_retentive_causal_phase_refiner_source_v3_seq11_e1_epoch10_fixed_target_diagnostic": {
+      "inode": 938384,
+      "device": 2082,
+      "mtime_ns": 1788438905995811400,
+      "symlink": null
+    },
+    "crane_symeood_dino_k1_retentive_causal_phase_refiner_source_v3_seq11_e1_seed3407": {
+      "inode": 932609,
+      "device": 2082,
+      "mtime_ns": 1788419355953914500,
+      "symlink": null
+    },
+    "crane_symeood_dino_k1_retentive_causal_phase_refiner_source_v3_seq11_epoch10_paired_fixed_target_diagnostic_v1": {
+      "inode": 938425,
+      "device": 2082,
+      "mtime_ns": 1788502701023841400,
+      "symlink": null
+    },
+    "crane_symeood_dino_k1_retentive_causal_phase_refiner_source_v4_seq11_v2_replay_seed3407": {
+      "inode": 940192,
+      "device": 2082,
+      "mtime_ns": 1788571539058444100,
+      "symlink": null
+    },
+    "crane_symeood_dino_k1_retentive_component_current_only_source_val": {
+      "inode": 944971,
+      "device": 2082,
+      "mtime_ns": 1788662861338713500,
+      "symlink": null
+    },
+    "crane_symeood_dino_k1_retentive_component_fixed_test": {
+      "inode": 898648,
+      "device": 2082,
+      "mtime_ns": 1788246699374042800,
+      "symlink": null
+    },
+    "crane_symeood_dino_k1_retentive_component_source_val": {
+      "inode": 896784,
+      "device": 2082,
+      "mtime_ns": 1788229097794587100,
+      "symlink": null
+    },
+    "crane_symeood_dino_source_inventory_v1": {
+      "inode": 825254,
+      "device": 2082,
+      "mtime_ns": 1787725573553705000,
+      "symlink": null
+    },
+    "crane_symeood_dino_source_inventory_v2": {
+      "inode": 940142,
+      "device": 2082,
+      "mtime_ns": 1788527523003405000,
+      "symlink": null
+    },
+    "crane_symeood_k1": {
+      "inode": 761118,
+      "device": 2082,
+      "mtime_ns": 1790128251061619600,
+      "symlink": null
+    },
+    "crane_symeood_k1_brightaug": {
+      "inode": 761119,
+      "device": 2082,
+      "mtime_ns": 1785120629900209900,
+      "symlink": null
+    },
+    "crane_symeood_k1_dino_corrected_mask_a_v4": {
+      "inode": 835739,
+      "device": 2082,
+      "mtime_ns": 1790316875535719400,
+      "symlink": null
+    },
+    "crane_symeood_k1_dino_corrected_mask_ac_v4_preflight.json": {
+      "inode": 835738,
+      "device": 2082,
+      "mtime_ns": 1790305635061092600,
+      "symlink": null
+    },
+    "crane_symeood_k1_dino_corrected_mask_c_v4": {
+      "inode": 835769,
+      "device": 2082,
+      "mtime_ns": 1790317107879334300,
+      "symlink": null
+    },
+    "crane_symeood_k1_dino_corrected_mask_source_probe_v4.json": {
+      "inode": 835692,
+      "device": 2082,
+      "mtime_ns": 1790302298506585700,
+      "symlink": null
+    },
+    "crane_symeood_k1_dino_fpn_gradient_a_v3": {
+      "inode": 680371,
+      "device": 2082,
+      "mtime_ns": 1790233253016927000,
+      "symlink": null
+    },
+    "crane_symeood_k1_dino_fpn_gradient_b_v3": {
+      "inode": 680408,
+      "device": 2082,
+      "mtime_ns": 1790233494046003500,
+      "symlink": null
+    },
+    "crane_symeood_k1_dino_fpn_gradient_c_v3": {
+      "inode": 694838,
+      "device": 2082,
+      "mtime_ns": 1790233729643377500,
+      "symlink": null
+    },
+    "crane_symeood_k1_dino_fpn_gradient_v3_artifact_audit.json": {
+      "inode": 835667,
+      "device": 2082,
+      "mtime_ns": 1790255223637380200,
+      "symlink": null
+    },
+    "crane_symeood_k1_dino_fpn_gradient_v3_preflight.json": {
+      "inode": 680370,
+      "device": 2082,
+      "mtime_ns": 1790219334558336000,
+      "symlink": null
+    },
+    "crane_symeood_k1_dino_object_background_relation_a_v5": {
+      "inode": 889587,
+      "device": 2082,
+      "mtime_ns": 1790425935080631300,
+      "symlink": null
+    },
+    "crane_symeood_k1_dino_object_background_relation_c_v5": {
+      "inode": 890146,
+      "device": 2082,
+      "mtime_ns": 1790426281234645400,
+      "symlink": null
+    },
+    "crane_symeood_k1_dino_object_background_relation_v5_artifact_audit.json": {
+      "inode": 903603,
+      "device": 2082,
+      "mtime_ns": 1790428764166003200,
+      "symlink": null
+    },
+    "crane_symeood_k1_dino_object_background_relation_v5_artifact_audit_complete.json": {
+      "inode": 904392,
+      "device": 2082,
+      "mtime_ns": 1790470551632255800,
+      "symlink": null
+    },
+    "crane_symeood_k1_dino_object_background_relation_v5_artifact_audit_v2.json": {
+      "inode": 903632,
+      "device": 2082,
+      "mtime_ns": 1790429125465536600,
+      "symlink": null
+    },
+    "crane_symeood_k1_dino_object_background_relation_v5_artifact_audit_v3.json": {
+      "inode": 903648,
+      "device": 2082,
+      "mtime_ns": 1790429290120728200,
+      "symlink": null
+    },
+    "crane_symeood_k1_dino_object_background_relation_v5_preflight.json": {
+      "inode": 889586,
+      "device": 2082,
+      "mtime_ns": 1790404638199805500,
+      "symlink": null
+    },
+    "crane_symeood_k1_dino_object_background_relation_v5_source_val_candidate_flow_v1.json": {
+      "inode": 904472,
+      "device": 2082,
+      "mtime_ns": 1790478870923923500,
+      "symlink": null
+    },
+    "crane_symeood_k1_dino_object_background_source_probe_v5_r2.json": {
+      "inode": 889544,
+      "device": 2082,
+      "mtime_ns": 1790323428224846400,
+      "symlink": null
+    },
+    "crane_symeood_k1_dino_semantic_distill_fair_2gpu_v1": {
+      "inode": 697158,
+      "device": 2082,
+      "mtime_ns": 1790130866758948800,
+      "symlink": null
+    },
+    "crane_symeood_k1_dino_semantic_distill_fair_v1": {
+      "inode": 697152,
+      "device": 2082,
+      "mtime_ns": 1790080450727331800,
+      "symlink": null
+    },
+    "crane_symeood_k1_dino_semantic_distill_v1": {
+      "inode": 695890,
+      "device": 2082,
+      "mtime_ns": 1790079696252698500,
+      "symlink": null
+    },
+    "crane_symeood_k1_dino_warmstart_control_v2": {
+      "inode": 728770,
+      "device": 2082,
+      "mtime_ns": 1790150640489118400,
+      "symlink": null
+    },
+    "crane_symeood_k1_dino_warmstart_distill_v2": {
+      "inode": 728793,
+      "device": 2082,
+      "mtime_ns": 1790150918912545600,
+      "symlink": null
+    },
+    "crane_symeood_k1_dino_warmstart_v2_paired_test_audit.json": {
+      "inode": 742949,
+      "device": 2082,
+      "mtime_ns": 1790152038935261000,
+      "symlink": null
+    },
+    "crane_symeood_k1_dino_warmstart_v2_paired_test_audit.md": {
+      "inode": 742950,
+      "device": 2082,
+      "mtime_ns": 1790152038935927700,
+      "symlink": null
+    },
+    "crane_symeood_k1_epoch20_source_val": {
+      "inode": 944697,
+      "device": 2082,
+      "mtime_ns": 1790554962416460100,
+      "symlink": null
+    },
+    "crane_symeood_k1_port_day2night_aug_b_v1": {
+      "inode": 1071993,
+      "device": 2082,
+      "mtime_ns": 1790686487176803700,
+      "symlink": null
+    },
+    "crane_symeood_k1_port_day2night_midpoint_formal_v1": {
+      "inode": 1116302,
+      "device": 2082,
+      "mtime_ns": 1791034296664554100,
+      "symlink": null
+    },
+    "crane_symeood_k1_port_day2night_midpoint_sigma_v1": {
+      "inode": 1156080,
+      "device": 2082,
+      "mtime_ns": 1791113244450368500,
+      "symlink": null
+    },
+    "crane_symeood_k1_port_day2night_v1": {
+      "inode": 1019441,
+      "device": 2082,
+      "mtime_ns": 1790649445713262800,
+      "symlink": null
+    },
+    "crane_symeood_k1_source_val_reference_epoch24": {
+      "inode": 935963,
+      "device": 2082,
+      "mtime_ns": 1788416752551138200,
+      "symlink": null
+    },
+    "depth_raw_opt_v1": {
+      "inode": 947793,
+      "device": 2082,
+      "mtime_ns": 1788698306956241900,
+      "symlink": null
+    },
+    "dino_teacher_fc_cls_interpolation_v1": {
+      "inode": 761120,
+      "device": 2082,
+      "mtime_ns": 1790062120166187200,
+      "symlink": null
+    },
+    "dino_teacher_s7_highres_fixed_target_v1": {
+      "inode": 761121,
+      "device": 2082,
+      "mtime_ns": 1786264417869056400,
+      "symlink": null
+    },
+    "dino_teacher_s7_highres_margin_source_audit_v1": {
+      "inode": 761122,
+      "device": 2082,
+      "mtime_ns": 1786259801078334900,
+      "symlink": null
+    },
+    "dino_teacher_s7_highres_roi_ranker_v1": {
+      "inode": 761123,
+      "device": 2082,
+      "mtime_ns": 1787299835663160000,
+      "symlink": null
+    },
+    "dino_teacher_s7_temporal_relative_quality_v1": {
+      "inode": 761125,
+      "device": 2082,
+      "mtime_ns": 1787299835767159000,
+      "symlink": null
+    },
+    "dino_teacher_s7_temporal_student_v1": {
+      "inode": 761126,
+      "device": 2082,
+      "mtime_ns": 1787299835807158600,
+      "symlink": null
+    },
+    "dino_teacher_s7_unified_highres_margin_audit_v1": {
+      "inode": 761127,
+      "device": 2082,
+      "mtime_ns": 1786343795544755200,
+      "symlink": null
+    },
+    "dino_teacher_s7_unified_highres_ranker_v1": {
+      "inode": 761128,
+      "device": 2082,
+      "mtime_ns": 1787299835859158100,
+      "symlink": null
+    },
+    "dino_teacher_scoped_lowlight_v1_formal8": {
+      "inode": 761130,
+      "device": 2082,
+      "mtime_ns": 1789611478242809200,
+      "symlink": null
+    },
+    "four_arm_fix2_20261006_100252_465112_review.tar.gz": {
+      "inode": 1680012,
+      "device": 2082,
+      "mtime_ns": 1791253142212664400,
+      "symlink": null
+    },
+    "four_arm_fix3_20261006_103230_480611_review.tar.gz": {
+      "inode": 1682741,
+      "device": 2082,
+      "mtime_ns": 1791253989493599800,
+      "symlink": null
+    },
+    "four_arm_fix4_20261006_103921_484324_review.tar.gz": {
+      "inode": 1684076,
+      "device": 2082,
+      "mtime_ns": 1791254390871016000,
+      "symlink": null
+    },
+    "four_arm_fix5_20261006_105204_491124_review.tar.gz": {
+      "inode": 1701417,
+      "device": 2082,
+      "mtime_ns": 1791259798015443300,
+      "symlink": null
+    },
+    "historical_mechanism_inventory_final.json": {
+      "inode": 904536,
+      "device": 2082,
+      "mtime_ns": 1790491239786194500,
+      "symlink": null
+    },
+    "historical_mechanism_inventory_v1.json": {
+      "inode": 904496,
+      "device": 2082,
+      "mtime_ns": 1790489671549934300,
+      "symlink": null
+    },
+    "historical_mechanism_inventory_v2.json": {
+      "inode": 904512,
+      "device": 2082,
+      "mtime_ns": 1790490441384940600,
+      "symlink": null
+    },
+    "k1_candidate_selection_v1_preflight.json": {
+      "inode": 904604,
+      "device": 2082,
+      "mtime_ns": 1790501504731618700,
+      "symlink": null
+    },
+    "k1_candidate_selection_v1_source_supplement.json": {
+      "inode": 904632,
+      "device": 2082,
+      "mtime_ns": 1790502343951769900,
+      "symlink": null
+    },
+    "k1_dino_warmstart_preflight_v2.json": {
+      "inode": 728736,
+      "device": 2082,
+      "mtime_ns": 1790132310782199700,
+      "symlink": null
+    },
+    "k1_dino_warmstart_test_analysis_20260923.tar.gz": {
+      "inode": 742976,
+      "device": 2082,
+      "mtime_ns": 1790153309563968000,
+      "symlink": null
+    },
+    "oof_task_fix_index_after.sha256": {
+      "inode": 1961265,
+      "device": 2082,
+      "mtime_ns": 1791800218497201900,
+      "symlink": null
+    },
+    "oof_task_fix_index_before.sha256": {
+      "inode": 1961234,
+      "device": 2082,
+      "mtime_ns": 1791800142715839900,
+      "symlink": null
+    },
+    "oof_task_fix_worktree_after.sha256": {
+      "inode": 1961264,
+      "device": 2082,
+      "mtime_ns": 1791800215566316200,
+      "symlink": null
+    },
+    "oof_task_fix_worktree_before.sha256": {
+      "inode": 1961233,
+      "device": 2082,
+      "mtime_ns": 1791800139492792700,
+      "symlink": null
+    },
+    "port_depth_four_arm_v1": {
+      "inode": 1714561,
+      "device": 2082,
+      "mtime_ns": 1791362198420989900,
+      "symlink": null
+    },
+    "port_depth_four_arm_v1_train03_20261006_142442_604015.tar.gz": {
+      "inode": 1714565,
+      "device": 2082,
+      "mtime_ns": 1791267885735765300,
+      "symlink": null
+    },
+    "port_depth_four_arm_v1_train03_20261006_142450_604135.tar.gz": {
+      "inode": 1714592,
+      "device": 2082,
+      "mtime_ns": 1791268218825467200,
+      "symlink": null
+    },
+    "port_detection_runtime_v1": {
+      "inode": 1677018,
+      "device": 2082,
+      "mtime_ns": 1791255124739112000,
+      "symlink": null
+    },
+    "port_detection_runtime_v1_four_arm_inputs_fix1_20261006": {
+      "inode": 1673338,
+      "device": 2082,
+      "mtime_ns": 1791251022710346400,
+      "symlink": null
+    },
+    "port_detection_runtime_v1_four_arm_inputs_fix1_review_20261006.tar.gz": {
+      "inode": 1673356,
+      "device": 2082,
+      "mtime_ns": 1791251022725261200,
+      "symlink": null
+    },
+    "port_detection_runtime_v1_four_arm_static_20261006": {
+      "inode": 1670594,
+      "device": 2082,
+      "mtime_ns": 1791250178310925400,
+      "symlink": null
+    },
+    "port_detection_runtime_v1_four_arm_static_retry1_20261006": {
+      "inode": 1671616,
+      "device": 2082,
+      "mtime_ns": 1791250497062270300,
+      "symlink": null
+    },
+    "port_detection_runtime_v1_four_arm_test_20261006": {
+      "inode": 1670599,
+      "device": 2082,
+      "mtime_ns": 1791250186369947700,
+      "symlink": null
+    },
+    "port_detection_runtime_v1_four_arm_test_run1_20261006": {
+      "inode": 1672002,
+      "device": 2082,
+      "mtime_ns": 1791250625023031800,
+      "symlink": null
+    },
+    "port_frozen_downstream_v1_20261007_163625_1260566.tar.gz": {
+      "inode": 1782613,
+      "device": 2082,
+      "mtime_ns": 1791363104468538300,
+      "symlink": null
+    },
+    "port_geometry_ap_test_v1_native_server_input_fix_v1": {
+      "inode": 1928918,
+      "device": 2082,
+      "mtime_ns": 1791618627905246600,
+      "symlink": null
+    },
+    "port_geometry_ap_test_v1_static_server_input_fix_v1": {
+      "inode": 1928915,
+      "device": 2082,
+      "mtime_ns": 1791618558754598200,
+      "symlink": null
+    },
+    "port_geometry_ap_v1_val_native_server": {
+      "inode": 1928771,
+      "device": 2082,
+      "mtime_ns": 1791616151386810200,
+      "symlink": null
+    },
+    "port_geometry_midpoint_edge_residual_v1_20261005_212712": {
+      "inode": 1533077,
+      "device": 2082,
+      "mtime_ns": 1791206878680174400,
+      "symlink": null
+    },
+    "port_geometry_midpoint_edge_residual_v1_20261005_212712.tar.gz": {
+      "inode": 1534097,
+      "device": 2082,
+      "mtime_ns": 1791207115498957200,
+      "symlink": null
+    },
+    "port_geometry_midpoint_formal_v1_roi_cache": {
+      "inode": 1401853,
+      "device": 2082,
+      "mtime_ns": 1791168099070283000,
+      "symlink": "port_results/geometry/port_geometry_midpoint_formal_v1_roi_cache"
+    },
+    "port_geometry_midpoint_formal_v1_test_eval": {
+      "inode": 1401854,
+      "device": 2082,
+      "mtime_ns": 1791168099072170200,
+      "symlink": "port_results/geometry/port_geometry_midpoint_formal_v1_test_eval"
+    },
+    "port_geometry_midpoint_readout_test_v1": {
+      "inode": 1954319,
+      "device": 2082,
+      "mtime_ns": 1791771069371411900,
+      "symlink": null
+    },
+    "port_geometry_midpoint_readout_v1": {
+      "inode": 1943048,
+      "device": 2082,
+      "mtime_ns": 1791768521725693800,
+      "symlink": null
+    },
+    "port_geometry_midpoint_sigma15_v1_val_eval": {
+      "inode": 1401857,
+      "device": 2082,
+      "mtime_ns": 1791168099077251300,
+      "symlink": "port_results/geometry/port_geometry_midpoint_sigma15_v1_val_eval"
+    },
+    "port_geometry_size_boundary_continuous_v1_20261007_154944_1078779.tar.gz": {
+      "inode": 1780530,
+      "device": 2082,
+      "mtime_ns": 1791359929250311800,
+      "symlink": null
+    },
+    "port_geometry_size_boundary_v1": {
+      "inode": 1777552,
+      "device": 2082,
+      "mtime_ns": 1791379246221890100,
+      "symlink": null
+    },
+    "port_geometry_size_boundary_v1_20261007_143640_810794.tar.gz": {
+      "inode": 1777939,
+      "device": 2082,
+      "mtime_ns": 1791355597230255400,
+      "symlink": null
+    },
+    "port_geometry_size_contrast_v1_20261006_195709_817580": {
+      "inode": 1768073,
+      "device": 2082,
+      "mtime_ns": 1791288315264361900,
+      "symlink": null
+    },
+    "port_geometry_size_contrast_v1_20261006_195709_817580.tar.gz": {
+      "inode": 1768134,
+      "device": 2082,
+      "mtime_ns": 1791288316514573700,
+      "symlink": null
+    },
+    "port_geometry_size_direction_balance_v1_20261007_212046_2322017.tar.gz": {
+      "inode": 1793553,
+      "device": 2082,
+      "mtime_ns": 1791380453750568400,
+      "symlink": null
+    },
+    "port_geometry_size_support_v1_20261006_184154_742483": {
+      "inode": 1767885,
+      "device": 2082,
+      "mtime_ns": 1791283323614567200,
+      "symlink": null
+    },
+    "port_geometry_size_support_v1_20261006_184154_742483.tar.gz": {
+      "inode": 1767905,
+      "device": 2082,
+      "mtime_ns": 1791283323827209500,
+      "symlink": null
+    },
+    "port_low_fa_v1_20261015_server_v1_analysis.tar.gz": {
+      "inode": 2018816,
+      "device": 2082,
+      "mtime_ns": 1792049201807013700,
+      "symlink": null
+    },
+    "port_low_fa_v1_20261015_server_v1_reviewed.tar.gz": {
+      "inode": 2018819,
+      "device": 2082,
+      "mtime_ns": 1792049236331713600,
+      "symlink": null
+    },
+    "port_low_fa_v1_current.bundle": {
+      "inode": 2018768,
+      "device": 2082,
+      "mtime_ns": 1792049172214453100,
+      "symlink": null
+    },
+    "port_midpoint_depth_v1_20261006_095629.tar.gz": {
+      "inode": 1676508,
+      "device": 2082,
+      "mtime_ns": 1791252005586309900,
+      "symlink": null
+    },
+    "port_midpoint_reliability_v1_collect": {
+      "inode": 1401859,
+      "device": 2082,
+      "mtime_ns": 1791168099081672100,
+      "symlink": "port_results/reliability/port_midpoint_reliability_v1_collect"
+    },
+    "port_midpoint_reliability_v1_fit": {
+      "inode": 1401860,
+      "device": 2082,
+      "mtime_ns": 1791168099082449300,
+      "symlink": "port_results/reliability/port_midpoint_reliability_v1_fit"
+    },
+    "port_reliability_branches_v1_test_cached_v1": {
+      "inode": 1401862,
+      "device": 2082,
+      "mtime_ns": 1791168099087326400,
+      "symlink": "port_results/reliability/port_reliability_branches_v1_test_cached_v1"
+    },
+    "port_reliability_branches_v1_val_cached_v1": {
+      "inode": 1401863,
+      "device": 2082,
+      "mtime_ns": 1791168099105065500,
+      "symlink": "port_results/reliability/port_reliability_branches_v1_val_cached_v1"
+    },
+    "port_reliability_train_support_v1": {
+      "inode": 1401864,
+      "device": 2082,
+      "mtime_ns": 1791168099106459400,
+      "symlink": "port_results/reliability/port_reliability_train_support_v1"
+    },
+    "port_reliability_train_support_v1_cache": {
+      "inode": 1401865,
+      "device": 2082,
+      "mtime_ns": 1791168099107145500,
+      "symlink": "port_results/reliability/port_reliability_train_support_v1_cache"
+    },
+    "port_shape_e_h_v1_val_compare.json": {
+      "inode": 1401866,
+      "device": 2082,
+      "mtime_ns": 1791168099113133500,
+      "symlink": "port_results/geometry/port_shape_e_h_v1_val_compare.json"
+    },
+    "port_simple_reliability_v1_fit": {
+      "inode": 1401867,
+      "device": 2082,
+      "mtime_ns": 1791168099116696200,
+      "symlink": "port_results/reliability/port_simple_reliability_v1_fit"
+    },
+    "port_size_annotation_readout_v1_20261007_091057": {
+      "inode": 1769174,
+      "device": 2082,
+      "mtime_ns": 1791335458224924500,
+      "symlink": null
+    },
+    "port_size_annotation_readout_v1_20261007_091057.tar.gz": {
+      "inode": 1769177,
+      "device": 2082,
+      "mtime_ns": 1791335458262590400,
+      "symlink": null
+    },
+    "port_size_annotation_readout_v1_paired_20261007_102350_448360": {
+      "inode": 1769739,
+      "device": 2082,
+      "mtime_ns": 1791339831378928100,
+      "symlink": null
+    },
+    "port_size_annotation_readout_v1_paired_20261007_102350_448360.tar.gz": {
+      "inode": 1769742,
+      "device": 2082,
+      "mtime_ns": 1791339831413533800,
+      "symlink": null
+    },
+    "port_size_candidate_downstream_v1_20261007_172550_1446561.exit": {
+      "inode": 1783669,
+      "device": 2082,
+      "mtime_ns": 1791365151473531500,
+      "symlink": null
+    },
+    "port_size_candidate_downstream_v1_20261007_172550_1446561.launch.json": {
+      "inode": 1783663,
+      "device": 2082,
+      "mtime_ns": 1791365150145740000,
+      "symlink": null
+    },
+    "port_size_candidate_downstream_v1_20261007_172550_1446561.launch.sh": {
+      "inode": 1783661,
+      "device": 2082,
+      "mtime_ns": 1791365150139299300,
+      "symlink": null
+    },
+    "port_size_candidate_downstream_v1_20261007_172550_1446561.log": {
+      "inode": 1783662,
+      "device": 2082,
+      "mtime_ns": 1791365151468519100,
+      "symlink": null
+    },
+    "port_size_candidate_downstream_v1_20261007_191454_1852169.exit": {
+      "inode": 1788860,
+      "device": 2082,
+      "mtime_ns": 1791373244529183200,
+      "symlink": null
+    },
+    "port_size_candidate_downstream_v1_20261007_191454_1852169.launch.json": {
+      "inode": 1787673,
+      "device": 2082,
+      "mtime_ns": 1791371694135578000,
+      "symlink": null
+    },
+    "port_size_candidate_downstream_v1_20261007_191454_1852169.launch.sh": {
+      "inode": 1787671,
+      "device": 2082,
+      "mtime_ns": 1791371694129278200,
+      "symlink": null
+    },
+    "port_size_candidate_downstream_v1_20261007_191454_1852169.log": {
+      "inode": 1787672,
+      "device": 2082,
+      "mtime_ns": 1791373244523669300,
+      "symlink": null
+    },
+    "port_size_candidate_downstream_v1_20261007_191454_1852169.tar.gz": {
+      "inode": 1788858,
+      "device": 2082,
+      "mtime_ns": 1791373244496030200,
+      "symlink": null
+    },
+    "port_size_halfpeak_range_v3_analysis_20261005.tar.gz": {
+      "inode": 1453976,
+      "device": 2082,
+      "mtime_ns": 1791186265963991500,
+      "symlink": null
+    },
+    "port_size_halfpeak_range_v3_assess": {
+      "inode": 1450556,
+      "device": 2082,
+      "mtime_ns": 1791186104968552200,
+      "symlink": null
+    },
+    "port_size_halfpeak_range_v3_check": {
+      "inode": 1446393,
+      "device": 2082,
+      "mtime_ns": 1791184097937600700,
+      "symlink": null
+    },
+    "port_size_halfpeak_range_v3_smoke": {
+      "inode": 1446642,
+      "device": 2082,
+      "mtime_ns": 1791184183630691200,
+      "symlink": null
+    },
+    "port_size_halfpeak_range_v3_train": {
+      "inode": 1447129,
+      "device": 2082,
+      "mtime_ns": 1791184607756663500,
+      "symlink": null
+    },
+    "port_size_halfpeak_range_v3_unittest.log": {
+      "inode": 1446288,
+      "device": 2082,
+      "mtime_ns": 1791184048536906100,
+      "symlink": null
+    },
+    "port_size_reference_v1_train": {
+      "inode": 1401868,
+      "device": 2082,
+      "mtime_ns": 1791168099134348600,
+      "symlink": "port_results/reliability/port_size_reference_v1_train"
+    },
+    "port_size_residual_v4": {
+      "inode": 1521233,
+      "device": 2082,
+      "mtime_ns": 1791205207124506800,
+      "symlink": null
+    },
+    "pro-experience": {
+      "inode": 761131,
+      "device": 2082,
+      "mtime_ns": 1787299343095461500,
+      "symlink": null
+    },
+    "seq03_fixed_chain_100frames_seq06_v1.json": {
+      "inode": 1025736,
+      "device": 2082,
+      "mtime_ns": 1790651557185344100,
+      "symlink": null
+    },
+    "sim_box_error_decomposition_seq06_v1.json": {
+      "inode": 1031952,
+      "device": 2082,
+      "mtime_ns": 1790665795833285900,
+      "symlink": null
+    },
+    "symeood_sim_val_epochs_v1.json": {
+      "inode": 1072177,
+      "device": 2082,
+      "mtime_ns": 1790671095534558600,
+      "symlink": null
+    },
+    "teacher_student_source_val_gap_v1.json": {
+      "inode": 937025,
+      "device": 2082,
+      "mtime_ns": 1790515586989228700,
+      "symlink": null
+    },
+    "teacher_student_source_val_gap_v2.json": {
+      "inode": 944832,
+      "device": 2082,
+      "mtime_ns": 1790555440777648100,
+      "symlink": null
+    },
+    "webots_depth_e2e": {
+      "inode": 832968,
+      "device": 2082,
+      "mtime_ns": 1788075522464983500,
+      "symlink": null
+    },
+    "webots_native_s14_train03_recovery_20261006_104455_448360.tar.gz": {
+      "inode": 1685118,
+      "device": 2082,
+      "mtime_ns": 1791254717934455800,
+      "symlink": null
+    }
+  },
+  "pre_git_status_sha256": "3e4c6c3ec252f63b4e73cb28d8a14e1c53f5d0eb9c331e452887aadca4074b44",
+  "inventory_files": 1720,
+  "inventory_bytes": 2059519769
+}

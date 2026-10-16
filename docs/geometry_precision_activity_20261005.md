@@ -1072,7 +1072,7 @@ CUDA_VISIBLE_DEVICES=3 bash crane_project/tools/run_port_detection_runtime_v1.sh
 
 **授权／范围：** 按用户“按推荐修改代码、检查并给服务器指令”，实施A043最近一步的支持／标注诊断，不扩展为新尺寸训练。读取已核验σ1.5 collect的2558 TRAIN＋887 VAL数值，不重建缓存、不加载模型／ROI／图像／policy，不执行深度公式或访问TEST预测／标注。旧64图fit48／probe16及标准尺度身份保持，未复用半尺度冒充独立支持。
 
-**改动：** 新增`port_geometry_size_support_v1.py`工具模块、`diagnose_port_geometry_size_support_v1.py`入口、`run_port_geometry_size_support_v1.sh`、protocol／sources及只含3445 TRAIN／VAL条目的labels合同、20项测试；说明集中至[新运行文件](detection/尺寸诊断与有限对照_v1_运行说明_20261006.md)，更新顶部／第1.1节及深度结果第6.3节完成状态。逐帧双边log／有符号误差、尺度／比例、尾部、三个中心分母、域／视频／来源／旧采样角色、正确与错误子集、B→M恢复／新增错误分别报告。片段按已映射源视频／segment／时间／帧断开，未知时间只报编号相邻，不称独立场景或自动判定支持充分。
+**改动：** 新增`port_geometry_size_support_v1.py`工具模块、`diagnose_port_geometry_size_support_v1.py`入口、`run_port_geometry_size_support_v1.sh`、protocol／sources及只含3445 TRAIN／VAL条目的labels合同、20项测试；说明集中至[新运行文件](detection/尺寸优化专用记录_20261016.md#legacy-size-run-doc)，更新顶部／第1.1节及深度结果第6.3节完成状态。逐帧双边log／有符号误差、尺度／比例、尾部、三个中心分母、域／视频／来源／旧采样角色、正确与错误子集、B→M恢复／新增错误分别报告。片段按已映射源视频／segment／时间／帧断开，未知时间只报编号相邻，不称独立场景或自动判定支持充分。
 
 **来源／标注合同：** 固定collect五文件SHA（rows=`0d971bb608761ecd9df180f3e6c0dffb46ca71974431cc97375b9cc9b14c88c6`）及B／head／选权／冻结receipt、VAL指纹；支持已有目录或原tar只读，不执行／解压包内代码。3445 annfile SHA、594 axis快照及k=2.1生成合同复核；0.25px容差只检查舍入多边形中心／尺寸与axis赋值，不重建或替换native GT。物理参考面保持UNCONFIRMED，不把固定k或图像比例等同于物理L/S。
 
@@ -1093,13 +1093,13 @@ CUDA_VISIBLE_DEVICES=3 bash crane_project/tools/run_port_detection_runtime_v1.sh
 
 **授权／设计：** 用户同意先完善TRAIN支持再做有限对照，并请求运行指令。不改原TRAIN／VAL，不把VAL不足推断成唯一原因；离线使用VAL选权仍是VAL选择。复用2558 TRAIN封存预测及三ROI缓存，身份排序预置每视频末尾约20%probe、前10编号purged；legacy64不进新梯度，原角色保持。fit1942／probe492／legacy64／purged60；fit54尺寸错误、共同偏小仅2，probe不独立于原训练，也不确认物理参考。视频平衡／错误曝光每尺度视图最多4次，同时保护正确框。
 
-**文件／实现：** 新增utils/port_geometry_size_contrast_v1.py、tools/run_port_geometry_size_contrast_v1.py及.sh、protocol／sources JSON、tests/test_port_geometry_size_contrast_v1.py和[运行说明](detection/尺寸诊断与有限对照_v1_运行说明_20261006.md)。保留原2818参数在线头与全部交付保护，固定双边log与双边＋0.25投影比例两个监督组，同初始化／调度／Adam／200步。每组各2步smoke丢弃；完整M VAL887重放通过后才有限更新，无中间选权、重试或自动晋级。回传各项加权梯度／裁剪与原图连续误差；原联合gate加probe MAE／P95保护。脚本失败立即停，tar位于work_dirs根目录、排除权重／ROI。未修改旧源／权重／结果、policy／公式或论文。
+**文件／实现：** 新增utils/port_geometry_size_contrast_v1.py、tools/run_port_geometry_size_contrast_v1.py及.sh、protocol／sources JSON、tests/test_port_geometry_size_contrast_v1.py和[运行说明](detection/尺寸优化专用记录_20261016.md#legacy-size-run-doc)。保留原2818参数在线头与全部交付保护，固定双边log与双边＋0.25投影比例两个监督组，同初始化／调度／Adam／200步。每组各2步smoke丢弃；完整M VAL887重放通过后才有限更新，无中间选权、重试或自动晋级。回传各项加权梯度／裁剪与原图连续误差；原联合gate加probe MAE／P95保护。脚本失败立即停，tar位于work_dirs根目录、排除权重／ROI。未修改旧源／权重／结果、policy／公式或论文。
 
 **验证／完成状态（A048更新）：** 交付时101来源闭包及真实封存collection的CPU prepare／角色复算通过；14测试中10本地通过、4因无Torch留服务器。A048服务器14项全部通过，实际两尺度资格、4次smoke更新及400次有限更新、完整VAL与回传核验均完成。测试涵盖VAL不能入计划、角色不由误差决定、fit／legacy／purge隔离、曝光上限／视频平衡、篡改与连续退化拒绝、shell失败后停止及根目录压缩。两组性能未通过、保持M，不追加预算，取消运行待办；可靠性／米制深度未新评，不从Train-03／TEST选方案。实现协议及旧反证保留，不将运行完成写成收益或根因已解决。
 
 ### A047. 2026-10-06：合并尺寸运行说明、集中论文结果，明确可靠性与深度共同目标
 
-**范围／改动：** 按用户授权合并两份尺度运行说明，移除原两份独立文件，仅维护[统一运行说明](detection/尺寸诊断与有限对照_v1_运行说明_20261006.md)与[尺寸主要结果](detection/尺寸精度主要结果与对比分析_20261006.md)。保留已完成CPU诊断的精简流程存档、新有限协议／Git／服务器／根目录压缩指令；主要结果现按A049用户偏好只列固定B／M标准VAL、TRAIN支持及标注合同；旧200步和新有限反证留活动A014／A048，不再入论文结果文件。深度文件第6.4节改为尺寸结果引用，旧锚点保留，重复表格移出；更新本记录顶部／摘要及旧链接，不修改旧长交接。
+**范围／改动：** 按用户授权合并两份尺度运行说明，移除原两份独立文件，仅维护[统一运行说明](detection/尺寸优化专用记录_20261016.md#legacy-size-run-doc)与[尺寸主要结果](detection/尺寸精度主要结果与对比分析_20261006.md)。保留已完成CPU诊断的精简流程存档、新有限协议／Git／服务器／根目录压缩指令；主要结果现按A049用户偏好只列固定B／M标准VAL、TRAIN支持及标注合同；旧200步和新有限反证留活动A014／A048，不再入论文结果文件。深度文件第6.4节改为尺寸结果引用，旧锚点保留，重复表格移出；更新本记录顶部／摘要及旧链接，不修改旧长交接。
 
 **目标／边界：** 用户明确尺寸修复应同时改善可靠性和深度。几何是共同上游，短边尺度与投影比例是重点，但几何通过不证明下游收益。匹配同一候选前端，固定policy／公式后分别检查可靠性同接受数错误接受／正确保留及分视频表现，独立深度米制误差／尾部／全帧有效覆盖；仅一侧改善不称共同改善。另拟合policy／公式另立版本，Train-03／TEST不选方案。此轮只整理文档和目标，没有新增下游代码、服务器运行、训练或论文改写。
 
