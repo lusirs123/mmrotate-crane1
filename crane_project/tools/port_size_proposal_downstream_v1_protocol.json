@@ -1,0 +1,44 @@
+{
+  "protocol": "port_size_proposal_downstream_v1",
+  "versions": [
+    "b",
+    "midpoint",
+    "c20",
+    "p07"
+  ],
+  "size_heads": {
+    "c20": {
+      "arm": "repeat7",
+      "epoch": 20,
+      "sha256": "fefbe410d84a3728137d0603ff8b0713bc0dd145fbc3727c4bb4aa114a70e974"
+    },
+    "p07": {
+      "arm": "proposal7",
+      "epoch": 7,
+      "sha256": "d1fa5587fb42fe30db6994a14eb2e345cd00c552b1718ba45e5c3f2e8b5ec6fd"
+    }
+  },
+  "stages": [
+    "complete887 original-image VAL vs sealed training outputs; decisions/score/presence exact, boxes atol1e-4 rtol1e-6",
+    "only after VAL pass complete1440 TEST, same-run four arms, original native AP11 verification",
+    "Unknown-02 only1097, original Raw-opt calibration c9c14fc1b09ba8223996121425e302888ac7d44213192225acd5365fb2f1ffe2"
+  ],
+  "metrics": "Existing full-frame mean_RIoU,DFR,ACI,MCML,TDR,AP50/AP75; center<15px/output,size both<=10%/output,180deg angle<=3 andGTaspect>=1.2/eligible output; coverage/missing/full correct; long/shortMAE/P95/bias,a/r,near fixedM<=3% each edge harms andsize transitions. Unknown metreMAE,RMSE,bias,P95,count/frames; common-valid paired metrics; signed algebra of short/ratio/interaction not additive MAE attribution.",
+  "limits": {
+    "training_updates": 0,
+    "selection": false,
+    "formula_refit": false,
+    "automatic_adoption": false,
+    "train03": false,
+    "fixed_dev": false,
+    "reliability_filter": false,
+    "size_accept_filter": false
+  },
+  "resources": {
+    "gpu": 3,
+    "max_process_mib": 1536,
+    "min_free_mib": 2048,
+    "allocator_mib": 1024
+  },
+  "historical": "S025 original adoption failure retained regardless of descriptive TEST/depth; keep formal M."
+}
