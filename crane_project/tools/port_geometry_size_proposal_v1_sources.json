@@ -1,0 +1,9 @@
+{
+  "protocol": "port_geometry_size_proposal_v1",
+  "sources": {
+    "crane_project/utils/port_geometry_size_proposal_v1.py": "c984f34a2ed3218b0a2605ebe1b1cad66fda1f5833330a6f6e74abb284592d3b",
+    "crane_project/tools/run_port_geometry_size_proposal_v1.py": "c527bde8a69d194ac1538b8abbb7506f0ab7e33990330c10e2c68cd82de35b85",
+    "tests/test_port_geometry_size_proposal_v1.py": "a15921153d92373cd39c8b4e5d245d8173a122dfcc8c29bcd1274879fced124d",
+    "crane_project/tools/port_geometry_size_proposal_v1_protocol.json": "296bb9ea3a02163925088c80706ec8bb20552a611acd72b237152f3a70219dc4"
+  }
+}

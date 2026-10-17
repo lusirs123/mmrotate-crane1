@@ -1,0 +1,57 @@
+{
+  "protocol": "port_geometry_size_proposal_v1",
+  "parameter_count": 2712,
+  "h": 0.0625,
+  "slots": [
+    "natural",
+    "long_plus",
+    "long_minus",
+    "short_plus",
+    "short_minus",
+    "long_exact",
+    "short_exact"
+  ],
+  "arms": [
+    "repeat7",
+    "proposal7"
+  ],
+  "training": {
+    "epochs": 24,
+    "batch_size": 8,
+    "updates_per_epoch": 639,
+    "seed": 1703,
+    "lr": 0.001,
+    "clip_norm": 10.0,
+    "weight_decay": 0.0
+  },
+  "data": "Full2558 TRAIN, standard/half5116 paired views,5112 output views; no GT/center/old eligible filtering. Four missing views retained in natural reports. No new independent images.",
+  "change": "Only TRAIN Q organization. repeat7: seven natural M slots; proposal7: natural, long+/-h,short+/-h,long GT exact,short GT exact. Same frozen visual inputs, unchanged I structure/readout and unweighted SmoothL1 beta.1. Stem deterministic and shared once/view in BOTH arms.",
+  "labels": "GT long/short assigned ONCE by natural M raw axes, then actual B-model swap. log(GT_axis/Q_axis), no rematch on Q crossing, no clipping. GT-exact named axis zero. No slot/type/h/GT flag input to scorer.",
+  "inference": "Unchanged original I.forward on natural M ONCE; original B range/raw axis/canonical angle/ROI/whole-pair fallback M; training Q is never mistaken for frozen M.",
+  "control": "Both arms freshly trained24; no reuse of historical I even if forward/loss close. Compare repeated reduction/gradients/updates and record max drift. Adam can amplify roundoff in mathematically constant logit biases.",
+  "engineering": "Frozen source/cache/B/M/I07 SHA; saved M baseline -> raw cache B/GT/image identities; real full neutral natural train/VAL; full7slot labels/support/axis-crossing/unreachable inventory; natural-wrapper agreement, repeated2updates and candidate2updates discarded, exact checkpoint/optimizer/RNG replay; no TRAIN admission gate.",
+  "evaluation": "Every24 natural full887 VAL per arm, overall/Real/Sim/video custom metrics, AP11 cached-GT supplement, center<15,size10,angle<=3 with GT aspect>=1.2; outputs/missing/full denominators. Natural TRAIN groups and7slot recovery diagnostic only.",
+  "selection": "Both arms same lexicographic Sim longMAE,shortMAE,earliest epoch, independent of TRAIN. Select best intrinsic-adoption-passing epoch; else descriptive best and KEEP M. No composite score or TEST/Unknown access.",
+  "adoption": {
+    "sim": "Both MAE < min(B,I07)-1e-6; meanabs(a)<=M+1e-6; fullRIoU>max(M,I07)+1e-5.",
+    "real": "Both MAE<=I07+1e-6; fullRIoU>=I07-1e-5; no substantive tolerated degradation.",
+    "near": "Both domains, each fixed-M near3 single-edge MAE<=M+1e-6. Membership fixed from M, not I07 or candidate. Counts exact.",
+    "protection": "M center/raw/canonical angle/score/presence exact. Per-domain ACI unchanged; MCML max/mean<=M; TDR hits>=M with identical denominators. DFR/MRF, P95/bias/r and size10 transitions disclosed, not extra gates.",
+    "mechanism": "Chosen proposal vs independently chosen repeat control: Sim BOTH MAE lower>1e-6 and fullRIoU higher>1e-5; Real both MAE/RIoU no worse within1e-6/1e-5; near MAE no worse control+1e-6. Adoption and usefulness separately reported."
+  },
+  "resources": {
+    "physical_gpu": 3,
+    "max_process_mib": 1536,
+    "min_free_mib": 2048,
+    "torch_allocator_cap_mib": 1100
+  },
+  "stop": "Engineering/nonfinite/resource failure stops. Otherwise fixed24 per arm, all VAL even if TRAIN harms; no added amplitude/module/weight/epochs/TEST/depth, no automatic promotion.",
+  "limits": {
+    "detector_updates": 0,
+    "midpoint_updates": 0,
+    "feature_extractions": 0,
+    "test_access": false,
+    "depth_access": false,
+    "control_reused": false
+  }
+}
