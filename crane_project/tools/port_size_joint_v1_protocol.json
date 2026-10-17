@@ -1,0 +1,14 @@
+{
+  "protocol": "port_size_joint_v1",
+  "scope": "Saved fullTRAIN5116 paired views andVAL887 rows; frozenM,C20,P07; common proposal TRAIN aggregate only; metadata inventory only; CPU, zero model/cache/inference/optimizer/TEST/depth error access.",
+  "groups": "Fixed M single-edge absolute relative error<=3%; bothnear,longnear/shorterror,shortnear/longerror,botherror; 9 long/short improvement states and9 jointscale/aspect states with ties explicit EPS1e-12. Full frames and outputs separate; no TRAIN gate.",
+  "comparison": [
+    "m->c20",
+    "m->p07",
+    "c20->p07"
+  ],
+  "sources": "Original indexed S025 rows/checkpoint identities and pinned common-probe SHA; existing OpenCV rotatedIoU CPU only, no prediction generation.",
+  "artificial": "Mean error difference vs same-frame-set natural slot; do NOT label difference as meanabs response or near-conditioned per-frame harm. Artificial pre-delivery errors and fixed natural axes kept distinct.",
+  "stop": "No new candidate training contract unless usable natural AND appropriately conditioned artificial response evidence. Missing saved evidence is reported; do not rerun a model to fill gaps.",
+  "depth": "Keep Train03 calibration diagnostic, Fixeddev formula development exposed, Unknown02 frozen descriptive exposed. No reassignment of excluded historical sequences, no new depth error calculation, no new acquisition."
+}

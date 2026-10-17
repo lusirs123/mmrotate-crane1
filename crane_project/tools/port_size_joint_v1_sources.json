@@ -1,0 +1,14 @@
+{
+  "protocol": "port_size_joint_v1",
+  "sources": {
+    "crane_project/tools/analyze_port_size_joint_v1.py": "2112ed728e84a7b20f2a2ce15ab64f3d25d4ec4218c8e64efaa62dd9a4924d3c",
+    "tests/test_port_size_joint_v1.py": "c05b3d52f7dcb09293f5b5c6f80b85b814621c901b6dd51987dd5808e3d2ff29",
+    "crane_project/tools/port_size_joint_v1_protocol.json": "85dc179a8ba79a13490a7f9a3488bbaed36ace9c9ad41bf83f0dc211105edf1b",
+    "crane_project/tools/eval_crane_offline.py": "52d22caa5383a0c35c3b4f1b1f6b1453ba5da9d2618da0eb686eff8570bfc9b9",
+    "crane_project/utils/port_geometry_size_condition_v1.py": "c35768dfd79da941dcdc8c7fcb4f0d0fa4628deccf3cb579efe2f7186e1c199d",
+    "crane_project/utils/port_geometry_size_distribution_v1.py": "ea5302fb6085765475f42c6187c56740bf1681d90dd5fed693910b43332dfe33",
+    "crane_project/utils/port_geometry_size_proposal_v1.py": "c984f34a2ed3218b0a2605ebe1b1cad66fda1f5833330a6f6e74abb284592d3b",
+    "docs/data/webots_depth_formal_frame_index_v1.manifest.json": "9aaf257121c36fc672e2b294c6a5c51e7e240fcd437e49cbc3698aa58b490d7b",
+    "docs/webots/Webots单目深度估计.md": "3a9c30b9425e6e8f597eb6a8b585d22e058b7023dc0958aea00180cd527d6eeb"
+  }
+}
