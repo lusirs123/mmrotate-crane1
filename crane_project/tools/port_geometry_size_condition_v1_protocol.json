@@ -1,0 +1,36 @@
+{
+  "adoption": {
+    "diagnostic_only": "joint10 and transitions, P95/bias/a/r/projected ratios, near/mixed damage, AP; not separate all-must-pass gates.",
+    "protection": "Exact M center/raw and canonical direction/score/output. Per-domain MCML max/mean nonincrease and TDR hits nondecrease with identical denominators; ACI equality. DFR disclosed, no independent rejection threshold.",
+    "real": "Both long/short MAE strictly lower than both M and B by1e-6 relative units; full mean_RIoU>M+1e-5.",
+    "sim": "Both long/short MAE<=M+1e-6 relative units; full mean_RIoU>=M-1e-5. Tolerances are numerical, no substantive degradation allowance."
+  },
+  "change": "Only replace four repeated additive geometry entries with geometry*log_bucket_coordinate in both terminal linear readouts. Retain all four entries, including context constants. Effective freedom increases despite same nominal count.",
+  "control": "Reuse all24 R epochs only after immutable source/cache/weights/schedule/initial/runtime and every checkpoint plus saved VAL rows/summary SHA verification. Replay R01,R05,R24 predictions exactly. A mismatch stops, never silently retrains control.",
+  "engineering": "Byte SHA, full real TRAIN/VAL zero identity and original M reference replay, model-axis/resize/delivery,2 discarded updates and exact checkpoint+optimizer+RNG replay. Restore seed1703 after smoke; verify original R schedule and initial digest. Full per-view geometry/context clamp counts saved.",
+  "evaluation": "Candidate every24 epochs complete887 VAL, independent of TRAIN diagnosis. Overall/Real/Sim/video custom metrics, three geometry components, coverage, AP11 cached-GT supplement; full TRAIN groups per epoch are explanatory only.",
+  "input": "Same frozen B P3 ROI/support, B original/model OBB, actual sx/sy and frozen M as R; full2558 TRAIN identities standard/half5116 views,5112 present.",
+  "limits": {
+    "automatic_promotion": false,
+    "cache_rebuilt": false,
+    "depth_access": false,
+    "detector_updates": 0,
+    "feature_extractions": 0,
+    "frozen_midpoint_updates": 0,
+    "test_access": false
+  },
+  "mechanism": "Separately compare candidate best adoption-passing or representative with control best adoption-passing or representative: Real long MAE lower>1e-6, short no worse; Sim both MAE no worse and both domains mean_RIoU no worse within1e-5. Indicates usefulness of the readout change, not proof of semantic error-group recognition.",
+  "parameter_count": 2712,
+  "protocol": "port_geometry_size_condition_v1",
+  "selection": "All24 per arm descriptive representative: Real long MAE, short MAE, earliest epoch. Independently select best adoption-passing epoch by same key. If none, report representative and keep M. Both arms receive same24-epoch window and new adoption checks.",
+  "settings": {
+    "batch_size": 8,
+    "clip_norm": 10.0,
+    "epochs": 24,
+    "lr": 0.001,
+    "seed": 1703,
+    "weight_decay": 0.0
+  },
+  "stop": "Engineering invalidity stops; no TRAIN admission. One24-epoch candidate, no sweeps/additional modules/budget. No adopted candidate keeps M. No TEST/depth/reliability access or automatic promotion.",
+  "supervision": "Original R decoded SmoothL1 beta0.1 only; same targets, gradients, delivery guards, grid and initialization. B/M frozen."
+}

@@ -1,0 +1,11 @@
+{
+  "protocol": "port_geometry_size_condition_v1",
+  "sources": {
+    "crane_project/tools/eval_port_geometry_size_distribution_val_v2.py": "eb321a6094a4bfbc30920948064866f04b631adf0e7c04c8fcd87fe0356c1f8f",
+    "crane_project/tools/port_geometry_size_condition_v1_protocol.json": "d1526cb165b7eddf0555786c60e05423c2ca194f4d4b8fbbc267f024b2bc0bbe",
+    "crane_project/tools/run_port_geometry_size_condition_v1.py": "71573a5716d2e7086d9ed653fe60956dfb5581f4580f4adbd0e54e5fe8febe3c",
+    "crane_project/utils/port_geometry_size_condition_v1.py": "c35768dfd79da941dcdc8c7fcb4f0d0fa4628deccf3cb579efe2f7186e1c199d",
+    "crane_project/utils/port_simple_component_reliability_v1.py": "05cb0fb1f59fd353725134471bc98bc0026d5beb789526618add08eb46837309",
+    "tests/test_port_geometry_size_condition_v1.py": "c0872d3aad418ce1630a12139310d60e121404a78505ef79433af9f74e7d3077"
+  }
+}
