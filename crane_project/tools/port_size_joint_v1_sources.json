@@ -8,7 +8,9 @@
     "crane_project/utils/port_geometry_size_condition_v1.py": "c35768dfd79da941dcdc8c7fcb4f0d0fa4628deccf3cb579efe2f7186e1c199d",
     "crane_project/utils/port_geometry_size_distribution_v1.py": "ea5302fb6085765475f42c6187c56740bf1681d90dd5fed693910b43332dfe33",
     "crane_project/utils/port_geometry_size_proposal_v1.py": "c984f34a2ed3218b0a2605ebe1b1cad66fda1f5833330a6f6e74abb284592d3b",
-    "docs/data/webots_depth_formal_frame_index_v1.manifest.json": "9aaf257121c36fc672e2b294c6a5c51e7e240fcd437e49cbc3698aa58b490d7b",
+    "docs/data/webots_depth_formal_frame_index_v1.manifest.json": "9aaf257121c36fc672e2b294c6a5c51e7e240fcd437e49cbc3698aa58b490d7b"
+  },
+  "reviewed_documents_local_only": {
     "docs/webots/Webots单目深度估计.md": "3a9c30b9425e6e8f597eb6a8b585d22e058b7023dc0958aea00180cd527d6eeb"
   }
 }
