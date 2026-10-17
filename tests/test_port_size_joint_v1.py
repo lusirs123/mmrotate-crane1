@@ -68,5 +68,11 @@ class JointAuditTests(unittest.TestCase):
         x=a.geometry([0,0,100,50,0],[0,0,50,100,-math.pi/2],lambda p,g:1.)
         self.assertEqual(x['e'],[0.,0.]);self.assertEqual(x['r'],0.)
 
+    def test_train_sim_is_training_role_with_source_name_preserved(self):
+        c,p=self.fixture()
+        for r in (c,p):r['split']='train_sim'
+        row=a.bind([c],[p],lambda p,g:.8)[0]
+        self.assertEqual(row['split'],'train');self.assertEqual(row['source_split'],'train_sim')
+
 
 if __name__=='__main__':unittest.main()

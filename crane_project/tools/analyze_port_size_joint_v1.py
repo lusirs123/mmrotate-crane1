@@ -84,7 +84,10 @@ def bind(control, candidate, riou):
     for a,b in zip(control,candidate):
         for k in ('split','scale','image','sequence','frame_id','domain','gt','b','midpoint'):
             if a[k]!=b[k]:raise ValueError('Paired identity mismatch '+k)
-        key=(a['split'],a['scale'],a['image'])
+        if a['split'] not in ('train','train_sim','val'):raise ValueError('Unknown saved source split')
+        if a['split']=='train_sim' and a['domain']!='sim':raise ValueError('TRAIN Sim source identity')
+        split='train' if a['split'] in ('train','train_sim') else 'val'
+        key=(split,a['scale'],a['image'])
         if key in seen:raise ValueError('Duplicate paired view')
         seen.add(key)
         gt=a['gt'];m=a['midpoint'];c=a['edge_residual'];p=b['edge_residual']
@@ -92,7 +95,7 @@ def bind(control, candidate, riou):
             if (m is None)!=(x is None):raise ValueError('Output identity changed')
             if m is not None and (any(m[j]!=x[j] for j in (0,1,4,5)) or (m[2]<m[3])!=(x[2]<x[3])):raise ValueError('Geometry identity changed')
         geoms={k:geometry(gt,x,riou) for k,x in [('m',m),('c20',c),('p07',p)]}
-        result.append(dict(split=a['split'],scale=a['scale'],image=a['image'],domain=a['domain'],sequence=a['sequence'],
+        result.append(dict(split=split,source_split=a['split'],scale=a['scale'],image=a['image'],domain=a['domain'],sequence=a['sequence'],
             member=membership(geoms['m']),geoms=geoms,delivery=dict(c20=a['size_delivery'],p07=b['size_delivery'])))
     return result
 
