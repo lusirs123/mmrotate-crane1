@@ -1,0 +1,9 @@
+{
+  "protocol": "port_geometry_size_axis_balance_v1",
+  "sources": {
+    "crane_project/utils/port_geometry_size_axis_balance_v1.py": "9eef66c03963d530381da173fc0c35a1247264a9c536b60fbdccd48d980404a2",
+    "crane_project/tools/run_port_geometry_size_axis_balance_v1.py": "554783b78e867ec4bbb843b493ceb33abb14c8ba70d6d36f66e5010e4f980391",
+    "tests/test_port_geometry_size_axis_balance_v1.py": "9fedade7364d79fd77105bd5f05c2f45a3ddf3112d11f89af386e80cde747b9b",
+    "crane_project/tools/port_geometry_size_axis_balance_v1_protocol.json": "9cb17330ab4c5f143c22a5537c098ee6c812670b6318bff0a0a970b4155f7245"
+  }
+}

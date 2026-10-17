@@ -1,0 +1,37 @@
+{
+  "protocol": "port_geometry_size_axis_balance_v1",
+  "settings": {
+    "seed": 1703,
+    "epochs": 24,
+    "batch_size": 8,
+    "lr": 0.001,
+    "weight_decay": 0.0,
+    "clip_norm": 10.0
+  },
+  "parameter_count": 2712,
+  "timing": "After S019/S020; before any axis-balanced fitting. Does not change I07 identity.",
+  "change": "Only fixed TRAIN canonical-axis weights; same I forward/init/targets/SmoothL1/delivery. near3 coefficient1, other two error-direction sample masses balanced within cap4 and complete cell mean1. No gradient/loss equality claimed.",
+  "loss": "L=sum_ij(w_ij*SmoothL1_beta0.1(delta_hat_ij-target_ij))/(2*N); N=present supervised views in current batch. No batch-weight-sum normalization. Canonical weights -> M raw -> B-model ROI axes.",
+  "weights": "Full5112 present TRAIN views; per domain/scale/edge, fixed M signed relative error: abs<=.03 near3, else negative undersized/positive oversized. near=1; sum_g min(4*n_g,lambda)=n_under+n_over. Labels/weights absent from inference. Both directions required in8 cells.",
+  "control": "Verify complete S019 uniform-I run/source/cache/runtime/init/schedule/all24 heads+rows+summaries. Replay01/07/21/24. No silent retraining on mismatch.",
+  "evaluation": "Full TRAIN diagnostic and all887 VAL each24 epochs, no TRAIN gate. All custom detection metrics,3 geometry rates/denominators/coverage, video/domain/overall; AP11 cached-GT supplement.",
+  "selection": "Each arm descriptive Sim longMAE, shortMAE, earliest epoch over24; independently same ordering within adoption-passing set. Fixed original I07 reference is never reselected.",
+  "adoption": {
+    "sim": "Both MAE<min(B,I07)-1e-6; abs(a)<=M+1e-6; full meanRIoU>I07+1e-5; each fixed-M single-edge near3 MAE<=I07+1e-6.",
+    "real": "Both MAE<=I07+1e-6; full meanRIoU>=I07-1e-5.",
+    "protection": "Exact M center/raw and canonical angle/score/output. Per domain MCML max/mean<=I07, TDR identical denominator and hits>=I07, ACI and adjacent-pair identity.",
+    "diagnostic": "P95/bias/r,4 groups a,joint10/paired flips,DFR/MRF/AP and per-video costs; no extra rejection gates."
+  },
+  "effects": "Separate from adoption: compare each arm selected adoption-passing else descriptive representative under same fixed key. Report per-edge Sim MAE gain>1e-6 and both-edge flag, domain RIoU/Real costs independently. A failure of strict adoption is not proof of no local effect. No alternate epoch hunting.",
+  "engineering": "Full real neutral TRAIN/VAL, actual raw-axis map roundtrip, full cell fixed weights, real all-one vs original-I2updates bit-exact losses/gradients/Adam/clipping/state;2weighted smoke updates; save/restore optimizer/RNG. Six total discarded engineering head updates, fresh seed/state for formal15336.",
+  "stop": "Engineering failure stops. One24-epoch balanced candidate; no added module/loss/data/epochs or TEST selection. No automatic promotion. TRAIN diagnostic never skips VAL.",
+  "limits": {
+    "test_access": false,
+    "depth_access": false,
+    "feature_extractions": 0,
+    "detector_updates": 0,
+    "frozen_midpoint_updates": 0,
+    "cache_rebuilt": false,
+    "automatic_promotion": false
+  }
+}
