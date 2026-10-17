@@ -45,7 +45,8 @@ def analyze(base,uniform):
             for group,cellvalue in v.items():
                 x=cellvalue['edge_residual'];s=x['sizes'];c=comp[group]['edge_residual']
                 if c['size_correct']!=s['joint10'] or c['outputs']!=s['outputs']:raise ValueError('Component denominator mismatch')
-                row=dict(arm=arm,epoch=epoch,group=group,mean_RIoU=x['mean_riou_full_frame'],**c,
+                row=dict(arm=arm,epoch=epoch,group=group,adoption_pass=meta['adoption']['pass_all'],
+                    adoption_failed=';'.join(meta['adoption']['failed']),mean_RIoU=x['mean_riou_full_frame'],**c,
                     long_MAE_percent=s['edges']['long']['mae']*100,short_MAE_percent=s['edges']['short']['mae']*100,
                     long_P95_percent=s['edges']['long']['p95']*100,short_P95_percent=s['edges']['short']['p95']*100,
                     long_bias_percent=s['edges']['long']['bias']*100,short_bias_percent=s['edges']['short']['bias']*100,
@@ -88,6 +89,23 @@ def analyze(base,uniform):
                          for g in support.GROUPS} for domain in ('real','sim')}
     selected_near=read(raw/'candidate'/('val_epoch_%02d.near.json'%ce))
     training=read(raw/'candidate'/('train_epoch_%02d.summary.json'%ce))
+    train_rows=run.old.read_rows(raw/'candidate'/('train_epoch_%02d.rows.jsonl.gz'%ce))
+    prior_train={m:{(r['image'],r['scale']):r for r in run.old.read_rows(uniform/'candidate'/('train_epoch_%02d.rows.jsonl.gz'%ep))}
+                 for m,ep in [('i07',7),('uniform_selected',re)]}
+    for r in train_rows:
+        for method,bykey in prior_train.items():
+            other=bykey[(r['image'],r['scale'])]
+            if any(r[k]!=other[k] for k in ('gt','midpoint','b','domain','scale')):raise ValueError('TRAIN paired identity drift')
+            r[method]=other['edge_residual']
+    single_axis={}
+    for split,rs in [('train',train_rows),('val',candidate)]:
+        for domain in ('real','sim'):
+            for scale in ((1.,.5) if split=='train' else (1.,)):
+                for j,edge in enumerate(('long','short')):
+                    for label in run.axis.GROUPS:
+                        sub=[r for r in rs if r['domain']==domain and r['scale']==scale and r['midpoint'] is not None and run.axis.labels(r['gt'],r['midpoint'])[j]==label]
+                        single_axis[split+'/'+domain+'/'+str(scale)+'/'+edge+'/'+label]=dict(count=len(sub),
+                            methods={m:run.metrics.size_summary(sub,m) for m in ('midpoint','i07','uniform_selected','edge_residual')})
     loss_trajectories=[]
     for epoch in range(1,25):
         l=read(raw/'candidate'/('train_epoch_%02d.loss_groups.json'%epoch))
@@ -96,7 +114,8 @@ def analyze(base,uniform):
     result=dict(status=done['status'],source_commit=proof['git_head'],selected=selected,
         passing_epochs={a:choices[a]['passing_epochs'] for a in choices},selected_values={a:values[(a,m['epoch'])] for a,m in selected.items()},
         fixed_I07=reference,fixed_I07_near=near_ref,selected_near=selected_near,
-        paired=paired,fixed_M_groups=fixedgroups,selected_train=training,train_weights=read(raw/'train_weights.json'),
+        paired=paired,fixed_M_groups=fixedgroups,selected_train=training,single_axis=single_axis,train_weights=read(raw/'train_weights.json'),
+        selected_delivery=dict(Counter(r['size_delivery'] for r in candidate)),
         effects_vs_control=done['effects_vs_control'],candidate_failed_checks=selected['candidate']['adoption']['failed'],
         adoption_check_pass_counts=dict(Counter(k for e in choices['candidate']['epochs'] for k,v in e['adoption']['checks'].items() if v)),
         omitted_heads=omitted,frames_report=frames,completion=done,
