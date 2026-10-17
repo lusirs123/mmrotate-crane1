@@ -42,6 +42,23 @@ def rows(path):
     return [json.loads(s) for s in Path(path).read_text().splitlines() if s.strip()]
 
 
+def checked_depth_sources():
+    historical=load(ROOT/'tools/port_frozen_downstream_v1_sources.json')
+    actual={n:depth.sha(ROOT/n) for n in historical['sources']}
+    differences={n:dict(historical=h,current=actual[n]) for n,h in historical['sources'].items() if actual[n]!=h}
+    allowed={'mmrotate/core/bbox/assigners/sym_pola.py','mmrotate/models/losses/sym_kld_loss.py',
+        'mmrotate/models/losses/sym_nfl_loss.py','mmrotate/models/dense_heads/sym_eood_head.py',
+        'mmrotate/models/detectors/sym_eood_detector.py'}
+    # These five changes are the reviewed Oct11 training checks. Current hashes
+    # must additionally equal the sealed size-training source closure.
+    current=load(ROOT/'crane_project/tools/port_geometry_size_distribution_v1_sources.json')['sources']
+    if set(differences)-allowed or any(actual[n]!=current[n] for n in differences):
+        raise ValueError('Unreviewed downstream dependency drift')
+    return dict(historical_manifest_sha256=depth.sha(ROOT/'tools/port_frozen_downstream_v1_sources.json'),
+                actual_sources=actual,reviewed_training_only_differences=differences,
+                note='Five Oct11 training-check changes; unchanged inference methods, full native VAL replay still required.')
+
+
 def identity(m, candidate):
     if (m is None) != (candidate is None):
         raise ValueError('Size head changed output presence')
@@ -180,7 +197,7 @@ def run(args):
         if depth.sha(ROOT/depth.CALIBRATION)!=depth.CAL_SHA:raise ValueError('Raw-opt SHA drift')
         calibration=load(ROOT/depth.CALIBRATION)
         report['size_source_identity']=condition.checked_sources()
-        _,_,report['depth_source_identity']=legacy.checked_sources()
+        report['depth_source_identity']=checked_depth_sources()
         report['calibration_sha256']=depth.CAL_SHA
         report['git_head']=subprocess.check_output(['git','rev-parse','HEAD'],cwd=str(ROOT),text=True).strip()
         report['script_sha256']=depth.sha(__file__)

@@ -42,6 +42,10 @@ class FrozenEvaluationTests(unittest.TestCase):
         args=self.fixture();args[1].clear()
         with self.assertRaises(ValueError):e.depth_report(*args)
 
+    def test_depth_source_closure(self):
+        value=e.checked_depth_sources()
+        self.assertEqual(len(value["reviewed_training_only_differences"]),5)
+
     def test_resource_limits(self):
         e.check_memory(dict(process_mib=1536,free_mib=2048))
         for value in [dict(process_mib=1537,free_mib=4096),dict(process_mib=500,free_mib=2047)]:
