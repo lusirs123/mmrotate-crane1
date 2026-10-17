@@ -42,6 +42,15 @@ class FrozenEvaluationTests(unittest.TestCase):
         args=self.fixture();args[1].clear()
         with self.assertRaises(ValueError):e.depth_report(*args)
 
+    def test_real_and_webots_original_resolution_contract(self):
+        shape=(1,3,1024,1024)
+        meta=dict(filename='/tmp/frame.jpg',ori_shape=(1080,1920,3),flip=False)
+        src=dict(image_path='/tmp/frame.jpg',image_size=[1920,1080])
+        e.validate_view(shape,[meta],src)
+        with self.assertRaises(ValueError):e.validate_view(shape,[meta],dict(image_path='/tmp/frame.jpg'))
+        meta['ori_shape']=(1024,1024,3)
+        e.validate_view(shape,[meta],dict(image_path='/tmp/frame.jpg'))
+
     def test_depth_source_closure(self):
         value=e.checked_depth_sources()
         self.assertEqual(len(value["reviewed_training_only_differences"]),5)

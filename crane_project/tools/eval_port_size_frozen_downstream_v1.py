@@ -93,6 +93,26 @@ def check_memory(value):
         raise RuntimeError('RESOURCE_STOP: process>1536MiB or free<2048MiB: '+str(value))
 
 
+def validate_view(shape, metas, source):
+    expected=tuple(source.get('image_size',[1024,1024])[::-1])
+    if (tuple(shape)!=(1,3,1024,1024) or len(metas)!=1 or
+            Path(metas[0]['filename']).resolve()!=Path(source['image_path']).resolve() or
+            tuple(metas[0]['ori_shape'][:2])!=expected or metas[0].get('flip',False)):
+        raise ValueError('Original image/view identity differs')
+
+
+def native_view(pipeline, source, helpers):
+    from mmcv.parallel import collate,scatter
+    value=pipeline(dict(img_info=dict(filename=source['image_path']),img_prefix=None))
+    if value is None:raise ValueError('Original inference pipeline skipped a frame')
+    value=scatter(collate([value],samples_per_gpu=1),[0])[0]
+    if len(value['img'])!=1 or len(value['img_metas'])!=1:raise ValueError('One deterministic view required')
+    image,metas=value['img'][0],value['img_metas'][0]
+    validate_view(image.shape,metas,source)
+    helpers.g.checked_meta(metas[0])
+    return image,metas
+
+
 def compare_boxes(current, reference):
     import numpy as np
     if len(current) != len(reference): raise ValueError('VAL length differs')
@@ -219,7 +239,7 @@ def run(args):
         def hook(module,inputs,output):captured.update(inputs=inputs,midpoint=output['boxes_original'])
         handle=mid.register_forward_hook(hook)
         def predict(source):
-            image,metas=native.native_view(pipeline,source,0,helpers)
+            image,metas=native_view(pipeline,source,helpers)
             captured.clear()
             result=helpers.capture(detector,mid,image,metas,audit)
             roi,support,b,bm,xy=captured['inputs'];m=captured['midpoint']
