@@ -74,7 +74,9 @@ def loss(output, gt, midpoint, boxes_model, canonical_weights):
     point = F.smooth_l1_loss(output['delta_roi'], terms['target'], beta=.1, reduction='none')
     roi_weights = permute_axes(w, midpoint, boxes_model)
     # 1/(2N) sum(w*loss); NEVER divide by a batch weight sum.
-    terms['total'] = (point*roi_weights).mean()
+    # Preserve the original autograd path for the mathematical identity w=1.
+    # A separate elementwise reduction has tiny CUDA backward-rounding changes.
+    terms['total'] = terms['decoded'] if bool((w == 1).all()) else (point*roi_weights).mean()
     terms['unweighted'] = terms['decoded']
     terms['canonical_pointwise'] = permute_axes(point, midpoint, boxes_model)
     return terms

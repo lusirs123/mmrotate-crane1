@@ -11,7 +11,7 @@
   "parameter_count": 2712,
   "timing": "After S019/S020; before any axis-balanced fitting. Does not change I07 identity.",
   "change": "Only fixed TRAIN canonical-axis weights; same I forward/init/targets/SmoothL1/delivery. near3 coefficient1, other two error-direction sample masses balanced within cap4 and complete cell mean1. No gradient/loss equality claimed.",
-  "loss": "L=sum_ij(w_ij*SmoothL1_beta0.1(delta_hat_ij-target_ij))/(2*N); N=present supervised views in current batch. No batch-weight-sum normalization. Canonical weights -> M raw -> B-model ROI axes.",
+  "loss": "L=sum_ij(w_ij*SmoothL1_beta0.1(delta_hat_ij-target_ij))/(2*N); N=present supervised views in current batch. No batch-weight-sum normalization. Canonical weights -> M raw -> B-model ROI axes. For an all-one batch reuse original-I decoded loss/autograd graph exactly; nonunit batches use weighted elementwise mean.",
   "weights": "Full5112 present TRAIN views; per domain/scale/edge, fixed M signed relative error: abs<=.03 near3, else negative undersized/positive oversized. near=1; sum_g min(4*n_g,lambda)=n_under+n_over. Labels/weights absent from inference. Both directions required in8 cells.",
   "control": "Verify complete S019 uniform-I run/source/cache/runtime/init/schedule/all24 heads+rows+summaries. Replay01/07/21/24. No silent retraining on mismatch.",
   "evaluation": "Full TRAIN diagnostic and all887 VAL each24 epochs, no TRAIN gate. All custom detection metrics,3 geometry rates/denominators/coverage, video/domain/overall; AP11 cached-GT supplement.",
