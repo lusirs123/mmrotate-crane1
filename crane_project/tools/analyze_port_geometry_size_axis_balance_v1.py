@@ -19,7 +19,7 @@ def sha(p):return hashlib.sha256(p.read_bytes()).hexdigest()
 
 
 def analyze(base,uniform):
-    raw=base/'axis_20261017_v2_run'
+    raw=base/'axis_20261017_v3_run'
     if (base/'local_review.json').exists():raise ValueError('Refuse to overwrite review')
     index=read(raw/'artifacts.json')['files'];omitted=[]
     for name,digest in index.items():

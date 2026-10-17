@@ -36,7 +36,7 @@ def protocol():
             protection='Exact M center/raw and canonical angle/score/output. Per domain MCML max/mean<=I07, TDR identical denominator and hits>=I07, ACI and adjacent-pair identity.',
             diagnostic='P95/bias/r,4 groups a,joint10/paired flips,DFR/MRF/AP and per-video costs; no extra rejection gates.'),
         effects='Separate from adoption: compare each arm selected adoption-passing else descriptive representative under same fixed key. Report per-edge Sim MAE gain>1e-6 and both-edge flag, domain RIoU/Real costs independently. A failure of strict adoption is not proof of no local effect. No alternate epoch hunting.',
-        engineering='Full real neutral TRAIN/VAL, actual raw-axis map roundtrip, full cell fixed weights, real all-one vs original-I2updates bit-exact losses/gradients/Adam/clipping/state;2weighted smoke updates; save/restore optimizer/RNG. Six total discarded engineering head updates, fresh seed/state for formal15336.',
+        engineering='Full real neutral TRAIN/VAL, actual raw-axis map roundtrip, full cell weights. Real all-one vs original-I2updates: exact scalar loss/delta gradient/terminal gradient; stem gradients rtol1e-6 atol1e-10, state rtol1e-6 atol1e-7, Adam moments rtol1e-6 atol1e-10, step counters exact. Original-I self-repeat has CUDA stem roundoff, so no bit-exact training-state claim. Two weighted smoke updates; exact checkpoint/optimizer/RNG serialization. Six discarded engineering head updates, then fresh formal15336.',
         stop='Engineering failure stops. One24-epoch balanced candidate; no added module/loss/data/epochs or TEST selection. No automatic promotion. TRAIN diagnostic never skips VAL.',
         limits=dict(test_access=False, depth_access=False, feature_extractions=0, detector_updates=0,
                     frozen_midpoint_updates=0, cache_rebuilt=False, automatic_promotion=False))
@@ -101,6 +101,7 @@ def choose(results):
 def update(head,opt,packed,indices,weights,torch,compare_original=False):
     ts=[t[indices] for t in packed['tensors']];head.train();opt.zero_grad()
     output=head(*ts[:-1]);terms=axis.loss(output,ts[-1],ts[-2],ts[3],weights[indices])
+    if compare_original:output['delta_roi'].retain_grad()
     if not bool(torch.isfinite(terms['total'])):raise ValueError('Nonfinite weighted loss')
     terms['total'].backward()
     params=list(head.parameters())
@@ -113,7 +114,8 @@ def update(head,opt,packed,indices,weights,torch,compare_original=False):
     return dict(loss=float(terms['total'].detach()),unweighted_loss=float(terms['unweighted'].detach()),
                 stem_grad_norm=stem,terminal_grad_norm=terminal,
                 grad_norm_before_clip=before,clipped=before>10.,
-                pointwise=terms['canonical_pointwise'].detach().cpu().tolist(),gradients=gradients)
+                pointwise=terms['canonical_pointwise'].detach().cpu().tolist(),gradients=gradients,
+                delta_gradient=output['delta_roi'].grad.detach().clone() if compare_original else None)
 
 
 def group_losses(acc,event,batch,prepared):
@@ -237,20 +239,28 @@ def run(args):
             event=update(a,oa,tp,batch,ones,torch,True)
             # Obtain original pre-clip grads separately without an extra update.
             ts=[t[batch] for t in tp['tensors']];ob.zero_grad()
-            original_terms=old.head_module().loss(b(*ts[:-1]),ts[-1],ts[-2],ts[3],'decoded_control');original_terms['total'].backward()
-            if event['loss']!=float(original_terms['total'].detach()) or any(not torch.equal(x,p.grad) for x,p in zip(event['gradients'],b.parameters())):raise ValueError('All-one loss/gradient equivalence failed')
+            original_output=b(*ts[:-1]);original_output['delta_roi'].retain_grad()
+            original_terms=old.head_module().loss(original_output,ts[-1],ts[-2],ts[3],'decoded_control');original_terms['total'].backward()
+            if event['loss']!=float(original_terms['total'].detach()) or not torch.equal(event['delta_gradient'],original_output['delta_roi'].grad):raise ValueError('All-one loss/delta gradient differs')
+            gradient_max=0.
+            for x,(name,p) in zip(event['gradients'],b.named_parameters()):
+                gradient_max=max(gradient_max,float((x-p.grad).abs().max()))
+                if not (torch.allclose(x,p.grad,rtol=1e-6,atol=1e-10) if name.startswith('stem.') else torch.equal(x,p.grad)):raise ValueError('All-one parameter gradient outside fixed equivalence bounds: '+name)
             torch.nn.utils.clip_grad_norm_(b.parameters(),10.);ob.step()
-            if sealed.state_digest(a)!=sealed.state_digest(b):raise ValueError('All-one Adam/clipping update differs')
+            state_max=max(float((x-y).abs().max()) for x,y in zip(a.parameters(),b.parameters()))
+            if any(not torch.allclose(x,y,rtol=1e-6,atol=1e-7) for x,y in zip(a.parameters(),b.parameters())):raise ValueError('All-one update outside fixed equivalence bounds')
             for left,right in zip(oa.state_dict()['state'].values(),ob.state_dict()['state'].values()):
                 for k in left:
                     if torch.is_tensor(left[k]):
-                        if not torch.equal(left[k],right[k]):raise ValueError('All-one optimizer moments differ')
+                        valid=torch.equal(left[k],right[k]) if k=='step' else torch.allclose(left[k],right[k],rtol=1e-6,atol=1e-10)
+                        if not valid:raise ValueError('All-one optimizer outside fixed equivalence bounds')
                     elif left[k]!=right[k]:raise ValueError('All-one optimizer steps differ')
-            equivalence.append(dict(loss=event['loss'],loss_grad_state_optimizer_exact=True))
+            equivalence.append(dict(loss=event['loss'],loss_delta_terminal_exact=True,stem_state_optimizer_within_fixed_float32_bounds=True,
+                gradient_absmax=gradient_max,state_absmax=state_max,bit_exact_state=sealed.state_digest(a)==sealed.state_digest(b)))
         old.seed_all(torch);smoke=GeometryConditionSizeHead().to(device);opt=torch.optim.Adam(smoke.parameters(),lr=.001,weight_decay=0.)
         events=[]
         for batch in batches[0][:2]:
-            event=update(smoke,opt,tp,batch,weights,torch);events.append({k:v for k,v in event.items() if k not in ('gradients','pointwise')})
+            event=update(smoke,opt,tp,batch,weights,torch);events.append({k:v for k,v in event.items() if k not in ('gradients','pointwise','delta_gradient')})
         if events[0]['stem_grad_norm']!=0 or events[0]['terminal_grad_norm']<=0 or events[1]['stem_grad_norm']<=0:raise ValueError('Weighted gradient smoke failed')
         reload,ck=save(out/'smoke.pth',smoke,opt,0,proof,torch)
         with torch.no_grad():
@@ -269,7 +279,7 @@ def run(args):
                 losses=[];acc={};tick=time.monotonic()
                 for step,batch in enumerate(batchlist,1):
                     event=update(h,opt,tp,batch,weights,torch);group_losses(acc,event,batch,prepared)
-                    event.pop('gradients');event.pop('pointwise');losses.append(event['loss'])
+                    event.pop('gradients');event.pop('pointwise');event.pop('delta_gradient');losses.append(event['loss'])
                     log.write(json.dumps(dict(epoch=epoch,step=step,**event),allow_nan=False)+'\n')
                     if step%100==0 or step==639:log.flush();print('balanced',epoch,step,event['loss'],flush=True)
                 if sum(v['count'] for v in acc.values())!=10224 or not math.isclose(sum(v['weighted_sum'] for v in acc.values())/10224,sum(losses)/len(losses),rel_tol=1e-6,abs_tol=1e-9):raise ValueError('Training loss accounting differs')

@@ -23,7 +23,7 @@
     "diagnostic": "P95/bias/r,4 groups a,joint10/paired flips,DFR/MRF/AP and per-video costs; no extra rejection gates."
   },
   "effects": "Separate from adoption: compare each arm selected adoption-passing else descriptive representative under same fixed key. Report per-edge Sim MAE gain>1e-6 and both-edge flag, domain RIoU/Real costs independently. A failure of strict adoption is not proof of no local effect. No alternate epoch hunting.",
-  "engineering": "Full real neutral TRAIN/VAL, actual raw-axis map roundtrip, full cell fixed weights, real all-one vs original-I2updates bit-exact losses/gradients/Adam/clipping/state;2weighted smoke updates; save/restore optimizer/RNG. Six total discarded engineering head updates, fresh seed/state for formal15336.",
+  "engineering": "Full real neutral TRAIN/VAL, actual raw-axis map roundtrip, full cell weights. Real all-one vs original-I2updates: exact scalar loss/delta gradient/terminal gradient; stem gradients rtol1e-6 atol1e-10, state rtol1e-6 atol1e-7, Adam moments rtol1e-6 atol1e-10, step counters exact. Original-I self-repeat has CUDA stem roundoff, so no bit-exact training-state claim. Two weighted smoke updates; exact checkpoint/optimizer/RNG serialization. Six discarded engineering head updates, then fresh formal15336.",
   "stop": "Engineering failure stops. One24-epoch balanced candidate; no added module/loss/data/epochs or TEST selection. No automatic promotion. TRAIN diagnostic never skips VAL.",
   "limits": {
     "test_access": false,
