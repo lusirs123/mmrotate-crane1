@@ -81,6 +81,46 @@ def footprint(points,h,w):
     return cells
 
 
+def linear_evidence(oldpoints,points,h,w,img_hw):
+    """Sufficient nullspace witness even when both readers touch same cells.
+
+    Sampling is a fixed linear map per channel. A point source can differ in
+    coefficients without adding information if the old81 samples span all
+    relevant source cells. Report that case explicitly, not as new evidence.
+    """
+    import numpy as np
+    def weights(pts):
+        rows=[]
+        for x,y in pts.reshape(-1,2).cpu().tolist():
+            x,y=x/8,y/8;a,b=math.floor(x),math.floor(y);u,v=x-a,y-b
+            row={}
+            for dx,dy,weight in ((0,0,(1-u)*(1-v)),(1,0,u*(1-v)),(0,1,(1-u)*v),(1,1,u*v)):
+                ix,iy=a+dx,b+dy
+                if 0<=ix<w and 0<=iy<h and ix*8<img_hw[1] and iy*8<img_hw[0] and weight>0:
+                    row[(ix,iy)]=weight
+            rows.append(row)
+        return rows
+    left,right=weights(oldpoints),weights(points)
+    cells=sorted(set(k for row in left+right for k in row));lookup={v:i for i,v in enumerate(cells)}
+    def matrix(rows):
+        value=np.zeros((len(rows),len(cells)),dtype=np.float64)
+        for i,row in enumerate(rows):
+            for k,v in row.items():value[i,lookup[k]]=v
+        return value
+    a,c=matrix(left),matrix(right)
+    _,s,vh=np.linalg.svd(a,full_matrices=False)
+    rank=int((s>1e-9).sum());basis=vh[:rank]
+    remainder=c-(c@basis.T)@basis
+    norm=np.linalg.norm(remainder,axis=1);j=int(norm.argmax())
+    vector=remainder[j]/max(float(norm[j]),1e-30)
+    invisible=float(np.abs(a@vector).max());response=float(np.abs(c@vector).max())
+    return dict(old_rank=rank,union_source_cells=len(cells),relative_singular_tolerance=1e-9,
+                old_null_response=invisible,native_response=response,
+                witness=bool(invisible<1e-6 and response>1e-3),
+                max_outside_old_row_span=float(norm[j]),
+                note='Coordinate-linear witness only, not semantic usefulness; no new information if old span is complete.')
+
+
 def main(args):
     out=args.out_dir.resolve()
     if out.parent!=(ROOT/'work_dirs'/VERSION).resolve() or out.exists():raise ValueError('Fresh result-only directory required')
@@ -152,11 +192,13 @@ def main(args):
                 with torch.no_grad():
                     features=detector.extract_feat(image);report['feature_extractions']+=1
                     if any(f.requires_grad or f.grad_fn is not None for f in features):raise ValueError('Frozen graph retained')
-                    bm=image.new_tensor(helpers.g.flatten_prediction(detector.simple_test_from_features(features,metas,rescale=False)))[:,:5]
+                    raw6=image.new_tensor(helpers.g.flatten_prediction(detector.simple_test_from_features(features,metas,rescale=False)));bm=raw6[:,:5]
                     b=image.new_tensor(helpers.g.flatten_prediction(detector.simple_test_from_features(features,metas,rescale=True)))
                     xy=b.new_tensor(meta['scale_factor'][:2]).reshape(1,2).expand(len(b),-1)
+                    if not torch.equal(raw6[:,5],b[:,5]):raise ValueError('Native score restoration mismatch')
                     if not torch.allclose(g.map_boxes(bm,meta,inverse=True),b[:,:5],atol=1e-4,rtol=1e-6):raise ValueError('Native coordinate restoration')
                     if len(b)!=len(rec['boxes_original']) or not torch.allclose(b.cpu(),rec['boxes_original'],atol=1e-4,rtol=1e-6):raise ValueError('B cache replay differs')
+                    if not torch.equal(b[:,5].cpu(),rec['boxes_original'][:,5]) or not torch.allclose(bm.cpu(),rec['boxes_model'],atol=1e-4,rtol=1e-6) or not torch.equal(xy.cpu(),rec['scale_xy']):raise ValueError('Cached raw axes/score/resize differs')
                     roi,support,oldpoints=g.sample_local(features[0],bm,meta,'aligned')
                     roi_error=float((roi.cpu()-rec['roi']).abs().max()) if len(b) else 0.
                     if not torch.allclose(roi.cpu(),rec['roi'],atol=1e-4,rtol=1e-6) or not torch.allclose(support.cpu(),rec['support'],atol=1e-6,rtol=1e-6):raise ValueError('Original ROI cache replay differs')
@@ -181,7 +223,7 @@ def main(args):
                     newcells=footprint(pts,h,w);extra=newcells-oldcells
                     # Construct a nullspace witness on the ACTUAL coordinate grid:
                     # perturb a native cell unseen by all old9x9 samples.
-                    witness=False;witness_magnitude=0.
+                    witness=False;witness_magnitude=0.;pulse=direct=oldpulse=None
                     for cell in sorted(extra):
                         pulse=torch.zeros_like(features[0]);pulse[0,0,cell[1],cell[0]]=1.
                         oldpulse,_,_=g.sample_local(pulse,bm,meta,'aligned')
@@ -189,6 +231,7 @@ def main(args):
                         magnitude=float(direct['samples'].abs().max())
                         if torch.equal(oldpulse,torch.zeros_like(oldpulse)) and magnitude>1e-6:
                             witness=True;witness_magnitude=magnitude;break
+                    linear=linear_evidence(oldpoints,pts,h,w,meta['img_shape'][:2])
                     view=dict(image=rec['image'],sequence=rec['sequence'],domain=rec['domain'],scale=scale,
                         original_hw=list(meta['ori_shape'][:2]),model_hw=list(image.shape[-2:]),img_hw=list(meta['img_shape'][:2]),
                         actual_sxsy=xy.cpu().tolist(),b=b.cpu().tolist(),m=m.cpu().tolist(),bm=bm.cpu().tolist(),
@@ -197,6 +240,7 @@ def main(args):
                         positions_total=c['inside'].numel(),positions_inside=int(c['inside'].sum()),
                         old_roi_source_cells=len(oldcells),native_point_source_cells=len(newcells),extra_source_cells=len(extra),
                         nullspace_witness=witness,witness_response=witness_magnitude,
+                        linear_basis=linear,
                         feature_difference_mean_abs=float(delta.abs().mean()),feature_difference_max_abs=float(delta.abs().max()),timings=times,
                         raw_point_bytes=c['samples'].numel()*c['samples'].element_size())
                     report['views'].append(view)
@@ -214,7 +258,7 @@ def main(args):
                 head.load_state_dict(initial)
                 if any(p.grad is not None for p in detector.parameters()) or any(p.grad is not None for p in midpoint.parameters()):raise ValueError('Frozen weights received gradient')
                 if not torch.equal(head(reads['native_p3'],b,bm,xy,m)['boxes_original'],m):raise ValueError('Restored neutral differs')
-                print(json.dumps(dict(image=rec['image'],scale=scale,extra_cells=len(extra),witness=witness,resource=resource)),flush=True)
+                print(json.dumps(dict(image=rec['image'],scale=scale,extra_cells=len(extra),witness=witness,linear_witness=linear['witness'],resource=resource)),flush=True)
                 del batch,image,metas,features,roi,support,reads,a,c,delta,value,grads,pulse,direct,oldpulse
             del dataset,lookup
         handle.remove()
@@ -232,8 +276,10 @@ def main(args):
         report['input_sha256']=inputs
         report['whole_run_allocated_peak_mib']=max(report.get('whole_run_allocated_peak_mib',0.),torch.cuda.max_memory_allocated()/2**20)
         report['allocator_reserved_mib']=torch.cuda.max_memory_reserved()/2**20
-        report['all_real_views_have_new_evidence']=all(v['nullspace_witness'] for v in report['views'])
-        report['status']='ENGINEERING_PASS' if report['all_real_views_have_new_evidence'] else 'INPUT_DIFFERENCE_INCONCLUSIVE'
+        report['views_with_new_information']=sum(v['linear_basis']['witness'] for v in report['views'])
+        report['all_real_views_have_new_evidence']=report['views_with_new_information']==len(report['views'])
+        report['evidence_decision']='SUBSET_HAS_NEW_INFORMATION' if report['views_with_new_information'] else 'NO_NEW_INFORMATION_WITNESS_STOP_DESIGN'
+        report['status']='ENGINEERING_PASS'
     except Exception as e:
         report['error']=type(e).__name__+': '+str(e)
         raise

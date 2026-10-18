@@ -94,3 +94,17 @@ def test_frozen_native_graph_rejected():
 def test_protocol_no_training_or_test():
     p=n.protocol(); assert p['limits']['training_updates']==0 and p['limits']['test_reads']==0
     assert p['training']['present_views']==5112 and p['parameter_count']==2328
+
+
+def test_same_cells_do_not_imply_added_information():
+    from crane_project.tools.audit_port_size_native_p3_v1 import linear_evidence
+    # Four source nodes are fully recoverable from the old samples. The new
+    # center interpolation changes coefficients but adds no independent value.
+    old=torch.tensor([[0.,0.],[8.,0.],[0.,8.],[8.,8.]])
+    result=linear_evidence(old,torch.tensor([[4.,4.]]),4,4,(32,32))
+    assert result['old_rank']==4 and not result['witness']
+    # Two diagonal samples touch ALL four nodes, yet only constrain two DOFs.
+    # A new coefficient combination can still add evidence inside same cells.
+    partial=torch.tensor([[2.,2.],[6.,6.]])
+    result=linear_evidence(partial,torch.tensor([[2.,6.]]),4,4,(32,32))
+    assert result['old_rank']==2 and result['witness']
