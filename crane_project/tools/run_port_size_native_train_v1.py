@@ -52,6 +52,7 @@ def protocol():
         efficiency_revision='S030 nominal bool is NOT verified. Paired randomized100 A/B repetitions after20 warmups, same frozen view, two blocks; report jitter/CI. If shared load prevents stable inference, mark efficiency unconfirmed, never claim passed.',
         execution='cache then fresh training after functional engineering; resource/nonfinite/mapping failure stops. Unconfirmed shared-GPU latency is not a fabricated engineering pass; efficiency remains separate adoption requirement.',
         limits=dict(epochs_per_arm=24,detector_updates=0,midpoint_updates=0,test_reads=0,depth_reads=0,automatic_promotion=False))
+    p['efficiency']=p['efficiency'].replace('full process<2048MiB','full process<7000MiB (user revised7GB, one physical GPU; safety stop6800MiB, allocator6000MiB)')
     return p
 
 
@@ -208,6 +209,31 @@ def build_cache(args,out,torch,proof):
     del detector,midpoint,head;gc.collect();torch.cuda.empty_cache()
 
 
+def partition_records(rows):
+    """Original real TRAIN is train; original Sim TRAIN is train_sim."""
+    for r in rows:
+        expected='val' if r['shard']=='val_s1' else ('train_sim' if r['domain']=='sim' else 'train')
+        if r['shard'] not in ('train_s1','train_s05','val_s1') or r['domain'] not in ('real','sim') or r['split']!=expected:
+            raise ValueError('Point row split/shard/domain identity')
+    return (sorted([r for r in rows if r['split'] in ('train','train_sim')],key=lambda r:(r['scale'],r['image'])),
+            sorted([r for r in rows if r['split']=='val'],key=lambda r:r['image']))
+
+
+def cache_source_compatibility(cached,current):
+    """Accept only the exact pre-fit loader/test repair; sampler/head unchanged."""
+    if cached==current:return dict(status='EXACT',changed_sources=[])
+    old={'crane_project/tools/audit_port_size_native_p3_v1.py':'39531b247ecd32e246a991f0c78c9270aa010e6661ecd6d6e2ff3192999ded0a',
+         'crane_project/tools/port_size_native_train_v1_protocol.json':'9d2e3d7c017eb3d557c6f884555a34bf7a802de1c773379604e34be9f9b2128b',
+         'crane_project/tools/run_port_size_native_train_v1.py':'531ec9156fafdb8012bf01ab0b4203a6d8ec9840cef23c88e5d49b577930ca4a',
+         'tests/test_port_size_native_train_v1.py':'6d0a5fb987c9bdb39df8c1a1081bd9ff1750b2292dcabffd13d7916551c6515f'}
+    expected=deepcopy(current)
+    for path,digest in old.items():expected['current']['sources'][path]=digest
+    if cached!=expected:raise ValueError('Cache/training source identity differs outside exact pre-fit loader repair')
+    return dict(status='EXACT_KNOWN_LOADER_REPAIR',changed_sources=list(old),
+        reason='Preserve original cache; only train_sim partition, exact compatibility receipt and regression tests changed. Feature extraction, samples, head, labels, optimizer and scientific protocol unchanged; only process cap raised by explicit user instruction to7000MiB.',
+        cached_sources={k:cached['current']['sources'][k] for k in old},current_sources={k:current['current']['sources'][k] for k in old})
+
+
 class PointStore:
     def __init__(self,path,torch,verify=True):
         import numpy as np
@@ -219,8 +245,7 @@ class PointStore:
             self.shared[label]=torch.load(str(self.path/(label+'_shared.pt')),map_location='cpu')
             for arm in ('cached_p3','native_p3'):self.maps[label,arm]=np.load(str(self.path/(label+'_'+arm+'.npy')),mmap_mode='r')
             self.rows.extend(read(self.path/(label+'_records.json')))
-        self.train=sorted([r for r in self.rows if r['split']=='train'],key=lambda r:(r['scale'],r['image']))
-        self.val=sorted([r for r in self.rows if r['split']=='val'],key=lambda r:r['image'])
+        self.train,self.val=partition_records(self.rows)
         if len(self.train)!=5116 or len(self.val)!=887:raise ValueError('Point row split identity')
 
     def batch(self,rows,arm,device):
@@ -240,7 +265,7 @@ def near_joint(rows):
     groups=dict(overall=rows)
     groups.update({d:[r for r in rows if r['domain']==d] for d in ('real','sim')})
     groups.update({s:[r for r in rows if r['sequence']==s] for s in sorted({r['sequence'] for r in rows})})
-    if rows and rows[0]['split']=='train':
+    if rows and all(r['split'] in ('train','train_sim') for r in rows):
         groups.update({d+'/'+str(sc):[r for r in rows if r['domain']==d and r['scale']==sc] for d in ('real','sim') for sc in (1.,.5)})
     out={}
     for key,rs in groups.items():
@@ -383,7 +408,8 @@ def train(args,out,torch,proof):
     from crane_project.utils import port_geometry_size_distribution_metrics_v1 as metrics
     from crane_project.tools.run_port_geometry_size_condition_v1 import components
     store=PointStore(args.point_cache,torch)
-    if store.meta['source_proof']['current']!=proof['current']:raise ValueError('Cache/training source identity differs')
+    compatibility=cache_source_compatibility(store.meta['source_proof'],proof)
+    write(out/'cache_source_compatibility.json',compatibility)
     smoke(store,out,torch)
     report=dict(protocol=VERSION,status='RUNNING',arms={},point_cache_sha256=sha(args.point_cache/'cache_manifest.json'),
         formal_head_updates=0,test_reads=0,depth_reads=0,source_proof=proof,efficiency=store.meta['benchmark'])
@@ -442,10 +468,10 @@ def main(args):
     try:
         proof=checked_sources();write(out/'source_identity.json',proof);write(out/'protocol.json',protocol())
         from crane_project.tools.audit_port_size_native_p3_v1 import setup_gpu
-        resource,stop,thread=setup_gpu(out);report['resource']=resource
+        resource,stop,thread=setup_gpu(out,user_limit_mib=7000,process_stop_mib=6800,allocator_cap_mib=6000);report['resource']=resource
         import torch
         torch.cuda.set_device(0);torch.set_num_threads(1)
-        torch.cuda.set_per_process_memory_fraction(1350*2**20/torch.cuda.get_device_properties(0).total_memory,0);seed(torch)
+        torch.cuda.set_per_process_memory_fraction(resource['allocator_cap_mib']*2**20/torch.cuda.get_device_properties(0).total_memory,0);seed(torch)
         if args.stage=='cache':build_cache(args,out,torch,proof)
         else:
             if args.point_cache is None:raise ValueError('Point cache required')

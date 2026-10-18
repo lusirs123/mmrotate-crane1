@@ -40,7 +40,8 @@ def smi(fields,kind='gpu'):
     return [[c.strip() for c in v.split(',')] for v in s.splitlines() if v.strip()]
 
 
-def setup_gpu(out):
+def setup_gpu(out,user_limit_mib=2048,process_stop_mib=1900,allocator_cap_mib=1350):
+    if not 0<allocator_cap_mib<process_stop_mib<user_limit_mib:raise ValueError("Invalid GPU memory limits")
     cards=[r for r in smi('index,uuid,memory.free') if int(r[0]) in (2,3)]
     requested=os.environ.get('CUDA_VISIBLE_DEVICES')
     if requested is not None:
@@ -51,7 +52,7 @@ def setup_gpu(out):
     if int(card[2])<3072:raise RuntimeError('RESOURCE_STOP free<3072MiB')
     os.environ['CUDA_VISIBLE_DEVICES']=card[0]
     state=dict(physical_gpu=int(card[0]),uuid=card[1],free_before_mib=int(card[2]),
-               process_peak_polled_mib=0,process_stop_mib=1900,allocator_cap_mib=1350,user_limit_mib=2048)
+               process_peak_polled_mib=0,process_stop_mib=process_stop_mib,allocator_cap_mib=allocator_cap_mib,user_limit_mib=user_limit_mib)
     stop=threading.Event()
     def watch():
         while not stop.is_set():
@@ -59,8 +60,8 @@ def setup_gpu(out):
                 apps=smi('pid,gpu_uuid,used_memory','compute-apps')
                 own=sum(int(r[2]) for r in apps if r[0]==str(os.getpid()) and r[1]==card[1])
                 state['process_peak_polled_mib']=max(own,state['process_peak_polled_mib'])
-                if own>=1900:
-                    write(out/'RESOURCE_STOP.json',dict(state,reason='Own process reached1900MiB safety stop'))
+                if own>=process_stop_mib:
+                    write(out/'RESOURCE_STOP.json',dict(state,reason='Own process reached%dMiB safety stop'%process_stop_mib))
                     os._exit(75)
             except Exception as e:
                 # A blind monitor cannot promise the user cap: stop fail closed.

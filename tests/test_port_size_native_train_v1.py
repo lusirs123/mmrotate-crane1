@@ -54,3 +54,44 @@ def test_mmap_batch_identity_and_missing_rejection(tmp_path):
     assert torch.equal(batch[0]['samples'],r['samples']) and torch.equal(batch[-2],x[5])
     assert not store.maps['train_s1','cached_p3'].flags.writeable
     with pytest.raises(ValueError):store.batch([dict(row,present=False)],'cached_p3','cpu')
+
+
+def test_original_train_sim_partition_and_reject_wrong_split():
+    rows=[dict(shard=shard,domain=domain,split=split,image=domain,scale=sc)
+          for shard,sc in [('train_s1',1.),('train_s05',.5),('val_s1',1.)]
+          for domain,split in [('real','val' if shard=='val_s1' else 'train'),('sim','val' if shard=='val_s1' else 'train_sim')]]
+    tr,va=t.partition_records(rows)
+    assert len(tr)==4 and len(va)==2 and {r['domain'] for r in tr}=={'real','sim'}
+    with pytest.raises(ValueError):t.partition_records([dict(rows[1],split='train')])
+    with pytest.raises(ValueError):t.partition_records([dict(rows[0],shard='unknown')])
+
+
+def test_only_exact_loader_repair_compatible_with_immutable_cache():
+    old={'crane_project/tools/audit_port_size_native_p3_v1.py':'39531b247ecd32e246a991f0c78c9270aa010e6661ecd6d6e2ff3192999ded0a',
+         'crane_project/tools/port_size_native_train_v1_protocol.json':'9d2e3d7c017eb3d557c6f884555a34bf7a802de1c773379604e34be9f9b2128b',
+         'crane_project/tools/run_port_size_native_train_v1.py':'531ec9156fafdb8012bf01ab0b4203a6d8ec9840cef23c88e5d49b577930ca4a',
+         'tests/test_port_size_native_train_v1.py':'6d0a5fb987c9bdb39df8c1a1081bd9ff1750b2292dcabffd13d7916551c6515f'}
+    cached=dict(current=dict(protocol='same',sources=dict(old,head='unchanged')),parent={'x':1},native={'y':2})
+    current=deepcopy(cached)
+    for k in old:current['current']['sources'][k]='repaired'
+    assert t.cache_source_compatibility(cached,current)['status']=='EXACT_KNOWN_LOADER_REPAIR'
+    assert t.cache_source_compatibility(current,current)['status']=='EXACT'
+    current['current']['sources']['head']='changed'
+    with pytest.raises(ValueError):t.cache_source_compatibility(cached,current)
+    current=deepcopy(cached);current['parent']['x']=3
+    with pytest.raises(ValueError):t.cache_source_compatibility(cached,current)
+
+
+def test_explicit_revised_resource_cap_keeps_single_gpu(monkeypatch,tmp_path):
+    from crane_project.tools import audit_port_size_native_p3_v1 as audit
+    class Thread:
+        def __init__(self,**kwargs):pass
+        def start(self):pass
+    monkeypatch.setattr(audit.threading,'Thread',Thread)
+    monkeypatch.setenv('CUDA_VISIBLE_DEVICES','3')
+    monkeypatch.setattr(audit,'smi',lambda *args:[['2','gpu2','8000'],['3','gpu3','8000']])
+    state,stop,thread=audit.setup_gpu(tmp_path,user_limit_mib=7000,process_stop_mib=6800,allocator_cap_mib=6000)
+    assert state['physical_gpu']==3 and state['user_limit_mib']==7000 and state['process_stop_mib']==6800
+    assert audit.os.environ['CUDA_VISIBLE_DEVICES']=='3'
+    monkeypatch.setenv('CUDA_VISIBLE_DEVICES','2,3')
+    with pytest.raises(ValueError):audit.setup_gpu(tmp_path)

@@ -40,7 +40,7 @@
     "mechanism": "Native chosen eligible vs cached chosen eligible (else descriptive control by same key): both Sim MAE lower>1e-6, Real both<=control+0.001, overall RIoU>=control-1e-5. Do not infer capacity/feature insufficiency from historical I comparison.",
     "diagnostics_only": "P95,bias,Real a/r,near-both,cross-edge intersections,joint10 transitions,AP,per-video changes; not additional gates."
   },
-  "efficiency": "Online increment<=5ms mean and<=128MiB allocator peak over common cached head on same warmed batch1 measurement; full process<2048MiB. Point cache float32 for both arms, no full P3 disk cache.",
+  "efficiency": "Online increment<=5ms mean and<=128MiB allocator peak over common cached head on same warmed batch1 measurement; full process<7000MiB (user revised7GB, one physical GPU; safety stop6800MiB, allocator6000MiB). Point cache float32 for both arms, no full P3 disk cache.",
   "numerical": "MAE relative not percent; epsilon1e-6; RIoU epsilon1e-5. Near change counts1e-12 diagnostic. No later tolerance tuning.",
   "stop": "Invalid engineering or resource cap stops. One paired24-epoch run only after separate implementation/execution authorization. No added levels/rounds on failure. Multiscale design only.",
   "depth": "Common detection/depth adoption NOT yet available: retain data roles, freeze legal development protocol/threshold before future fitting; independent validation missing; Unknown02 descriptive only, Raw-opt fixed.",
