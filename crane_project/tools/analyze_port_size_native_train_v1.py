@@ -75,7 +75,7 @@ def results(source,out):
                 if group in ep['diagnostics']:
                     for e in ('long','short'):
                         near=ep['diagnostics'][group]['near'][e]
-                        x['near_'+e+'_count']=near['count'];x['near_'+e+'_mae_pct']=100*near['after_mae'];x['near_'+e+'_harmed']=near['harmed']
+                        x['near_'+e+'_count']=near['count'];x['near_'+e+'_mae_pct']=100*near['after_mae'] if near['after_mae'] is not None else None;x['near_'+e+'_harmed']=near['harmed']
                 rows.append(x)
         chosen=v['selected'] if v['selected'] is not None else v['representative']
         ep=next(e for e in v['epochs'] if e['epoch']==chosen)
