@@ -1,0 +1,10 @@
+{
+  "protocol": "port_size_native_p3_v1",
+  "sources": {
+    "crane_project/utils/port_size_native_p3_v1.py": "8c38ebf1953033972875e6ad1817ea3cd928ffdd9b68d0134bbc2495714e35ec",
+    "crane_project/tools/audit_port_size_native_p3_v1.py": "4673239317126fa8e5c882d46df7080dd54fb1da1a9bbc5ed8fac4ccc307c3b8",
+    "tests/test_port_size_native_p3_v1.py": "cef613d45fbd143bcd18b1a6bf8c7671e62e7f03f35cb1e5e157a6e3e7653f07",
+    "crane_project/tools/port_size_native_p3_v1_protocol.json": "81b969f071f613cd715c71636d5ceb857f950c42e7afd46e4d869ea75e1c2aa1",
+    "crane_project/tools/port_size_proposal_downstream_v1_sources.json": "4e0499e4345873260560ce8e7a02fe4ccdacf990a1fd8c7158374772cf74b602"
+  }
+}

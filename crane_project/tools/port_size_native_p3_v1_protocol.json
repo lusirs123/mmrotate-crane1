@@ -1,0 +1,53 @@
+{
+  "protocol": "port_size_native_p3_v1",
+  "status": "DESIGN_AND_ENGINEERING_ONLY_NO_TRAINING",
+  "arms": [
+    "cached_p3",
+    "native_p3"
+  ],
+  "parameter_count": 2328,
+  "scope": "Same B context1.5x with16px floor, same M positions, cached support and common post-sampling point/tangent stem. No expansion/multiscale/learned offsets.",
+  "difference": "Only raw feature sampling source in the common architecture. Historical I convolution-before-sampling is NOT this control.",
+  "tensors": "P3[1,256,H,W]; ROI[N,256,9,9]; samples[N,256,132,9]; common support[N,1,132,9]; coords[N,2,132,9]; geometry[N,4]; logits[N,2,33].",
+  "labels": "Offline original log(GT/M) assigned once to frozen M raw axes then model-B ROI axes. No GT in sampling or forward.",
+  "training": {
+    "images": 2558,
+    "views": 5116,
+    "present_views": 5112,
+    "scales": [
+      1.0,
+      0.5
+    ],
+    "epochs": 24,
+    "batch_size": 8,
+    "updates_per_epoch": 639,
+    "optimizer": "Adam",
+    "lr": 0.001,
+    "weight_decay": 0.0,
+    "clip_norm": 10.0,
+    "seed": 1703,
+    "shuffle": "Python Random(1703+epoch), original scale/image sorted present views",
+    "initialization": "Both fresh identical state; terminal zero. No old checkpoint reuse.",
+    "loss": "Unweighted SmoothL1 beta0.1 over all2N residuals; natural M only; no TRAIN admission gate."
+  },
+  "evaluation": "Every epoch full887 natural VAL, identical opportunity; no TEST/depth method selection. Overall/Real/Sim/video custom/AP/3geometry/coverage and paired sizes.",
+  "ranking": "Single lexicographic rule per arm: (Sim long MAE, Sim short MAE, Real long MAE, Real short MAE, epoch); select best eligible by this key, else same-key descriptive only.",
+  "eligibility": {
+    "direct": "Sim both MAE<M-1e-6; Real both MAE<=M+0.001 relative units (0.1pp). B and I07/C20/P07 gaps disclosed.",
+    "joint": "Sim meanabs(a),meanabs(r)<=M+1e-6 log units.",
+    "protection": "Fixed-M near<=3% each edge each domain MAE<=M+0.001. M output/center/raw and canonical angle/score exact. Per-domain DFR not higher; MCML max/mean not higher; TDR numerator not lower with same denominator.",
+    "detection": "Full-frame mean_RIoU overall>=M-1e-5 and each domain>=M-0.001. If no increase>1e-5 overall, call size contribution with detection held, not localization gain.",
+    "mechanism": "Native chosen eligible vs cached chosen eligible (else descriptive control by same key): both Sim MAE lower>1e-6, Real both<=control+0.001, overall RIoU>=control-1e-5. Do not infer capacity/feature insufficiency from historical I comparison.",
+    "diagnostics_only": "P95,bias,Real a/r,near-both,cross-edge intersections,joint10 transitions,AP,per-video changes; not additional gates."
+  },
+  "efficiency": "Online increment<=5ms mean and<=128MiB allocator peak over common cached head on same warmed batch1 measurement; full process<2048MiB. Point cache float32 for both arms, no full P3 disk cache.",
+  "numerical": "MAE relative not percent; epsilon1e-6; RIoU epsilon1e-5. Near change counts1e-12 diagnostic. No later tolerance tuning.",
+  "stop": "Invalid engineering or resource cap stops. One paired24-epoch run only after separate implementation/execution authorization. No added levels/rounds on failure. Multiscale design only.",
+  "depth": "Common detection/depth adoption NOT yet available: retain data roles, freeze legal development protocol/threshold before future fitting; independent validation missing; Unknown02 descriptive only, Raw-opt fixed.",
+  "limits": {
+    "training_updates": 0,
+    "test_reads": 0,
+    "depth_reads": 0,
+    "automatic_promotion": false
+  }
+}
