@@ -112,11 +112,16 @@ def linear_evidence(oldpoints,points,h,w,img_hw):
     rank=int((s>1e-9).sum());basis=vh[:rank]
     remainder=c-(c@basis.T)@basis
     norm=np.linalg.norm(remainder,axis=1);j=int(norm.argmax())
-    vector=remainder[j]/max(float(norm[j]),1e-30)
-    invisible=float(np.abs(a@vector).max());response=float(np.abs(c@vector).max())
-    return dict(old_rank=rank,union_source_cells=len(cells),relative_singular_tolerance=1e-9,
+    valid=float(norm[j])>1e-9
+    if valid:
+        vector=remainder[j]/float(norm[j])
+        invisible=float(np.abs(a@vector).max());response=float(np.abs(c@vector).max())
+    else:
+        invisible=response=None  # Do not normalize floating-point noise.
+    return dict(old_rank=rank,union_source_cells=len(cells),absolute_singular_tolerance=1e-9,
+                witness_residual_threshold=1e-9,valid_witness_constructed=valid,
                 old_null_response=invisible,native_response=response,
-                witness=bool(invisible<1e-6 and response>1e-3),
+                witness=bool(valid and invisible<1e-6 and response>1e-3),
                 max_outside_old_row_span=float(norm[j]),
                 note='Coordinate-linear witness only, not semantic usefulness; no new information if old span is complete.')
 

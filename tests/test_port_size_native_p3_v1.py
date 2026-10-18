@@ -103,8 +103,28 @@ def test_same_cells_do_not_imply_added_information():
     old=torch.tensor([[0.,0.],[8.,0.],[0.,8.],[8.,8.]])
     result=linear_evidence(old,torch.tensor([[4.,4.]]),4,4,(32,32))
     assert result['old_rank']==4 and not result['witness']
+    assert not result['valid_witness_constructed'] and result['old_null_response'] is None and result['native_response'] is None
     # Two diagonal samples touch ALL four nodes, yet only constrain two DOFs.
     # A new coefficient combination can still add evidence inside same cells.
     partial=torch.tensor([[2.,2.],[6.,6.]])
     result=linear_evidence(partial,torch.tensor([[2.,6.]]),4,4,(32,32))
     assert result['old_rank']==2 and result['witness']
+
+
+def test_original_model_swap_differs_independent_coordinates():
+    b=torch.tensor([[128.,128.,100.,100.1,.3,.9]])
+    xy=torch.tensor([[1.002,1.]])
+    bm=b[:,:5].clone();bm[:,:4]*=xy[:,[0,1,0,1]];m=b.clone()
+    assert bool(b[0,2]<b[0,3]) and not bool(bm[0,2]<bm[0,3])
+    roi=torch.zeros(1,256,9,9);sup=torch.ones(1,1,9,9)
+    a=n.read_points(roi,sup,b,bm,xy,m,'cached_p3')
+    # Axis0 is M RAW width here because MODEL-B is not swapped. Independently
+    # compute bucket16(log0), plus side0, tangent4(center), no shared helper.
+    expected=torch.tensor([(128.+50.*math.cos(.3))*1.002,128.+50.*math.sin(.3)])
+    got=a['model_points'].reshape(1,2,2,33,9,2)[0,0,0,16,4]
+    assert torch.allclose(got,expected,atol=2e-5,rtol=1e-6)
+    dx=float(expected[0])-float(bm[0,0]);dy=float(expected[1])-float(bm[0,1])
+    local=torch.tensor([(dx*math.cos(.3)+dy*math.sin(.3))/(float(bm[0,2])*1.5),
+                        (-dx*math.sin(.3)+dy*math.cos(.3))/(float(bm[0,3])*1.5)])
+    gotlocal=a['local'].permute(0,2,3,1).reshape(1,2,2,33,9,2)[0,0,0,16,4]
+    assert torch.allclose(gotlocal,local,atol=2e-6,rtol=1e-6)
