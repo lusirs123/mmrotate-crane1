@@ -164,6 +164,23 @@ def main(args):
             if set(representatives)!=set(prior.sealed.TRAIN_COUNTS):raise ValueError('TRAIN videos changed')
             selected[label]=[deepcopy(representatives[s]) for s in sorted(representatives)]
             del raw
+        reused=set()
+        if args.resume_from:
+            previous=json.loads((args.resume_from/'engineering.json').read_text())
+            old_source=json.loads((args.resume_from/'source_identity.json').read_text())['current']['sources']
+            audit_path='crane_project/tools/audit_port_size_native_p3_v1.py'
+            if previous.get('error')!='ValueError: Predetermined engineering representative missing output; report, do not substitute':raise ValueError('Only the known expected-MISSING engineering interruption can resume')
+            if set(old_source)!=set(source['sources']) or any(old_source[k]!=source['sources'][k] for k in old_source if k!=audit_path):raise ValueError('Non-audit source changed; do not reuse')
+            expected=[(r['image'],r['scale']) for label in ('train_s1','train_s05') for r in selected[label]]
+            seen=[(r['image'],r['scale']) for r in previous['views']]
+            if seen!=expected[:len(seen)] or len(seen)!=10:raise ValueError('Incomplete replay prefix differs')
+            prior_artifacts=json.loads((args.resume_from/'artifacts.json').read_text())['files']
+            if any(sha(args.resume_from/p)!=s for p,s in prior_artifacts.items()):raise ValueError('Interrupted artifacts drift')
+            reused=set(seen);report['views']=deepcopy(previous['views'])
+            report['resume']=dict(path=str(args.resume_from),engineering_sha256=sha(args.resume_from/'engineering.json'),
+                reused_complete_views=len(seen),prior_actual_extractions=previous['feature_extractions'],
+                prior_process_peak_mib=previous['resource']['process_peak_polled_mib'],
+                reason='Only expected empty-path handling repaired; common reader/head/coordinates/protocol/test sources unchanged.')
         for p in (args.b_weight,args.m_weight):inputs[str(p)]=sha(p)
         detector,midpoint,_,helpers,runtime=load_native(args.b_weight,args.m_weight,0)
         report['runtime']=runtime
@@ -185,6 +202,7 @@ def main(args):
             dataset=ConcatDataset([build_dataset(s) for s in fixed_specs(cfg,scale)])
             lookup={Path(info['filename']).stem:offset+i for part,offset in zip(dataset.datasets,(0,len(dataset.datasets[0]))) for i,info in enumerate(part.data_infos)}
             for rec in selected[label]:
+                if (rec['image'],rec['scale']) in reused:continue
                 batch=scatter(collate([dataset[lookup[rec['image']]]],samples_per_gpu=1),[0])[0]
                 image,metas=batch['img'][0],batch['img_metas'][0];meta=metas[0]
                 if sha(meta['filename'])!=rec['image_sha256']:raise ValueError('TRAIN image bytes changed')
@@ -203,7 +221,16 @@ def main(args):
                     roi_error=float((roi.cpu()-rec['roi']).abs().max()) if len(b) else 0.
                     if not torch.allclose(roi.cpu(),rec['roi'],atol=1e-4,rtol=1e-6) or not torch.allclose(support.cpu(),rec['support'],atol=1e-6,rtol=1e-6):raise ValueError('Original ROI cache replay differs')
                     m=midpoint(roi,support,b,bm,xy)['boxes_original']
-                    if not len(m):raise ValueError('Predetermined engineering representative missing output; report, do not substitute')
+                    if not len(m):
+                        for arm in n.ARMS:
+                            empty=n.read_points(roi,support,b,bm,xy,m,arm,features[0],meta)
+                            if not torch.equal(head(empty,b,bm,xy,m)['boxes_original'],m):raise ValueError('Expected missing identity differs')
+                        report['views'].append(dict(image=rec['image'],sequence=rec['sequence'],domain=rec['domain'],scale=scale,
+                            missing=True,output_count=0,cache_presence_exact=True,neutral_M_exact=True,
+                            backbone_shapes=backbone_shapes[-1],fpn_shapes=[list(f.shape) for f in features]))
+                        print(json.dumps(dict(image=rec['image'],scale=scale,status='EXPECTED_MISSING_PRESERVED',resource=resource)),flush=True)
+                        del batch,image,metas,features,roi,support,empty
+                        continue
                     reads={a:n.read_points(roi,support,b,bm,xy,m,a,features[0],meta) for a in n.ARMS}
                     for k in ('masks','local','geometry','model_points','inside'):
                         if not torch.equal(reads[n.ARMS[0]][k],reads[n.ARMS[1]][k]):raise ValueError('Common input mismatch '+k)
@@ -262,7 +289,7 @@ def main(args):
                 del batch,image,metas,features,roi,support,reads,a,c,delta,value,grads,pulse,direct,oldpulse
             del dataset,lookup
         handle.remove()
-        if report['feature_extractions']!=12:raise ValueError('Wrong bounded extraction count')
+        if len(report['views'])!=12 or report['feature_extractions']+len(reused)!=12:raise ValueError('Wrong bounded view count')
         if detector_before!=helpers.g.state_digest(detector) or midpoint_before!=helpers.g.state_digest(midpoint):raise ValueError('Frozen model mutated')
         for p,s in inputs.items():
             if sha(p)!=s:raise ValueError('Input changed during run')
@@ -276,8 +303,10 @@ def main(args):
         report['input_sha256']=inputs
         report['whole_run_allocated_peak_mib']=max(report.get('whole_run_allocated_peak_mib',0.),torch.cuda.max_memory_allocated()/2**20)
         report['allocator_reserved_mib']=torch.cuda.max_memory_reserved()/2**20
-        report['views_with_new_information']=sum(v['linear_basis']['witness'] for v in report['views'])
-        report['all_real_views_have_new_evidence']=report['views_with_new_information']==len(report['views'])
+        present=[v for v in report['views'] if not v.get('missing',False)]
+        report['views_with_new_information']=sum(v['linear_basis']['witness'] for v in present)
+        report['all_real_views_have_new_evidence']=report['views_with_new_information']==len(present)
+        report['evaluated_views']=len(report['views']);report['present_views']=len(present)
         report['evidence_decision']='SUBSET_HAS_NEW_INFORMATION' if report['views_with_new_information'] else 'NO_NEW_INFORMATION_WITNESS_STOP_DESIGN'
         report['status']='ENGINEERING_PASS'
     except Exception as e:
@@ -294,4 +323,5 @@ if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__)
     for key in ('out-dir','cache-dir','b-weight','m-weight'):p.add_argument('--'+key,type=Path,required=True)
     p.add_argument('--source-commit',required=True)
+    p.add_argument('--resume-from',type=Path)
     main(p.parse_args())
