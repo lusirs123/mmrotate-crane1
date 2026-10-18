@@ -1,0 +1,39 @@
+{
+  "protocol": "port_size_local_vectors_v1",
+  "status": "FROZEN_BEFORE_FIT",
+  "hypothesis": "Local 2D supervision of original GT rectangle side midpoints adds direction evidence beyond final size supervision; no guarantee directions become correct.",
+  "representation": "81 existing fixed ROI points, 4x2 normalized continuous vectors per point, M-vector residual reference; no new features/points/multiscale.",
+  "correspondence": "OFFLINE per-position minimum of mean8 SmoothL1 over8 D4 cyclic/reverse permutations preserving opposite pairs; deterministic first tie, no GT matching in forward.",
+  "decode": "Inverse actual anisotropic resize/ROI affine before opposite-vector Euclidean norms; sort local long/short, support-weighted arithmetic mean; reference ratio makes zero residual exactly M.",
+  "support": "Cached geometric support only, no GT overlap or quality head. Supported nonfinite or length<=1e-6 => whole-pair M fallback. Zero support fallback, training invalidity stops; never GT-filter.",
+  "labels": "Original annotated OBB midpoints, not visible physical keypoints; labels outside ROI unbounded; local directions can pollute recovered lengths.",
+  "architecture": "267->8 pointwise conv,8->8 3x3,8->8 terminal1x1;2800 parameters. Both arms same complete forward and geometry inputs, zero terminal.",
+  "loss": "Control: mean(2N) SmoothL1 beta0.1 log-size residual. Candidate: same +0.1*meanN support-normalized minD4 mean8 SmoothL1 beta0.1 vector loss. No batch weight-sum rescaling beyond per-view support.",
+  "data": "Full TRAIN2558 image identities x2 scales=5116 views,5112 outputs; full natural VAL887 each epoch,886 outputs. No TRAIN admission. Artificial proposals not used.",
+  "fit": {
+    "arms": [
+      "size_only",
+      "size_plus_geometry"
+    ],
+    "epochs_per_arm": 24,
+    "batch_size": 8,
+    "updates_per_epoch": 639,
+    "seed": 1703,
+    "optimizer": "Adam",
+    "lr": 0.001,
+    "weight_decay": 0.0,
+    "clip_norm": 10.0,
+    "shuffle": "Random(1703+epoch)",
+    "fresh_initialization": true
+  },
+  "selection": "Eligible first, lexicographic Sim longMAE,Sim shortMAE,Real longMAE,Real shortMAE,epoch. None eligible => same-key descriptive representative, not adopted.",
+  "adoption": "Sim eachMAE<M-1e-6; Real each<=M+0.001; Sim meanabs(a/r)<=M+1e-6; four fixedM near<=3% edgeMAEs<=M+0.001; overall fullRIoU>=M-1e-5; eachdomain>=M-0.001. Identity/coverage exact; domainDFR/MCMLmax/mean nonincrease; TDRhitsnondecrease samewindows; ACI equal. Relative tolerances0.001 permit0.1pp cost, not strict protection.",
+  "geometry_value": "Candidate vs common selected-or-descriptive control: bothSimMAEs lower by>1e-6,Real each<=control+0.001,overallRIoU>=control-1e-5; also report full adoption separately. Shared structure gains not attributable to added supervision; equal parameter count does not eliminate constraint/capacity differences.",
+  "diagnostics": "MAE/P95/bias/a/r;near,bothnear,wrong->right/right->wrong,joint gain/tradeoff;wrong-direction harm and useful correction retention explanatory only;fullcustoms/AP11supplement/threegeometries/coverage;overall/domain/video,TRAINscalesseparate.",
+  "stop": "Invalid coordinate/SHA/support/nonfinite/engineering stops;24epochs/arm only. No new lambda/grid/loss/module/epoch search. No TEST/depth or automatic M promotion.",
+  "resource": "One physical GPU2or3 only; own process<7000MiB,stop6800MiB,allocator6000MiB.",
+  "papers": [
+    "https://openaccess.thecvf.com/content_CVPR_2020/papers/Cao_D2Det_Towards_High_Quality_Object_Detection_and_Instance_Segmentation_CVPR_2020_paper.pdf",
+    "https://arxiv.org/pdf/2008.07043"
+  ]
+}
