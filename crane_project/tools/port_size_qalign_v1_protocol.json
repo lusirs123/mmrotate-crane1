@@ -1,0 +1,40 @@
+{
+  "protocol": "port_size_qalign_v1",
+  "status": "FROZEN_BEFORE_FIT",
+  "hypothesis": "Only visual 2D area reading coordinates change: fixed B versus B-to-Q warp within same cached B-P3. Not new source information.",
+  "representation": "Same V2800 network/reference vectors/logical positions/decoder; both use W=min(S_A,S_Q). Only visual samples differ.",
+  "correspondence": "Fixed original B/Q raw axes, model B canonical source frame only; original points transformed before actual anisotropic resize; no GT input.",
+  "decode": "Inverse actual anisotropic resize/ROI affine before opposite-vector Euclidean norms; sort local long/short, support-weighted arithmetic mean; reference ratio makes zero residual exactly M.",
+  "support": "Outside old B cache zero, no extrapolation. Common logical-slot support, NOT physical intersection. Natural TRAIN zero W => stop, no filtering.",
+  "labels": "GT canonical long/short assigned once to M raw/modelB axes. No projected GT extent.",
+  "architecture": "Same V267->8 1x1,8->8 3x3,8->8 1x1 zero terminal,2800params; source grid A=u,Q=g H_Q T_B; both same u/M anchor and common W.",
+  "loss": "Both arms ONLY final size SmoothL1 beta0.1 mean2N; no geometry/local/proposal/weight loss.",
+  "data": "Full TRAIN2558 image identities x2 scales=5116 views,5112 outputs; full natural VAL887 each epoch,886 outputs. No TRAIN admission. Artificial proposals not used.",
+  "fit": {
+    "arms": [
+      "fixed_b",
+      "q_aligned"
+    ],
+    "epochs_per_arm": 24,
+    "batch_size": 8,
+    "updates_per_epoch": 639,
+    "seed": 1703,
+    "optimizer": "Adam",
+    "lr": 0.001,
+    "weight_decay": 0.0,
+    "clip_norm": 10.0,
+    "shuffle": "Random(1703+epoch)",
+    "fresh_initialization": true
+  },
+  "selection": "Eligible first, lexicographic Sim longMAE,Sim shortMAE,Real longMAE,Real shortMAE,epoch. None eligible => same-key descriptive representative, not adopted.",
+  "adoption": "Sim eachMAE<M-1e-6; Real each<=M+0.001; Sim meanabs(a/r)<=M+1e-6; four fixedM near<=3% edgeMAEs<=M+0.001; overall fullRIoU>=M-1e-5; eachdomain>=M-0.001. Identity/coverage exact; domainDFR/MCMLmax/mean nonincrease; TDRhitsnondecrease samewindows; ACI equal. Relative tolerances0.001 permit0.1pp cost, not strict protection.",
+  "geometry_value": "Q vs A selected-or-descriptive: Sim both lower>1e-6,Real<=A+0.001,overallRIoU>=A-1e-5; four fixed E_j intersection harm / fixed |E_j| <= A+1e-6. No posthoc reselection.",
+  "diagnostics": "MAE/P95/bias/a/r;near,bothnear,wrong->right/right->wrong,joint gain/tradeoff;wrong-direction harm and useful correction retention explanatory only;fullcustoms/AP11supplement/threegeometries/coverage;overall/domain/video,TRAINscalesseparate.",
+  "stop": "Invalid coordinate/SHA/support/nonfinite/engineering stops;24epochs/arm only. No new lambda/grid/loss/module/epoch search. No TEST/depth or automatic M promotion.",
+  "resource": "One physical GPU2or3; own process<7000MiB,stop6800,allocator6000.",
+  "papers": [
+    "https://github.com/csuhan/s2anet/blob/e463c2bb17e161a6909e3d83410b49697dce770a/mmdet/models/anchor_heads_rotated/s2anet_head.py",
+    "https://github.com/YiqunChen1999/RefineBox/blob/0a9feb76857adb879225d536a92797d3f884522c/refinebox/models/layers/res_refiner.py"
+  ],
+  "engineering": "TRAIN-only full5116 support/neutral audit before any VAL read; two fixed8view batches, discard updates, Adam/RNG reload exact. 20warmup/100alternating paired GPU timings, read+head batch1, mean delta<=5ms,allocator delta<=128MiB."
+}
