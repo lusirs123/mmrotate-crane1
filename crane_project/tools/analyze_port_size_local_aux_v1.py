@@ -22,12 +22,15 @@ def run(source,control_source,out):
     t=read(source/'training.json');done=read(source/'finished.json')
     if t['status']!=done['status'] or done['status']!='COMPLETE' or t['formal_updates']!=15336:raise ValueError('Incomplete finite candidate')
     if t['control_artifacts_sha256']!=sha(control_source/'artifacts.json'):raise ValueError('Control result identity')
+    original_control=read(control_source/'training.json')['arms']['size_only']
+    if t['control']!=original_control or t['initial_state_digest']!=original_control['initial_state_digest']:raise ValueError('Reused control/init differs')
     from crane_project.utils import port_geometry_size_distribution_metrics_v1 as metrics
     from crane_project.tools.run_port_geometry_size_condition_v1 import components
     prior_verification=read(control_source.parent/'analysis_20261018_v1/analysis.json')
     if prior_verification['source_artifacts_sha256']!=sha(control_source/'artifacts.json') or prior_verification['verification']['epochs_recomputed']!=48:raise ValueError('Prior verified control identity')
     records=[];selected={};behavior=[];paired=[];verification=dict(val_epochs_recomputed=0,reused_already_verified_control_epochs=24,prior_control_verification_sha256=sha(control_source.parent/'analysis_20261018_v1/analysis.json'),maximum_cross_platform_riou_difference=0.)
     all_models={'size_only':t['control'],'size_plus_local':t};cache={}
+    baseline={(r['scale'],r['image']):r for r in load(control_source/'baseline_val.rows.jsonl.gz')}
     for arm,report in all_models.items():
         epochs=report['epochs'];good=[]
         if [e['epoch'] for e in epochs]!=list(range(1,25)):raise ValueError('Missing full VAL epoch')
@@ -35,9 +38,18 @@ def run(source,control_source,out):
             if ranking(ep['metrics'],ep['epoch'])!=ep['selection_key'] or eligibility(ep['metrics'],ep['diagnostics'])!=ep['eligibility']:raise ValueError('Rule drift')
             if ep['eligibility']['pass_all']:good.append(ep)
             rows=load((control_source/'size_only' if arm=='size_only' else source)/('epoch_%02d_val.rows.jsonl.gz'%ep['epoch']))
+            if len(rows)!=887 or {(r['scale'],r['image']) for r in rows}!=set(baseline):raise ValueError('Full VAL identities')
+            for row in rows:
+                ref=baseline[(row['scale'],row['image'])]
+                if any(row[k]!=ref[k] for k in ('gt','b','midpoint','split','domain','sequence','frame_id')):raise ValueError('Baseline metadata drift')
+            if arm=='size_plus_local':
+                n=ep['epoch']
+                if read(source/('epoch_%02d_val.json'%n))!=ep or sha(source/('head_epoch_%02d.pth'%n))!=ep['checkpoint_sha256']:raise ValueError('Epoch/checkpoint binding')
+                if ep['schedule_sha256']!=original_control['epochs'][n-1]['schedule_sha256']:raise ValueError('Paired data order')
             recompute=metrics.summary(rows,cache) if arm=='size_plus_local' else None
             if recompute is not None and (components(rows)!=ep['components'] or not numerical_equal(near_joint(rows),ep['diagnostics'])):raise ValueError('Geometric recomputation')
             for group in ep['metrics']:
+                if recompute is not None and recompute[group]['paired']!=ep['metrics'][group]['paired']:raise ValueError('Size transition counts')
                 for method in (metrics.METHODS if recompute is not None else ()):
                     a,b=recompute[group][method],ep['metrics'][group][method]
                     delta=abs(a['mean_riou_full_frame']-b['mean_riou_full_frame']);verification['maximum_cross_platform_riou_difference']=max(delta,verification['maximum_cross_platform_riou_difference'])
@@ -46,6 +58,7 @@ def run(source,control_source,out):
                 r.update(wrong_to_right=ep['metrics'][group]['paired']['wrong_to_right'],right_to_wrong=ep['metrics'][group]['paired']['right_to_wrong']);records.append(r)
             verification['val_epochs_recomputed']+=int(recompute is not None)
         chosen=min(good or epochs,key=lambda e:e['selection_key']);selected[arm]=dict(epoch=chosen['epoch'],status='eligible_selected' if good else 'descriptive_only',eligible_epochs=[e['epoch'] for e in good],**{k:chosen[k] for k in ('metrics','components','diagnostics','eligibility','checkpoint_sha256')})
+        if report['selected']!=(chosen['epoch'] if good else None) or report['representative']!=chosen['epoch']:raise ValueError('Saved selection identity')
     selections={arm:[r for r in records if r['arm']==arm and r['epoch']==selected[arm]['epoch']] for arm in all_models}
     for split in ('train','val'):
         maps={}
