@@ -105,6 +105,8 @@ def score_rows(records, h, torch):
     rows, skips = [], []
     with torch.no_grad():
         for i, r in enumerate(present):
+            if i % 256 == 0:
+                print('RESPONSE_PROGRESS %d/%d' % (i, len(present)), flush=True)
             x = [r[k] for k in ('roi', 'support', 'boxes_original', 'boxes_model', 'scale_xy', 'midpoint_original')]
             q, safe = d.proposals(x[-1]); raw = (x[-1][0, 2] < x[-1][0, 3]).long().item()
             gs = r['gt_original'][0, 2:4].sort(descending=True)[0].tolist()  # OFFLINE only
@@ -213,6 +215,7 @@ def main(args):
     import torch
     torch.set_num_threads(1)
     h = load_head(args, torch)
+    frozen_state = {k:v.clone() for k,v in h.state_dict().items()}
     result = engineering(args, torch, h)
     availability = {n: dict(present=(args.cache/n).is_file()) for n in ('cache_manifest.json','train_s1.pt','train_s05.pt')}
     if args.run_cache and not all(v['present'] for v in availability.values()):
@@ -229,15 +232,29 @@ def main(args):
         with gzip.open(replay_path,'rt') as f:
             replay={(r['image'],r['scale']):r for r in map(json.loads,f)}
         with torch.no_grad():
+            max_replay_difference = 0.
+            replay_count = 0
             for r in records:
                 if not len(r['midpoint_original']):
                     continue
                 x=[r[k] for k in ('roi','support','boxes_original','boxes_model','scale_xy','midpoint_original')]
                 ref=torch.tensor([replay[r['image'],r['scale']]['edge_residual']],dtype=x[0].dtype)
-                if not torch.allclose(h(*x)['boxes_original'],ref,atol=2e-4,rtol=2e-6):
+                actual=h(*x)['boxes_original']
+                max_replay_difference=max(max_replay_difference,float((actual-ref).abs().max()))
+                replay_count += 1
+                if not torch.allclose(actual,ref,atol=2e-4,rtol=2e-6):
                     raise ValueError('Saved CPU/server V20 natural replay differs')
+        print('NATURAL_REPLAY_PASS %d max_abs=%g' % (replay_count,max_replay_difference),flush=True)
         rows, skips = score_rows(records, h, torch)
+        if any(not torch.equal(frozen_state[k],v) for k,v in h.state_dict().items()):
+            raise ValueError('Frozen V20 state changed during real responses')
+        if sha(args.parent/'size_only/head_epoch_20.pth') != HEAD_SHA:
+            raise ValueError('Checkpoint bytes changed')
+        if checked_sources()!=source_proof:
+            raise ValueError('Execution source changed')
         result.update(status='FROZEN_TRAIN_RESPONSE_COMPLETE', cache=cache_identity,parent_source_proof=source_proof,
+                      replay_count=replay_count,maximum_saved_replay_absolute_difference=max_replay_difference,
+                      real_frozen_state_unchanged=True,checkpoint_bytes_unchanged=True,
                       missing_views=[dict(image=r['image'], scale=r['scale']) for r in records if not len(r['midpoint_original'])])
     args.out.mkdir(parents=True)
     write(args.out/'protocol.json', protocol());write(args.out/'engineering.json', result)
