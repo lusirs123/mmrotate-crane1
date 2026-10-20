@@ -107,7 +107,7 @@ def run(args):
         a20_remains_unadopted=True,continuation_remains_unadopted=True,automatic_adoption=False,test_selection=False,depth_selection=False)
     tick=time.monotonic();stop=None;watcher=None
     try:
-        if os.environ.get('WORLD_SIZE','1')!='1' or os.environ.get('CUDA_VISIBLE_DEVICES') not in ('1',):
+        if os.environ.get('WORLD_SIZE','1')!='1' or os.environ.get('CUDA_VISIBLE_DEVICES') not in ('2','3'):
             raise ValueError('One explicit physical GPU required')
         resource,stop,watcher=setup_gpu(out,7000,6800,6000);report['resource']=resource
         torch.cuda.set_device(0)

@@ -101,7 +101,8 @@
   },
   "resources": {
     "physical_gpu_choices": [
-      1
+      2,
+      3
     ],
     "single_gpu": true,
     "user_limit_mib": 7000,

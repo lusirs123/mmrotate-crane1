@@ -22,7 +22,7 @@ SEQUENCE='unknown_test_02_coverage_retry'
 
 def protocol():
     p=previous.protocol()
-    p['resources']['physical_gpu_choices']=[1]
+    p['resources']['physical_gpu_choices']=[2,3]
     p.update(protocol=VERSION,versions=list(ARMS),size_heads=HEADS,weight_sha256=PINS,
         inference='Same-run native B/M; four frozen fixed-B2800params size heads, same B-P3 cache/read_pair commonW, decoder and pair fallback. Single natural M input; no filters, iteration, NMS or compensation.',
         stages=['complete887 native VAL: sealed cache/resize/coordinates/W and all six frozen output/score/delivery replay; failure blocks TEST/depth',
@@ -135,10 +135,10 @@ def depth_report(predictions,truths,manifest,calibration):
 
 def setup_gpu(out,user_limit_mib=7000,process_stop_mib=6800,allocator_cap_mib=6000):
     if not 0<allocator_cap_mib<process_stop_mib<user_limit_mib:raise ValueError("Invalid GPU memory limits")
-    cards=[r for r in smi('index,uuid,memory.free') if int(r[0]) in (1,)]
+    cards=[r for r in smi('index,uuid,memory.free') if int(r[0]) in (2,3)]
     requested=os.environ.get('CUDA_VISIBLE_DEVICES')
     if requested is not None:
-        if requested not in ('1',):raise ValueError('Only physical GPU1 authorized by current user request')
+        if requested not in ('2','3'):raise ValueError('Only physical GPU2/3 authorized by current user request')
         cards=[r for r in cards if r[0]==requested]
     if not cards:raise RuntimeError('RESOURCE_STOP no authorized GPU')
     card=max(cards,key=lambda r:int(r[2]))
