@@ -141,5 +141,5 @@ def test_wrong_gpu_fails_before_creating_results(tmp_path,monkeypatch):
     monkeypatch.setenv('CUDA_VISIBLE_DEVICES','2')
     monkeypatch.setattr(r,'ROOT',tmp_path)
     out=tmp_path/'work_dirs'/r.VERSION/'unused'
-    with pytest.raises(ValueError):r.main(SimpleNamespace(out_dir=out))
+    with pytest.raises(ValueError):r.main(SimpleNamespace(out_dir=out,resume_from=None,engineering_only=False))
     assert not out.exists()

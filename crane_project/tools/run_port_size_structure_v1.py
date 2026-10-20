@@ -18,6 +18,7 @@ ROOT=Path(__file__).resolve().parents[2];sys.path.insert(0,str(ROOT))
 from crane_project.tools.run_port_size_native_train_v1 import sha,read,write,rows_write,seed,rng_get,rng_set,equal,near_joint,eligibility,ranking
 from crane_project.tools import run_port_size_qalign_v1 as parent
 from crane_project.utils import port_size_structure_v1 as model
+from crane_project.utils.port_size_structure_resume_v1 import status_write,prepare as prepare_resume
 VERSION='port_size_structure_v1'
 
 
@@ -210,6 +211,11 @@ def execute(args,out,torch,proof):
     from crane_project.utils import port_geometry_midpoint_sigma_v1 as frozen_model
     from crane_project.utils import port_geometry_size_distribution_metrics_v1 as metrics
     from crane_project.tools.run_port_geometry_size_condition_v1 import components
+    recovery=prepare_resume(args.resume_from,out,protocol(),proof) if args.resume_from else None
+    if recovery:
+        old=recovery['failed_finished']['runtime']
+        if (old['torch'],old['cuda'],old['cudnn'])!=(str(torch.__version__),torch.version.cuda,torch.backends.cudnn.version()):raise ValueError('Resume numerical runtime differs')
+        write(out/'resume_origin.json',recovery)
     sealed=prior.sealed;history,differences=prior.historical_identity()
     if sha(args.b_weight)!=prior.B_SHA:raise ValueError('Actual B SHA')
     cache=sealed.checked_cache(args.cache_dir,history);selection,references,indexed=sealed.checked_selection(args.head_dir,history)
@@ -217,24 +223,47 @@ def execute(args,out,torch,proof):
     train,nbytes=parent.load_records(args.cache_dir,cache,frozen,'cuda:0',torch,model,references,('train_s1','train_s05'))
     if len(train)!=5116 or sum(bool(len(r['midpoint_original'])) for r in train)!=5112:raise ValueError('Complete TRAIN identity')
     inputs=dict(b_sha256=sha(args.b_weight),m_sha256=sha(args.head_dir/sealed.FIXED['path']),cache_manifest_sha256=sha(args.cache_dir/'cache_manifest.json'),shards=cache['files'],reference_artifacts=indexed,historical_identity=history,unused_detector_differences=differences)
-    write(out/'input_identity.json',inputs);eng=engineering(train,out,torch);write(out/'ENGINEERING_PASSED.json',dict(status='PASS',formal_updates=0,val_shards_loaded=0,temporary_updates_discarded=True))
+    write(out/'input_identity.json',inputs)
+    if recovery:
+        if inputs!=recovery['previous_input_identity']:raise ValueError('Recovered input identity differs')
+        eng=read(out/'engineering.json')
+        print('ENGINEERING_REUSED_SHA_VERIFIED',recovery['completed_epochs'],flush=True)
+    else:
+        eng=engineering(train,out,torch);write(out/'ENGINEERING_PASSED.json',dict(status='PASS',formal_updates=0,val_shards_loaded=0,temporary_updates_discarded=True))
     if args.engineering_only:return
     val,nv=parent.load_records(args.cache_dir,cache,frozen,'cuda:0',torch,model,references,('val_s1',))
     if len(val)!=887 or sum(bool(len(r['midpoint_original'])) for r in val)!=886:raise ValueError('Complete VAL identity')
-    report=dict(protocol=VERSION,status='RUNNING',formal_updates=0,inputs=inputs,source_proof=proof,source_commit=args.source_commit,common_stem_initial_sha256=eng['common_stem_initial_sha256'],arms={},test_reads=0,depth_reads=0,feature_extractions=0,automatic_adoption=False)
+    report=dict(protocol=VERSION,status='RUNNING',formal_updates=recovery['completed_updates'] if recovery else 0,inputs=inputs,source_proof=proof,source_commit=args.source_commit,common_stem_initial_sha256=eng['common_stem_initial_sha256'],arms={},test_reads=0,depth_reads=0,feature_extractions=0,automatic_adoption=False)
+    if recovery:report['resume']=dict(previous_directory=recovery['previous_directory'],completed_updates_reused=recovery['completed_updates'],no_repeated_updates=True)
     present=[r for r in train if len(r['midpoint_original'])];cache_iou={};representatives={}
     for arm in model.ARMS:
-        dest=out/arm;dest.mkdir();h=fresh(arm,torch);opt=optimizer(h,torch);initial=state_digest(h.state_dict());stem=state_digest(h.stem.state_dict())
+        dest=out/arm;dest.mkdir(exist_ok=True);h=fresh(arm,torch);opt=optimizer(h,torch);initial=state_digest(h.state_dict());stem=state_digest(h.stem.state_dict())
         if opt.state or stem!=report['common_stem_initial_sha256']:raise ValueError('Fresh common initialization differs')
         zv=evaluate(h,val,arm,torch);zt=evaluate(h,train,arm,torch)
         if any(r['edge_residual']!=r['midpoint'] for r in zv+zt):raise ValueError('All natural neutral mismatch')
-        if arm==model.ARMS[0]:
+        if arm==model.ARMS[0] and not recovery:
             rows_write(out/'baseline_val.rows.jsonl.gz',zv);rows_write(out/'baseline_train.rows.jsonl.gz',zt)
             summary=metrics.summary(zv,cache_iou);write(out/'baseline_val.summary.json',dict(metrics=summary,components=components(zv),diagnostics=near_report(zv)))
             for d,correct in [('real',199),('sim',464)]:
                 if summary[d]['midpoint']['sizes']['joint10']!=correct:raise ValueError('M count mismatch')
-        del zv,zt;events=[]
-        for epoch in range(1,25):
+        del zv,zt;events=list(recovery['events'][arm]) if recovery else []
+        if events:
+            last=events[-1]['epoch'];path=dest/('head_epoch_%02d.pth'%last);saved=torch.load(path,map_location='cpu')
+            if saved['protocol']!=VERSION or saved['arm']!=arm or saved['epoch']!=last or saved['updates']!=last*639 or saved['input_identity']!=inputs or sha(path)!=events[-1]['checkpoint_sha256']:raise ValueError('Resume checkpoint identity')
+            h.load_state_dict(saved['head_state'],strict=True);opt.load_state_dict(saved['optimizer_state'])
+            if not equal(h.state_dict(),saved['head_state'],torch) or not equal(opt.state_dict(),saved['optimizer_state'],torch):raise ValueError('Restored head/Adam state differs')
+            import gzip
+            replay_proof={}
+            for split,records in [('train',train),('val',val)]:
+                with gzip.open(dest/('epoch_%02d_%s.rows.jsonl.gz'%(last,split)),'rt') as stream:reference=[json.loads(line) for line in stream]
+                actual=evaluate(h,records,arm,torch)
+                if actual!=reference:raise ValueError('Restored full '+split+' forward differs')
+                replay_proof[split]=dict(views=len(actual),rows_exact=True)
+            rng_set(saved['rng'],torch)
+            if not equal(rng_get(torch),saved['rng'],torch):raise ValueError('Restored RNG state differs')
+            write(dest/'RESTORED_CHECKPOINT_VERIFIED.json',dict(epoch=last,checkpoint_sha256=sha(path),full_replay=replay_proof,optimizer_restored=True,rng_restored=True,next_epoch=last+1))
+            print('RESTORED_CHECKPOINT_VERIFIED',arm,last,'NEXT',last+1,flush=True)
+        for epoch in range(len(events)+1,25):
             began=time.monotonic();ids=list(range(len(present)));random.Random(1703+epoch).shuffle(ids);loss_sum=0.;updates=0
             for start in range(0,len(ids),8):
                 rr=[present[j] for j in ids[start:start+8]];x=batch(rr,torch);step=update(h,opt,x,arm,torch);report['formal_updates']+=1;updates+=1;loss_sum+=step['loss']*len(rr)
@@ -250,20 +279,21 @@ def execute(args,out,torch,proof):
             rng_set(saved_rng,torch)
             ep=dict(epoch=epoch,metrics=summary,components=comp,diagnostics=diag,cross_edge=model.cross_edge(vr),eligibility=gate,selection_key=ranking(summary,epoch),checkpoint_sha256=sha(path),schedule_sha256=hashlib.sha256(json.dumps(ids,separators=(',',':')).encode()).hexdigest(),training_loss=loss_sum/len(present),epoch_seconds=time.monotonic()-began)
             write(dest/('epoch_%02d_val.json'%epoch),ep);rows_write(dest/('epoch_%02d_val.rows.jsonl.gz'%epoch),vr);write(dest/('epoch_%02d_train.json'%epoch),td);rows_write(dest/('epoch_%02d_train.rows.jsonl.gz'%epoch),tr)
-            events.append(ep);write(dest/'progress.json',dict(last_complete_epoch=epoch,updates=epoch*639,epochs=events));print(json.dumps(dict(stage='epoch_finished',arm=arm,epoch=epoch,eligible=gate['pass_all'],failed=gate['failed'],selection_key=ep['selection_key'],elapsed=ep['epoch_seconds'])),flush=True)
+            events.append(ep);status_write(dest/'progress.json',dict(last_complete_epoch=epoch,updates=epoch*639,epochs=events));print(json.dumps(dict(stage='epoch_finished',arm=arm,epoch=epoch,eligible=gate['pass_all'],failed=gate['failed'],selection_key=ep['selection_key'],elapsed=ep['epoch_seconds'])),flush=True)
             del x,vr,tr,td
         eligible=[e for e in events if e['eligibility']['pass_all']];chosen=min(eligible or events,key=lambda e:e['selection_key'])
         result=dict(initial_state_digest=initial,initial_stem_digest=stem,representative=chosen['epoch'],selected=chosen['epoch'] if eligible else None,eligible_epochs=[e['epoch'] for e in eligible],epochs=events)
-        representatives[arm]=chosen;report['arms'][arm]=result;write(dest/'selection.json',result);write(out/'training.json',report);del h,opt;torch.cuda.empty_cache()
+        representatives[arm]=chosen;report['arms'][arm]=result;write(dest/'selection.json',result);status_write(out/'training.json',report);del h,opt;torch.cuda.empty_cache()
     v,d=[report['arms'][a] for a in model.ARMS]
     if report['formal_updates']!=30672 or v['initial_stem_digest']!=d['initial_stem_digest'] or [e['schedule_sha256'] for e in v['epochs']]!=[e['schedule_sha256'] for e in d['epochs']]:raise ValueError('Fair budget/stem/schedule')
     if frozen_digest!=sealed.state_digest(frozen) or sha(args.b_weight)!=prior.B_SHA or sha(args.head_dir/sealed.FIXED['path'])!=sealed.FIXED['sha256']:raise ValueError('Frontend state or bytes changed')
     if sha(args.cache_dir/'cache_manifest.json')!=cache['manifest_sha256'] or any(sha(args.cache_dir/n)!=h for n,h in cache['files'].items()):raise ValueError('Cache bytes changed')
-    report.update(status='COMPLETE',structure_value=structure_value(*[representatives[a] for a in model.ARMS]));write(out/'training.json',report)
+    report.update(status='COMPLETE',structure_value=structure_value(*[representatives[a] for a in model.ARMS]));status_write(out/'training.json',report)
 
 
 def main(args):
     out=args.out_dir.resolve()
+    if args.resume_from and args.engineering_only:raise ValueError('Recovery must continue the frozen formal budget')
     if out.parent!=(ROOT/'work_dirs'/VERSION).resolve() or out.exists():raise ValueError('Fresh result-only directory required')
     if os.environ.get('CUDA_VISIBLE_DEVICES')!='3' or os.environ.get('WORLD_SIZE','1')!='1':raise ValueError('Only single physicalGPU3 authorized')
     out.mkdir(parents=True);stop=None;report=dict(protocol=VERSION,status='FAILED',started_utc=datetime.now(timezone.utc).isoformat())
@@ -289,6 +319,7 @@ def parser():
     p.add_argument('--cache-dir',type=Path,default=ROOT/'work_dirs/port_results/geometry/port_geometry_midpoint_formal_v1_roi_cache')
     p.add_argument('--head-dir',type=Path,default=ROOT/'work_dirs/crane_symeood_k1_port_day2night_midpoint_sigma_v1/sigma_1p5')
     p.add_argument('--b-weight',type=Path,default=ROOT/'work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/epoch_24.pth')
+    p.add_argument('--resume-from',type=Path,help='SHA-bound failed sibling run; recover complete epoch prefix without overwriting it')
     return p
 
 
