@@ -1,0 +1,81 @@
+{
+  "protocol": "port_size_structure_v1",
+  "status": "FROZEN_BEFORE_FIT",
+  "hypothesis": "Same frozen visual/conditional input267 and common stem: local-vector representation+geometric decode vs direct canonical-log residual regression; not isolate one vector operator.",
+  "representation": "V_structure: sealed fixed-B vector head2800params. D_direct: identical stem +8to2 terminal,2746params; per-slot canonical long/short log residual weighted by identical commonW. Same M8reference channels.",
+  "correspondence": "Fixed original B/Q raw axes, model B canonical source frame only; original points transformed before actual anisotropic resize; no GT input.",
+  "decode": "V unchanged inverse-anisotropic-affine/opposite norms/local sort/weighted arithmetic sizes/neutral reference normalization. D canonical log weighted mean then canonical-to-Mraw-to-modelBroi; same deliver_sizes.",
+  "support": "Both same fixed-B samples and W=min(S_A,S_Q) from sealed read_pair; same logical coords and M reference vectors. Q-grid only contributes existing W, not new visual feature. Natural zero W stops; no GT filtering.",
+  "labels": "GT canonical long/short assigned once to M raw/modelB axes. No projected GT extent.",
+  "architecture": "267to8 1x1+ReLU,8to8 3x3+ReLU,8to8(V)/8to2(D)1x1; parameter gap54=1.93% of V; same stem near-parameter control, not equal effective capacity.",
+  "loss": "Only final delivered-interface PRE-GUARD delta_roi SmoothL1 beta0.1 mean2N, no ratio/local/geometry/protection/weights/proposals. Invalid numerical representation stops, guard rejection alone is recorded not loss-filtered.",
+  "data": "Full TRAIN2558 image identities x2 scales=5116 views,5112 outputs; full natural VAL887 each epoch,886 outputs. No TRAIN admission. Artificial proposals not used.",
+  "fit": {
+    "arms": [
+      "V_structure",
+      "D_direct"
+    ],
+    "epochs_per_arm": 24,
+    "batch_size": 8,
+    "updates_per_epoch": 639,
+    "seed": 1703,
+    "optimizer": "Adam",
+    "lr": 0.001,
+    "weight_decay": 0.0,
+    "clip_norm": 10.0,
+    "shuffle": "Random(1703+epoch)",
+    "fresh_initialization": true,
+    "adam_betas": [
+      0.9,
+      0.999
+    ],
+    "adam_eps": 1e-08,
+    "amsgrad": false,
+    "lr_schedule": "constant",
+    "drop_last": false,
+    "common_stem_exact": true,
+    "terminal_weight_bias_zero": true,
+    "load_historical_checkpoint": false
+  },
+  "selection": "Eligible first, lexicographic Sim longMAE,Sim shortMAE,Real longMAE,Real shortMAE,epoch. None eligible => same-key descriptive representative, not adopted.",
+  "adoption": "Sim eachMAE<M-1e-6; Real each<=M+0.001; Sim meanabs(a/r)<=M+1e-6; four fixedM near<=3% edgeMAEs<=M+0.001; overall fullRIoU>=M-1e-5; eachdomain>=M-0.001. Identity/coverage exact; domainDFR/MCMLmax/mean nonincrease; TDRhitsnondecrease samewindows; ACI equal. Relative tolerances0.001 permit0.1pp cost, not strict protection.",
+  "geometry_value": "Separate adoption and structure evidence. Selected-or-descriptive V vs D: Sim both MAE<D-1e-6; Real each<=D+0.001; four Mnear<=D+0.001; Sim a/r<=D+1e-6; overallRIoU>=D-1e-5,domain>=D-0.001; DFR not increased. All24 same-epoch deltas reported with no posthoc persistence threshold or seed significance claim.",
+  "diagnostics": "MAE/P95/bias/a/r;near,bothnear,wrong->right/right->wrong,joint gain/tradeoff;wrong-direction harm and useful correction retention explanatory only;fullcustoms/AP11supplement/threegeometries/coverage;overall/domain/video,TRAINscalesseparate.",
+  "stop": "Invalid coordinate/SHA/support/nonfinite/engineering stops;24epochs/arm only. No new lambda/grid/loss/module/epoch search. No TEST/depth or automatic M promotion.",
+  "resource": "Only physical GPU3 (last card); singleGPU own<=7000MiB,stop6800,allocator6000,free>=3072.",
+  "papers": [],
+  "engineering": "Before VAL load: full5116 TRAIN views, identical all267 stem inputs, M neutral/missing exact, W positive, source SHA; fixed first16output views for 2steps+reload next update per arm; discard all6updates incl clones. 20warmup/100randomized pairs read+head batch1 costs descriptive, own limits hard.",
+  "parameter_counts": {
+    "V_structure": 2800,
+    "D_direct": 2746
+  },
+  "adoption_checks": {
+    "reference": "M each epoch, same for both arms",
+    "sim_each_mae_strict_improvement": 1e-06,
+    "real_each_mae_allowed_increase": 0.001,
+    "M_near_threshold": 0.03,
+    "near_each_domain_edge_mae_allowed_increase": 0.001,
+    "domain_full_RIoU_allowed_decrease": 0.001,
+    "overall_full_RIoU_allowed_decrease": 1e-05,
+    "sim_a_r_allowed_increase": 1e-06,
+    "output_identity_exact": true,
+    "DFR_MCML_nonincrease": true,
+    "TDR_hits_nondecrease_same_windows": true,
+    "ACI_and_adjacent_pairs_equal": true,
+    "other_diagnostics_not_hard_gates": [
+      "AP75",
+      "P95",
+      "bias",
+      "near_damage_count",
+      "positive_harm",
+      "cross_edge_harm"
+    ]
+  },
+  "limits": {
+    "test_reads": 0,
+    "depth_reads": 0,
+    "feature_extractions": 0,
+    "automatic_adoption": false,
+    "epoch_search_beyond24": false
+  }
+}
