@@ -1,0 +1,99 @@
+{
+  "protocol": "port_size_qalign_downstream_v1",
+  "versions": [
+    "b",
+    "midpoint",
+    "a20",
+    "q20"
+  ],
+  "size_heads": {
+    "a20": {
+      "arm": "fixed_b",
+      "epoch": 20,
+      "sha256": "545e18459d3ead4a54c441d64de27ca44a8394bfdc20cc2caf4c2f7534326479"
+    },
+    "q20": {
+      "arm": "q_aligned",
+      "epoch": 20,
+      "sha256": "dac187b4f010fe1b18585022a95ca4afb6a08b692e2b594f93f3b0e5945507d7"
+    }
+  },
+  "weight_sha256": {
+    "b": "8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23",
+    "midpoint": "16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7",
+    "a20": "545e18459d3ead4a54c441d64de27ca44a8394bfdc20cc2caf4c2f7534326479",
+    "q20": "dac187b4f010fe1b18585022a95ca4afb6a08b692e2b594f93f3b0e5945507d7"
+  },
+  "inference": "Same-run native B/M, existing B-P3 cache construction, identical S038 read_pair W=min(S_A,S_Q), frozen2800params heads; no Q02/other epochs, no iteration/NMS/reliability/size filter.",
+  "stages": [
+    "complete887 native VAL: source cache tensors/resize/coordinates/W and saved ep20 output/delivery replay; failure blocks TEST/depth",
+    "complete1440 frozen detection TEST, four versions, existing custom metrics/geometry and native AP11",
+    "complete1097 Unknown-02 only; exposed TEST descriptive, same frozen Raw-opt/camera/top-beam reference and numerical validity"
+  ],
+  "datasets": {
+    "val": {
+      "frames": 887,
+      "role": "native_chain_replay_no_selection"
+    },
+    "detection_test": {
+      "frames": 1440,
+      "role": "exposed_TEST_frozen_description"
+    },
+    "unknown02": {
+      "sequence": "unknown_test_02_coverage_retry",
+      "frames": 1097,
+      "role": "exposed_TEST_frozen_description"
+    }
+  },
+  "geometry": {
+    "center_px_strict": 15,
+    "size_relative_max_inclusive": 0.1,
+    "angle_period_deg": 180,
+    "angle_max_deg_inclusive": 3,
+    "angle_gt_aspect_min": 1.2,
+    "near_reference": "fixed_M",
+    "near_max": 0.03
+  },
+  "depth_metrics": [
+    "mae_m",
+    "rmse_m",
+    "bias_m",
+    "p95_abs_error_m",
+    "numeric_depth_count",
+    "frame_count",
+    "numeric_depth_coverage"
+  ],
+  "calibration_sha256": "c9c14fc1b09ba8223996121425e302888ac7d44213192225acd5365fb2f1ffe2",
+  "replay": {
+    "box_atol": 0.0001,
+    "box_rtol": 1e-06,
+    "roi_atol": 0.0001,
+    "roi_rtol": 1e-06,
+    "support_atol": 1e-06,
+    "coordinate_atol": 1e-05,
+    "score_presence_delivery_checks_exact": true
+  },
+  "reporting": "overall/domain/video; long-shortMAE/P95/bias,a/r,joint10 transitions; near fixedM<=3%,cross intersection/ALL positive harm/both-harmed/effective correction; center<15px/output,sizeboth<=10%/output,angle180period<=3deg/GTaspect>=1.2 output; missing/output/full-frame coverage; fullRIoU,DFR,ACI,MCML,TDR,AP50/75.",
+  "depth_reporting": "metreMAE,RMSE,bias,P95,numeric count/frames,all-four and pairwise common-valid metrics,new/lost valid and frameIDs of improved/worsened/tied; short/a/r geometry; signed short/ratio/interaction propagation NOT additive MAE decomposition.",
+  "limits": {
+    "training_updates": 0,
+    "selection": false,
+    "formula_refit": false,
+    "automatic_adoption": false,
+    "train03": false,
+    "fixed_dev": false,
+    "reliability_filter": false,
+    "size_accept_filter": false
+  },
+  "resources": {
+    "physical_gpu_choices": [
+      2,
+      3
+    ],
+    "single_gpu": true,
+    "user_limit_mib": 7000,
+    "stop_mib": 6800,
+    "allocator_cap_mib": 6000
+  },
+  "historical": "A20/Q20 remain descriptive, S039 VAL failures retained; M formal. Unknown cannot select or compensate. New independent depth generalization evidence still missing."
+}
