@@ -20,6 +20,22 @@ def sha(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 def read(path):return json.loads(Path(path).read_text())
 
 
+def verify_replay(actual,reference,split,summary):
+    """Reproduce the original persistence pipeline, including VAL enrichment.
+
+    The sealed VAL writer calls summary before rows_write; TRAIN does not.
+    Do not drop derived fields or tolerate prediction differences.
+    """
+    if split not in ('train','val'):raise ValueError('Unknown replay split')
+    if split=='val':summary(actual,{})
+    if len(actual)!=len(reference):raise ValueError('Restored '+split+' row count differs')
+    for i,(a,b) in enumerate(zip(actual,reference)):
+        if a!=b:
+            fields=[k for k in sorted(set(a)|set(b)) if k not in a or k not in b or a[k]!=b[k]]
+            raise ValueError('Restored %s row %d image=%s fields=%s differs'%(split,i,a.get('image'),fields))
+    return dict(views=len(actual),rows_exact=True,derived_metrics_recomputed=split=='val')
+
+
 def status_write(path,value):
     """Only mutable progress/training status; never epoch/weight/source files."""
     path=Path(path)

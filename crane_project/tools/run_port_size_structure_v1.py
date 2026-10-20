@@ -18,7 +18,7 @@ ROOT=Path(__file__).resolve().parents[2];sys.path.insert(0,str(ROOT))
 from crane_project.tools.run_port_size_native_train_v1 import sha,read,write,rows_write,seed,rng_get,rng_set,equal,near_joint,eligibility,ranking
 from crane_project.tools import run_port_size_qalign_v1 as parent
 from crane_project.utils import port_size_structure_v1 as model
-from crane_project.utils.port_size_structure_resume_v1 import status_write,prepare as prepare_resume
+from crane_project.utils.port_size_structure_resume_v1 import status_write,prepare as prepare_resume,verify_replay
 VERSION='port_size_structure_v1'
 
 
@@ -257,8 +257,7 @@ def execute(args,out,torch,proof):
             for split,records in [('train',train),('val',val)]:
                 with gzip.open(dest/('epoch_%02d_%s.rows.jsonl.gz'%(last,split)),'rt') as stream:reference=[json.loads(line) for line in stream]
                 actual=evaluate(h,records,arm,torch)
-                if actual!=reference:raise ValueError('Restored full '+split+' forward differs')
-                replay_proof[split]=dict(views=len(actual),rows_exact=True)
+                replay_proof[split]=verify_replay(actual,reference,split,metrics.summary)
             rng_set(saved['rng'],torch)
             if not equal(rng_get(torch),saved['rng'],torch):raise ValueError('Restored RNG state differs')
             write(dest/'RESTORED_CHECKPOINT_VERIFIED.json',dict(epoch=last,checkpoint_sha256=sha(path),full_replay=replay_proof,optimizer_restored=True,rng_restored=True,next_epoch=last+1))

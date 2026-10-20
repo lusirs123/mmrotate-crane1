@@ -68,3 +68,26 @@ def test_partial_epoch_not_silently_retrained(tmp_path):
     old,out,protocol,proof=fixture(tmp_path);w=old/'V_structure/head_epoch_03.pth';w.write_bytes(b'partial')
     i=json.loads((old/'artifacts.json').read_text());i['files'][str(w.relative_to(old))]=io.sha(w);dump(old/'artifacts.json',i)
     with pytest.raises(ValueError):io.prepare(old,out,protocol,proof)
+
+
+def test_replay_reproduces_val_enrichment_without_dropping_any_fields():
+    # Same order as the original writer: forward -> summary -> persist.
+    raw=[dict(image='frame',edge_residual=[0.,0.,100.,50.,0.,.8],pre_guard=[0.,0.,100.,50.,0.,.8])]
+    def summary(rows,cache):
+        assert cache=={}
+        for row in rows:row['metrics']=dict(derived_size=row['edge_residual'][2])
+    sealed=deepcopy(raw);summary(sealed,{})
+    assert io.verify_replay(deepcopy(raw),sealed,'val',summary)['derived_metrics_recomputed']
+    assert io.verify_replay(deepcopy(raw),raw,'train',lambda *_:pytest.fail('TRAIN must not be enriched'))['rows_exact']
+    for field in ('edge_residual','pre_guard'):
+        changed=deepcopy(raw);changed[0][field][2]+=.00001
+        with pytest.raises(ValueError,match=field):io.verify_replay(changed,sealed,'val',summary)
+    damaged=deepcopy(sealed);damaged[0]['metrics']['derived_size']+=1
+    with pytest.raises(ValueError,match='metrics'):io.verify_replay(deepcopy(raw),damaged,'val',summary)
+    damaged=deepcopy(sealed);damaged[0]['unexpected']=True
+    with pytest.raises(ValueError,match='unexpected'):io.verify_replay(deepcopy(raw),damaged,'val',summary)
+
+
+def test_replay_count_and_split_mismatch_rejected():
+    with pytest.raises(ValueError,match='count'):io.verify_replay([], [dict(image='x')],'train',None)
+    with pytest.raises(ValueError,match='split'):io.verify_replay([],[],'test',None)
