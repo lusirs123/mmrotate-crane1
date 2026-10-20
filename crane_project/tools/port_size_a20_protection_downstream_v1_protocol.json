@@ -1,0 +1,113 @@
+{
+  "protocol": "port_size_a20_protection_downstream_v1",
+  "versions": [
+    "b",
+    "midpoint",
+    "a20",
+    "c6",
+    "r6",
+    "p5"
+  ],
+  "size_heads": {
+    "a20": {
+      "arm": "fixed_b",
+      "epoch": 20,
+      "sha256": "545e18459d3ead4a54c441d64de27ca44a8394bfdc20cc2caf4c2f7534326479"
+    },
+    "c6": {
+      "arm": "C",
+      "epoch": 6,
+      "sha256": "04de79a63963062d641fda9ce70e51f30dceb37e048c2b3429d0c2a0161dec52"
+    },
+    "r6": {
+      "arm": "R",
+      "epoch": 6,
+      "sha256": "c433497f1fd769773ec1d10909b1072e4e576a6eb3b453b8b43d31ae96a7447a"
+    },
+    "p5": {
+      "arm": "P",
+      "epoch": 5,
+      "sha256": "e9d0108204c79bdac22311a288560ec7fffc43c86f1091a474e16adbb9272c81"
+    }
+  },
+  "weight_sha256": {
+    "b": "8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23",
+    "midpoint": "16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7",
+    "a20": "545e18459d3ead4a54c441d64de27ca44a8394bfdc20cc2caf4c2f7534326479",
+    "c6": "04de79a63963062d641fda9ce70e51f30dceb37e048c2b3429d0c2a0161dec52",
+    "r6": "c433497f1fd769773ec1d10909b1072e4e576a6eb3b453b8b43d31ae96a7447a",
+    "p5": "e9d0108204c79bdac22311a288560ec7fffc43c86f1091a474e16adbb9272c81"
+  },
+  "inference": "Same-run native B/M; four frozen fixed-B2800params size heads, same B-P3 cache/read_pair commonW, decoder and pair fallback. Single natural M input; no filters, iteration, NMS or compensation.",
+  "stages": [
+    "complete887 native VAL: sealed cache/resize/coordinates/W and all six frozen output/score/delivery replay; failure blocks TEST/depth",
+    "complete1440 detection TEST, six frozen versions, native AP11 and existing geometry/custom metrics",
+    "complete1097 Unknown-02 only; fixed Raw-opt/calibration/physical reference, exposed TEST description"
+  ],
+  "datasets": {
+    "val": {
+      "frames": 887,
+      "role": "native_chain_replay_no_selection"
+    },
+    "detection_test": {
+      "frames": 1440,
+      "role": "exposed_TEST_frozen_description"
+    },
+    "unknown02": {
+      "sequence": "unknown_test_02_coverage_retry",
+      "frames": 1097,
+      "role": "exposed_TEST_frozen_description"
+    }
+  },
+  "geometry": {
+    "center_px_strict": 15,
+    "size_relative_max_inclusive": 0.1,
+    "angle_period_deg": 180,
+    "angle_max_deg_inclusive": 3,
+    "angle_gt_aspect_min": 1.2,
+    "near_reference": "fixed_M",
+    "near_max": 0.03
+  },
+  "depth_metrics": [
+    "mae_m",
+    "rmse_m",
+    "bias_m",
+    "p95_abs_error_m",
+    "numeric_depth_count",
+    "frame_count",
+    "numeric_depth_coverage"
+  ],
+  "calibration_sha256": "c9c14fc1b09ba8223996121425e302888ac7d44213192225acd5365fb2f1ffe2",
+  "replay": {
+    "box_atol": 0.0001,
+    "box_rtol": 1e-06,
+    "roi_atol": 0.0001,
+    "roi_rtol": 1e-06,
+    "support_atol": 1e-06,
+    "coordinate_atol": 1e-05,
+    "score_presence_delivery_checks_exact": true
+  },
+  "reporting": "overall/domain/video; long-shortMAE/P95/bias,a/r,joint10 transitions; near fixedM<=3%,cross intersection/ALL positive harm/both-harmed/effective correction; center<15px/output,sizeboth<=10%/output,angle180period<=3deg/GTaspect>=1.2 output; missing/output/full-frame coverage; fullRIoU,DFR,ACI,MCML,TDR,AP50/75.",
+  "depth_reporting": "metreMAE/RMSE/bias/P95/coverage; all-six and pairwise common-valid paired errors/counts/frameIDs incl M/A20 and C6->R6; own short/a/r geometry and signed scale/ratio/interaction propagation, NOT additive MAE attribution.",
+  "limits": {
+    "training_updates": 0,
+    "selection": false,
+    "formula_refit": false,
+    "automatic_adoption": false,
+    "train03": false,
+    "fixed_dev": false,
+    "reliability_filter": false,
+    "size_accept_filter": false
+  },
+  "resources": {
+    "physical_gpu_choices": [
+      2,
+      3
+    ],
+    "single_gpu": true,
+    "user_limit_mib": 7000,
+    "stop_mib": 6800,
+    "allocator_cap_mib": 6000
+  },
+  "historical": "All C/R/P epochs failed S043 VAL eligibility; C6/R6/P5 fixed descriptive representatives, not re-selected. A20 remains unadopted, M formal. P5 vs R6 confounds epoch; use existing same-epoch VAL for mechanism. Unknown/TEST descriptive only, no independent generalization claim."
+}
