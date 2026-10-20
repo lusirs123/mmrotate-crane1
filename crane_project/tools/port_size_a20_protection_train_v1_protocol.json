@@ -1,0 +1,76 @@
+{
+  "protocol": "port_size_a20_protection_train_v1",
+  "status": "FROZEN_BEFORE_ENGINEERING_AND_FIT",
+  "a20_sha256": "545e18459d3ead4a54c441d64de27ca44a8394bfdc20cc2caf4c2f7534326479",
+  "arms": [
+    "C",
+    "R",
+    "P"
+  ],
+  "epochs_per_arm": 6,
+  "updates_per_epoch": 639,
+  "batch_size": 8,
+  "lr": 0.0001,
+  "clip_norm": 10.0,
+  "optimizer": "fresh Adam,weight_decay0",
+  "parameter_count": 2800,
+  "formal_updates": 11502,
+  "val_evaluations": 18,
+  "seed": 1703,
+  "shuffle": "Random(1703+20+continuation_epoch)",
+  "initialization": "Fixed A20 head only; Adam and RNG reset identically for all3; all engineering states discarded",
+  "losses": {
+    "L0": "Original A20 mean2N SmoothL1_beta0.1(delta_roi-target_roi), reusing original graph",
+    "Lratio": "meanN SmoothL1_beta0.1(z_long-z_short), exactly old A048 ratio form",
+    "Lprotect": "sum_ij(active_ij * relu(abs(expm1(z_ij))-Eref_ij-epsilon))/(2N)",
+    "ratio_weight": 0.25,
+    "protect_weight": 0.1,
+    "C": "L0",
+    "R": "L0 + 0.25*Lratio",
+    "P": "L0 + 0.25*Lratio + 0.1*Lprotect",
+    "limits": "Soft, reactive, training-only objective; no hard no-regression, first-step or shared-parameter guarantee. No new inference evidence and no novelty claim from ratio supervision. Fixed coefficients are engineering draft choices, not optimized or empirically justified."
+  },
+  "fixed_masks": {
+    "near": "E_M <= 0.03",
+    "gain": "E_A20 < E_M - 1e-6",
+    "active": "near OR gain",
+    "reference": "M on near-only; A20 on gain-only; min(E_M,E_A20) on overlap; inactive entries zero in mean2N",
+    "epsilon": 0.0,
+    "frozen": "Computed only once on complete TRAIN for training. VAL masks only for evaluation, never fed into fit or inference. GT/reference tensors detached. No subset sampler or active-count normalization."
+  },
+  "reference_precision": "Frozen memberships from saved Python float64 errors, packed bool unchanged. Error thresholds remain float64 GPU; actual decoded float32 candidate divided by float64 GT. No float32 mask recomputation.",
+  "inputs": "Original A20 fixed_b old B-P3 and common W; all TRAIN5116/5112 outputs; VAL887/886; no GT in forward or inference, no sample filtering",
+  "selection": "Same expanded eligibility for all3 then lexicographic Sim longMAE,Sim shortMAE,Real longMAE,Real shortMAE,earlier continuation epoch. None eligible => same-key descriptive representative, no adoption.",
+  "conditions": {
+    "domain_M_sizes": "Sim long/shortMAE < M-1e-6 each; Real long/shortMAE <= M+0.001 each",
+    "domain_M_near": "Fixed M near<=3% long/short MAE <= M+0.001 each domain",
+    "domain_M_RIoU": "each domain full mean_RIoU >= M-0.001",
+    "domain_identity": "exact M center/raw+canonical angle/score/output presence; new_output=lost_output=0, same center/angle/coverage denominators",
+    "domain_DFR": "DFR_percent_per_frame <= M (same adjacent pairs)",
+    "domain_MCML": "MCML max<=M AND mean<=M",
+    "domain_TDR": "same window denominator, hits>=M",
+    "domain_ACI": "ACI and valid adjacent-pair count exactly equal M",
+    "sim_M_scale_ratio": "meanabs(a) and meanabs(r) <= M+1e-6",
+    "overall_M_RIoU": "full mean_RIoU >= M-1e-5",
+    "sim_A20_sizes": "each <=A20+1e-6 AND at least one <A20-1e-6",
+    "sim_A20_scale": "meanabs(a)<=A20+1e-6",
+    "sim_A20_ratio": "meanabs(r)<A20-1e-6",
+    "real_A20_sizes": "long and short MAE <= A20+0.001",
+    "overall_A20_RIoU": "full mean_RIoU >= A20-1e-5"
+  },
+  "mechanism": "At representatives chosen by same rule, P must reduce protected excess-error loss vs R by >1e-6 in each domain, not lose fixed A20 useful-gain retention vs R beyond 1e-6, and keep Sim eachMAE <= R+1e-6 and <= C+1e-6. Separate local usefulness from full adoption.",
+  "reporting": "Full original custom mean_RIoU,DFR,ACI,MCML,TDR,AP50/75 supplement; center<15px/output,sizeboth<=10%/output,angle180period<=3deg/GTaspect>=1.2 output; coverage/missing/full-frame correct coverage; overall/domain/video. Protect and harmful-direction statistics do not replace final metrics.",
+  "engineering": "Full5116 TRAIN replay vs exact saved A20 including2 pre/final fallbacks, original C2updates loss/grad/Adam equivalence; 2 discarded updates+save/reload next update per arm; full887 VAL starting identity; frozen float64 mask binding; resource measurement. rtol1e-6,gradient atol1e-10,state atol1e-7,Adam atol1e-10; serialization/RNG exact. Box replay atol1e-4 rtol1e-6,delta1e-6; discrete/score/presence exact.",
+  "stop": "Source/mapping/nonfinite/replay/recovery/resource failure stops. TRAIN diagnostic benefit never gates VAL.6epochs/arm only,no coefficient/epoch/module expansion. No TEST or Unknown02, no automatic M replacement.",
+  "resource": {
+    "single_physical_gpu_choices": [
+      2,
+      3
+    ],
+    "user_limit_mib": 7000,
+    "stop_mib": 6800,
+    "allocator_cap_mib": 6000,
+    "min_free_mib": 3072
+  },
+  "exposure": "Hypothesis after exposed S041 TEST/Unknown; fit and selection only TRAIN/VAL. New independent depth evidence still missing."
+}

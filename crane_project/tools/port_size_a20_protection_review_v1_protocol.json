@@ -1,0 +1,67 @@
+{
+  "protocol": "port_size_a20_protection_review_v1",
+  "status": "DESIGN_AND_CPU_PROTOTYPE_ONLY_NO_TRAINING_AUTHORIZED",
+  "fixed_start": {
+    "arm": "fixed_b",
+    "epoch": 20,
+    "sha256": "545e18459d3ead4a54c441d64de27ca44a8394bfdc20cc2caf4c2f7534326479"
+  },
+  "scope": "Read only S039 fixed A20 TRAIN and VAL saved rows; no head/cache/image load, model inference, server or GPU. TEST/Unknown-02 are not opened by review.",
+  "representation": "Keep A20 2800params fixed-B read, old B-P3 ROI, W=min(S_A,S_Q) and frozen M input; no Q-aligned visual read, new feature/loss head, support change or artificial proposal.",
+  "labels": "GT canonical long/short mapped by frozen M raw and model-B axis identity. No GT projection and no GT-dependent inference.",
+  "errors": "z_j=log(pre_guard_pred_j/GT_j); E_j=abs(expm1(z_j)), same single-edge absolute relative error as reporting. Fixed M/A20 references use delivered boxes. Pre-guard invalid or overflow stops; no clipping/filtering. Final delivered protection reported separately.",
+  "fixed_masks": {
+    "near": "E_M <= 0.03",
+    "gain": "E_A20 < E_M - 1e-6",
+    "active": "near OR gain",
+    "reference": "M on near-only; A20 on gain-only; min(E_M,E_A20) on overlap; inactive entries zero in mean2N",
+    "epsilon": 0.0,
+    "frozen": "Computed only once on complete TRAIN for training. VAL masks only for evaluation, never fed into fit or inference. GT/reference tensors detached. No subset sampler or active-count normalization."
+  },
+  "losses": {
+    "L0": "Original A20 mean2N SmoothL1_beta0.1(delta_roi-target_roi), reusing original graph",
+    "Lratio": "meanN SmoothL1_beta0.1(z_long-z_short), exactly old A048 ratio form",
+    "Lprotect": "sum_ij(active_ij * relu(abs(expm1(z_ij))-Eref_ij-epsilon))/(2N)",
+    "ratio_weight": 0.25,
+    "protect_weight": 0.1,
+    "C": "L0",
+    "R": "L0 + 0.25*Lratio",
+    "P": "L0 + 0.25*Lratio + 0.1*Lprotect",
+    "limits": "Soft, reactive, training-only objective; no hard no-regression, first-step or shared-parameter guarantee. No new inference evidence and no novelty claim from ratio supervision. Fixed coefficients are engineering draft choices, not optimized or empirically justified."
+  },
+  "continuation_design_not_launched": {
+    "arms": ["C", "R", "P"],
+    "start": "All from same fixed A20 head weights; reset Adam moments and RNG by identical rule; do NOT zero the trained terminal or reuse engineering weights",
+    "epochs_per_arm_proposed": 6,
+    "batch_size": 8,
+    "updates_per_epoch": 639,
+    "optimizer": "fresh Adam",
+    "lr_proposed": 0.0001,
+    "weight_decay": 0.0,
+    "clip_norm": 10.0,
+    "seed": 1703,
+    "order_proposed": "same sorted(scale,image) 5112 output views, shuffle Random(1703+20+continuation_epoch), no GT sampling",
+    "missing": "all 5116 views accounted, four missing outputs remain missing; all 5112 outputs supervised including two historical fallback views",
+    "validation": "epoch0 replay identity only, then full887 VAL at each of six epochs in every arm. No TRAIN admission, no TEST/depth for choice.",
+    "engineering_before_future_fit": "Actual cache + A20 replay, pre/final fallback identity, zero-coefficient C loss/grad/Adam equivalence, frozen refs, axis mapping, exact checkpoint/RNG restore, resource measurement. Synthetic proof here does not complete these checks."
+  },
+  "evaluation_draft": {
+    "direct": "Domain long/shortMAE, P95,bias,a/r; fixed M near and A20 useful-gain groups by edge, no net-count-only success",
+    "benefit_retention": "sum min(max(E_M-E_new,0),E_M-E_A20) over fixed gain edges / sum(E_M-E_A20), separately domain/edge and scale. Also counts still beneficial, lost, reversed and gained; per-edge capping prevents extra gains elsewhere hiding loss.",
+    "hard_inherited": "All arms use original S038 M-relative eligibility/identity/DFR/MCML/TDR/ACI gates; retain documented 0.1pp domain and near MAE cost allowances, no TEST-driven relaxation.",
+    "additional_common_adoption_draft": "Apply to C/R/P uniformly: VAL Sim bothMAE <= fixedA20+1e-6 and at least one <A20-1e-6; Sim meanabs(r)<A20-1e-6 and meanabs(a)<=A20+1e-6; Real edgeMAEs<=A20+0.001. Overall fullRIoU>=A20-1e-5. No automatic promotion.",
+    "mechanism_vs_R_and_C": "At representatives chosen by same rule, P must reduce protected excess-error loss vs R by >1e-6 in each domain, not lose fixed A20 useful-gain retention vs R beyond 1e-6, and keep Sim eachMAE <= R+1e-6 and <= C+1e-6. Separate local usefulness from full adoption.",
+    "selection": "Same eligibility then lexicographic Sim longMAE, Sim shortMAE, Real longMAE, Real shortMAE, earlier continuation_epoch. None eligible: same-key descriptive representative only. No custom weighted composite score.",
+    "reporting": "Full original custom mean_RIoU,DFR,ACI,MCML,TDR,AP50/75 supplement; center<15px/output,sizeboth<=10%/output,angle180period<=3deg/GTaspect>=1.2 output; coverage/missing/full-frame correct coverage; overall/domain/video. Protect and harmful-direction statistics do not replace final metrics.",
+    "depth": "No depth data is read or used here. Future frozen Raw-opt evaluation needs separately fixed development/independent-data roles; Unknown-02 cannot select candidates or epochs."
+  },
+  "history": {
+    "S021": "Static complete-TRAIN domain/scale/edge residual-group weights (near=1,cap4,mean-one), NOT dynamic weighting. New hinge activation depends on new error exceeding fixed per-edge reference, while memberships/reference stay fixed.",
+    "A048": "Explicit GT ratio loss already tried. R is required ablation on new fixed A20 start, not a novel ratio mechanism.",
+    "L20": "Local per-position size supervision constrains hidden local predictions. P only constrains final canonical edge error against frozen baselines; shared-parameter interference may still lose useful corrections.",
+    "seven_slot": "No artificial proposals or changes in input organization.",
+    "native_P3_or_Q_alignment": "No change of feature source, coordinates, network or decode.",
+    "distillation": "Error ceiling supervised by GT, not A20 coordinate matching; predictions better than A20 are unpenalized."
+  },
+  "stop": "This turn stops after full saved-row support review, CPU math/axis checks and design. No actual optimizer steps, training runner, remote sync or GPU launch. Future fit needs explicit separate implementation authorization and final contract freeze; no coefficient/budget expansion on failure."
+}
