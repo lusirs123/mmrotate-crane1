@@ -125,3 +125,26 @@ def test_no_run_guard_and_no_epoch_selection_cli(tmp_path):
     p=d.protocol();assert p['limits']['selection'] is False and p['limits']['formula_refit'] is False
     assert p['versions']==list(d.ARMS) and p['limits']['fixed_dev'] is False and p['limits']['train03'] is False
     assert len(d.HEADS)==4 and 'q20' not in d.ARMS
+
+
+def test_latest_gpu1_request_does_not_change_legacy_gpu_choices(monkeypatch,tmp_path):
+    class NoThread:
+        def __init__(self,**kwargs):pass
+        def start(self):pass
+    monkeypatch.setattr(d,'smi',lambda fields,kind='gpu':[['1','GPU-second','4096'],['2','GPU-third','6000']])
+    monkeypatch.setattr(d.threading,'Thread',NoThread)
+    monkeypatch.setenv('CUDA_VISIBLE_DEVICES','1')
+    state,stop,thread=d.setup_gpu(tmp_path)
+    assert state['physical_gpu']==1 and state['user_limit_mib']==7000
+    assert d.protocol()['resources']['physical_gpu_choices']==[1]
+    assert previous.protocol()['resources']['physical_gpu_choices']==[2,3]
+    monkeypatch.setenv('CUDA_VISIBLE_DEVICES','2')
+    with pytest.raises(ValueError):d.setup_gpu(tmp_path)
+
+
+def test_memory_stop_and_insufficient_free_fail_closed(monkeypatch,tmp_path):
+    monkeypatch.setenv('CUDA_VISIBLE_DEVICES','1')
+    monkeypatch.setattr(d,'smi',lambda fields,kind='gpu':[['1','GPU-second','3000']])
+    with pytest.raises(RuntimeError):d.setup_gpu(tmp_path)
+    e.check_memory(dict(process_mib=6799))
+    with pytest.raises(RuntimeError):e.check_memory(dict(process_mib=6800))

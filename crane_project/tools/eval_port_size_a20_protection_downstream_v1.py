@@ -14,7 +14,7 @@ import sys
 import time
 ROOT=Path(__file__).resolve().parents[2];sys.path.insert(0,str(ROOT))
 from crane_project.utils.port_size_a20_protection_downstream_v1 import (
-    VERSION,ARMS,HEADS,PINS,SEQUENCE,protocol,depth,identity,head_metadata,replay_inputs,
+    VERSION,ARMS,HEADS,PINS,SEQUENCE,protocol,depth,identity,head_metadata,replay_inputs,setup_gpu,
     compare_boxes,require_val_proof,detection_report,depth_report,delivery_label)
 from crane_project.tools.eval_port_size_proposal_downstream_v1 import (
     write,write_rows,load,rows,native_view,memory_snapshot,checked_depth_sources)
@@ -107,9 +107,8 @@ def run(args):
         a20_remains_unadopted=True,continuation_remains_unadopted=True,automatic_adoption=False,test_selection=False,depth_selection=False)
     tick=time.monotonic();stop=None;watcher=None
     try:
-        if os.environ.get('WORLD_SIZE','1')!='1' or os.environ.get('CUDA_VISIBLE_DEVICES') not in ('2','3'):
+        if os.environ.get('WORLD_SIZE','1')!='1' or os.environ.get('CUDA_VISIBLE_DEVICES') not in ('1',):
             raise ValueError('One explicit physical GPU required')
-        from crane_project.tools.audit_port_size_native_p3_v1 import setup_gpu
         resource,stop,watcher=setup_gpu(out,7000,6800,6000);report['resource']=resource
         torch.cuda.set_device(0)
         torch.cuda.set_per_process_memory_fraction(6000*2**20/torch.cuda.get_device_properties(0).total_memory,0)
