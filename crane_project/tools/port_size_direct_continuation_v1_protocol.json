@@ -1,0 +1,72 @@
+{
+  "protocol": "port_size_direct_continuation_v1",
+  "status": "FROZEN_BEFORE_ENGINEERING_AND_FIT",
+  "arms": [
+    "C",
+    "R"
+  ],
+  "epochs_per_arm": 6,
+  "updates_per_epoch": 639,
+  "batch_size": 8,
+  "lr": 0.0001,
+  "clip_norm": 10.0,
+  "optimizer": "fresh Adam per arm lr1e-4 betas(.9,.999) eps1e-8 weight_decay0 amsgradFalse constant lr; no old optimizer loaded",
+  "parameter_count": 2746,
+  "formal_updates": 7668,
+  "val_evaluations": 12,
+  "seed": 1703,
+  "shuffle": "Random(1703+20+continuation_epoch)",
+  "initialization": "Fixed S046 D_direct ep02 model only,1278 prior updates. Adam/RNG reset identically; all engineering updates discarded. Original head/forward unchanged.",
+  "losses": {
+    "L0": "EXACT original S046 D mean2N SmoothL1_beta0.1(delta_roi-target_roi)",
+    "Lratio": "EXACT historical meanN SmoothL1_beta0.1(canonical_log_error_long-canonical_log_error_short), no weights/masks",
+    "ratio_weight": 0.25,
+    "C": "L0",
+    "R": "L0 + 0.25*Lratio"
+  },
+  "reference_precision": "Fixed saved D/M float64 errors and memberships computed once; diagnostics ONLY, never loss/sampling/forward inputs. Historical helper a_errors means D start errors in this experiment.",
+  "inputs": "Same original B-P3/M/commonW/267 channels. No GT in forward. Complete TRAIN5116views/5112outputs; complete VAL887/886 each epoch.",
+  "selection": "Same historical eligibility and lexicographic Sim long,Sim short,Real long,Real short,earlier continuation epoch. Source-relative A20 clauses bind D ep02, same thresholds. No eligible=>descriptive representative only.",
+  "conditions": {
+    "domain_M_sizes": "Sim long/shortMAE < M-1e-6 each; Real long/shortMAE <= M+0.001 each",
+    "domain_M_near": "Fixed M near<=3% long/short MAE <= M+0.001 each domain",
+    "domain_M_RIoU": "each domain full mean_RIoU >= M-0.001",
+    "domain_identity": "exact M center/raw+canonical angle/score/output presence; new_output=lost_output=0, same center/angle/coverage denominators",
+    "domain_DFR": "DFR_percent_per_frame <= M (same adjacent pairs)",
+    "domain_MCML": "MCML max<=M AND mean<=M",
+    "domain_TDR": "same window denominator, hits>=M",
+    "domain_ACI": "ACI and valid adjacent-pair count exactly equal M",
+    "sim_M_scale_ratio": "meanabs(a) and meanabs(r) <= M+1e-6",
+    "overall_M_RIoU": "full mean_RIoU >= M-1e-5",
+    "sim_D02_sizes": "each <=D02+1e-6 AND at least one <D02-1e-6",
+    "sim_D02_scale": "meanabs(a)<=D02+1e-6",
+    "sim_D02_ratio": "meanabs(r)<D02-1e-6",
+    "real_D02_sizes": "long and short MAE <= D02+0.001",
+    "overall_D02_RIoU": "full mean_RIoU >= D02-1e-5"
+  },
+  "mechanism": "All6 same-epoch R-C metrics plus ratio-improved/short-worsened/accurate-other-edge-harmed intersections. No newly invented mechanism passing score or threshold. Epoch6 is fixed-budget comparison only.",
+  "reporting": "Full original custom mean_RIoU,DFR,ACI,MCML,TDR,AP50/75 supplement; center<15px/output,sizeboth<=10%/output,angle180period<=3deg/GTaspect>=1.2 output; coverage/missing/full-frame correct coverage; overall/domain/video. Protect and harmful-direction statistics do not replace final metrics.",
+  "engineering": "Full saved D TRAIN/VAL replay, exact head-only load and empty Adam, original D loss/update equivalence2steps, C/R finite updates and exact saved optimizer/RNG next step,discard10temporaryupdates. No benefit gate.",
+  "stop": "Source/replay/mapping/numerical/resource failures stop. No TRAIN effect gate.6epochs/arm only; no TEST/depth,lambda search,automatic M replacement.",
+  "resource": {
+    "single_physical_gpu_choices": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "user_limit_mib": 7000,
+    "stop_mib": 6800,
+    "allocator_cap_mib": 6000,
+    "min_free_mib": 3072,
+    "choice": "Most free memory at launch across four cards; one physical GPU, existing7GB cap, no other task touched"
+  },
+  "exposure": "Protocol follows exposed S047 TEST/Unknown description. No TEST/Unknown reads in this task, no compensation or validation on them. Independent generalization remains unproved.",
+  "start_sha256": "615646e20f07b9cfec16c9fc18b56505dc737688ab5d0aceadb7b1eca8e8e299",
+  "scope": "Two-stage D ep02 continuation vs historical vector ep20 continuation: same continuation budget/order, different initial training stages; NOT pure structure ablation.",
+  "diagnostic_sets": {
+    "M_near": "E_M<=.03",
+    "D_gain": "E_D<E_M-1e-6",
+    "boundary": "Offline only; saved float64 sets, no training penalty"
+  }
+}
