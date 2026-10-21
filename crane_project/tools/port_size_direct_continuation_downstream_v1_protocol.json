@@ -1,0 +1,161 @@
+{
+  "protocol": "port_size_direct_continuation_downstream_v1",
+  "versions": [
+    "b",
+    "midpoint",
+    "d02",
+    "a20",
+    "c6",
+    "r6",
+    "dc6",
+    "dr6",
+    "dc1",
+    "dr1"
+  ],
+  "size_heads": {
+    "d02": {
+      "arm": "D_direct",
+      "epoch": 2,
+      "sha256": "615646e20f07b9cfec16c9fc18b56505dc737688ab5d0aceadb7b1eca8e8e299"
+    },
+    "a20": {
+      "arm": "fixed_b",
+      "epoch": 20,
+      "sha256": "545e18459d3ead4a54c441d64de27ca44a8394bfdc20cc2caf4c2f7534326479"
+    },
+    "c6": {
+      "arm": "C",
+      "epoch": 6,
+      "sha256": "04de79a63963062d641fda9ce70e51f30dceb37e048c2b3429d0c2a0161dec52"
+    },
+    "r6": {
+      "arm": "R",
+      "epoch": 6,
+      "sha256": "c433497f1fd769773ec1d10909b1072e4e576a6eb3b453b8b43d31ae96a7447a"
+    },
+    "dc6": {
+      "arm": "C",
+      "epoch": 6,
+      "sha256": "c4f8c00dd5b53412ee42d15462baf9fb0e4804d4490a1702b740d6b701654f3b"
+    },
+    "dr6": {
+      "arm": "R",
+      "epoch": 6,
+      "sha256": "918c04224b051a50329ed28b2581f1e9fcfb14e1a800075f03575f3e04bceac1"
+    },
+    "dc1": {
+      "arm": "C",
+      "epoch": 1,
+      "sha256": "ffdbe77bc40906c85d200c720b40e24f8cbc5c9f3544f98cfb892613599f8905"
+    },
+    "dr1": {
+      "arm": "R",
+      "epoch": 1,
+      "sha256": "d7d11a47bd55682e7c4093277553ecf6ae2ddd7ee76097690c48ac4b40683e25"
+    }
+  },
+  "weight_sha256": {
+    "b": "8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23",
+    "midpoint": "16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7",
+    "d02": "615646e20f07b9cfec16c9fc18b56505dc737688ab5d0aceadb7b1eca8e8e299",
+    "a20": "545e18459d3ead4a54c441d64de27ca44a8394bfdc20cc2caf4c2f7534326479",
+    "c6": "04de79a63963062d641fda9ce70e51f30dceb37e048c2b3429d0c2a0161dec52",
+    "r6": "c433497f1fd769773ec1d10909b1072e4e576a6eb3b453b8b43d31ae96a7447a",
+    "dc6": "c4f8c00dd5b53412ee42d15462baf9fb0e4804d4490a1702b740d6b701654f3b",
+    "dr6": "918c04224b051a50329ed28b2581f1e9fcfb14e1a800075f03575f3e04bceac1",
+    "dc1": "ffdbe77bc40906c85d200c720b40e24f8cbc5c9f3544f98cfb892613599f8905",
+    "dr1": "d7d11a47bd55682e7c4093277553ecf6ae2ddd7ee76097690c48ac4b40683e25"
+  },
+  "inference": "All ten actual same-run frozen versions. Original fixed B-P3/read_pair/W, original D_direct or AlignedSizeHead forward, size-only delivery. No output aliases, filters, fitting or epoch competition.",
+  "stages": [
+    "full source and checkpoint identity",
+    "complete887 native VAL including sealed original tensors/W/axis/resize and cached final/pre_guard/score/presence/validity replay; fail blocks TEST/depth",
+    "complete1440 TEST Real868 Sim572",
+    "complete1097 Unknown02 frozen Raw-opt only"
+  ],
+  "datasets": {
+    "val": {
+      "frames": 887,
+      "role": "native_chain_replay_no_selection"
+    },
+    "detection_test": {
+      "frames": 1440,
+      "role": "exposed_TEST_frozen_description"
+    },
+    "unknown02": {
+      "sequence": "unknown_test_02_coverage_retry",
+      "frames": 1097,
+      "role": "exposed_TEST_frozen_description"
+    }
+  },
+  "geometry": {
+    "center_px_strict": 15,
+    "size_relative_max_inclusive": 0.1,
+    "angle_period_deg": 180,
+    "angle_max_deg_inclusive": 3,
+    "angle_gt_aspect_min": 1.2,
+    "near_reference": "fixed_M",
+    "near_max": 0.03
+  },
+  "depth_metrics": [
+    "mae_m",
+    "rmse_m",
+    "bias_m",
+    "p95_abs_error_m",
+    "max_abs_error_m",
+    "abs_rel",
+    "numeric_depth_count",
+    "frame_count",
+    "numeric_depth_coverage"
+  ],
+  "calibration_sha256": "c9c14fc1b09ba8223996121425e302888ac7d44213192225acd5365fb2f1ffe2",
+  "replay": {
+    "box_atol": 0.0001,
+    "box_rtol": 1e-06,
+    "roi_atol": 0.0001,
+    "roi_rtol": 1e-06,
+    "support_atol": 1e-06,
+    "coordinate_atol": 1e-05,
+    "score_presence_delivery_checks_exact": true
+  },
+  "reporting": "overall/domain/video; long-shortMAE/P95/bias,a/r,joint10 transitions; near fixedM<=3%,cross intersection/ALL positive harm/both-harmed/effective correction; center<15px/output,sizeboth<=10%/output,angle180period<=3deg/GTaspect>=1.2 output; missing/output/full-frame coverage; fullRIoU,DFR,ACI,MCML,TDR,AP50/75.",
+  "depth_reporting": "metreMAE,RMSE,bias,P95,numeric count/frames,all-ten and pairwise common-valid metrics,new/lost valid and frameIDs of improved/worsened/tied; short/a/r geometry; signed short/ratio/interaction propagation NOT additive MAE decomposition.",
+  "limits": {
+    "training_updates": 0,
+    "selection": false,
+    "formula_refit": false,
+    "automatic_adoption": false,
+    "train03": false,
+    "fixed_dev": false,
+    "reliability_filter": false,
+    "size_accept_filter": false
+  },
+  "resources": {
+    "physical_gpu_choices": [
+      2,
+      3
+    ],
+    "single_gpu": true,
+    "user_limit_mib": 7000,
+    "stop_mib": 6800,
+    "allocator_cap_mib": 6000,
+    "choice": "Maximum free on physical GPU2/3, prefer3 on tie; single card, own7GB cap, do not touch other processes"
+  },
+  "historical": "All old baselines rerun, exact per-frame compared to S047 indexed results (B/M/D02/A20/C6/R6). Original source/VAL adoption failures remain; no new adoption or independent generalization from exposed TEST/Unknown.",
+  "main_versions": [
+    "b",
+    "midpoint",
+    "d02",
+    "c6",
+    "r6",
+    "dc6",
+    "dr6"
+  ],
+  "auxiliary_versions": [
+    "a20",
+    "dc1",
+    "dr1"
+  ],
+  "fixed_roles": "Main fixed-budget epoch6 D-C6,D-R6 versus LVSR-C6,LVSR-R6 and B/M/D02. D-C1,D-R1 retain original descriptive representative identity but auxiliary only. A20 is auxiliary LVSR start. All fixed before dataset access; no selecting between epoch1 and6.",
+  "comparisons": "D02->DC6 ordinary continuation; DC6->DR6 ratio increment; LVSR_C6<->DC6 and LVSR_R6<->DR6 full two-stage workflows, NOT equal-stage pure structural attribution. All pairwise depth and size transitions plus M/start references."
+}
