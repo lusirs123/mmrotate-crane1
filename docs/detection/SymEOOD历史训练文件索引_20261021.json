@@ -1,0 +1,603 @@
+{
+  "schema": "symeood_historical_training_file_index_v1",
+  "date": "2026-10-21",
+  "scope": "Local deduplication and relocation only; no download or experiments. Historical code resolved through reachable Git commits.",
+  "remote_audit": {
+    "remote_root": "/media/omnisky/personal_files/ljj/symEOOD",
+    "head": "64b9b0145a4498162dcee965576dfbec9a512ec2",
+    "status": " M docs/reliability_handoff_20261003.md\n M third_party/dinov2/dinov2/eval/cell_dino/knn.py\n M third_party/dinov2/dinov2/eval/cell_dino/utils.py\n M third_party/dinov2/dinov2/eval/depth/models/decode_heads/decode_head.py\n M third_party/dinov2/dinov2/eval/depth/models/decode_heads/linear_head.py\n M third_party/dinov2/dinov2/eval/depth/models/depther/base.py\n M third_party/dinov2/dinov2/eval/depth/models/depther/encoder_decoder.py\n M third_party/dinov2/dinov2/eval/segmentation/models/decode_heads/linear_head.py\n M third_party/dinov2/dinov2/eval/segmentation_m2f/core/anchor/point_generator.py\n M third_party/dinov2/dinov2/eval/segmentation_m2f/core/box/samplers/sampling_result.py\n M third_party/dinov2/dinov2/eval/segmentation_m2f/models/decode_heads/mask2former_head.py\n M third_party/dinov2/dinov2/eval/segmentation_m2f/models/losses/cross_entropy_loss.py\n M third_party/dinov2/dinov2/eval/segmentation_m2f/models/losses/match_costs.py\n M third_party/dinov2/dinov2/eval/segmentation_m2f/models/plugins/msdeformattn_pixel_decoder.py\n M third_party/dinov2/dinov2/eval/segmentation_m2f/models/segmentors/encoder_decoder_mask2former.py\n M third_party/dinov2/dinov2/eval/segmentation_m2f/models/utils/assigner.py\n M third_party/dinov2/dinov2/eval/segmentation_m2f/models/utils/point_sample.py\n M third_party/dinov2/dinov2/eval/segmentation_m2f/models/utils/positional_encoding.py\n M third_party/dinov2/dinov2/eval/segmentation_m2f/models/utils/transformer.py\n M third_party/dinov2/dinov2/hub/depth/decode_heads.py\n M third_party/dinov2/dinov2/hub/depth/encoder_decoder.py\n M third_party/dinov2/dinov2/hub/text/dinov2_wrapper.py\n M third_party/dinov2/dinov2/layers/attention.py\n M third_party/dinov2/dinov2/layers/block.py\n M third_party/dinov2/dinov2/utils/checkpoint.py\n?? cleanup_archives/\n?? crane_project/data_contracts/dino_quality_ranking_complementarity_audit_v1.json\n?? crane_project/data_contracts/dino_quality_ranking_complementarity_audit_v1.json.before_path_fix.bak\n?? crane_project/data_contracts/dino_quality_ranking_complementarity_audit_v1_r2.json\n?? crane_project/tools/._analyze_port_size_qalign_v1.py\n?? crane_project/tools/._engineer_port_size_qalign_v1.py\n?? crane_project/tools/._port_size_qalign_v1_protocol.json\n?? crane_project/tools/._port_size_qalign_v1_sources.json\n?? crane_project/tools/._run_port_size_qalign_v1.py\n?? crane_project/tools/analyze_port_geometry_size_proposal_v1.py\n?? crane_project/tools/analyze_port_size_a20_protection_downstream_v1.py\n?? crane_project/tools/analyze_port_size_a20_protection_v1.py\n?? crane_project/tools/analyze_port_size_correction_behavior_v1.py\n?? crane_project/tools/analyze_port_size_direct_continuation_downstream_v1.py\n?? crane_project/tools/analyze_port_size_direct_continuation_v1.py\n?? crane_project/tools/analyze_port_size_direction_evidence_v1.py\n?? crane_project/tools/analyze_port_size_joint_v1.py\n?? crane_project/tools/analyze_port_size_native_p3_v1.py\n?? crane_project/tools/analyze_port_size_native_train_v1.py\n?? crane_project/tools/analyze_port_size_proposal_downstream_v1.py\n?? crane_project/tools/analyze_port_size_qalign_downstream_v1.py\n?? crane_project/tools/analyze_port_size_qalign_v1.py\n?? crane_project/tools/analyze_port_size_seven_replay_v1.py\n?? crane_project/tools/analyze_port_size_structure_downstream_v1.py\n?? crane_project/tools/analyze_port_size_structure_v1.py\n?? crane_project/tools/analyze_port_size_transfer_v1.py\n?? crane_project/tools/audit_port_size_auxiliary_conflict_v1.py\n?? crane_project/tools/audit_port_size_direction_evidence_v1.py\n?? crane_project/tools/audit_port_size_native_p3_v1.py\n?? crane_project/tools/check_port_oof_snapshot_detection_v1.py\n?? crane_project/tools/engineer_port_size_qalign_v1.py\n?? crane_project/tools/eval_port_geometry_midpoint_readout_test_v1.py\n?? crane_project/tools/eval_port_size_a20_protection_downstream_v1.py\n?? crane_project/tools/eval_port_size_direct_continuation_downstream_v1.py\n?? crane_project/tools/eval_port_size_proposal_downstream_v1.py\n?? crane_project/tools/eval_port_size_qalign_downstream_v1.py\n?? crane_project/tools/eval_port_size_structure_downstream_v1.py\n?? crane_project/tools/port_geometry_midpoint_readout_test_v1_protocol.json\n?? crane_project/tools/port_geometry_midpoint_readout_test_v1_sources.json\n?? crane_project/tools/port_geometry_size_condition_v1_protocol.json\n?? crane_project/tools/port_geometry_size_condition_v1_sources.json\n?? crane_project/tools/port_geometry_size_proposal_v1_protocol.json\n?? crane_project/tools/port_geometry_size_proposal_v1_sources.json\n?? crane_project/tools/port_size_a20_protection_downstream_v1_protocol.json\n?? crane_project/tools/port_size_a20_protection_downstream_v1_sources.json\n?? crane_project/tools/port_size_a20_protection_review_v1_protocol.json\n?? crane_project/tools/port_size_a20_protection_train_v1_protocol.json\n?? crane_project/tools/port_size_a20_protection_train_v1_sources.json\n?? crane_project/tools/port_size_direct_continuation_downstream_v1_protocol.json\n?? crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json\n?? crane_project/tools/port_size_direct_continuation_v1_protocol.json\n?? crane_project/tools/port_size_direct_continuation_v1_sources.json\n?? crane_project/tools/port_size_joint_v1_protocol.json\n?? crane_project/tools/port_size_joint_v1_sources.json\n?? crane_project/tools/port_size_local_aux_v1_protocol.json\n?? crane_project/tools/port_size_local_vectors_v1_protocol.json\n?? crane_project/tools/port_size_local_vectors_v1_sources.json\n?? crane_project/tools/port_size_native_p3_v1_protocol.json\n?? crane_project/tools/port_size_native_p3_v1_sources.json\n?? crane_project/tools/port_size_native_train_v1_protocol.json\n?? crane_project/tools/port_size_native_train_v1_sources.json\n?? crane_project/tools/port_size_proposal_downstream_v1_protocol.json\n?? crane_project/tools/port_size_proposal_downstream_v1_sources.json\n?? crane_project/tools/port_size_qalign_downstream_v1_protocol.json\n?? crane_project/tools/port_size_qalign_downstream_v1_sources.json\n?? crane_project/tools/port_size_qalign_v1_protocol.json\n?? crane_project/tools/port_size_qalign_v1_sources.json\n?? crane_project/tools/port_size_seven_replay_v1_protocol.json\n?? crane_project/tools/port_size_seven_replay_v1_sources.json\n?? crane_project/tools/port_size_structure_downstream_v1_protocol.json\n?? crane_project/tools/port_size_structure_downstream_v1_sources.json\n?? crane_project/tools/port_size_structure_v1_protocol.json\n?? crane_project/tools/port_size_structure_v1_sources.json\n?? crane_project/tools/replay_port_size_seven_v1.py\n?? crane_project/tools/review_port_size_a20_protection_v1.py\n?? crane_project/tools/run_port_geometry_size_condition_v1.py\n?? crane_project/tools/run_port_geometry_size_proposal_v1.py\n?? crane_project/tools/run_port_size_a20_protection_v1.py\n?? crane_project/tools/run_port_size_direct_continuation_v1.py\n?? crane_project/tools/run_port_size_local_aux_v1.py\n?? crane_project/tools/run_port_size_local_vectors_v1.py\n?? crane_project/tools/run_port_size_native_train_v1.py\n?? crane_project/tools/run_port_size_qalign_v1.py\n?? crane_project/tools/run_port_size_structure_v1.py\n?? crane_project/tools/tools/\n?? crane_project/tools/verify_port_size_proposal_downstream_v1.py\n?? crane_project/utils/._port_size_qalign_v1.py\n?? crane_project/utils/port_geometry_size_condition_v1.py\n?? crane_project/utils/port_geometry_size_proposal_v1.py\n?? crane_project/utils/port_size_a20_protection_downstream_v1.py\n?? crane_project/utils/port_size_a20_protection_review_v1.py\n?? crane_project/utils/port_size_a20_protection_train_v1.py\n?? crane_project/utils/port_size_auxiliary_conflict_v1.py\n?? crane_project/utils/port_size_direct_continuation_downstream_v1.py\n?? crane_project/utils/port_size_direct_continuation_resource_v1.py\n?? crane_project/utils/port_size_direct_continuation_v1.py\n?? crane_project/utils/port_size_direction_evidence_v1.py\n?? crane_project/utils/port_size_local_vectors_v1.py\n?? crane_project/utils/port_size_native_p3_v1.py\n?? crane_project/utils/port_size_qalign_downstream_v1.py\n?? crane_project/utils/port_size_qalign_v1.py\n?? crane_project/utils/port_size_structure_downstream_v1.py\n?? crane_project/utils/port_size_structure_resume_v1.py\n?? crane_project/utils/port_size_structure_v1.py\n?? evidence_archives/\n?? raw_opt_calibration_train_analysis_20260906.tar.gz\n?? tests/._test_port_size_qalign_v1.py\n?? tests/test_port_geometry_midpoint_readout_test_v1.py\n?? tests/test_port_geometry_size_condition_v1.py\n?? tests/test_port_geometry_size_proposal_v1.py\n?? tests/test_port_size_a20_protection_downstream_v1.py\n?? tests/test_port_size_a20_protection_review_v1.py\n?? tests/test_port_size_a20_protection_train_v1.py\n?? tests/test_port_size_auxiliary_conflict_v1.py\n?? tests/test_port_size_direct_continuation_downstream_v1.py\n?? tests/test_port_size_direct_continuation_v1.py\n?? tests/test_port_size_direction_analysis_v1.py\n?? tests/test_port_size_direction_evidence_v1.py\n?? tests/test_port_size_joint_v1.py\n?? tests/test_port_size_local_vectors_v1.py\n?? tests/test_port_size_native_p3_v1.py\n?? tests/test_port_size_native_train_v1.py\n?? tests/test_port_size_proposal_downstream_v1.py\n?? tests/test_port_size_qalign_downstream_v1.py\n?? tests/test_port_size_qalign_v1.py\n?? tests/test_port_size_seven_replay_v1.py\n?? tests/test_port_size_structure_downstream_v1.py\n?? tests/test_port_size_structure_resume_v1.py\n?? tests/test_port_size_structure_v1.py\n?? tests/test_port_size_transfer_v1.py\n?? v2_current_only_failure_attribution_v1_evidence.tar.gz\n?? v2_seq11_current_only_source_gate_v1_evidence.tar.gz\n?? v2_seq11_history_contribution_ablation_v1_evidence.tar.gz\n?? v2_seq11_pre_cv_evidence.tar.gz\n?? v2_seq11_pre_cv_identity_v2_evidence.tar.gz\n?? v2_seq11_three_way_baseline_v1_evidence.tar.gz\n?? v2_source_val_all_frame_metric_decomposition_v2_evidence.tar.gz\n",
+    "source_history": "a0d9f9f28856b6ccbf0aaf6c1a5811147fc01ed3 2026-10-11 07:54:24 +0800 Repair auxiliary training and enforce GPU3 memory plateau guard\n3c493b186ada0b7c1fef8ebc5a7dba772e2001ae 2026-10-01 13:41:46 +0800 E-H v1\n3151aadca70adfa4042ba1c622beca9a83fd5a19 2026-09-30 16:27:55 +0800 新增 D实验＝现有SymEOOD尺度B＋中心—尺寸回归补偿：\neb569afc72e61bbcd554c7afe0aabb54b9f93b14 2026-09-27 17:32:05 +0800 直接监督 K1 的最终候选选择\n49ee098575afd644fe2fd41f32e0adcd3576d191 2026-09-26 09:26:04 +0800 24 epoch 方案完成代码修改\n0fa67fef20641cbad52de0f3f22ff7ed5f263eb8 2026-09-24 21:07:12 +0800 现有产物核查\ndde262722412836630f4dca9c03c37fac31cc19e 2026-09-22 20:31:53 +0800 重新设计使用两张 GPU\n29ca55f5ae0aafbbde028c25fc8a4c9e2da79549 2026-09-22 20:17:47 +0800 结构修复\na2eb1224fa647ad3371ada0e2848a9950fde0066 2026-09-22 19:59:04 +0800 DINOv2 只作为离线训练教师，推理时仅运行普通 SymEOOD K1 学生\n584e36f3c8ccba9ca0c81ef5d2b65575574c08ee 2026-08-28 08:30:29 +0800 符合锁定设计\nace1db6865cf9c9b87f940a040114acabec19524 2026-07-20 09:11:50 +0800 测试 1\n35e0e01096eff560cbc861fd72986381cfa69b56 2026-07-18 09:06:59 +0800 PQAv3\n"
+  },
+  "runs": {
+    "crane_eood_k1_port_day2night_v1": {
+      "directory": "work_dirs/crane_eood_k1_port_day2night_v1",
+      "selected": "epoch_24",
+      "selected_sha_actual": "ee277d72cdf27d76e3216da4d17256b453b539d69d692cdd71960fadf7ebd2bf",
+      "selected_sha_recorded": "ee277d72cdf27d76e3216da4d17256b453b539d69d692cdd71960fadf7ebd2bf",
+      "saved_weights": [
+        "epoch_16.pth",
+        "epoch_18.pth",
+        "epoch_20.pth",
+        "epoch_22.pth",
+        "epoch_24.pth"
+      ],
+      "file_inventory": [
+        "20260929_105316.log",
+        "20260929_105316.log.json",
+        "crane_eood_k1_port_day2night_seq06_v1.py",
+        "val_sweep_port_v1/sweep_results.json",
+        "val_sweep_port_v1/epoch_16/preds/results.pkl.provenance.json",
+        "val_sweep_port_v1/epoch_16/preds/Task1_grab.provenance.json",
+        "val_sweep_port_v1/epoch_18/preds/results.pkl.provenance.json",
+        "val_sweep_port_v1/epoch_18/preds/Task1_grab.provenance.json",
+        "val_sweep_port_v1/epoch_20/preds/results.pkl.provenance.json",
+        "val_sweep_port_v1/epoch_20/preds/Task1_grab.provenance.json",
+        "val_sweep_port_v1/epoch_22/preds/results.pkl.provenance.json",
+        "val_sweep_port_v1/epoch_22/preds/Task1_grab.provenance.json",
+        "val_sweep_port_v1/epoch_24/preds/results.pkl.provenance.json",
+        "val_sweep_port_v1/epoch_24/preds/Task1_grab.provenance.json",
+        "val_sweep_port_v1/final_test/epoch_24/final_test_metrics_v2.json",
+        "val_sweep_port_v1/final_test/epoch_24/preds/results.pkl.provenance.json",
+        "val_sweep_port_v1/final_test/epoch_24/preds/Task1_grab.provenance.json"
+      ]
+    },
+    "crane_eood_k1_port_day2night_aug_b_v1": {
+      "directory": "work_dirs/crane_eood_k1_port_day2night_aug_b_v1",
+      "selected": "epoch_24",
+      "selected_sha_actual": "95da2d648cfef95e1fcd00f2cdfc258d9cf75ed038135bbfc00059f8f6f2a4db",
+      "selected_sha_recorded": "95da2d648cfef95e1fcd00f2cdfc258d9cf75ed038135bbfc00059f8f6f2a4db",
+      "saved_weights": [
+        "epoch_10.pth",
+        "epoch_12.pth",
+        "epoch_14.pth",
+        "epoch_16.pth",
+        "epoch_18.pth",
+        "epoch_2.pth",
+        "epoch_20.pth",
+        "epoch_22.pth",
+        "epoch_24.pth",
+        "epoch_4.pth",
+        "epoch_6.pth",
+        "epoch_8.pth"
+      ],
+      "file_inventory": [
+        "20260930_083040.log",
+        "20260930_083040.log.json",
+        "crane_eood_k1_port_day2night_aug_b_v1.py",
+        "val_sweep_port_v1/sweep_results.json",
+        "val_sweep_port_v1/epoch_16/preds/results.pkl.provenance.json",
+        "val_sweep_port_v1/epoch_16/preds/Task1_grab.provenance.json",
+        "val_sweep_port_v1/epoch_18/preds/results.pkl.provenance.json",
+        "val_sweep_port_v1/epoch_18/preds/Task1_grab.provenance.json",
+        "val_sweep_port_v1/epoch_20/preds/results.pkl.provenance.json",
+        "val_sweep_port_v1/epoch_20/preds/Task1_grab.provenance.json",
+        "val_sweep_port_v1/epoch_22/preds/results.pkl.provenance.json",
+        "val_sweep_port_v1/epoch_22/preds/Task1_grab.provenance.json",
+        "val_sweep_port_v1/epoch_24/preds/results.pkl.provenance.json",
+        "val_sweep_port_v1/epoch_24/preds/Task1_grab.provenance.json",
+        "val_sweep_port_v1/final_test/epoch_24/final_test_metrics_v2.json",
+        "val_sweep_port_v1/final_test/epoch_24/preds/results.pkl.provenance.json",
+        "val_sweep_port_v1/final_test/epoch_24/preds/Task1_grab.provenance.json"
+      ]
+    },
+    "crane_symeood_k1_port_day2night_v1": {
+      "directory": "work_dirs/crane_symeood_k1_port_day2night_v1",
+      "selected": "epoch_20",
+      "selected_sha_actual": "780a5de1a17b32041175bdf408a209872100f776de811075c55204bf333a92fe",
+      "selected_sha_recorded": "780a5de1a17b32041175bdf408a209872100f776de811075c55204bf333a92fe",
+      "saved_weights": [
+        "epoch_10.pth",
+        "epoch_12.pth",
+        "epoch_14.pth",
+        "epoch_16.pth",
+        "epoch_18.pth",
+        "epoch_2.pth",
+        "epoch_20.pth",
+        "epoch_22.pth",
+        "epoch_24.pth",
+        "epoch_4.pth",
+        "epoch_6.pth",
+        "epoch_8.pth"
+      ],
+      "file_inventory": [
+        "20260929_083248.log",
+        "20260929_083248.log.json",
+        "crane_symeood_k1_port_day2night_seq06_v1.py",
+        "val_sweep_port_v1/sweep_results.json",
+        "val_sweep_port_v1/epoch_16/preds/results.pkl.provenance.json",
+        "val_sweep_port_v1/epoch_16/preds/Task1_grab.provenance.json",
+        "val_sweep_port_v1/epoch_18/preds/results.pkl.provenance.json",
+        "val_sweep_port_v1/epoch_18/preds/Task1_grab.provenance.json",
+        "val_sweep_port_v1/epoch_20/preds/results.pkl.provenance.json",
+        "val_sweep_port_v1/epoch_20/preds/Task1_grab.provenance.json",
+        "val_sweep_port_v1/epoch_22/preds/results.pkl.provenance.json",
+        "val_sweep_port_v1/epoch_22/preds/Task1_grab.provenance.json",
+        "val_sweep_port_v1/epoch_24/preds/results.pkl.provenance.json",
+        "val_sweep_port_v1/epoch_24/preds/Task1_grab.provenance.json",
+        "val_sweep_port_v1/final_test/epoch_20/final_test_metrics_v2.json",
+        "val_sweep_port_v1/final_test/epoch_20/test_subset_legacy_replay_v1.json",
+        "val_sweep_port_v1/final_test/epoch_20/preds/results.pkl.provenance.json",
+        "val_sweep_port_v1/final_test/epoch_20/preds/Task1_grab.provenance.json"
+      ]
+    },
+    "crane_symeood_k1_port_day2night_aug_b_v1": {
+      "directory": "work_dirs/crane_symeood_k1_port_day2night_aug_b_v1",
+      "selected": "epoch_24",
+      "selected_sha_actual": "8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23",
+      "selected_sha_recorded": "8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23",
+      "saved_weights": [
+        "epoch_10.pth",
+        "epoch_12.pth",
+        "epoch_14.pth",
+        "epoch_16.pth",
+        "epoch_18.pth",
+        "epoch_2.pth",
+        "epoch_20.pth",
+        "epoch_22.pth",
+        "epoch_24.pth",
+        "epoch_4.pth",
+        "epoch_6.pth",
+        "epoch_8.pth"
+      ],
+      "file_inventory": [
+        "20260929_155706.log",
+        "20260929_155706.log.json",
+        "crane_symeood_k1_port_day2night_aug_b_v1.py",
+        "test_subset_audit_b_v1.json",
+        "val_sweep_port_v1/sweep_results.json",
+        "val_sweep_port_v1/epoch_16/preds/results.pkl.provenance.json",
+        "val_sweep_port_v1/epoch_16/preds/Task1_grab.provenance.json",
+        "val_sweep_port_v1/epoch_18/preds/results.pkl.provenance.json",
+        "val_sweep_port_v1/epoch_18/preds/Task1_grab.provenance.json",
+        "val_sweep_port_v1/epoch_20/preds/results.pkl.provenance.json",
+        "val_sweep_port_v1/epoch_20/preds/Task1_grab.provenance.json",
+        "val_sweep_port_v1/epoch_22/preds/results.pkl.provenance.json",
+        "val_sweep_port_v1/epoch_22/preds/Task1_grab.provenance.json",
+        "val_sweep_port_v1/epoch_24/preds/results.pkl.provenance.json",
+        "val_sweep_port_v1/epoch_24/preds/Task1_grab.provenance.json",
+        "val_sweep_port_v1/final_test/epoch_24/final_test_metrics_v2.json",
+        "val_sweep_port_v1/final_test/epoch_24/preds/results.pkl.provenance.json",
+        "val_sweep_port_v1/final_test/epoch_24/preds/Task1_grab.provenance.json"
+      ]
+    }
+  },
+  "captured_files": {
+    "work_dirs/crane_eood_k1_port_day2night_v1/crane_eood_k1_port_day2night_seq06_v1.py": {
+      "path": "work_dirs/crane_eood_k1_port_day2night_v1/crane_eood_k1_port_day2night_seq06_v1.py",
+      "sha256": "91e89287e86a18d077efdc8d0b0885e8fa4ffd48cdae754d716f7423e3f0eaa9",
+      "storage": "original_work_dirs"
+    },
+    "work_dirs/crane_eood_k1_port_day2night_v1/20260929_105316.log": {
+      "path": "work_dirs/crane_eood_k1_port_day2night_v1/20260929_105316.log",
+      "sha256": "2cb71ddeff573da153a32ac3963483c1c2e2b6575eed92dd2e484a90e47fd00e",
+      "storage": "original_work_dirs"
+    },
+    "work_dirs/crane_eood_k1_port_day2night_v1/20260929_105316.log.json": {
+      "path": "work_dirs/crane_eood_k1_port_day2night_v1/20260929_105316.log.json",
+      "sha256": "ee1c424b159daf119b0364cbbf4c1b65d269e288a598b6c7627e172ba1771de7",
+      "storage": "original_work_dirs"
+    },
+    "work_dirs/crane_eood_k1_port_day2night_v1/val_sweep_port_v1/sweep_results.json": {
+      "path": "work_dirs/crane_eood_k1_port_day2night_v1/val_sweep_port_v1/sweep_results.json",
+      "sha256": "a0bf581181890dc65cc381812cff44e93dd5c6e5658857443c08bfebba39dc8a",
+      "storage": "original_work_dirs"
+    },
+    "work_dirs/crane_eood_k1_port_day2night_v1/val_sweep_port_v1/final_test/epoch_24/final_test_metrics_v2.json": {
+      "path": "work_dirs/crane_eood_k1_port_day2night_v1/val_sweep_port_v1/final_test/epoch_24/final_test_metrics_v2.json",
+      "sha256": "5698fec53d161a8a2c6013322e851a1d84aa26a3a92b33798bfc0f6dbf2d6a3e",
+      "storage": "original_work_dirs"
+    },
+    "work_dirs/crane_eood_k1_port_day2night_aug_b_v1/crane_eood_k1_port_day2night_aug_b_v1.py": {
+      "path": "work_dirs/crane_eood_k1_port_day2night_aug_b_v1/crane_eood_k1_port_day2night_aug_b_v1.py",
+      "sha256": "4fb64256fbe5d090168afccfd318478f2b1ea69cb759aac3515728ffc7e6e87e",
+      "storage": "original_work_dirs"
+    },
+    "work_dirs/crane_eood_k1_port_day2night_aug_b_v1/20260930_083040.log": {
+      "path": "work_dirs/crane_eood_k1_port_day2night_aug_b_v1/20260930_083040.log",
+      "sha256": "984345d00e1a7c5460b72a068618cd6f8af36de38a227deb8f6a7bf3ce121b14",
+      "storage": "original_work_dirs"
+    },
+    "work_dirs/crane_eood_k1_port_day2night_aug_b_v1/20260930_083040.log.json": {
+      "path": "work_dirs/crane_eood_k1_port_day2night_aug_b_v1/20260930_083040.log.json",
+      "sha256": "a55a940a4bf1467ba7a91c85865a772b4f06c3de8bbed7d1de8b1e113990db8b",
+      "storage": "original_work_dirs"
+    },
+    "work_dirs/crane_eood_k1_port_day2night_aug_b_v1/val_sweep_port_v1/sweep_results.json": {
+      "path": "work_dirs/crane_eood_k1_port_day2night_aug_b_v1/val_sweep_port_v1/sweep_results.json",
+      "sha256": "0d2a255e9f111972685836b52f9f17823b45bd49ecedd5183edc8996d037c9c1",
+      "storage": "original_work_dirs"
+    },
+    "work_dirs/crane_eood_k1_port_day2night_aug_b_v1/val_sweep_port_v1/final_test/epoch_24/final_test_metrics_v2.json": {
+      "path": "work_dirs/crane_eood_k1_port_day2night_aug_b_v1/val_sweep_port_v1/final_test/epoch_24/final_test_metrics_v2.json",
+      "sha256": "f51fe7979a798cbffa6cf767274d4e408d22169198771173a72e3b0773e5b313",
+      "storage": "original_work_dirs"
+    },
+    "work_dirs/crane_symeood_k1_port_day2night_v1/crane_symeood_k1_port_day2night_seq06_v1.py": {
+      "path": "work_dirs/crane_symeood_k1_port_day2night_v1/crane_symeood_k1_port_day2night_seq06_v1.py",
+      "sha256": "4d1ceff491d1562e1d1ed0527a56aac0e53fe1bc0a7d288ad143741f3fef99d2",
+      "storage": "original_work_dirs"
+    },
+    "work_dirs/crane_symeood_k1_port_day2night_v1/20260929_083248.log": {
+      "path": "work_dirs/crane_symeood_k1_port_day2night_v1/20260929_083248.log",
+      "sha256": "cdaa28c5193154af49293a097ea3adf64a2dadb2b48737ab9fbaa7595f8f562b",
+      "storage": "original_work_dirs"
+    },
+    "work_dirs/crane_symeood_k1_port_day2night_v1/20260929_083248.log.json": {
+      "path": "work_dirs/crane_symeood_k1_port_day2night_v1/20260929_083248.log.json",
+      "sha256": "e0fae60eee6b817d2f636d291157dd0b235ff34b3ad65daf620654fdd0378432",
+      "storage": "original_work_dirs"
+    },
+    "work_dirs/crane_symeood_k1_port_day2night_v1/val_sweep_port_v1/sweep_results.json": {
+      "path": "work_dirs/crane_symeood_k1_port_day2night_v1/val_sweep_port_v1/sweep_results.json",
+      "sha256": "7f1439a451442572c9e35131a3b29312f0c37900a5414a59f8e98c3769ff502d",
+      "storage": "original_work_dirs"
+    },
+    "work_dirs/crane_symeood_k1_port_day2night_v1/val_sweep_port_v1/final_test/epoch_20/final_test_metrics_v2.json": {
+      "path": "work_dirs/crane_symeood_k1_port_day2night_v1/val_sweep_port_v1/final_test/epoch_20/final_test_metrics_v2.json",
+      "sha256": "5b04937224cac601c9c1a2d5fcd50cccf9a473c6632e362a834b6a27bc58de64",
+      "storage": "original_work_dirs"
+    },
+    "work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/crane_symeood_k1_port_day2night_aug_b_v1.py": {
+      "path": "work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/crane_symeood_k1_port_day2night_aug_b_v1.py",
+      "sha256": "25b663c33adfc901a9c94a42eab0327fad91cc76203d22da2840ab97417080f3",
+      "storage": "original_work_dirs"
+    },
+    "work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/20260929_155706.log": {
+      "path": "work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/20260929_155706.log",
+      "sha256": "6d8fb14e3d36942ccb383521ecfe1e2f3834fc38778bb751eb1926a3c1fd9e5d",
+      "storage": "original_work_dirs"
+    },
+    "work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/20260929_155706.log.json": {
+      "path": "work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/20260929_155706.log.json",
+      "sha256": "17ea018fe0167c38001b6e96562c0666128126895c95549c4c32f249108a85d2",
+      "storage": "original_work_dirs"
+    },
+    "work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/val_sweep_port_v1/sweep_results.json": {
+      "path": "work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/val_sweep_port_v1/sweep_results.json",
+      "sha256": "ccaa55376d3d40175c86386fbb7c6e2e8db54a1e13b9b1611783c7255fb54352",
+      "storage": "original_work_dirs"
+    },
+    "work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/val_sweep_port_v1/final_test/epoch_24/final_test_metrics_v2.json": {
+      "path": "work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/val_sweep_port_v1/final_test/epoch_24/final_test_metrics_v2.json",
+      "sha256": "d071441605730d5adbb666390bd665e46102b69b28f2604e4ac4ad98ceae71b2",
+      "storage": "original_work_dirs"
+    },
+    "mmrotate/models/dense_heads/rotated_eood_head.py": {
+      "path": "mmrotate/models/dense_heads/rotated_eood_head.py",
+      "sha256": "fdbc7d68ede850881283966b81dbf4edc1d9171be13a97a889e092ca24139eb6",
+      "storage": "existing_active_source"
+    },
+    "mmrotate/models/dense_heads/sym_eood_head.py": {
+      "path": "mmrotate/models/dense_heads/sym_eood_head.py",
+      "sha256": "45db4adc70967a8c0c1a4426faf1eec093b81d745be89c31a21358567714c1b9",
+      "storage": "existing_active_source"
+    },
+    "mmrotate/models/detectors/eood.py": {
+      "path": "mmrotate/models/detectors/eood.py",
+      "sha256": "4c1497000c7798b4cf703e88204620e13101943f68bbddd31ef10a9649e72f1f",
+      "storage": "existing_active_source"
+    },
+    "mmrotate/models/detectors/sym_eood_detector.py": {
+      "path": "mmrotate/models/detectors/sym_eood_detector.py",
+      "sha256": "d52b5e6b88e2d1ce5c807e6ca5697e62376b6f43df422829b2be20e323b5eb3f",
+      "storage": "existing_active_source"
+    },
+    "mmrotate/models/losses/sym_kld_calculator.py": {
+      "path": "mmrotate/models/losses/sym_kld_calculator.py",
+      "sha256": "5feb50ef35da410d2102b3782d60afbf9fcb02324281688a5fd4b456b25531be",
+      "storage": "existing_active_source"
+    },
+    "mmrotate/models/losses/sym_kld_loss.py": {
+      "path": "mmrotate/models/losses/sym_kld_loss.py",
+      "sha256": "6b0577bbd3d64b2e8edd0d75667f01d2d51efd0ac884b0f36ea48acac2c275f4",
+      "storage": "existing_active_source"
+    },
+    "mmrotate/models/losses/sym_nfl_loss.py": {
+      "path": "mmrotate/models/losses/sym_nfl_loss.py",
+      "sha256": "3bdd8c55794b1328b2b10ea44237392da97ac5e424f00cf29147ba24a8036a7d",
+      "storage": "existing_active_source"
+    },
+    "mmrotate/core/bbox/assigners/sym_pola.py": {
+      "path": "mmrotate/core/bbox/assigners/sym_pola.py",
+      "sha256": "f8e54a630dfc9612edee07d6e74a8098284a89ddfd05808a0b1e645bc96edf86",
+      "storage": "existing_active_source"
+    }
+  },
+  "historical_sources": {
+    "e3f8253": {
+      "commit": {
+        "returncode": 0,
+        "stdout": "e3f82535a7342b55a93324ded375e9353c9a243c 2026-09-29 10:50:30 +0800 EOOD 06 训练\n",
+        "stderr": ""
+      },
+      "full_commit": "e3f82535a7342b55a93324ded375e9353c9a243c",
+      "retrieval": "git show e3f82535a7342b55a93324ded375e9353c9a243c:<path>",
+      "files": {
+        "mmrotate/models/dense_heads/rotated_eood_head.py": {
+          "sha256": "fdbc7d68ede850881283966b81dbf4edc1d9171be13a97a889e092ca24139eb6",
+          "git_ref": "e3f82535a7342b55a93324ded375e9353c9a243c:mmrotate/models/dense_heads/rotated_eood_head.py"
+        },
+        "mmrotate/models/dense_heads/sym_eood_head.py": {
+          "sha256": "02c0d4c993b275febfc823b041ad74a6b320213210e8b2a14be002f465c8e5a9",
+          "git_ref": "e3f82535a7342b55a93324ded375e9353c9a243c:mmrotate/models/dense_heads/sym_eood_head.py"
+        },
+        "mmrotate/models/detectors/eood.py": {
+          "sha256": "4c1497000c7798b4cf703e88204620e13101943f68bbddd31ef10a9649e72f1f",
+          "git_ref": "e3f82535a7342b55a93324ded375e9353c9a243c:mmrotate/models/detectors/eood.py"
+        },
+        "mmrotate/models/detectors/sym_eood_detector.py": {
+          "sha256": "f473edbca4c926b7d54e722bbde35e360ce0189bec17f9248f8da18bcac6883a",
+          "git_ref": "e3f82535a7342b55a93324ded375e9353c9a243c:mmrotate/models/detectors/sym_eood_detector.py"
+        },
+        "mmrotate/models/losses/sym_kld_calculator.py": {
+          "sha256": "5feb50ef35da410d2102b3782d60afbf9fcb02324281688a5fd4b456b25531be",
+          "git_ref": "e3f82535a7342b55a93324ded375e9353c9a243c:mmrotate/models/losses/sym_kld_calculator.py"
+        },
+        "mmrotate/models/losses/sym_kld_loss.py": {
+          "sha256": "e4466cda533d665e28e0f88c404b320051a3d0c747275e769e5d92441d0f7880",
+          "git_ref": "e3f82535a7342b55a93324ded375e9353c9a243c:mmrotate/models/losses/sym_kld_loss.py"
+        },
+        "mmrotate/models/losses/sym_nfl_loss.py": {
+          "sha256": "a6c39094f6b5eb10fd98da4aee828c4561dff15e6fdc2cf0946942cb73ce4f1b",
+          "git_ref": "e3f82535a7342b55a93324ded375e9353c9a243c:mmrotate/models/losses/sym_nfl_loss.py"
+        },
+        "mmrotate/core/bbox/assigners/sym_pola.py": {
+          "sha256": "6a362ca854f262a4219ca55a4773271a405a2e2672ec263a65039814ca1c7416",
+          "git_ref": "e3f82535a7342b55a93324ded375e9353c9a243c:mmrotate/core/bbox/assigners/sym_pola.py"
+        }
+      }
+    },
+    "a074048": {
+      "commit": {
+        "returncode": 0,
+        "stdout": "a074048c0b4883bf46abf941fd2998df9da25301 2026-09-29 21:06:49 +0800 EOOD尺度增强对比\n",
+        "stderr": ""
+      },
+      "full_commit": "a074048c0b4883bf46abf941fd2998df9da25301",
+      "retrieval": "git show a074048c0b4883bf46abf941fd2998df9da25301:<path>",
+      "files": {
+        "mmrotate/models/dense_heads/rotated_eood_head.py": {
+          "sha256": "fdbc7d68ede850881283966b81dbf4edc1d9171be13a97a889e092ca24139eb6",
+          "git_ref": "a074048c0b4883bf46abf941fd2998df9da25301:mmrotate/models/dense_heads/rotated_eood_head.py"
+        },
+        "mmrotate/models/dense_heads/sym_eood_head.py": {
+          "sha256": "02c0d4c993b275febfc823b041ad74a6b320213210e8b2a14be002f465c8e5a9",
+          "git_ref": "a074048c0b4883bf46abf941fd2998df9da25301:mmrotate/models/dense_heads/sym_eood_head.py"
+        },
+        "mmrotate/models/detectors/eood.py": {
+          "sha256": "4c1497000c7798b4cf703e88204620e13101943f68bbddd31ef10a9649e72f1f",
+          "git_ref": "a074048c0b4883bf46abf941fd2998df9da25301:mmrotate/models/detectors/eood.py"
+        },
+        "mmrotate/models/detectors/sym_eood_detector.py": {
+          "sha256": "f473edbca4c926b7d54e722bbde35e360ce0189bec17f9248f8da18bcac6883a",
+          "git_ref": "a074048c0b4883bf46abf941fd2998df9da25301:mmrotate/models/detectors/sym_eood_detector.py"
+        },
+        "mmrotate/models/losses/sym_kld_calculator.py": {
+          "sha256": "5feb50ef35da410d2102b3782d60afbf9fcb02324281688a5fd4b456b25531be",
+          "git_ref": "a074048c0b4883bf46abf941fd2998df9da25301:mmrotate/models/losses/sym_kld_calculator.py"
+        },
+        "mmrotate/models/losses/sym_kld_loss.py": {
+          "sha256": "e4466cda533d665e28e0f88c404b320051a3d0c747275e769e5d92441d0f7880",
+          "git_ref": "a074048c0b4883bf46abf941fd2998df9da25301:mmrotate/models/losses/sym_kld_loss.py"
+        },
+        "mmrotate/models/losses/sym_nfl_loss.py": {
+          "sha256": "a6c39094f6b5eb10fd98da4aee828c4561dff15e6fdc2cf0946942cb73ce4f1b",
+          "git_ref": "a074048c0b4883bf46abf941fd2998df9da25301:mmrotate/models/losses/sym_nfl_loss.py"
+        },
+        "mmrotate/core/bbox/assigners/sym_pola.py": {
+          "sha256": "6a362ca854f262a4219ca55a4773271a405a2e2672ec263a65039814ca1c7416",
+          "git_ref": "a074048c0b4883bf46abf941fd2998df9da25301:mmrotate/core/bbox/assigners/sym_pola.py"
+        }
+      }
+    },
+    "c16813c": {
+      "commit": {
+        "returncode": 0,
+        "stdout": "c16813c9c0f4ee6e9a2ea5aa0d0c5b4ae26b3481 2026-09-29 08:27:44 +0800 增加 06 数据集的 symeood 重新训练\n",
+        "stderr": ""
+      },
+      "full_commit": "c16813c9c0f4ee6e9a2ea5aa0d0c5b4ae26b3481",
+      "retrieval": "git show c16813c9c0f4ee6e9a2ea5aa0d0c5b4ae26b3481:<path>",
+      "files": {
+        "mmrotate/models/dense_heads/rotated_eood_head.py": {
+          "sha256": "fdbc7d68ede850881283966b81dbf4edc1d9171be13a97a889e092ca24139eb6",
+          "git_ref": "c16813c9c0f4ee6e9a2ea5aa0d0c5b4ae26b3481:mmrotate/models/dense_heads/rotated_eood_head.py"
+        },
+        "mmrotate/models/dense_heads/sym_eood_head.py": {
+          "sha256": "02c0d4c993b275febfc823b041ad74a6b320213210e8b2a14be002f465c8e5a9",
+          "git_ref": "c16813c9c0f4ee6e9a2ea5aa0d0c5b4ae26b3481:mmrotate/models/dense_heads/sym_eood_head.py"
+        },
+        "mmrotate/models/detectors/eood.py": {
+          "sha256": "4c1497000c7798b4cf703e88204620e13101943f68bbddd31ef10a9649e72f1f",
+          "git_ref": "c16813c9c0f4ee6e9a2ea5aa0d0c5b4ae26b3481:mmrotate/models/detectors/eood.py"
+        },
+        "mmrotate/models/detectors/sym_eood_detector.py": {
+          "sha256": "f473edbca4c926b7d54e722bbde35e360ce0189bec17f9248f8da18bcac6883a",
+          "git_ref": "c16813c9c0f4ee6e9a2ea5aa0d0c5b4ae26b3481:mmrotate/models/detectors/sym_eood_detector.py"
+        },
+        "mmrotate/models/losses/sym_kld_calculator.py": {
+          "sha256": "5feb50ef35da410d2102b3782d60afbf9fcb02324281688a5fd4b456b25531be",
+          "git_ref": "c16813c9c0f4ee6e9a2ea5aa0d0c5b4ae26b3481:mmrotate/models/losses/sym_kld_calculator.py"
+        },
+        "mmrotate/models/losses/sym_kld_loss.py": {
+          "sha256": "e4466cda533d665e28e0f88c404b320051a3d0c747275e769e5d92441d0f7880",
+          "git_ref": "c16813c9c0f4ee6e9a2ea5aa0d0c5b4ae26b3481:mmrotate/models/losses/sym_kld_loss.py"
+        },
+        "mmrotate/models/losses/sym_nfl_loss.py": {
+          "sha256": "a6c39094f6b5eb10fd98da4aee828c4561dff15e6fdc2cf0946942cb73ce4f1b",
+          "git_ref": "c16813c9c0f4ee6e9a2ea5aa0d0c5b4ae26b3481:mmrotate/models/losses/sym_nfl_loss.py"
+        },
+        "mmrotate/core/bbox/assigners/sym_pola.py": {
+          "sha256": "6a362ca854f262a4219ca55a4773271a405a2e2672ec263a65039814ca1c7416",
+          "git_ref": "c16813c9c0f4ee6e9a2ea5aa0d0c5b4ae26b3481:mmrotate/core/bbox/assigners/sym_pola.py"
+        }
+      }
+    },
+    "af8307c": {
+      "commit": {
+        "returncode": 0,
+        "stdout": "af8307ca175a46ffd7baa754116e28a2798b1a70 2026-09-29 15:56:11 +0800 BC 实验\n",
+        "stderr": ""
+      },
+      "full_commit": "af8307ca175a46ffd7baa754116e28a2798b1a70",
+      "retrieval": "git show af8307ca175a46ffd7baa754116e28a2798b1a70:<path>",
+      "files": {
+        "mmrotate/models/dense_heads/rotated_eood_head.py": {
+          "sha256": "fdbc7d68ede850881283966b81dbf4edc1d9171be13a97a889e092ca24139eb6",
+          "git_ref": "af8307ca175a46ffd7baa754116e28a2798b1a70:mmrotate/models/dense_heads/rotated_eood_head.py"
+        },
+        "mmrotate/models/dense_heads/sym_eood_head.py": {
+          "sha256": "02c0d4c993b275febfc823b041ad74a6b320213210e8b2a14be002f465c8e5a9",
+          "git_ref": "af8307ca175a46ffd7baa754116e28a2798b1a70:mmrotate/models/dense_heads/sym_eood_head.py"
+        },
+        "mmrotate/models/detectors/eood.py": {
+          "sha256": "4c1497000c7798b4cf703e88204620e13101943f68bbddd31ef10a9649e72f1f",
+          "git_ref": "af8307ca175a46ffd7baa754116e28a2798b1a70:mmrotate/models/detectors/eood.py"
+        },
+        "mmrotate/models/detectors/sym_eood_detector.py": {
+          "sha256": "f473edbca4c926b7d54e722bbde35e360ce0189bec17f9248f8da18bcac6883a",
+          "git_ref": "af8307ca175a46ffd7baa754116e28a2798b1a70:mmrotate/models/detectors/sym_eood_detector.py"
+        },
+        "mmrotate/models/losses/sym_kld_calculator.py": {
+          "sha256": "5feb50ef35da410d2102b3782d60afbf9fcb02324281688a5fd4b456b25531be",
+          "git_ref": "af8307ca175a46ffd7baa754116e28a2798b1a70:mmrotate/models/losses/sym_kld_calculator.py"
+        },
+        "mmrotate/models/losses/sym_kld_loss.py": {
+          "sha256": "e4466cda533d665e28e0f88c404b320051a3d0c747275e769e5d92441d0f7880",
+          "git_ref": "af8307ca175a46ffd7baa754116e28a2798b1a70:mmrotate/models/losses/sym_kld_loss.py"
+        },
+        "mmrotate/models/losses/sym_nfl_loss.py": {
+          "sha256": "a6c39094f6b5eb10fd98da4aee828c4561dff15e6fdc2cf0946942cb73ce4f1b",
+          "git_ref": "af8307ca175a46ffd7baa754116e28a2798b1a70:mmrotate/models/losses/sym_nfl_loss.py"
+        },
+        "mmrotate/core/bbox/assigners/sym_pola.py": {
+          "sha256": "6a362ca854f262a4219ca55a4773271a405a2e2672ec263a65039814ca1c7416",
+          "git_ref": "af8307ca175a46ffd7baa754116e28a2798b1a70:mmrotate/core/bbox/assigners/sym_pola.py"
+        }
+      }
+    }
+  },
+  "prediction_identity_verification": {
+    "crane_eood_k1_port_day2night_v1": {
+      "test_prediction_sha_actual": "4a1812c2207876c67a1c1d94c97311a6db8edfe5f43a40ca7a3b248223a35408",
+      "test_prediction_sha_recorded": "4a1812c2207876c67a1c1d94c97311a6db8edfe5f43a40ca7a3b248223a35408",
+      "val_prediction_sha_actual": "2434b45a75f23a0c22c02bde53d267ef9c843a76dce3ed622513198ac92fc3e7",
+      "val_prediction_sha_recorded": "2434b45a75f23a0c22c02bde53d267ef9c843a76dce3ed622513198ac92fc3e7",
+      "recorded_checkpoint_path_exists": false
+    },
+    "crane_eood_k1_port_day2night_aug_b_v1": {
+      "test_prediction_sha_actual": "7c194bb6419abfbfa1357d643fb057e6e41c9d80746b9a58f7cf8c1e2672c2c0",
+      "test_prediction_sha_recorded": "7c194bb6419abfbfa1357d643fb057e6e41c9d80746b9a58f7cf8c1e2672c2c0",
+      "val_prediction_sha_actual": "00ecba99943013ee8451de4f089a4e3404e73b3814c57498c23b54c31f7832dd",
+      "val_prediction_sha_recorded": "00ecba99943013ee8451de4f089a4e3404e73b3814c57498c23b54c31f7832dd",
+      "recorded_checkpoint_path_exists": true
+    },
+    "crane_symeood_k1_port_day2night_v1": {
+      "test_prediction_sha_actual": "c31827aff1e80f9276e87a61b6af15f22963567abc309b7a0e014923ae892454",
+      "test_prediction_sha_recorded": "c31827aff1e80f9276e87a61b6af15f22963567abc309b7a0e014923ae892454",
+      "val_prediction_sha_actual": "a4bfda6c31931a2781a56f693de6fa29fd6caa8cb0eb96ccdc8c1c182840c2d7",
+      "val_prediction_sha_recorded": "a4bfda6c31931a2781a56f693de6fa29fd6caa8cb0eb96ccdc8c1c182840c2d7",
+      "recorded_checkpoint_path_exists": false
+    },
+    "crane_symeood_k1_port_day2night_aug_b_v1": {
+      "test_prediction_sha_actual": "17ccc2d68a8e507f9c306891b92c69e32bd79b9b187707258586e766d859010f",
+      "test_prediction_sha_recorded": "17ccc2d68a8e507f9c306891b92c69e32bd79b9b187707258586e766d859010f",
+      "val_prediction_sha_actual": "cbfa341c53faf859a4eb96ab62a2470611cde0493896f50fcc7f805f53020725",
+      "val_prediction_sha_recorded": "cbfa341c53faf859a4eb96ab62a2470611cde0493896f50fcc7f805f53020725",
+      "recorded_checkpoint_path_exists": true
+    },
+    "evidence_archives": [
+      "evidence_archives/closed_geometry_routes_20260905.tar.gz",
+      "evidence_archives/closed_geometry_routes_20260905_files.txt"
+    ],
+    "cleanup_archives": [
+      "cleanup_archives/closed_geometry_refiner_evidence_20260905.tar.gz",
+      "cleanup_archives/closed_geometry_refiner_evidence_20260905.tar.gz.sha256"
+    ]
+  },
+  "original_verification": {
+    "status": "CAPTURED_EVIDENCE_VERIFIED_NOT_FULL_RUNTIME_SNAPSHOT",
+    "text_files_sha_verified": 60,
+    "selected_weights_sha_verified_on_server": 4,
+    "selected_prediction_files_sha_verified_on_server": 8,
+    "no_model_deserialization": true,
+    "no_inference_or_training": true,
+    "historical_source_limit": "Eight core files from each log-recorded Git revision; contemporaneous uncommitted state and full dependency tree not certified.",
+    "remote_followup_block": "Automatic approval review quota failure; supplemental source-tree/archive query not executed."
+  },
+  "consolidation": {
+    "moved_training_files": 20,
+    "removed_active_source_copies": 8,
+    "historical_copies_replaced_by_git_references": 32,
+    "old_directory": "docs/detection/innovation1_server_audit_20261021",
+    "legacy_manifest": {
+      "history.json": "03cb30848d7e66f733f7d5b1a57e22a26ff5d0f81bc1f00ecdf4f303024e9bf6",
+      "server_evidence.json": "bd12fab4735f9658d160d6333b22cf62371cd9512a160327b83376f315f17000",
+      "verification.json": "3df9520f526f8af5c0b17151d4cab65aef91192570bdebc24b66dd61d5dce12d",
+      "result_identity.json": "9e4ed98d978019194a1e038935d77eff4045d2fe76c19ada50f9c2cef8721867",
+      "captured/mmrotate/models/losses/sym_nfl_loss.py": "3bdd8c55794b1328b2b10ea44237392da97ac5e424f00cf29147ba24a8036a7d",
+      "captured/mmrotate/models/losses/sym_kld_calculator.py": "5feb50ef35da410d2102b3782d60afbf9fcb02324281688a5fd4b456b25531be",
+      "captured/mmrotate/models/losses/sym_kld_loss.py": "6b0577bbd3d64b2e8edd0d75667f01d2d51efd0ac884b0f36ea48acac2c275f4",
+      "captured/mmrotate/models/dense_heads/rotated_eood_head.py": "fdbc7d68ede850881283966b81dbf4edc1d9171be13a97a889e092ca24139eb6",
+      "captured/mmrotate/models/dense_heads/sym_eood_head.py": "45db4adc70967a8c0c1a4426faf1eec093b81d745be89c31a21358567714c1b9",
+      "captured/mmrotate/models/detectors/sym_eood_detector.py": "d52b5e6b88e2d1ce5c807e6ca5697e62376b6f43df422829b2be20e323b5eb3f",
+      "captured/mmrotate/models/detectors/eood.py": "4c1497000c7798b4cf703e88204620e13101943f68bbddd31ef10a9649e72f1f",
+      "captured/mmrotate/core/bbox/assigners/sym_pola.py": "f8e54a630dfc9612edee07d6e74a8098284a89ddfd05808a0b1e645bc96edf86",
+      "captured/work_dirs/crane_eood_k1_port_day2night_v1/20260929_105316.log": "2cb71ddeff573da153a32ac3963483c1c2e2b6575eed92dd2e484a90e47fd00e",
+      "captured/work_dirs/crane_eood_k1_port_day2night_v1/20260929_105316.log.json": "ee1c424b159daf119b0364cbbf4c1b65d269e288a598b6c7627e172ba1771de7",
+      "captured/work_dirs/crane_eood_k1_port_day2night_v1/crane_eood_k1_port_day2night_seq06_v1.py": "91e89287e86a18d077efdc8d0b0885e8fa4ffd48cdae754d716f7423e3f0eaa9",
+      "captured/work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/20260929_155706.log.json": "17ea018fe0167c38001b6e96562c0666128126895c95549c4c32f249108a85d2",
+      "captured/work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/20260929_155706.log": "6d8fb14e3d36942ccb383521ecfe1e2f3834fc38778bb751eb1926a3c1fd9e5d",
+      "captured/work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/crane_symeood_k1_port_day2night_aug_b_v1.py": "25b663c33adfc901a9c94a42eab0327fad91cc76203d22da2840ab97417080f3",
+      "captured/work_dirs/crane_eood_k1_port_day2night_aug_b_v1/20260930_083040.log.json": "a55a940a4bf1467ba7a91c85865a772b4f06c3de8bbed7d1de8b1e113990db8b",
+      "captured/work_dirs/crane_eood_k1_port_day2night_aug_b_v1/crane_eood_k1_port_day2night_aug_b_v1.py": "4fb64256fbe5d090168afccfd318478f2b1ea69cb759aac3515728ffc7e6e87e",
+      "captured/work_dirs/crane_eood_k1_port_day2night_aug_b_v1/20260930_083040.log": "984345d00e1a7c5460b72a068618cd6f8af36de38a227deb8f6a7bf3ce121b14",
+      "captured/work_dirs/crane_symeood_k1_port_day2night_v1/crane_symeood_k1_port_day2night_seq06_v1.py": "4d1ceff491d1562e1d1ed0527a56aac0e53fe1bc0a7d288ad143741f3fef99d2",
+      "captured/work_dirs/crane_symeood_k1_port_day2night_v1/20260929_083248.log": "cdaa28c5193154af49293a097ea3adf64a2dadb2b48737ab9fbaa7595f8f562b",
+      "captured/work_dirs/crane_symeood_k1_port_day2night_v1/20260929_083248.log.json": "e0fae60eee6b817d2f636d291157dd0b235ff34b3ad65daf620654fdd0378432",
+      "captured/work_dirs/crane_symeood_k1_port_day2night_v1/val_sweep_port_v1/sweep_results.json": "7f1439a451442572c9e35131a3b29312f0c37900a5414a59f8e98c3769ff502d",
+      "captured/work_dirs/crane_symeood_k1_port_day2night_v1/val_sweep_port_v1/final_test/epoch_20/final_test_metrics_v2.json": "5b04937224cac601c9c1a2d5fcd50cccf9a473c6632e362a834b6a27bc58de64",
+      "captured/work_dirs/crane_eood_k1_port_day2night_aug_b_v1/val_sweep_port_v1/sweep_results.json": "0d2a255e9f111972685836b52f9f17823b45bd49ecedd5183edc8996d037c9c1",
+      "captured/work_dirs/crane_eood_k1_port_day2night_aug_b_v1/val_sweep_port_v1/final_test/epoch_24/final_test_metrics_v2.json": "f51fe7979a798cbffa6cf767274d4e408d22169198771173a72e3b0773e5b313",
+      "captured/work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/val_sweep_port_v1/sweep_results.json": "ccaa55376d3d40175c86386fbb7c6e2e8db54a1e13b9b1611783c7255fb54352",
+      "captured/work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/val_sweep_port_v1/final_test/epoch_24/final_test_metrics_v2.json": "d071441605730d5adbb666390bd665e46102b69b28f2604e4ac4ad98ceae71b2",
+      "captured/work_dirs/crane_eood_k1_port_day2night_v1/val_sweep_port_v1/sweep_results.json": "a0bf581181890dc65cc381812cff44e93dd5c6e5658857443c08bfebba39dc8a",
+      "captured/work_dirs/crane_eood_k1_port_day2night_v1/val_sweep_port_v1/final_test/epoch_24/final_test_metrics_v2.json": "5698fec53d161a8a2c6013322e851a1d84aa26a3a92b33798bfc0f6dbf2d6a3e",
+      "historical_sources/af8307c/mmrotate/models/losses/sym_nfl_loss.py": "a6c39094f6b5eb10fd98da4aee828c4561dff15e6fdc2cf0946942cb73ce4f1b",
+      "historical_sources/af8307c/mmrotate/models/losses/sym_kld_calculator.py": "5feb50ef35da410d2102b3782d60afbf9fcb02324281688a5fd4b456b25531be",
+      "historical_sources/af8307c/mmrotate/models/losses/sym_kld_loss.py": "e4466cda533d665e28e0f88c404b320051a3d0c747275e769e5d92441d0f7880",
+      "historical_sources/af8307c/mmrotate/models/dense_heads/rotated_eood_head.py": "fdbc7d68ede850881283966b81dbf4edc1d9171be13a97a889e092ca24139eb6",
+      "historical_sources/af8307c/mmrotate/models/dense_heads/sym_eood_head.py": "02c0d4c993b275febfc823b041ad74a6b320213210e8b2a14be002f465c8e5a9",
+      "historical_sources/af8307c/mmrotate/models/detectors/sym_eood_detector.py": "f473edbca4c926b7d54e722bbde35e360ce0189bec17f9248f8da18bcac6883a",
+      "historical_sources/af8307c/mmrotate/models/detectors/eood.py": "4c1497000c7798b4cf703e88204620e13101943f68bbddd31ef10a9649e72f1f",
+      "historical_sources/af8307c/mmrotate/core/bbox/assigners/sym_pola.py": "6a362ca854f262a4219ca55a4773271a405a2e2672ec263a65039814ca1c7416",
+      "historical_sources/e3f8253/mmrotate/models/losses/sym_nfl_loss.py": "a6c39094f6b5eb10fd98da4aee828c4561dff15e6fdc2cf0946942cb73ce4f1b",
+      "historical_sources/e3f8253/mmrotate/models/losses/sym_kld_calculator.py": "5feb50ef35da410d2102b3782d60afbf9fcb02324281688a5fd4b456b25531be",
+      "historical_sources/e3f8253/mmrotate/models/losses/sym_kld_loss.py": "e4466cda533d665e28e0f88c404b320051a3d0c747275e769e5d92441d0f7880",
+      "historical_sources/e3f8253/mmrotate/models/dense_heads/rotated_eood_head.py": "fdbc7d68ede850881283966b81dbf4edc1d9171be13a97a889e092ca24139eb6",
+      "historical_sources/e3f8253/mmrotate/models/dense_heads/sym_eood_head.py": "02c0d4c993b275febfc823b041ad74a6b320213210e8b2a14be002f465c8e5a9",
+      "historical_sources/e3f8253/mmrotate/models/detectors/sym_eood_detector.py": "f473edbca4c926b7d54e722bbde35e360ce0189bec17f9248f8da18bcac6883a",
+      "historical_sources/e3f8253/mmrotate/models/detectors/eood.py": "4c1497000c7798b4cf703e88204620e13101943f68bbddd31ef10a9649e72f1f",
+      "historical_sources/e3f8253/mmrotate/core/bbox/assigners/sym_pola.py": "6a362ca854f262a4219ca55a4773271a405a2e2672ec263a65039814ca1c7416",
+      "historical_sources/c16813c/mmrotate/models/losses/sym_nfl_loss.py": "a6c39094f6b5eb10fd98da4aee828c4561dff15e6fdc2cf0946942cb73ce4f1b",
+      "historical_sources/c16813c/mmrotate/models/losses/sym_kld_calculator.py": "5feb50ef35da410d2102b3782d60afbf9fcb02324281688a5fd4b456b25531be",
+      "historical_sources/c16813c/mmrotate/models/losses/sym_kld_loss.py": "e4466cda533d665e28e0f88c404b320051a3d0c747275e769e5d92441d0f7880",
+      "historical_sources/c16813c/mmrotate/models/dense_heads/rotated_eood_head.py": "fdbc7d68ede850881283966b81dbf4edc1d9171be13a97a889e092ca24139eb6",
+      "historical_sources/c16813c/mmrotate/models/dense_heads/sym_eood_head.py": "02c0d4c993b275febfc823b041ad74a6b320213210e8b2a14be002f465c8e5a9",
+      "historical_sources/c16813c/mmrotate/models/detectors/sym_eood_detector.py": "f473edbca4c926b7d54e722bbde35e360ce0189bec17f9248f8da18bcac6883a",
+      "historical_sources/c16813c/mmrotate/models/detectors/eood.py": "4c1497000c7798b4cf703e88204620e13101943f68bbddd31ef10a9649e72f1f",
+      "historical_sources/c16813c/mmrotate/core/bbox/assigners/sym_pola.py": "6a362ca854f262a4219ca55a4773271a405a2e2672ec263a65039814ca1c7416",
+      "historical_sources/a074048/mmrotate/models/losses/sym_nfl_loss.py": "a6c39094f6b5eb10fd98da4aee828c4561dff15e6fdc2cf0946942cb73ce4f1b",
+      "historical_sources/a074048/mmrotate/models/losses/sym_kld_calculator.py": "5feb50ef35da410d2102b3782d60afbf9fcb02324281688a5fd4b456b25531be",
+      "historical_sources/a074048/mmrotate/models/losses/sym_kld_loss.py": "e4466cda533d665e28e0f88c404b320051a3d0c747275e769e5d92441d0f7880",
+      "historical_sources/a074048/mmrotate/models/dense_heads/rotated_eood_head.py": "fdbc7d68ede850881283966b81dbf4edc1d9171be13a97a889e092ca24139eb6",
+      "historical_sources/a074048/mmrotate/models/dense_heads/sym_eood_head.py": "02c0d4c993b275febfc823b041ad74a6b320213210e8b2a14be002f465c8e5a9",
+      "historical_sources/a074048/mmrotate/models/detectors/sym_eood_detector.py": "f473edbca4c926b7d54e722bbde35e360ce0189bec17f9248f8da18bcac6883a",
+      "historical_sources/a074048/mmrotate/models/detectors/eood.py": "4c1497000c7798b4cf703e88204620e13101943f68bbddd31ef10a9649e72f1f",
+      "historical_sources/a074048/mmrotate/core/bbox/assigners/sym_pola.py": "6a362ca854f262a4219ca55a4773271a405a2e2672ec263a65039814ca1c7416"
+    },
+    "legacy_readme_sha256": "c67eadf5ab5c4a60b741570febf96fc0c6f9c096373fda42ee45981c99231914",
+    "legacy_manifest_sha256": "6f33686272453f3c6d3bdeed765becb172f5fa8f45074ec828b8bfd778dc18b4",
+    "note": "JSON containers holding duplicate text were replaced by this content-free index. Original remote paths remain as historical evidence; use captured_files paths for current local files."
+  }
+}
