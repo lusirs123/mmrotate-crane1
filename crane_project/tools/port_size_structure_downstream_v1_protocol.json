@@ -1,0 +1,123 @@
+{
+  "protocol": "port_size_structure_downstream_v1",
+  "versions": [
+    "b",
+    "midpoint",
+    "v20",
+    "d02",
+    "a20",
+    "c6",
+    "r6"
+  ],
+  "size_heads": {
+    "v20": {
+      "arm": "V_structure",
+      "epoch": 20,
+      "sha256": "003ed9e2f5de323f2fe8e99e03ab116f2b09ffee286997af6bae9e91e81d16b1"
+    },
+    "d02": {
+      "arm": "D_direct",
+      "epoch": 2,
+      "sha256": "615646e20f07b9cfec16c9fc18b56505dc737688ab5d0aceadb7b1eca8e8e299"
+    },
+    "a20": {
+      "arm": "fixed_b",
+      "epoch": 20,
+      "sha256": "545e18459d3ead4a54c441d64de27ca44a8394bfdc20cc2caf4c2f7534326479"
+    },
+    "c6": {
+      "arm": "C",
+      "epoch": 6,
+      "sha256": "04de79a63963062d641fda9ce70e51f30dceb37e048c2b3429d0c2a0161dec52"
+    },
+    "r6": {
+      "arm": "R",
+      "epoch": 6,
+      "sha256": "c433497f1fd769773ec1d10909b1072e4e576a6eb3b453b8b43d31ae96a7447a"
+    }
+  },
+  "weight_sha256": {
+    "b": "8f8008c4944807a65ed0f2ee0cc348ea78690d54a4176944b2c9b0ebc83cec23",
+    "midpoint": "16c2fb448ac4e1c53530b8086d547f6f6ccb8d6b0763a42391c34f9b337982d7",
+    "v20": "003ed9e2f5de323f2fe8e99e03ab116f2b09ffee286997af6bae9e91e81d16b1",
+    "d02": "615646e20f07b9cfec16c9fc18b56505dc737688ab5d0aceadb7b1eca8e8e299",
+    "a20": "545e18459d3ead4a54c441d64de27ca44a8394bfdc20cc2caf4c2f7534326479",
+    "c6": "04de79a63963062d641fda9ce70e51f30dceb37e048c2b3429d0c2a0161dec52",
+    "r6": "c433497f1fd769773ec1d10909b1072e4e576a6eb3b453b8b43d31ae96a7447a"
+  },
+  "inference": "Actual same-run native B/M and V20,D02,A20,C6,R6. V and A both executed, never alias output. Identical original B-P3/read_pair/W/delivery; V is original AlignedSizeHead, D DirectSizeHead. No filters/iteration/compensation.",
+  "stages": [
+    "identity plus V/A parameter and exact implementation audit",
+    "complete887 native VAL: original ROI/support/W/axis/resize and frozen rows replay; failure blocks TEST/depth",
+    "complete1440 TEST Real868 Sim572; all seven actual outputs plus historical binding",
+    "complete1097 Unknown02 only, frozen Raw-opt/camera/physical and numerical validity"
+  ],
+  "datasets": {
+    "val": {
+      "frames": 887,
+      "role": "native_chain_replay_no_selection"
+    },
+    "detection_test": {
+      "frames": 1440,
+      "role": "exposed_TEST_frozen_description"
+    },
+    "unknown02": {
+      "sequence": "unknown_test_02_coverage_retry",
+      "frames": 1097,
+      "role": "exposed_TEST_frozen_description"
+    }
+  },
+  "geometry": {
+    "center_px_strict": 15,
+    "size_relative_max_inclusive": 0.1,
+    "angle_period_deg": 180,
+    "angle_max_deg_inclusive": 3,
+    "angle_gt_aspect_min": 1.2,
+    "near_reference": "fixed_M",
+    "near_max": 0.03
+  },
+  "depth_metrics": [
+    "mae_m",
+    "rmse_m",
+    "bias_m",
+    "p95_abs_error_m",
+    "max_abs_error_m",
+    "abs_rel",
+    "numeric_depth_count",
+    "frame_count",
+    "numeric_depth_coverage"
+  ],
+  "calibration_sha256": "c9c14fc1b09ba8223996121425e302888ac7d44213192225acd5365fb2f1ffe2",
+  "replay": {
+    "box_atol": 0.0001,
+    "box_rtol": 1e-06,
+    "roi_atol": 0.0001,
+    "roi_rtol": 1e-06,
+    "support_atol": 1e-06,
+    "coordinate_atol": 1e-05,
+    "score_presence_delivery_checks_exact": true
+  },
+  "reporting": "overall/domain/video; long-shortMAE/P95/bias,a/r,joint10 transitions; near fixedM<=3%,cross intersection/ALL positive harm/both-harmed/effective correction; center<15px/output,sizeboth<=10%/output,angle180period<=3deg/GTaspect>=1.2 output; missing/output/full-frame coverage; fullRIoU,DFR,ACI,MCML,TDR,AP50/75.",
+  "depth_reporting": "metreMAE,RMSE,bias,P95,numeric count/frames,all-four and pairwise common-valid metrics,new/lost valid and frameIDs of improved/worsened/tied; short/a/r geometry; signed short/ratio/interaction propagation NOT additive MAE decomposition.",
+  "limits": {
+    "training_updates": 0,
+    "selection": false,
+    "formula_refit": false,
+    "automatic_adoption": false,
+    "train03": false,
+    "fixed_dev": false,
+    "reliability_filter": false,
+    "size_accept_filter": false
+  },
+  "resources": {
+    "physical_gpu_choices": [
+      3
+    ],
+    "single_gpu": true,
+    "user_limit_mib": 7000,
+    "stop_mib": 6800,
+    "allocator_cap_mib": 6000
+  },
+  "historical": "S046 no eligible V/D epochs remains; fixed descriptive V20,D02. A20 reproduction reference; C6/R6 supplementary two-stage only. Unknown/TEST exposed frozen description; no structural attribution from two-stage arms, independent generalization, training, selection or adoption.",
+  "equivalence": "V/A strict same class+forward+state and complete natural VAL/native TEST/Unknown actual outputs. Neither historical checkpoint SHA nor aggregate metrics alone establish equivalence. No historical V-output reuse."
+}
