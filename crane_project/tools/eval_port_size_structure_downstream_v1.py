@@ -108,7 +108,7 @@ def historical_replay(predictions,folder,split):
             if a[key]!=b[key]:raise ValueError('Historical input/preprocess identity differs '+key)
         for arm in arms:
             if a[arm]!=b[arm]:raise ValueError('Historical actual output differs '+arm)
-            if split!=SEQUENCE:
+            if split!=SEQUENCE and arm in HEADS:
                 for field in ('pre_guard','delivery','failed_checks'):
                     if a[field][arm]!=b[field][arm]:raise ValueError('Historical guard differs '+field+'/'+arm)
                 if a['representation_valid'][arm]!=b['vector_valid'][arm]:raise ValueError('Historical representation differs '+arm)

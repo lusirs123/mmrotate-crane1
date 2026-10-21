@@ -109,3 +109,18 @@ def test_no_run_does_not_create_result_and_protocol_gpu3_only(tmp_path):
     text=e.parser().format_help();assert '--epoch' not in text and '--structure-run' in text
     p=d.protocol();assert p['resources']['physical_gpu_choices']==[3] and p['limits']['selection'] is False
     assert not p['limits']['train03'] and not p['limits']['fixed_dev'] and 'p5' not in d.HEADS
+
+
+def test_historical_baselines_have_no_size_guard_fields(tmp_path):
+    import json,hashlib
+    folder=tmp_path/'history';(folder/'val').mkdir(parents=True)
+    row=dict(image='frame',image_sha256='same',native_meta=dict(scale_xy=[1.,1.]),gt=[0.,0.,100.,50.,0.],sequence='real_seq_fixture',domain='real',
+        **{a:[0.,0.,100.,50.,0.,.8] for a in d.ARMS},pre_guard={a:[0.,0.,100.,50.,0.,.8] for a in d.HEADS},delivery={a:'accepted' for a in d.HEADS},failed_checks={a:[] for a in d.HEADS},representation_valid={a:True for a in d.HEADS})
+    old=deepcopy(row);old['vector_valid']=old.pop('representation_valid')
+    path=folder/'val/evaluation_rows.jsonl';path.write_text(json.dumps(old)+'\n')
+    (folder/'artifacts.json').write_text(json.dumps(dict(files={'val/evaluation_rows.jsonl':hashlib.sha256(path.read_bytes()).hexdigest()})))
+    assert e.historical_replay([row],folder,'val')['V_A20_all_equal']
+    row['delivery']['c6']='fallback'
+    with pytest.raises(ValueError,match='guard'):e.historical_replay([row],folder,'val')
+    row=deepcopy(old);row['representation_valid']=row.pop('vector_valid');row['pre_guard']['v20'][2]+=1
+    assert not e.historical_replay([row],folder,'val')['V_A20_all_equal']
