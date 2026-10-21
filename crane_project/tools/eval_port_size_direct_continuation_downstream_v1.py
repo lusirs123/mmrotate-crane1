@@ -31,6 +31,16 @@ def checked_sources():
     return dict(manifest_sha256=depth.sha(path),**proof)
 
 
+
+def reference_delivery(row):
+    # S048 missing frames intentionally have no regression-validity tensor.
+    if row['midpoint'] is None:
+        if row['edge_residual'] is not None or row['pre_guard'] is not None or row['size_delivery']!='no_output' or row['failed_checks']:
+            raise ValueError('Inconsistent frozen missing frame')
+        return dict(delivery='no_output',failed_checks=[],representation_valid=None,pre_guard=None)
+    return dict(delivery=row['size_delivery'],failed_checks=row['failed_checks'],representation_valid=row['representation_valid'],pre_guard=row['pre_guard'])
+
+
 def checked_references(a20_folder,protection_folder,structure_folder,cache_dir,load_cache=True,historical_folder=None,direct_folder=None):
     from crane_project.tools import eval_port_size_structure_downstream_v1 as sealed_previous
     refs,records,proof=sealed_previous.checked_references(a20_folder,protection_folder,structure_folder,cache_dir,load_cache,historical_folder)
@@ -49,7 +59,8 @@ def checked_references(a20_folder,protection_folder,structure_folder,cache_dir,l
         for r in saved:
             ref=refs[r['image']]
             if any(ref[k]!=r[k] for k in ('image','gt','b','midpoint','scale','sequence','domain','frame_id')):raise ValueError('S048 reference/input identity')
-            ref[public]=r['edge_residual'];ref['delivery'][public]=r['size_delivery'];ref['failed_checks'][public]=r['failed_checks'];ref['representation_valid'][public]=r['representation_valid'];ref['pre_guard'][public]=r['pre_guard']
+            ref[public]=r['edge_residual']
+            for field,value in reference_delivery(r).items():ref[field][public]=value
     for n in wanted:
         if depth.sha(folder/n)!=index[n]:raise ValueError('S048 indexed reference drift '+n)
     proof['S048_direct']=dict(directory=str(folder),index_sha256=depth.sha(folder/'artifacts.json'),files={n:index[n] for n in wanted},main_epochs=6,auxiliary_epochs=1)

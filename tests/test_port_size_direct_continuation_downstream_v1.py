@@ -119,3 +119,12 @@ def test_historical_native_guard_only_size_heads_and_deep_rows_exact(tmp_path):
     with pytest.raises(ValueError,match='guard'):e.historical_replay([changed],folder,'val')
     changed=deepcopy(rr);changed['d02'][2]+=1
     with pytest.raises(ValueError,match='output'):e.historical_replay([changed],folder,'val')
+
+
+def test_saved_missing_row_has_no_validity_tensor_but_present_requires_it():
+    row=dict(midpoint=None,edge_residual=None,pre_guard=None,size_delivery='no_output',failed_checks=[])
+    assert e.reference_delivery(row)==dict(delivery='no_output',failed_checks=[],representation_valid=None,pre_guard=None)
+    bad=dict(row,edge_residual=[0.,0.,100.,50.,0.,.8])
+    with pytest.raises(ValueError):e.reference_delivery(bad)
+    present=dict(row,midpoint=[0.,0.,100.,50.,0.,.8],edge_residual=[0.,0.,100.,50.,0.,.8],size_delivery='accepted')
+    with pytest.raises(KeyError):e.reference_delivery(present)
