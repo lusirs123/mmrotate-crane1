@@ -1,0 +1,729 @@
+{
+  "date": "2026-10-22",
+  "scope": "Local only. No server access. Preserve all first/second research files and all extracted results.",
+  "protected_inventory": {
+    "path": "docs/detection/SymEOOD与midpoint_文件保留与清理核查_20261022.json",
+    "sha256": "dc68169d9a8e4a0b33102dee1ed77f9f8e54b9473c46f33beb3828202a018b1f"
+  },
+  "tools_top_level": {
+    "files": 529,
+    "bytes": 8264930,
+    "byte_identical_duplicate_groups": 0
+  },
+  "third_point_tools": [
+    {
+      "path": "crane_project/tools/analyze_port_size_a20_protection_downstream_v1.py",
+      "bytes": 9498,
+      "sha256": "2458005b96933ece7552b53d05c0c6690584d986f45ff7afb807391c2d18bbfd",
+      "literal_references": [
+        "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+        "crane_project/tools/port_size_structure_downstream_v1_sources.json",
+        "crane_project/tools/port_size_a20_protection_downstream_v1_sources.json",
+        "tests/test_port_size_a20_protection_downstream_v1.py",
+        "docs/detection/第三研究点_清理收据_20261022.json",
+        "docs/detection/尺寸优化专用记录_20261016.md",
+        "docs/detection/第三研究点_复现身份清单_20261021.json",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/analyze_port_size_a20_protection_pairs_v1.py",
+      "bytes": 6650,
+      "sha256": "0a3881f93e90bd7e31cb94444dd90fc5c203bceb2b45f7188cfd585dd47ecf14",
+      "literal_references": [
+        "tests/test_port_size_a20_protection_pairs_v1.py",
+        "docs/detection/第三研究点_清理收据_20261022.json",
+        "docs/detection/尺寸优化专用记录_20261016.md"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/analyze_port_size_a20_protection_v1.py",
+      "bytes": 6920,
+      "sha256": "189bf92c24d95c7e070ea8d39fa8f58974fbd540e7cd12a21cf6264adc602da9",
+      "literal_references": [
+        "crane_project/tools/port_size_structure_v1_sources.json",
+        "crane_project/tools/port_size_direct_continuation_v1_sources.json",
+        "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+        "crane_project/tools/port_size_structure_downstream_v1_sources.json",
+        "crane_project/tools/port_size_a20_protection_train_v1_sources.json",
+        "crane_project/tools/port_size_a20_protection_downstream_v1_sources.json",
+        "docs/detection/尺寸优化专用记录_20261016.md",
+        "docs/detection/第三研究点_复现身份清单_20261021.json",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/analyze_port_size_direct_continuation_downstream_v1.py",
+      "bytes": 9957,
+      "sha256": "d7494534cf89fc2c34213a2aa2a93d6e836e1c714a975adc270c5a0609383e49",
+      "literal_references": [
+        "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+        "tests/test_port_size_direct_continuation_downstream_v1.py",
+        "docs/detection/第三研究点_清理收据_20261022.json",
+        "docs/detection/第三研究点_复现身份清单_20261021.json",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/analyze_port_size_direct_continuation_v1.py",
+      "bytes": 8901,
+      "sha256": "eeb5cd9a71954e519731213399170b7025ac98cd810dbfed12ab030833616c33",
+      "literal_references": [
+        "crane_project/tools/port_size_direct_continuation_v1_sources.json",
+        "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+        "docs/detection/第三研究点_清理收据_20261022.json",
+        "docs/detection/第三研究点_复现身份清单_20261021.json",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/analyze_port_size_qalign_downstream_v1.py",
+      "bytes": 9460,
+      "sha256": "d9335f2d2b0d7ec91af43894661a20c17af0b0ea34d967b1b442f4b2b29d5c8a",
+      "literal_references": [
+        "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+        "crane_project/tools/port_size_structure_downstream_v1_sources.json",
+        "crane_project/tools/port_size_a20_protection_downstream_v1_sources.json",
+        "crane_project/tools/port_size_qalign_downstream_v1_sources.json",
+        "tests/test_port_size_qalign_downstream_v1.py",
+        "docs/detection/第三研究点_清理收据_20261022.json",
+        "docs/detection/尺寸优化专用记录_20261016.md",
+        "docs/detection/第三研究点_复现身份清单_20261021.json",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/analyze_port_size_qalign_v1.py",
+      "bytes": 14990,
+      "sha256": "d7faf41466880e8a74f2ce2fe4e04da10fe681178edf87abf28b149af744cdea",
+      "literal_references": [
+        "crane_project/tools/port_size_structure_v1_sources.json",
+        "crane_project/tools/port_size_direct_continuation_v1_sources.json",
+        "crane_project/tools/analyze_port_size_a20_protection_pairs_v1.py",
+        "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+        "crane_project/tools/analyze_port_size_a20_protection_downstream_v1.py",
+        "crane_project/tools/summarize_port_size_a20_protection_downstream_v1.py",
+        "crane_project/tools/analyze_port_size_structure_v1.py",
+        "crane_project/tools/port_size_structure_downstream_v1_sources.json",
+        "crane_project/tools/analyze_port_size_direct_continuation_v1.py",
+        "crane_project/tools/port_size_qalign_v1_sources.json",
+        "crane_project/tools/port_size_a20_protection_train_v1_sources.json",
+        "crane_project/tools/analyze_port_size_a20_protection_v1.py",
+        "crane_project/tools/analyze_port_size_structure_downstream_v1.py",
+        "crane_project/tools/port_size_a20_protection_downstream_v1_sources.json",
+        "crane_project/tools/analyze_port_size_qalign_downstream_v1.py",
+        "crane_project/tools/analyze_port_size_direct_continuation_downstream_v1.py",
+        "crane_project/tools/port_size_qalign_downstream_v1_sources.json",
+        "docs/detection/第三研究点_清理收据_20261022.json",
+        "docs/detection/第三研究点_复现身份清单_20261021.json",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/analyze_port_size_structure_downstream_v1.py",
+      "bytes": 9696,
+      "sha256": "9720723ebe52265e884114b7927b8ee6dcbb0c7e76c177ebf121ebbbbc6ac261",
+      "literal_references": [
+        "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+        "crane_project/tools/port_size_structure_downstream_v1_sources.json",
+        "tests/test_port_size_structure_downstream_v1.py",
+        "docs/detection/第三研究点_清理收据_20261022.json",
+        "docs/detection/第三研究点_复现身份清单_20261021.json",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/analyze_port_size_structure_v1.py",
+      "bytes": 8679,
+      "sha256": "7a22f87595ec1668497c3b4b591e54f0d0972d72cf135d2b6cf396fd0903ca5c",
+      "literal_references": [
+        "crane_project/tools/port_size_structure_v1_sources.json",
+        "crane_project/tools/port_size_direct_continuation_v1_sources.json",
+        "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+        "crane_project/tools/port_size_structure_downstream_v1_sources.json",
+        "docs/detection/第三研究点_清理收据_20261022.json",
+        "docs/detection/尺寸优化专用记录_20261016.md",
+        "docs/detection/第三研究点_复现身份清单_20261021.json",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/engineer_port_size_qalign_v1.py",
+      "bytes": 7224,
+      "sha256": "e243077a908b8dfbffbb6ec37498dfd19847b6f8d03ce51245762c31e999bb2f",
+      "literal_references": [
+        "crane_project/tools/port_size_structure_v1_sources.json",
+        "crane_project/tools/port_size_direct_continuation_v1_sources.json",
+        "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+        "crane_project/tools/port_size_structure_downstream_v1_sources.json",
+        "crane_project/tools/port_size_qalign_v1_sources.json",
+        "crane_project/tools/port_size_a20_protection_train_v1_sources.json",
+        "crane_project/tools/port_size_a20_protection_downstream_v1_sources.json",
+        "crane_project/tools/run_port_size_qalign_v1.py",
+        "crane_project/tools/port_size_qalign_downstream_v1_sources.json",
+        "docs/detection/第三研究点_复现身份清单_20261021.json",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/eval_port_size_a20_protection_downstream_v1.py",
+      "bytes": 18237,
+      "sha256": "7eeaab4e647b9c202db6d237d7af483b0532d3fa7ffe8997d13218627a74f535",
+      "literal_references": [
+        "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+        "crane_project/tools/port_size_structure_downstream_v1_sources.json",
+        "crane_project/tools/port_size_a20_protection_downstream_v1_sources.json",
+        "docs/detection/第三研究点_清理收据_20261022.json",
+        "docs/detection/尺寸优化专用记录_20261016.md",
+        "docs/detection/第三研究点_复现身份清单_20261021.json",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/eval_port_size_direct_continuation_downstream_v1.py",
+      "bytes": 19729,
+      "sha256": "b85e44e9b30c1495e29f78972dd92b50b3a3ef5c8572b075e1a1eda0aac54df6",
+      "literal_references": [
+        "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+        "docs/detection/第三研究点_清理收据_20261022.json",
+        "docs/detection/第三研究点_复现身份清单_20261021.json",
+        "docs/detection/局部向量尺寸修正20261020.md",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/eval_port_size_qalign_downstream_v1.py",
+      "bytes": 17164,
+      "sha256": "0af9c779b70b2b899dd2a79442bdbfc3fa20ef5d65cd808729f14a62c1bffa82",
+      "literal_references": [
+        "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+        "crane_project/tools/port_size_structure_downstream_v1_sources.json",
+        "crane_project/tools/port_size_a20_protection_downstream_v1_sources.json",
+        "crane_project/tools/port_size_qalign_downstream_v1_sources.json",
+        "docs/detection/第三研究点_清理收据_20261022.json",
+        "docs/detection/尺寸优化专用记录_20261016.md",
+        "docs/detection/第三研究点_复现身份清单_20261021.json",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/eval_port_size_structure_downstream_v1.py",
+      "bytes": 22464,
+      "sha256": "4af5c586604f00298fe7cf977f58392130ed0cc2a905cc45bd6dd7cadbfc9c33",
+      "literal_references": [
+        "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+        "crane_project/tools/port_size_structure_downstream_v1_sources.json",
+        "docs/detection/第三研究点_清理收据_20261022.json",
+        "docs/detection/第三研究点_复现身份清单_20261021.json",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/port_size_a20_protection_downstream_v1_protocol.json",
+      "bytes": 4174,
+      "sha256": "d93649d138fe3d73954c8bb1d71be227c8ab50c8008e03d910807baee240a0bd",
+      "literal_references": [
+        "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+        "crane_project/tools/port_size_structure_downstream_v1_sources.json",
+        "crane_project/tools/eval_port_size_a20_protection_downstream_v1.py",
+        "crane_project/tools/port_size_a20_protection_downstream_v1_sources.json",
+        "docs/detection/第三研究点_复现身份清单_20261021.json",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/port_size_a20_protection_downstream_v1_sources.json",
+      "bytes": 26527,
+      "sha256": "07b0c51748befa40a6e08a35c29283ac732b52f83aa28bb4f8a7a6aab44d4f0e",
+      "literal_references": [
+        "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+        "crane_project/tools/port_size_structure_downstream_v1_sources.json",
+        "crane_project/tools/eval_port_size_a20_protection_downstream_v1.py",
+        "docs/detection/第三研究点_复现身份清单_20261021.json",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/port_size_a20_protection_review_v1_protocol.json",
+      "bytes": 6466,
+      "sha256": "24d04d3cea990da7d6987243660034f9733adcfdfb7a027dc0554307e679a8cf",
+      "literal_references": [
+        "crane_project/tools/port_size_structure_v1_sources.json",
+        "crane_project/tools/port_size_direct_continuation_v1_sources.json",
+        "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+        "crane_project/tools/port_size_structure_downstream_v1_sources.json",
+        "crane_project/tools/review_port_size_a20_protection_v1.py",
+        "crane_project/tools/port_size_a20_protection_train_v1_sources.json",
+        "crane_project/tools/port_size_a20_protection_downstream_v1_sources.json",
+        "docs/detection/尺寸优化专用记录_20261016.md",
+        "docs/detection/第三研究点_复现身份清单_20261021.json",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/port_size_a20_protection_train_v1_protocol.json",
+      "bytes": 5008,
+      "sha256": "f254343f69b8fcdc007689c146b79ad865337fc9d7e065ff16418a802a02fa8b",
+      "literal_references": [
+        "crane_project/tools/port_size_structure_v1_sources.json",
+        "crane_project/tools/port_size_direct_continuation_v1_sources.json",
+        "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+        "crane_project/tools/run_port_size_a20_protection_v1.py",
+        "crane_project/tools/port_size_structure_downstream_v1_sources.json",
+        "crane_project/tools/port_size_a20_protection_train_v1_sources.json",
+        "crane_project/tools/port_size_a20_protection_downstream_v1_sources.json",
+        "crane_project/utils/port_size_direct_continuation_v1.py",
+        "tests/test_port_size_a20_protection_train_v1.py",
+        "docs/detection/尺寸优化专用记录_20261016.md",
+        "docs/detection/第三研究点_复现身份清单_20261021.json",
+        "docs/detection/局部向量尺寸修正20261020.md",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/port_size_a20_protection_train_v1_sources.json",
+      "bytes": 9730,
+      "sha256": "5f65a75ee423a5616eb416cb230b18e48521a74da2fa429848b6bd7c10c2c4d0",
+      "literal_references": [
+        "crane_project/tools/port_size_structure_v1_sources.json",
+        "crane_project/tools/port_size_direct_continuation_v1_sources.json",
+        "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+        "crane_project/tools/run_port_size_a20_protection_v1.py",
+        "crane_project/tools/port_size_structure_downstream_v1_sources.json",
+        "crane_project/tools/port_size_a20_protection_downstream_v1_sources.json",
+        "docs/detection/第三研究点_复现身份清单_20261021.json",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/port_size_direct_continuation_downstream_v1_protocol.json",
+      "bytes": 5840,
+      "sha256": "4159e024688ac6f57a8e2f16874bd8048633a15fae0ac395ee6f9bb1f0022d6a",
+      "literal_references": [
+        "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+        "crane_project/tools/eval_port_size_direct_continuation_downstream_v1.py",
+        "docs/detection/第三研究点_复现身份清单_20261021.json",
+        "docs/detection/局部向量尺寸修正20261020.md",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+      "bytes": 30168,
+      "sha256": "660d7c3f6f54129bf59ceb2207069ea4bd0b66dec9df2b4fd368fbc7b8fc5921",
+      "literal_references": [
+        "crane_project/tools/eval_port_size_direct_continuation_downstream_v1.py",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/port_size_direct_continuation_v1_protocol.json",
+      "bytes": 4473,
+      "sha256": "0529c15616e18fed9463a3a63a8095da7cb21a5d60751a3fa269aab9a0f86b59",
+      "literal_references": [
+        "crane_project/tools/port_size_direct_continuation_v1_sources.json",
+        "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+        "crane_project/tools/run_port_size_direct_continuation_v1.py",
+        "docs/detection/第三研究点_复现身份清单_20261021.json",
+        "docs/detection/局部向量尺寸修正20261020.md",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/port_size_direct_continuation_v1_sources.json",
+      "bytes": 11805,
+      "sha256": "0b3ce12d7204fb244c8f4d5bf98ed10226c84760c6875538df10d74b1f809f0d",
+      "literal_references": [
+        "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+        "crane_project/tools/run_port_size_direct_continuation_v1.py",
+        "docs/detection/第三研究点_复现身份清单_20261021.json",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/port_size_qalign_downstream_v1_protocol.json",
+      "bytes": 3642,
+      "sha256": "90799f42c155f0fddcc49e927a9d8ac03752f53760ccfc3b36f77f753e137762",
+      "literal_references": [
+        "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+        "crane_project/tools/port_size_structure_downstream_v1_sources.json",
+        "crane_project/tools/eval_port_size_qalign_downstream_v1.py",
+        "crane_project/tools/port_size_a20_protection_downstream_v1_sources.json",
+        "crane_project/tools/port_size_qalign_downstream_v1_sources.json",
+        "docs/detection/尺寸优化专用记录_20261016.md",
+        "docs/detection/第三研究点_复现身份清单_20261021.json",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/port_size_qalign_downstream_v1_sources.json",
+      "bytes": 24424,
+      "sha256": "934c0a4df5598dead803bd39c139f61d6f86afc5ce7b3e1ad2ffe7cf08837c72",
+      "literal_references": [
+        "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+        "crane_project/tools/port_size_structure_downstream_v1_sources.json",
+        "crane_project/tools/eval_port_size_qalign_downstream_v1.py",
+        "crane_project/tools/port_size_a20_protection_downstream_v1_sources.json",
+        "docs/detection/尺寸优化专用记录_20261016.md",
+        "docs/detection/第三研究点_复现身份清单_20261021.json",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/port_size_qalign_v1_protocol.json",
+      "bytes": 3503,
+      "sha256": "ca698e6f2451931c60c2c0fb8e6aa5a6dee69d1c77f636ad28a271b2d347db75",
+      "literal_references": [
+        "crane_project/tools/port_size_structure_v1_sources.json",
+        "crane_project/tools/port_size_direct_continuation_v1_sources.json",
+        "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+        "crane_project/tools/port_size_structure_downstream_v1_sources.json",
+        "crane_project/tools/port_size_qalign_v1_sources.json",
+        "crane_project/tools/port_size_a20_protection_train_v1_sources.json",
+        "crane_project/tools/port_size_a20_protection_downstream_v1_sources.json",
+        "crane_project/tools/run_port_size_qalign_v1.py",
+        "crane_project/tools/port_size_qalign_downstream_v1_sources.json",
+        "docs/detection/尺寸优化专用记录_20261016.md",
+        "docs/detection/第三研究点_复现身份清单_20261021.json",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/port_size_qalign_v1_sources.json",
+      "bytes": 8520,
+      "sha256": "7191df9736af099aa9ced2c177eebae14c194cd5476aeb858e3ff045a125884a",
+      "literal_references": [
+        "crane_project/tools/port_size_structure_v1_sources.json",
+        "crane_project/tools/port_size_direct_continuation_v1_sources.json",
+        "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+        "crane_project/tools/port_size_structure_downstream_v1_sources.json",
+        "crane_project/tools/port_size_a20_protection_downstream_v1_sources.json",
+        "crane_project/tools/run_port_size_qalign_v1.py",
+        "crane_project/tools/port_size_qalign_downstream_v1_sources.json",
+        "docs/detection/尺寸优化专用记录_20261016.md",
+        "docs/detection/第三研究点_复现身份清单_20261021.json",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/port_size_structure_downstream_v1_protocol.json",
+      "bytes": 4734,
+      "sha256": "d4970cf7c86244c15f45d2d7cd793554cb165677aa2cf09217b69b78f686c576",
+      "literal_references": [
+        "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+        "crane_project/tools/port_size_structure_downstream_v1_sources.json",
+        "crane_project/tools/eval_port_size_structure_downstream_v1.py",
+        "docs/detection/第三研究点_复现身份清单_20261021.json",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/port_size_structure_downstream_v1_sources.json",
+      "bytes": 28341,
+      "sha256": "ec003e4ec42f5c0c1a3377cb57a439b3f9648fb9e433c68f3e324b60cfb299a6",
+      "literal_references": [
+        "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+        "crane_project/tools/eval_port_size_structure_downstream_v1.py",
+        "docs/detection/第三研究点_复现身份清单_20261021.json",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/port_size_structure_v1_protocol.json",
+      "bytes": 5058,
+      "sha256": "51d97d00722b6a0175d7a3aa7c8e6212831bf78d6960ab806c542435bd3f2e1e",
+      "literal_references": [
+        "crane_project/tools/port_size_structure_v1_sources.json",
+        "crane_project/tools/port_size_direct_continuation_v1_sources.json",
+        "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+        "crane_project/tools/port_size_structure_downstream_v1_sources.json",
+        "crane_project/tools/run_port_size_structure_v1.py",
+        "docs/detection/第三研究点_复现身份清单_20261021.json",
+        "docs/detection/局部向量尺寸修正20261020.md",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/port_size_structure_v1_sources.json",
+      "bytes": 10855,
+      "sha256": "fd624385220a6256501239013521e61f7c47765240c52709dc23ffe18f0314f2",
+      "literal_references": [
+        "crane_project/tools/port_size_direct_continuation_v1_sources.json",
+        "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+        "crane_project/tools/port_size_structure_downstream_v1_sources.json",
+        "crane_project/tools/run_port_size_structure_v1.py",
+        "docs/detection/第三研究点_复现身份清单_20261021.json",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/review_port_size_a20_protection_v1.py",
+      "bytes": 9928,
+      "sha256": "f0d837be07ba82de781c1bcad13e9e768c72307d766d8d1524f02f4730180309",
+      "literal_references": [
+        "crane_project/tools/port_size_structure_v1_sources.json",
+        "crane_project/tools/port_size_direct_continuation_v1_sources.json",
+        "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+        "crane_project/tools/port_size_structure_downstream_v1_sources.json",
+        "crane_project/tools/port_size_a20_protection_train_v1_sources.json",
+        "crane_project/tools/port_size_a20_protection_downstream_v1_sources.json",
+        "tests/test_port_size_a20_protection_review_v1.py",
+        "docs/detection/第三研究点_清理收据_20261022.json",
+        "docs/detection/尺寸优化专用记录_20261016.md",
+        "docs/detection/第三研究点_复现身份清单_20261021.json",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/run_port_size_a20_protection_v1.py",
+      "bytes": 22125,
+      "sha256": "0a724b9aa4dd92bd2abe56807bc6f44ad15b177d2e228dcfe7d0ee728e158aa0",
+      "literal_references": [
+        "crane_project/tools/port_size_structure_v1_sources.json",
+        "crane_project/tools/port_size_direct_continuation_v1_sources.json",
+        "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+        "crane_project/tools/port_size_structure_downstream_v1_sources.json",
+        "crane_project/tools/port_size_a20_protection_train_v1_sources.json",
+        "crane_project/tools/port_size_a20_protection_downstream_v1_sources.json",
+        "docs/detection/第三研究点_清理收据_20261022.json",
+        "docs/detection/尺寸优化专用记录_20261016.md",
+        "docs/detection/第三研究点_复现身份清单_20261021.json",
+        "docs/detection/局部向量尺寸修正20261020.md",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/run_port_size_direct_continuation_v1.py",
+      "bytes": 21423,
+      "sha256": "3b82028ede56a811ddef135a13cbbf23788e4aea395d3d5b215b0411ff85e4b2",
+      "literal_references": [
+        "crane_project/tools/port_size_direct_continuation_v1_sources.json",
+        "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+        "crane_project/tools/eval_port_size_direct_continuation_downstream_v1.py",
+        "docs/detection/第三研究点_清理收据_20261022.json",
+        "docs/detection/第三研究点_复现身份清单_20261021.json",
+        "docs/detection/局部向量尺寸修正20261020.md",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/run_port_size_qalign_v1.py",
+      "bytes": 18340,
+      "sha256": "dc7a3d49837b11f8562d8e038424af5451871dee05135c99510139327a728754",
+      "literal_references": [
+        "crane_project/tools/port_size_structure_v1_sources.json",
+        "crane_project/tools/port_size_direct_continuation_v1_sources.json",
+        "crane_project/tools/engineer_port_size_qalign_v1.py",
+        "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+        "crane_project/tools/port_size_structure_downstream_v1_sources.json",
+        "crane_project/tools/eval_port_size_direct_continuation_downstream_v1.py",
+        "crane_project/tools/port_size_qalign_v1_sources.json",
+        "crane_project/tools/eval_port_size_qalign_downstream_v1.py",
+        "crane_project/tools/port_size_a20_protection_train_v1_sources.json",
+        "crane_project/tools/eval_port_size_a20_protection_downstream_v1.py",
+        "crane_project/tools/eval_port_size_structure_downstream_v1.py",
+        "crane_project/tools/port_size_a20_protection_downstream_v1_sources.json",
+        "crane_project/tools/port_size_qalign_downstream_v1_sources.json",
+        "docs/detection/第三研究点_清理收据_20261022.json",
+        "docs/detection/第三研究点_复现身份清单_20261021.json",
+        "docs/detection/局部向量尺寸修正20261020.md",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/run_port_size_structure_v1.py",
+      "bytes": 28276,
+      "sha256": "3bffe88134873403592d4b20e5f4574d4237f25252b4f55057c10fb1e65d60b5",
+      "literal_references": [
+        "crane_project/tools/port_size_structure_v1_sources.json",
+        "crane_project/tools/port_size_direct_continuation_v1_sources.json",
+        "crane_project/tools/port_size_direct_continuation_downstream_v1_sources.json",
+        "crane_project/tools/analyze_port_size_structure_v1.py",
+        "crane_project/tools/port_size_structure_downstream_v1_sources.json",
+        "crane_project/tools/eval_port_size_direct_continuation_downstream_v1.py",
+        "crane_project/tools/eval_port_size_structure_downstream_v1.py",
+        "crane_project/utils/port_size_direct_continuation_downstream_v1.py",
+        "crane_project/utils/port_size_structure_downstream_v1.py",
+        "crane_project/utils/port_size_structure_resume_v1.py",
+        "docs/detection/第三研究点_清理收据_20261022.json",
+        "docs/detection/尺寸优化专用记录_20261016.md",
+        "docs/detection/第三研究点_复现身份清单_20261021.json",
+        "docs/detection/局部向量尺寸修正20261020.md",
+        "docs/detection/SymEOOD历史训练文件索引_20261021.json"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    },
+    {
+      "path": "crane_project/tools/summarize_port_size_a20_protection_downstream_v1.py",
+      "bytes": 6571,
+      "sha256": "c5ca276967e871f74f816987b3b8d663bf57ce03be66097fe774dc3d3f3feec8",
+      "literal_references": [
+        "docs/detection/尺寸优化专用记录_20261016.md"
+      ],
+      "decision": "retain: unique source/contract; absence of literal references does not prove unused"
+    }
+  ],
+  "archive": {
+    "deleted_path": "work_dirs/port_size_candidate_downstream_v1_20261007_191454_1852169.tar.gz",
+    "sha256": "8fd52649ee388f049dc81f5998f300ba9c8162566e1c2b5e12eafe7b9a1ebe89",
+    "bytes": 3379968,
+    "retained_members": [
+      {
+        "retained_path": "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/artifacts.json",
+        "sha256": "29536f78e65bae76c705dd6580c55539bbfb6f4a75f0890dd29c98c904ca2bd2",
+        "bytes": 2756
+      },
+      {
+        "retained_path": "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/candidate/completion.json",
+        "sha256": "b7a25a7d8e12b9573505fca97de051d668e6d3c8cddc4f909d5c36a19326833b",
+        "bytes": 49447
+      },
+      {
+        "retained_path": "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/candidate/fixed_dev_01_unseen_depth_swing/evaluation_rows.jsonl",
+        "sha256": "eb07c2fb560b4572db551ff46a650ac8e3f9eb3c62350d62c6aaafb41203b529",
+        "bytes": 1698579
+      },
+      {
+        "retained_path": "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/candidate/fixed_dev_01_unseen_depth_swing/predictions.jsonl",
+        "sha256": "26b13f088b5faa9be7cce290e9736ef4872638c9580572289865a8052adfe5c4",
+        "bytes": 1215449
+      },
+      {
+        "retained_path": "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/candidate/fixed_dev_01_unseen_depth_swing/summary.json",
+        "sha256": "6a3879c951be1590b7060b7c463c10be937a65baa9f2146d749d7a12c5a5b0ac",
+        "bytes": 16522
+      },
+      {
+        "retained_path": "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/candidate/inference_proof.json",
+        "sha256": "709ebb7c0c39b134e0d6ccea13a23b12e0b1aad4d2241e636a9d80e633fc46ca",
+        "bytes": 24970
+      },
+      {
+        "retained_path": "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/candidate/port_test/midpoint.decisions.jsonl",
+        "sha256": "01a1e762c5f625dcb4cf1681c2fd1e013e0f40d8cf5c1766fce6cce31242987a",
+        "bytes": 2265662
+      },
+      {
+        "retained_path": "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/candidate/port_test/predictions.jsonl",
+        "sha256": "1e26ed15466f01bb21c277c3018e88ce44f5666530be04bb516742429d4d8c0b",
+        "bytes": 1962629
+      },
+      {
+        "retained_path": "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/candidate/port_test/size_candidate.decisions.jsonl",
+        "sha256": "513dff8f3ed2ae957cea7bb73caa03cb80ab5b1fd9d0e513213c585a619a3a8d",
+        "bytes": 2265704
+      },
+      {
+        "retained_path": "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/candidate/port_test/summary.json",
+        "sha256": "9749aeb0379bca402a3fa67c00ca42849be70c653afc9fa356d486901f66ebc1",
+        "bytes": 300249
+      },
+      {
+        "retained_path": "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/candidate/protocol.json",
+        "sha256": "86bd8fbdd383faaedde65366382eb2d365b0670662de44fc1ca18cb230efd416",
+        "bytes": 2040
+      },
+      {
+        "retained_path": "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/candidate/sources.json",
+        "sha256": "98b4ac35fef98f676bf298cca5286f8599f2d375e7fac0b4a8cc45125a277a37",
+        "bytes": 23150
+      },
+      {
+        "retained_path": "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/candidate/unknown_test_02_coverage_retry/evaluation_rows.jsonl",
+        "sha256": "a3ad71e7d8d0c7e4db170dc8b1c08b5bee951bbd63bf0298c4a5e93d46bfc5f8",
+        "bytes": 2086210
+      },
+      {
+        "retained_path": "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/candidate/unknown_test_02_coverage_retry/predictions.jsonl",
+        "sha256": "8493a2ec502a6f2bd6345132519290fb0cac916ac562b65747f4152a3a740727",
+        "bytes": 1492351
+      },
+      {
+        "retained_path": "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/candidate/unknown_test_02_coverage_retry/summary.json",
+        "sha256": "2427f34157c49fa5b580a5615b570d9a04c83dc0c982c3f87f0cc35758543219",
+        "bytes": 16625
+      },
+      {
+        "retained_path": "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/check/completion.json",
+        "sha256": "7d251b7ab20fc1bfac9587205d03f7020065fff16a251667c2602b9d3144f008",
+        "bytes": 23291
+      },
+      {
+        "retained_path": "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/check/protocol.json",
+        "sha256": "86bd8fbdd383faaedde65366382eb2d365b0670662de44fc1ca18cb230efd416",
+        "bytes": 2040
+      },
+      {
+        "retained_path": "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/check/sources.json",
+        "sha256": "98b4ac35fef98f676bf298cca5286f8599f2d375e7fac0b4a8cc45125a277a37",
+        "bytes": 23150
+      },
+      {
+        "retained_path": "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/collect/completion.json",
+        "sha256": "9a308449444fd35a60e9595a4b73b1c7c1502ba2d6a39f1e8090389a9f45e661",
+        "bytes": 25814
+      },
+      {
+        "retained_path": "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/collect/fixed_dev_01_unseen_depth_swing/predictions.jsonl",
+        "sha256": "68bcedfd1b2c3eda80c6c599d78634cfe26fd324b40609fd0624d2ba91b4e1fa",
+        "bytes": 849984
+      },
+      {
+        "retained_path": "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/collect/port_test/predictions.jsonl",
+        "sha256": "f39d60b35f6628cd1142299cb55d81a33b53ece3fc8607bd6142379aba3efb93",
+        "bytes": 1378509
+      },
+      {
+        "retained_path": "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/collect/protocol.json",
+        "sha256": "86bd8fbdd383faaedde65366382eb2d365b0670662de44fc1ca18cb230efd416",
+        "bytes": 2040
+      },
+      {
+        "retained_path": "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/collect/sources.json",
+        "sha256": "98b4ac35fef98f676bf298cca5286f8599f2d375e7fac0b4a8cc45125a277a37",
+        "bytes": 23150
+      },
+      {
+        "retained_path": "work_dirs/port_geometry_size_boundary_v1/size_candidate_downstream_20261007_191454_1852169/collect/unknown_test_02_coverage_retry/predictions.jsonl",
+        "sha256": "d2195d7b6df45778c112e1e13504a1b0a1a812013e1ac00edd7d2068d47f4c84",
+        "bytes": 1043566
+      }
+    ]
+  },
+  "status": "archive_removed_retained_files_verified"
+}

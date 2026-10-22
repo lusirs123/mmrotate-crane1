@@ -1,0 +1,328 @@
+{
+  "scope": "Local regenerable Python bytecode only; four LVSR/direct experiment families; source exists; untracked; mtime 2026-10-19 through 2026-10-22 Asia/Taipei",
+  "deleted": [
+    {
+      "path": "crane_project/tools/__pycache__/run_port_size_structure_v1.cpython-38.pyc",
+      "bytes": 30251,
+      "mtime": "2026-10-20T21:33:14.435429+08:00",
+      "sha256": "a522a8186bc85228fbb1513d3ead774e3c0731489a218942a77da77ed8bb576d",
+      "source": "crane_project/tools/run_port_size_structure_v1.py",
+      "source_sha256": "3bffe88134873403592d4b20e5f4574d4237f25252b4f55057c10fb1e65d60b5"
+    },
+    {
+      "path": "crane_project/tools/__pycache__/analyze_port_size_a20_protection_pairs_v1.cpython-38.pyc",
+      "bytes": 8355,
+      "mtime": "2026-10-20T15:04:11.822541+08:00",
+      "sha256": "f688937800e64127fccdc9ac558eeaa61a7a73372151d62e9a9c55367b0cf896",
+      "source": "crane_project/tools/analyze_port_size_a20_protection_pairs_v1.py",
+      "source_sha256": "0a3881f93e90bd7e31cb94444dd90fc5c203bceb2b45f7188cfd585dd47ecf14"
+    },
+    {
+      "path": "crane_project/tools/__pycache__/analyze_port_size_qalign_v1.cpython-38.pyc",
+      "bytes": 15585,
+      "mtime": "2026-10-19T19:17:18.881745+08:00",
+      "sha256": "ae02452f1278323237a5f55dac4d22bcdfa81fb1dc8bb97d55e7b0b4bde117b6",
+      "source": "crane_project/tools/analyze_port_size_qalign_v1.py",
+      "source_sha256": "d7faf41466880e8a74f2ce2fe4e04da10fe681178edf87abf28b149af744cdea"
+    },
+    {
+      "path": "crane_project/tools/__pycache__/analyze_port_size_a20_protection_downstream_v1.cpython-38.pyc",
+      "bytes": 9866,
+      "mtime": "2026-10-20T15:35:12.126229+08:00",
+      "sha256": "86d915438f5fb5bdabb384b2d0d0394cf20a95100fba7d9bb7bc8ea08b5dcb34",
+      "source": "crane_project/tools/analyze_port_size_a20_protection_downstream_v1.py",
+      "source_sha256": "2458005b96933ece7552b53d05c0c6690584d986f45ff7afb807391c2d18bbfd"
+    },
+    {
+      "path": "crane_project/tools/__pycache__/eval_port_size_qalign_downstream_v1.cpython-38.pyc",
+      "bytes": 16891,
+      "mtime": "2026-10-19T19:20:33.017396+08:00",
+      "sha256": "a46a9b92c61e42a901f6a7dc940ef95a955ed6c0a7e1c141e53d4fffcf7dbd2b",
+      "source": "crane_project/tools/eval_port_size_qalign_downstream_v1.py",
+      "source_sha256": "0af9c779b70b2b899dd2a79442bdbfc3fa20ef5d65cd808729f14a62c1bffa82"
+    },
+    {
+      "path": "crane_project/tools/__pycache__/run_port_size_a20_protection_v1.cpython-38.pyc",
+      "bytes": 24104,
+      "mtime": "2026-10-20T14:23:48.680271+08:00",
+      "sha256": "bf23f1b190b1d4635c90f446d0c800320bfe25c28e388d3ec6363825ad345ebd",
+      "source": "crane_project/tools/run_port_size_a20_protection_v1.py",
+      "source_sha256": "0a724b9aa4dd92bd2abe56807bc6f44ad15b177d2e228dcfe7d0ee728e158aa0"
+    },
+    {
+      "path": "crane_project/tools/__pycache__/analyze_port_size_structure_v1.cpython-38.pyc",
+      "bytes": 9248,
+      "mtime": "2026-10-20T20:58:35.981287+08:00",
+      "sha256": "4a69004e417da5f1571f79d90522c0f3debcb98fb6ec7d9c1754d631ae322ac7",
+      "source": "crane_project/tools/analyze_port_size_structure_v1.py",
+      "source_sha256": "7a22f87595ec1668497c3b4b591e54f0d0972d72cf135d2b6cf396fd0903ca5c"
+    },
+    {
+      "path": "crane_project/tools/__pycache__/analyze_port_size_structure_downstream_v1.cpython-38.pyc",
+      "bytes": 9942,
+      "mtime": "2026-10-21T08:50:03.218388+08:00",
+      "sha256": "5d0fe25edfe27347e466ea2b822f00f3643f86bf7e26d201d4febb53302e9dca",
+      "source": "crane_project/tools/analyze_port_size_structure_downstream_v1.py",
+      "source_sha256": "9720723ebe52265e884114b7927b8ee6dcbb0c7e76c177ebf121ebbbbc6ac261"
+    },
+    {
+      "path": "crane_project/tools/__pycache__/analyze_port_size_direct_continuation_downstream_v1.cpython-38.pyc",
+      "bytes": 10127,
+      "mtime": "2026-10-21T14:41:24.208686+08:00",
+      "sha256": "92c79be73a4f1a8d32d1dd7d03b82cb7a71246d9814164c2362028fcd9f387b2",
+      "source": "crane_project/tools/analyze_port_size_direct_continuation_downstream_v1.py",
+      "source_sha256": "d7494534cf89fc2c34213a2aa2a93d6e836e1c714a975adc270c5a0609383e49"
+    },
+    {
+      "path": "crane_project/tools/__pycache__/eval_port_size_structure_downstream_v1.cpython-38.pyc",
+      "bytes": 21410,
+      "mtime": "2026-10-21T09:01:14.306349+08:00",
+      "sha256": "7081da0926514058df96b1c8ad42c82f6f40d2f33c4311ee1df4b987ba4e4691",
+      "source": "crane_project/tools/eval_port_size_structure_downstream_v1.py",
+      "source_sha256": "4af5c586604f00298fe7cf977f58392130ed0cc2a905cc45bd6dd7cadbfc9c33"
+    },
+    {
+      "path": "crane_project/tools/__pycache__/run_port_size_direct_continuation_v1.cpython-38.pyc",
+      "bytes": 24346,
+      "mtime": "2026-10-21T10:30:06.320435+08:00",
+      "sha256": "7450c72c595ab93a47a856daf3694d34040003fb6662b1f9f132adc799684ca7",
+      "source": "crane_project/tools/run_port_size_direct_continuation_v1.py",
+      "source_sha256": "3b82028ede56a811ddef135a13cbbf23788e4aea395d3d5b215b0411ff85e4b2"
+    },
+    {
+      "path": "crane_project/tools/__pycache__/eval_port_size_a20_protection_downstream_v1.cpython-38.pyc",
+      "bytes": 17527,
+      "mtime": "2026-10-20T15:41:33.339998+08:00",
+      "sha256": "36d42c2b1aef7ef86aed225940c1a8168fe7cb3034e7960a1bb27cd518c9b85c",
+      "source": "crane_project/tools/eval_port_size_a20_protection_downstream_v1.py",
+      "source_sha256": "7eeaab4e647b9c202db6d237d7af483b0532d3fa7ffe8997d13218627a74f535"
+    },
+    {
+      "path": "crane_project/tools/__pycache__/analyze_port_size_qalign_downstream_v1.cpython-38.pyc",
+      "bytes": 8613,
+      "mtime": "2026-10-19T19:24:15.226950+08:00",
+      "sha256": "7a801f822e3ac9a531867d631917d7efe9e4507b0b4c7f0798e35db3bf7da3f1",
+      "source": "crane_project/tools/analyze_port_size_qalign_downstream_v1.py",
+      "source_sha256": "d9335f2d2b0d7ec91af43894661a20c17af0b0ea34d967b1b442f4b2b29d5c8a"
+    },
+    {
+      "path": "crane_project/tools/__pycache__/run_port_size_qalign_v1.cpython-38.pyc",
+      "bytes": 20223,
+      "mtime": "2026-10-19T13:52:10.139310+08:00",
+      "sha256": "2695af10dfabeee4164751d12a6eecb6b76aabc28876cf556833ae34931ab837",
+      "source": "crane_project/tools/run_port_size_qalign_v1.py",
+      "source_sha256": "dc7a3d49837b11f8562d8e038424af5451871dee05135c99510139327a728754"
+    },
+    {
+      "path": "crane_project/tools/__pycache__/eval_port_size_direct_continuation_downstream_v1.cpython-38.pyc",
+      "bytes": 18933,
+      "mtime": "2026-10-21T14:48:02.252492+08:00",
+      "sha256": "ce468835d28a581c03a052610b8924f9e048e7edfb8df165beab33783ee62591",
+      "source": "crane_project/tools/eval_port_size_direct_continuation_downstream_v1.py",
+      "source_sha256": "b85e44e9b30c1495e29f78972dd92b50b3a3ef5c8572b075e1a1eda0aac54df6"
+    },
+    {
+      "path": "crane_project/tools/__pycache__/review_port_size_a20_protection_v1.cpython-38.pyc",
+      "bytes": 12041,
+      "mtime": "2026-10-20T10:58:21.842714+08:00",
+      "sha256": "8363a842be4ba7ec513513d53433468bdac7700e41bb304ec75f80fc42d3e460",
+      "source": "crane_project/tools/review_port_size_a20_protection_v1.py",
+      "source_sha256": "f0d837be07ba82de781c1bcad13e9e768c72307d766d8d1524f02f4730180309"
+    },
+    {
+      "path": "crane_project/tools/__pycache__/analyze_port_size_direct_continuation_v1.cpython-38.pyc",
+      "bytes": 9624,
+      "mtime": "2026-10-21T10:30:06.318154+08:00",
+      "sha256": "09a6c420b7f7609bb14807687becfe51c924e37c16ef7ffd98199221f9536221",
+      "source": "crane_project/tools/analyze_port_size_direct_continuation_v1.py",
+      "source_sha256": "eeb5cd9a71954e519731213399170b7025ac98cd810dbfed12ab030833616c33"
+    },
+    {
+      "path": "crane_project/utils/__pycache__/port_size_a20_protection_downstream_v1.cpython-38.pyc",
+      "bytes": 13680,
+      "mtime": "2026-10-20T15:41:33.335740+08:00",
+      "sha256": "0019beb90434ed17fff92810293a650da6b302a9a8211fb2e49a220aa44eb29e",
+      "source": "crane_project/utils/port_size_a20_protection_downstream_v1.py",
+      "source_sha256": "8396851e3d2256a9e2a7c77360d9cc1b12d693333721a2a97f91d1df8996c973"
+    },
+    {
+      "path": "crane_project/utils/__pycache__/port_size_direct_continuation_downstream_v1.cpython-38.pyc",
+      "bytes": 16912,
+      "mtime": "2026-10-21T14:42:58.603679+08:00",
+      "sha256": "bb0be68b08971db2e8bbd4bea022c92d2905fb82132d5832661215972681f639",
+      "source": "crane_project/utils/port_size_direct_continuation_downstream_v1.py",
+      "source_sha256": "2a2cebd243e54c8cc21c9a06b80a4eb44ff45294013bfd186767a498457c43ca"
+    },
+    {
+      "path": "crane_project/utils/__pycache__/port_size_qalign_downstream_v1.cpython-38.pyc",
+      "bytes": 14972,
+      "mtime": "2026-10-19T19:21:29.426065+08:00",
+      "sha256": "b0a238614b9823b9cc0df99f33f2c360f37c70383ed590c60d89097315ac449f",
+      "source": "crane_project/utils/port_size_qalign_downstream_v1.py",
+      "source_sha256": "c75cf05799e7ab21d6b4d872694f1ace16f446aa55eea5003d95aa89619286a9"
+    },
+    {
+      "path": "crane_project/utils/__pycache__/port_size_a20_protection_train_v1.cpython-38.pyc",
+      "bytes": 13731,
+      "mtime": "2026-10-20T14:23:48.675288+08:00",
+      "sha256": "0999f2f72c533a26352c39c8387eab064c737d9d4e6e70d4629c3542b3d63a4d",
+      "source": "crane_project/utils/port_size_a20_protection_train_v1.py",
+      "source_sha256": "5a10ee650f65d1f5f54a815671e7d2c3b78a7a029bd8a21e995af4d47cc09da2"
+    },
+    {
+      "path": "crane_project/utils/__pycache__/port_size_qalign_v1.cpython-38.pyc",
+      "bytes": 4951,
+      "mtime": "2026-10-19T13:51:17.484056+08:00",
+      "sha256": "1867aac1b00b0788872beba290d9c1e177315b821e328f1b738b29f1aaaed530",
+      "source": "crane_project/utils/port_size_qalign_v1.py",
+      "source_sha256": "bffff38f97d0d7cf8210f009c7b5160895a9d8e88f80fbca7efb80c3e1f71ca4"
+    },
+    {
+      "path": "crane_project/utils/__pycache__/port_size_a20_protection_review_v1.cpython-38.pyc",
+      "bytes": 6222,
+      "mtime": "2026-10-20T10:57:19.969202+08:00",
+      "sha256": "2787e94b9b3f3c9767ec238d2fa89cd7fd4b8873a93551847eba0c3cc951ab34",
+      "source": "crane_project/utils/port_size_a20_protection_review_v1.py",
+      "source_sha256": "b2f7a556c29be57197e2bc2a5db0f60618caa25eb024fdcd6c3378bc6c40ccf7"
+    },
+    {
+      "path": "crane_project/utils/__pycache__/port_size_structure_resume_v1.cpython-38.pyc",
+      "bytes": 6644,
+      "mtime": "2026-10-20T21:33:14.440120+08:00",
+      "sha256": "d85e47f602b7e598cc684b5e46a214b6d8c4cbba89debc4ffeecc80651892437",
+      "source": "crane_project/utils/port_size_structure_resume_v1.py",
+      "source_sha256": "b6feae182d78868fda2617733405b48b74a269bb9be9d4c7c84eb749ee63dba2"
+    },
+    {
+      "path": "crane_project/utils/__pycache__/port_size_structure_v1.cpython-38.pyc",
+      "bytes": 3741,
+      "mtime": "2026-10-20T20:58:35.977395+08:00",
+      "sha256": "acb6b44e7fafea5011df0b072dd08e4a116c4c922ce84fd9685038d35ccc234b",
+      "source": "crane_project/utils/port_size_structure_v1.py",
+      "source_sha256": "78a6ed3900b5076f4ce24666743fdbe93e1999527b863583c8b3ca9eccd5e8c6"
+    },
+    {
+      "path": "crane_project/utils/__pycache__/port_size_direct_continuation_resource_v1.cpython-38.pyc",
+      "bytes": 2556,
+      "mtime": "2026-10-21T10:30:06.316025+08:00",
+      "sha256": "e7abcd4b87ddbfdce475b5c692ad54fe37e0cb89e0ebab5c6354d43d6be9987d",
+      "source": "crane_project/utils/port_size_direct_continuation_resource_v1.py",
+      "source_sha256": "4d4adf8e47bc34dc148a272541418320a68eb0b461f8abde87adbce0010988e4"
+    },
+    {
+      "path": "crane_project/utils/__pycache__/port_size_direct_continuation_v1.cpython-38.pyc",
+      "bytes": 11036,
+      "mtime": "2026-10-21T10:31:08.890702+08:00",
+      "sha256": "710289c196eebc64a1a40f0fdd7fb0dfd3bab927e4ec64698ad119e4e9e8f58b",
+      "source": "crane_project/utils/port_size_direct_continuation_v1.py",
+      "source_sha256": "73b103324dfa4eaa4f613a8a8b9a434e0d50ae444f9f46a74baa1956a27df168"
+    },
+    {
+      "path": "crane_project/utils/__pycache__/port_size_structure_downstream_v1.cpython-38.pyc",
+      "bytes": 16235,
+      "mtime": "2026-10-21T08:51:34.325169+08:00",
+      "sha256": "792abeee16cd5bdd6b0d1c8ed5a934054c2404e9d80d81d507e48bf48077c274",
+      "source": "crane_project/utils/port_size_structure_downstream_v1.py",
+      "source_sha256": "357fe8c3bb88fcfa5168a84ec07d622cf6eb02c9fd52541467a6cbfc73d272c6"
+    },
+    {
+      "path": "tests/__pycache__/test_port_size_a20_protection_train_v1.cpython-38-pytest-8.3.5.pyc",
+      "bytes": 12682,
+      "mtime": "2026-10-20T14:24:00.137314+08:00",
+      "sha256": "eddb699fe20b041c38306d8ddaa61290f0cf43034912ff85df396f7429651404",
+      "source": "tests/test_port_size_a20_protection_train_v1.py",
+      "source_sha256": "c4af42e8ed92c53aae9c49dbc46ea1ba603fe2ac506afbf7458ed1b583b44b99"
+    },
+    {
+      "path": "tests/__pycache__/test_port_size_structure_downstream_v1.cpython-38-pytest-8.3.5.pyc",
+      "bytes": 16307,
+      "mtime": "2026-10-21T09:01:14.017947+08:00",
+      "sha256": "449954d13f19927c395ece1b2246316e498943a10dd730c2c23ed2f6deaecb8b",
+      "source": "tests/test_port_size_structure_downstream_v1.py",
+      "source_sha256": "f04467aa7a8d38ae6825b8eea4347a33f3d1b29f6b909510a966b48e2eb1e718"
+    },
+    {
+      "path": "tests/__pycache__/test_port_size_structure_resume_v1.cpython-38-pytest-8.3.5.pyc",
+      "bytes": 11836,
+      "mtime": "2026-10-20T21:33:14.447855+08:00",
+      "sha256": "7f6435737438ed20853d285a703f73f098c95f567cdcbf50d541c96321fc441f",
+      "source": "tests/test_port_size_structure_resume_v1.py",
+      "source_sha256": "f733462afd88053998df588da44f87a8c431d884c8554beecc70e09f202c6f9e"
+    },
+    {
+      "path": "tests/__pycache__/test_port_size_direct_continuation_downstream_v1.cpython-38-pytest-8.3.5.pyc",
+      "bytes": 19117,
+      "mtime": "2026-10-21T14:48:01.934704+08:00",
+      "sha256": "be2eeaaf0741ca1f59d4c59311c77822510b451d9a0055d6d93e72b6bd668415",
+      "source": "tests/test_port_size_direct_continuation_downstream_v1.py",
+      "source_sha256": "0acec0bec17d4580abbc096cafbd119fcd0e29810c4386be48c2209dda487162"
+    },
+    {
+      "path": "tests/__pycache__/test_port_size_a20_protection_downstream_v1.cpython-38-pytest-8.3.5.pyc",
+      "bytes": 20036,
+      "mtime": "2026-10-20T15:41:33.193311+08:00",
+      "sha256": "f9338c7d29480fa426c3cdb4784f5eeb4e9b37c0215411e69255fe45a42d73ea",
+      "source": "tests/test_port_size_a20_protection_downstream_v1.py",
+      "source_sha256": "f181b167a83ecec7817463e2fc7dd415ac584b44536380f566b0186c7f77b747"
+    },
+    {
+      "path": "tests/__pycache__/test_port_size_structure_v1.cpython-38-pytest-8.3.5.pyc",
+      "bytes": 30225,
+      "mtime": "2026-10-20T21:19:22.276086+08:00",
+      "sha256": "11f70e0a142eb16f59f2bc6d5e7721f3d8bf82407892621e55a54cc1be3bad5b",
+      "source": "tests/test_port_size_structure_v1.py",
+      "source_sha256": "bb19df5fee23a1710123816a5f9779cbb9c6dece508decdc274216ae151bf327"
+    },
+    {
+      "path": "tests/__pycache__/test_port_size_a20_protection_pairs_v1.cpython-38-pytest-8.3.5.pyc",
+      "bytes": 4670,
+      "mtime": "2026-10-20T15:04:11.820533+08:00",
+      "sha256": "3760d63cb4fc175a8c3e47ff43857560dc9fb5da8876366777f6f14843a9b8f7",
+      "source": "tests/test_port_size_a20_protection_pairs_v1.py",
+      "source_sha256": "958c0e867077041c9272fbba3e052e7ab673666b11a24570fa420b28b98037ec"
+    },
+    {
+      "path": "tests/__pycache__/test_port_size_a20_protection_review_v1.cpython-38-pytest-8.3.5.pyc",
+      "bytes": 19086,
+      "mtime": "2026-10-20T10:57:19.760693+08:00",
+      "sha256": "d3328eb5dfac9d9a92e99b1373bc2c5774bff8e61a969159616a90515beed9dd",
+      "source": "tests/test_port_size_a20_protection_review_v1.py",
+      "source_sha256": "5929cb98c5ac7b664816c102484693c92182370ec884b2673c3f4a7b11584be3"
+    },
+    {
+      "path": "tests/__pycache__/test_port_size_structure_v1.cpython-38.pyc",
+      "bytes": 12064,
+      "mtime": "2026-10-20T20:58:35.982384+08:00",
+      "sha256": "0d787c94f074c55f4e1c399bd9972f45d74e885929e30c3da01d464fb426357d",
+      "source": "tests/test_port_size_structure_v1.py",
+      "source_sha256": "bb19df5fee23a1710123816a5f9779cbb9c6dece508decdc274216ae151bf327"
+    },
+    {
+      "path": "tests/__pycache__/test_port_size_qalign_v1.cpython-38-pytest-8.3.5.pyc",
+      "bytes": 14200,
+      "mtime": "2026-10-19T13:51:46.867830+08:00",
+      "sha256": "10ca183ce2192770e7812c91652b0382cbe664d80442cb11b9d1a803db10fcb1",
+      "source": "tests/test_port_size_qalign_v1.py",
+      "source_sha256": "2e399f219d489abd09d40292ca42752fc1422fcb77841364bbd7cfcefd2e7ebe"
+    },
+    {
+      "path": "tests/__pycache__/test_port_size_direct_continuation_v1.cpython-38-pytest-8.3.5.pyc",
+      "bytes": 19191,
+      "mtime": "2026-10-21T10:31:23.904995+08:00",
+      "sha256": "a39b87d2e103ab1ec6bdbfd62e9529bd881630cfb5cc54978adfad0ac4577b74",
+      "source": "tests/test_port_size_direct_continuation_v1.py",
+      "source_sha256": "b1cef954d48d2e037411bdd1050e59dd2bf668e7d21c119eeab34053968c4809"
+    },
+    {
+      "path": "tests/__pycache__/test_port_size_qalign_downstream_v1.cpython-38-pytest-8.3.5.pyc",
+      "bytes": 20387,
+      "mtime": "2026-10-19T19:24:15.069123+08:00",
+      "sha256": "ececaaa363ca7845c3325ade030fec3c6cc552ceb00b250890ec6eb9c7c79510",
+      "source": "tests/test_port_size_qalign_downstream_v1.py",
+      "source_sha256": "aab42398c908dc6c06b15a7d0646b4284b43c67e17050513ba571635d71b9dd2"
+    }
+  ],
+  "bytes_removed": 577567,
+  "preserved": "All sources, tests, contracts, weights, caches of model features, original outputs, duplicate analysis evidence, historical archive and first/second research point files",
+  "status": "completed_and_verified"
+}

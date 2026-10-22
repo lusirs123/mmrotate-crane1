@@ -1,0 +1,190 @@
+{
+  "date": "2026-10-22",
+  "reason": "Retired third-point diagnostics and local auxiliary route. Not proof results were invalid. Raw experimental evidence retained.",
+  "files": [
+    {
+      "path": "crane_project/tools/audit_port_size_spatial_labels_v1.py",
+      "bytes": 11244,
+      "sha256": "84843c8c0738915dfc30e24000b95a5b2e6b18b15a8c61e26a62ff4701634864"
+    },
+    {
+      "path": "crane_project/tools/analyze_port_size_auxiliary_conflict_v1.py",
+      "bytes": 7834,
+      "sha256": "604dc33c5898f1053c656c5254ab999e2115b4442b5b0ce8efdf42635e3bf6e4"
+    },
+    {
+      "path": "crane_project/tools/audit_port_size_direction_evidence_v1.py",
+      "bytes": 19673,
+      "sha256": "23b35111f57d50e92d16f5d86fb73a7ea1de8f1f80f71cbd203ad9caead41a0f"
+    },
+    {
+      "path": "crane_project/tools/analyze_port_size_direction_evidence_v1.py",
+      "bytes": 10547,
+      "sha256": "3cc52854bcae46edf6d54efe371ccd5ff99969696b0c9efe3c9da08dda10a3ff"
+    },
+    {
+      "path": "crane_project/tools/analyze_port_size_v20_joint_v1.py",
+      "bytes": 20178,
+      "sha256": "1b84f5180d66688a9d52731b63ada3f3f5536ea730c96c39e9c89b53478c6521"
+    },
+    {
+      "path": "crane_project/tools/analyze_port_size_native_p3_v1.py",
+      "bytes": 6579,
+      "sha256": "28d71cb292fa26052f2e07e6e6b68de35cea8403b5e407019ccbd27a69bdd442"
+    },
+    {
+      "path": "crane_project/tools/replay_port_size_seven_v1.py",
+      "bytes": 15527,
+      "sha256": "bea205df0787afd033e4c89b2514b32fab02bda06c05f4d0d6854bf81e06aec7"
+    },
+    {
+      "path": "crane_project/tools/analyze_port_size_seven_replay_v1.py",
+      "bytes": 13120,
+      "sha256": "3a8a60c6748f71e56441077ee9d6b611ef0bfde38995bbad300956829bd06501"
+    },
+    {
+      "path": "crane_project/tools/run_port_size_local_aux_v1.py",
+      "bytes": 13632,
+      "sha256": "16dbc13eb0051a9772b72dbd76ec1a8102f1d01d2b06610f56e2370b98fc6a51"
+    },
+    {
+      "path": "crane_project/tools/analyze_port_size_local_aux_v1.py",
+      "bytes": 9908,
+      "sha256": "98289b18ebc26032ffd58b110c0a0612976b736771448dc5cff12448a00766e5"
+    },
+    {
+      "path": "tests/test_port_size_spatial_labels_v1.py",
+      "bytes": 2753,
+      "sha256": "d36f0ce6f78097af20328d0733ca8e084ccab73585f67e072af521fd9c19df1b"
+    },
+    {
+      "path": "tests/test_port_size_direction_evidence_v1.py",
+      "bytes": 5060,
+      "sha256": "4ffb498e0c7178d96409016932e4f852fbe62d8ec2d2b5f062211ab5b4f4f459"
+    },
+    {
+      "path": "tests/test_port_size_direction_analysis_v1.py",
+      "bytes": 1395,
+      "sha256": "4d43da98d549014323299c15837a24aeab416e828569db8c68387bb03c3023df"
+    },
+    {
+      "path": "tests/test_port_size_v20_joint_v1.py",
+      "bytes": 5274,
+      "sha256": "86dada17c7b2158c91c217097fc3f5310f7fe6354bb467e14bba2a82c5238222"
+    },
+    {
+      "path": "tests/test_port_size_seven_replay_v1.py",
+      "bytes": 4683,
+      "sha256": "6348dae3e334f450aa4b287e55238b4005890eaed1a87ff80538a9bd4d007538"
+    }
+  ],
+  "code_reference_scan": {
+    "roots": [
+      "crane_project",
+      "tests",
+      "tools"
+    ],
+    "suffixes": [
+      ".py",
+      ".sh"
+    ],
+    "outside_consumers": [],
+    "limitation": "Literal reference scan; historical docs and source manifests intentionally retain original paths. Dynamic external calls require restoration."
+  },
+  "restore": "From repository root: python -m tarfile -e archives/third_research_point/retired_diagnostics_20261022/sources.tar.gz <empty isolated directory>. Verify SHA against manifest before using. Do not overwrite current workspace.",
+  "archive_sha256": "b667995653ecb2fefab1fc99c5ffec68f365d24137bf03d6704dd9e60ed05929",
+  "archive_bytes": 43094,
+  "verification": {
+    "archive_members_match": true,
+    "remaining_code_sha_unchanged": 833,
+    "deleted_source_files": 15,
+    "deleted_bytecode": [
+      {
+        "path": "crane_project/tools/__pycache__/audit_port_size_spatial_labels_v1.cpython-38.pyc",
+        "bytes": 15209,
+        "sha256": "da2308984e056962afbc52388fcaf68dd442730a4ea5bfc7dc7350fc1691b55f"
+      },
+      {
+        "path": "crane_project/tools/__pycache__/analyze_port_size_auxiliary_conflict_v1.cpython-38.pyc",
+        "bytes": 11535,
+        "sha256": "e131662ee97710407db80a297b263b487a7c77c59dd8796486d60b4bbc2462e5"
+      },
+      {
+        "path": "crane_project/tools/__pycache__/audit_port_size_direction_evidence_v1.cpython-38.pyc",
+        "bytes": 19334,
+        "sha256": "2f75a62478b64a414c43866f7b1781a35a8e0e61b7f78a5b1b0349f17b958061"
+      },
+      {
+        "path": "crane_project/tools/__pycache__/analyze_port_size_direction_evidence_v1.cpython-38.pyc",
+        "bytes": 9200,
+        "sha256": "04391ce8e667f19e8d7a4240399078bc5e5e3d16fb1de1e410a0165e37ea4bb7"
+      },
+      {
+        "path": "crane_project/tools/__pycache__/analyze_port_size_v20_joint_v1.cpython-38.pyc",
+        "bytes": 23637,
+        "sha256": "a6201d6e485a9c778377da8e8407dca50e753d1a37aab6d211117f9ef42176af"
+      },
+      {
+        "path": "crane_project/tools/__pycache__/replay_port_size_seven_v1.cpython-313.pyc",
+        "bytes": 31348,
+        "sha256": "42edd0de12f7af33411b4273ef0044696a19fdea24d262c399b57a7f11078318"
+      },
+      {
+        "path": "crane_project/tools/__pycache__/replay_port_size_seven_v1.cpython-38.pyc",
+        "bytes": 16849,
+        "sha256": "3d9718ab46c9cc531469f3243afc298b9cf72204fa3119f455c23663f9cce359"
+      },
+      {
+        "path": "crane_project/tools/__pycache__/analyze_port_size_seven_replay_v1.cpython-313.pyc",
+        "bytes": 29054,
+        "sha256": "f66afa2b1499cf75a35a6a3507c7f32dc907f29e84f6e69384d3eb90835a233d"
+      },
+      {
+        "path": "crane_project/tools/__pycache__/analyze_port_size_seven_replay_v1.cpython-38.pyc",
+        "bytes": 18621,
+        "sha256": "e939daf575bcf8a621bf0774a513e692cff55e523ce80c42555049ab7aadeb65"
+      },
+      {
+        "path": "crane_project/tools/__pycache__/run_port_size_local_aux_v1.cpython-38.pyc",
+        "bytes": 13561,
+        "sha256": "a7062eb9c5e6cafbb35abb82c26e05c9d6a9829c9685db37970b80e4f42c426d"
+      },
+      {
+        "path": "crane_project/tools/__pycache__/analyze_port_size_local_aux_v1.cpython-38.pyc",
+        "bytes": 10483,
+        "sha256": "e7643338618cee72270f5e30c5c3c64129b7675ffc8525a338c8d16a07d6ec85"
+      },
+      {
+        "path": "tests/__pycache__/test_port_size_spatial_labels_v1.cpython-38-pytest-8.3.5.pyc",
+        "bytes": 12804,
+        "sha256": "0c719a5220e986b8deaf45cf0ed963d2d5e71ed746f7c6b041c2042ac2e1f9cc"
+      },
+      {
+        "path": "tests/__pycache__/test_port_size_direction_evidence_v1.cpython-38-pytest-8.3.5.pyc",
+        "bytes": 16034,
+        "sha256": "dc0ccc8361bfc41ee9cd5b8ecac5ce722a6fe13c95ee26aabefeb457000e67c0"
+      },
+      {
+        "path": "tests/__pycache__/test_port_size_direction_analysis_v1.cpython-38-pytest-8.3.5.pyc",
+        "bytes": 5021,
+        "sha256": "266604262b68213c252677fcb09b2e8171c34ab2dfa5c877822649d5de5e50d6"
+      },
+      {
+        "path": "tests/__pycache__/test_port_size_v20_joint_v1.cpython-38-pytest-8.3.5.pyc",
+        "bytes": 16758,
+        "sha256": "e85b725907200e9f66783acfc8749e6ca7dfa62e6e45e60d65ee2755d165f0eb"
+      },
+      {
+        "path": "tests/__pycache__/test_port_size_seven_replay_v1.cpython-38.pyc",
+        "bytes": 7242,
+        "sha256": "0c3e75aa57b807ca9ef04805fd101269191e3374531e5599b7d2f59f1e8e8424"
+      },
+      {
+        "path": "tests/__pycache__/test_port_size_seven_replay_v1.cpython-313.pyc",
+        "bytes": 10754,
+        "sha256": "d478a3a82b972d48b13e07619ae164bf456a6cd3b56efceeb15881995994a052"
+      }
+    ],
+    "status": "completed"
+  }
+}
