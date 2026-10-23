@@ -34,6 +34,7 @@ class SymNFLLoss(nn.Module):
                  kld_chunk_size=1024,
                  use_quality_target=False,
                  isolate_images=False,
+                 use_geometry_weight=True,
                  strict_finite=False):
         super(SymNFLLoss, self).__init__()
         assert use_sigmoid is True, 'Only sigmoid focal loss is supported.'
@@ -53,6 +54,10 @@ class SymNFLLoss(nn.Module):
         # Opt-in repair: historical configs keep batch-pooled computation
         # and identical checkpoint state keys.
         self.isolate_images = bool(isolate_images)
+        # Ablation switch: False keeps the identical Focal parameters, outer
+        # loss weight, labels, normalisation and _local_iter bookkeeping, and
+        # only forces mu == 1 by skipping the detached top-K geometry block.
+        self.use_geometry_weight = bool(use_geometry_weight)
         self.strict_finite = bool(strict_finite)
         
         # [降维改造] 注册不参与梯度的长整型 Buffer，使其随权重一起保存
@@ -165,7 +170,12 @@ class SymNFLLoss(nn.Module):
             for name, value in (('logits', pred_logits), ('boxes', pred_bboxes), ('GT', gt_bboxes)):
                 if value is not None and not torch.isfinite(value).all():
                     raise FloatingPointError('Nonfinite SymNFL ' + name)
-        if self.isolate_images:
+        if not self.use_geometry_weight:
+            # Ablation C=0: geometry weight is fully disabled. This takes
+            # precedence over isolate_images so the combination has one
+            # unambiguous meaning: mu == 1 either way.
+            pass
+        elif self.isolate_images:
             if gt_bboxes is None:
                 raise ValueError('Per-image SymNFL requires an explicit GT tensor (possibly empty)')
             mu_sym, quality = self._image_spatial_weights(

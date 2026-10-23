@@ -3,8 +3,39 @@ import torch
 from mmdet.core.bbox.assigners.assign_result import AssignResult
 from mmdet.core.bbox.assigners.base_assigner import BaseAssigner
 from mmrotate.core.bbox.builder import ROTATED_BBOX_ASSIGNERS
+from mmrotate.core.bbox.iou_calculators import rbbox_overlaps
+from mmrotate.core.bbox.transforms import obb2xyxy
 
 # 导入路径修正：从 core 跨目录调用 models/losses 中的算子
+
+
+def _diou_penalty(boxes1, boxes2):
+    """Center-distance penalty used by the original PolaAssigner.
+
+    This mirrors ``PolaAssigner.diou`` exactly: it returns the normalised
+    centre offset ``rho^2 / c^2`` in [0, 1], NOT a DIoU value. It is kept in a
+    separate function so the ablation can reuse it without touching history.
+    """
+    boxes1 = boxes1.reshape([-1, 1, 4])
+    center_x1 = (boxes1[..., 2] + boxes1[..., 0]) / 2
+    center_y1 = (boxes1[..., 3] + boxes1[..., 1]) / 2
+    center_x2 = (boxes2[:, 2] + boxes2[:, 0]) / 2
+    center_y2 = (boxes2[:, 3] + boxes2[:, 1]) / 2
+    out_max_xy = torch.max(boxes1[..., 2:], boxes2[:, 2:])
+    out_min_xy = torch.min(boxes1[..., :2], boxes2[:, :2])
+    inter_diag = (center_x2 - center_x1) ** 2 + (center_y2 - center_y1) ** 2
+    outer = torch.clamp((out_max_xy - out_min_xy), min=0.00000001)
+    outer_diag = (outer[..., 0] ** 2) + (outer[..., 1] ** 2)
+    dious = (inter_diag) / outer_diag
+    return torch.clamp(dious, min=0, max=1.0)
+
+
+def iou_diou_cost(pred_bboxes, gt_bboxes):
+    """``1 - RIoU + rho^2/c^2`` as used by the original POLA geometric term."""
+    iou = rbbox_overlaps(pred_bboxes, gt_bboxes)
+    xyxy_pred = obb2xyxy(pred_bboxes, 'le90')
+    xyxy_gt = obb2xyxy(gt_bboxes, 'le90')
+    return 1.0 - (iou - _diou_penalty(xyxy_pred, xyxy_gt))
 
 @ROTATED_BBOX_ASSIGNERS.register_module(force=True)
 class SymPOLAAssigner(BaseAssigner):
@@ -19,8 +50,12 @@ class SymPOLAAssigner(BaseAssigner):
                  topk: int = 6,
                  o2m_warmup_iters: int = 0,
                  o2m_topk: int = 9,
+                 cost_reg_mode: str = 'kld',
                  strict_finite: bool = False):
         super().__init__()
+        if cost_reg_mode not in ('kld', 'iou'):
+            raise ValueError('cost_reg_mode must be "kld" or "iou"')
+        self.cost_reg_mode = cost_reg_mode
         self.cost_class = cost_class
         self.cost_reg = cost_reg
         self.o2m = o2m
@@ -77,11 +112,16 @@ class SymPOLAAssigner(BaseAssigner):
         pos_cost_class = self.focal_loss_alpha * ((1 - out_prob) ** self.focal_loss_gamma) * (-(out_prob + 1e-8).log())
         cost_class = pos_cost_class[:, gt_labels]
 
-        from mmrotate.models.losses.sym_kld_calculator import sym_kld
-        
-        raw_cost_reg = sym_kld(pred_bboxes[:, None, :].expand(-1, num_gt, -1),
-                               gt_bboxes[None, :, :].expand(num_bboxes, -1, -1),
-                               eps=self.eps)
+        if self.cost_reg_mode == 'kld':
+            from mmrotate.models.losses.sym_kld_calculator import sym_kld
+
+            raw_cost_reg = sym_kld(pred_bboxes[:, None, :].expand(-1, num_gt, -1),
+                                   gt_bboxes[None, :, :].expand(num_bboxes, -1, -1),
+                                   eps=self.eps)
+        else:
+            # Controlled ablation of the assignment geometry only: same class
+            # cost, same tau schedule, same candidate set and same top-k ramp.
+            raw_cost_reg = iou_diou_cost(pred_bboxes, gt_bboxes)
         if self.strict_finite and (not torch.isfinite(pred_logits).all()
                                   or not torch.isfinite(raw_cost_reg).all()):
             raise FloatingPointError('Nonfinite SymPOLA logits or regression cost')
