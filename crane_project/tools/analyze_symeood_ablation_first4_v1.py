@@ -138,7 +138,7 @@ def run(args):
     out = args.out.resolve()
     out.mkdir(exist_ok=False, parents=True)
     summary, frames, comparisons = {}, [], []
-    for group in GROUPS:
+    for group in args.groups:
         sweep = json.loads((base/group/'ckpt_sweep/sweep_results.json').read_text())
         logrows = [json.loads(l) for p in (base/group).glob('*.log.json')
                    for l in p.read_text().splitlines()]
@@ -252,4 +252,6 @@ if __name__ == '__main__':
     p = argparse.ArgumentParser()
     p.add_argument('--snapshot', type=Path, required=True)
     p.add_argument('--out', type=Path, required=True)
+    p.add_argument('--groups', nargs='+', default=list(GROUPS),
+                   choices=('000', '100', '010', '001', '110', '101', '011', '111'))
     run(p.parse_args())
