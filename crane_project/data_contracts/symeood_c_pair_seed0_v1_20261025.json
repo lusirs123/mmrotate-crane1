@@ -1,0 +1,232 @@
+{
+  "state": "FROZEN",
+  "protocol": "symeood_C110_C111_native_pair_seed0_v1",
+  "date": "2026-10-25",
+  "groups": [
+    "110",
+    "111"
+  ],
+  "run_order": [
+    "110",
+    "111"
+  ],
+  "seed": 0,
+  "runs_each": 1,
+  "epochs_each": 24,
+  "world_size": 2,
+  "per_rank_batch": 2,
+  "physical_gpus": [
+    2,
+    3
+  ],
+  "optimizer": {
+    "type": "SGD",
+    "lr": 0.0025,
+    "momentum": 0.9,
+    "weight_decay": 0.0001
+  },
+  "lr": {
+    "policy": "step",
+    "warmup": "linear",
+    "warmup_iters": 1000,
+    "warmup_ratio": 0.001,
+    "step": [
+      16,
+      22
+    ]
+  },
+  "clip": {
+    "grad_clip": {
+      "max_norm": 10,
+      "norm_type": 2
+    }
+  },
+  "base_config": "/media/omnisky/personal_files/ljj/symEOOD/crane_project/configs/crane_symeood_k1_port_day2night_aug_b_v1.py",
+  "configurations": {
+    "110": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_c_pair_seed0_20261025_v2/configs/Coff_seed0.py",
+    "111": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_c_pair_seed0_20261025_v2/configs/Con_seed0.py"
+  },
+  "config_sha256": {
+    "110": "0fd0b8c6870336490e4b965a3dd94d13ecb99654bd3d6a36da131680d69d2fff",
+    "111": "4e28e95aa41b2efd5aa2d54fb500b7ed13c856675f0ffa6d5718bc580e6b4d65"
+  },
+  "native_gate_path": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_c_pair_seed0_20261025_v1/native_gate",
+  "launch_environment": {
+    "CUDA_HOME": null,
+    "LD_LIBRARY_PATH": "/media/omnisky/4435947f-033c-4e45-904d-f2c4d0bfbf70/Anaconda3/envs/mmrotljj/lib/python3.8/site-packages/cv2/../../lib64:",
+    "CONDA_PREFIX": null,
+    "CUDA_VISIBLE_DEVICES": "2,3",
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1"
+  },
+  "launch_environment_evidence": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_c_pair_seed0_20261025_v1/launch_environment_reconstruction.json",
+  "native_gate_sha256": "cb8fc18b783ddf06a201579ed936f03ef2728f2bb060e1ee688d57b8492789e6",
+  "runtime_lock_sha256": "4642a5060613a759db629afc4797a834205d9ed50e32b696667369e0372682ab",
+  "pretrained": {
+    "path": "/home/omnisky/.cache/torch/hub/checkpoints/resnet50-0676ba61.pth",
+    "sha256": "0676ba61b6795bbe1773cffd859882e5e297624d384b6993f7c9e683e722fb8a"
+  },
+  "common_initialization": "fresh independent CPU initialization seed0; exact full parameter/buffer and RNG identity required; no historical detector weights",
+  "input_pairing": "same sampler,worker seeds,batch2,augmentations; compare everyrank/epoch input hash, preserve records",
+  "training": "actual tools/train.py native DDP FP32; intermediates stayGPU; complete runs sequential; no offload or recompute",
+  "additions": "identity/state/input logging only, native deterministic4step invariance accepted; no USG counterfactual or gradient probe",
+  "candidate_epochs": [
+    16,
+    18,
+    20,
+    22,
+    24
+  ],
+  "online_VAL_epochs": [
+    2,
+    4,
+    6,
+    8,
+    10,
+    12,
+    14,
+    16,
+    18,
+    20,
+    22,
+    24
+  ],
+  "selection": {
+    "r_center_delta": 0.005,
+    "mcml_limit": 5,
+    "weight_sim": 0.7,
+    "weight_real": 0.3,
+    "soft_w_tdr": 0.35,
+    "soft_w_r_center": 0.25,
+    "soft_w_aci": 0.2,
+    "soft_w_angle": 0.2
+  },
+  "center_thresh_px": 15,
+  "ep24_role": "auxiliary fixed budget, not second main selector",
+  "TEST": "each original VAL selected version only; same evaluator, no TEST-driven reselection",
+  "depth": false,
+  "comparisons": {
+    "primary": [
+      "fullframe center correct coverage",
+      "RIoU>=.5 hit count/output coverage",
+      "MCML max/mean and failureevents"
+    ],
+    "required_costs": [
+      "Real/Sim and pervideo RIoU,DFR,ACI",
+      "Sim A-RMSE",
+      "samevalidpairsDFR/ACI",
+      "angle penalty decomposition"
+    ],
+    "size": "auxiliary"
+  },
+  "adoption": "No automatic model replacement or posthoc utility score. Report all tradeoffs. No numeric acceptable-cost gate supplied; final adoption remains review decision.",
+  "inference_limit": "one paired rerun at same seed0; not independent-seed stability or significance; retain old and new results",
+  "stop": "exactly2complete runs then stop; numerical/identity error stops queue; no bad-score retries or extension; no automaticresume",
+  "downstream": "110cannot inherit historicalB midpoint/LVSR results; no new downstream run authorized here",
+  "time": "2026-10-25 16:08:04",
+  "native_acceptance": {
+    "passed": true,
+    "cases": 5,
+    "checks": [
+      {
+        "reference": "B",
+        "peer": "111",
+        "rank": 0,
+        "steps": 4,
+        "all_functional_fields_bitwise_equal": true
+      },
+      {
+        "reference": "B",
+        "peer": "B_trace",
+        "rank": 0,
+        "steps": 4,
+        "all_functional_fields_bitwise_equal": true
+      },
+      {
+        "reference": "110",
+        "peer": "110_trace",
+        "rank": 0,
+        "steps": 4,
+        "all_functional_fields_bitwise_equal": true
+      },
+      {
+        "reference": "B",
+        "peer": "111",
+        "rank": 1,
+        "steps": 4,
+        "all_functional_fields_bitwise_equal": true
+      },
+      {
+        "reference": "B",
+        "peer": "B_trace",
+        "rank": 1,
+        "steps": 4,
+        "all_functional_fields_bitwise_equal": true
+      },
+      {
+        "reference": "110",
+        "peer": "110_trace",
+        "rank": 1,
+        "steps": 4,
+        "all_functional_fields_bitwise_equal": true
+      }
+    ],
+    "hook_epoch_conservation_events": 8,
+    "initial_parameters_sha256": "666f287e04a338bb499ad983f245d0bf5d7dff0fb29258e3711c87350f44adf5",
+    "initial_state_sha256": "2f8551c3bac98501a2d7f86961d903509c4abee551b5204e2c5f9f9df14f7a9f",
+    "initial_parameters_equal_across_ranks": true,
+    "peak_allocated_mib": 2598.390625,
+    "peak_reserved_mib": 2818.0,
+    "GPU_offload": false,
+    "formal_training": false
+  },
+  "native_runtime": {
+    "cudnn": 8500,
+    "torch": "1.13.1+cu117",
+    "libraries": {
+      "/media/omnisky/4435947f-033c-4e45-904d-f2c4d0bfbf70/Anaconda3/envs/mmrotljj/lib/python3.8/site-packages/mmcv/_ext.cpython-38-x86_64-linux-gnu.so": "3d9ba9b75b4d323a6ad09d3be02f30b1d1139d769a9670c93188ab81f87cbddf",
+      "/media/omnisky/4435947f-033c-4e45-904d-f2c4d0bfbf70/Anaconda3/envs/mmrotljj/lib/python3.8/site-packages/torch/lib/libc10.so": "09ae296100b80d386a57e97ba7e700c7ad372eb7c57637ec0534130f4db52b9a",
+      "/media/omnisky/4435947f-033c-4e45-904d-f2c4d0bfbf70/Anaconda3/envs/mmrotljj/lib/python3.8/site-packages/torch/lib/libc10_cuda.so": "911bd6aab494300dad5232ac7ba146fcfb96cb45945dec2004ac114cec3129e3",
+      "/media/omnisky/4435947f-033c-4e45-904d-f2c4d0bfbf70/Anaconda3/envs/mmrotljj/lib/python3.8/site-packages/torch/lib/libcublas.so.11": "f6acd947c28d545b81e0201959f0f5cde58afe3acf5316f46b4a29dabccfda5a",
+      "/media/omnisky/4435947f-033c-4e45-904d-f2c4d0bfbf70/Anaconda3/envs/mmrotljj/lib/python3.8/site-packages/torch/lib/libcublasLt.so.11": "2e7ea25404dfe83df9679c5410ca3d28ba2388d7437cec56d19b9e3c0d0eaca0",
+      "/media/omnisky/4435947f-033c-4e45-904d-f2c4d0bfbf70/Anaconda3/envs/mmrotljj/lib/python3.8/site-packages/torch/lib/libcudart-e409450e.so.11.0": "510212e8f5d3bc4fd079daef28621ba5197ee57a7c0809d915a260ab9b183318",
+      "/media/omnisky/4435947f-033c-4e45-904d-f2c4d0bfbf70/Anaconda3/envs/mmrotljj/lib/python3.8/site-packages/torch/lib/libcudnn.so.8": "1c7be39eda616edc79848ffa6ff8c4a2dd3c3e241fb78aa874c4378b03cfef19",
+      "/media/omnisky/4435947f-033c-4e45-904d-f2c4d0bfbf70/Anaconda3/envs/mmrotljj/lib/python3.8/site-packages/torch/lib/libcudnn_cnn_infer.so.8": "8852118bdab53cf1ded93516962e8951e801546cb58ba26b04d66bd562925dd0",
+      "/media/omnisky/4435947f-033c-4e45-904d-f2c4d0bfbf70/Anaconda3/envs/mmrotljj/lib/python3.8/site-packages/torch/lib/libcudnn_cnn_train.so.8": "454915ad6144fc0795e720e5f61c492d8e3963f15e107a56adafb47e9c96e8c9",
+      "/media/omnisky/4435947f-033c-4e45-904d-f2c4d0bfbf70/Anaconda3/envs/mmrotljj/lib/python3.8/site-packages/torch/lib/libcudnn_ops_infer.so.8": "b24edb9397717304602873ff018a8b25a14e87a6980f2ccb771a0b81fb352b15",
+      "/media/omnisky/4435947f-033c-4e45-904d-f2c4d0bfbf70/Anaconda3/envs/mmrotljj/lib/python3.8/site-packages/torch/lib/libcudnn_ops_train.so.8": "f67f0580f831d2e2d86be043dd951eedc9e6bfc60323da36b559201e6c6b9e10",
+      "/media/omnisky/4435947f-033c-4e45-904d-f2c4d0bfbf70/Anaconda3/envs/mmrotljj/lib/python3.8/site-packages/torch/lib/libtorch.so": "96cf53c4d33b26c7c2ece6c4d6e2c66030014c2d50a653300b1c3786e2392a96",
+      "/media/omnisky/4435947f-033c-4e45-904d-f2c4d0bfbf70/Anaconda3/envs/mmrotljj/lib/python3.8/site-packages/torch/lib/libtorch_cpu.so": "e78d1ff6944d8634a4b5d3e7b816937d2d0a28b0a65dfc1a5bfcd79e2d643e8e",
+      "/media/omnisky/4435947f-033c-4e45-904d-f2c4d0bfbf70/Anaconda3/envs/mmrotljj/lib/python3.8/site-packages/torch/lib/libtorch_cuda.so": "e06771104c85140bff21250fb7b2a20b447005b58a71c41130357b2644993557",
+      "/media/omnisky/4435947f-033c-4e45-904d-f2c4d0bfbf70/Anaconda3/envs/mmrotljj/lib/python3.8/site-packages/torch/lib/libtorch_cuda_cpp.so": "23464a96e38fbccaeb08bdc05405403e89a513bb0121164611ff123c9f82b4dd",
+      "/media/omnisky/4435947f-033c-4e45-904d-f2c4d0bfbf70/Anaconda3/envs/mmrotljj/lib/python3.8/site-packages/torch/lib/libtorch_cuda_cu.so": "637c6b12c15a0a4cf982feb3a59b49afc399317d2d6d16ade069a15b94b391de",
+      "/media/omnisky/4435947f-033c-4e45-904d-f2c4d0bfbf70/Anaconda3/envs/mmrotljj/lib/python3.8/site-packages/torch/lib/libtorch_global_deps.so": "7d1e88ca697f976d1c1db167cc432dfdfa75644935b8d74bee37440fb937f236",
+      "/media/omnisky/4435947f-033c-4e45-904d-f2c4d0bfbf70/Anaconda3/envs/mmrotljj/lib/python3.8/site-packages/torch/lib/libtorch_python.so": "9d0cb745a3346af6b19b66a10aea501d8624f35eb38ddbf6883038a22b0322fb",
+      "/media/omnisky/4435947f-033c-4e45-904d-f2c4d0bfbf70/Anaconda3/envs/mmrotljj/lib/python3.8/site-packages/torchvision.libs/libcudart.782fcab0.so.11.0": "e409450e09ff17eb27ee4eabaec5f21ec7d03e8d41885a5234b8713f81b5ea72",
+      "/usr/lib/x86_64-linux-gnu/libcuda.so.570.169": "47063b33d19dfdb9c5e49d8ac2d945328d3e703c0384751ae6dc0f27b08075d7"
+    },
+    "formal_flags": {
+      "cudnn_deterministic": false,
+      "cudnn_benchmark": false,
+      "cudnn_tf32": true,
+      "matmul_tf32": false
+    }
+  },
+  "full_protocol_sha256": "6130b8886c9dfc679492c12106a65c8f6b5daa4daed6f81a94c17c6f85d615b0",
+  "data_inventory_count": 3445,
+  "source_count": 328,
+  "source_tool_sha256": {
+    "crane_project/tools/gate_symeood_c_pair_v1.py": "28894fc2d60b7e0f7febaa71ffb39641cb973aa5288c5b578aa9f9f0a15d8195",
+    "crane_project/tools/native_symeood_b111_entry_check_v1.py": "a615abe4e8434a7549e2c50927808737778c7c929112ab29690e241587af31b1",
+    "crane_project/tools/run_symeood_c_pair_v1.py": "437dd89885453365a72956084d4ac18705732852202cc23ddf43e8ee1a025ac1",
+    "crane_project/tools/analyze_symeood_c_pair_v1.py": "073be6f8ece0d0fc7a62dcca25a4567a8d48cb8cdbf09a9828b5cb8f2a8a721e",
+    "tests/test_symeood_c_pair_v1.py": "ef78e5775c2ecae46af155d5e773563738d81285f99b9c30668475f1ee997d86"
+  },
+  "initial_launch_failure": {
+    "directory": "work_dirs/symeood_c_pair_seed0_20261025_v1/110",
+    "updates": 0,
+    "stage": "before_run environment assertion",
+    "fixed_by": "exact gate parent environment propagation, no guard relaxation",
+    "performance_retry": false
+  }
+}

@@ -78,7 +78,9 @@ def main():
                 optimizer_tensor_state=tensor_digest(states),optimizer_groups=optimizer['param_groups'],
                 state_sha256=tensor_digest(self.model.state_dict().items()),parameters_sha256=tensor_digest(self.model.named_parameters()),buffers_sha256=tensor_digest(self.model.named_buffers()),
                 counters=[self.model.bbox_head.assigner._local_call_count,int(self.model.bbox_head.loss_cls._local_iter)],
-                nonzero_gradient_tensors=self.nonzero)
+                nonzero_gradient_tensors=self.nonzero,
+                peak_allocated_mib=torch.cuda.max_memory_allocated()/2**20,
+                peak_reserved_mib=torch.cuda.max_memory_reserved()/2**20)
             write(Path(runner.work_dir)/('native_steps_rank%d.jsonl'%self.rank),row)
             t.clear()
 
