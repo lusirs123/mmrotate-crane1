@@ -1,0 +1,261 @@
+{
+  "protocol": "symeood_cross_entry_review_v1",
+  "date": "2026-10-25",
+  "bounded_engineering_only": true,
+  "original_protocol": {
+    "state": "FROZEN_BEFORE_SHORT_RUN",
+    "pairs": [
+      [
+        "100",
+        "iou",
+        "U"
+      ],
+      [
+        "101",
+        "iou",
+        "G"
+      ],
+      [
+        "110",
+        "kld",
+        "U"
+      ],
+      [
+        "111",
+        "kld",
+        "G"
+      ]
+    ],
+    "performance": [
+      "original selected VAL",
+      "VAL epochs16,18,20,22,24"
+    ],
+    "TEST": false,
+    "depth": false,
+    "short": {
+      "steps_per_path": 20,
+      "paths": [
+        "old native",
+        "USG bare",
+        "USG full production hook"
+      ],
+      "world_size": 2,
+      "per_rank_batch": 2,
+      "source": "Actual native DistributedGroupSampler, seed0,2workers/rank,batch2; first10 batches of sampler epochs0/1(early),23/24(mature); live independent loaders verify every tensor+metadata digest against frozen prefix",
+      "states": {
+        "early": {
+          "weights": "fresh common native CPU initialization",
+          "optimizer": "fresh native SGD",
+          "counters": "0/0"
+        },
+        "mature": {
+          "weights": "fixed old epoch24 of corresponding pair shared by all paths",
+          "optimizer": "same old epoch24 optimizer shared by all paths",
+          "counters": "diagnostically injected assigner=2*checkpoint.meta.iter,NFL=5*meta.iter; NOT historical counter/RNG restoration"
+        }
+      },
+      "hook_boundary": "two engineering mini-epochs of10 steps; actual production hook including probe at first boundary and next-step check; not historical epoch replay",
+      "boundaries": [
+        0,
+        998,
+        999,
+        1000,
+        1998,
+        1999,
+        2000,
+        3998,
+        3999,
+        4000
+      ],
+      "numerical": [
+        "det:old,bare,full",
+        "nondet:old,old_repeat,bare,full; repeated native estimates short numerical floor only"
+      ],
+      "stop": "20 steps maximum; record first divergence, never extend to find desired agreement",
+      "optimizer": "native SGD lr.0025 momentum.9 wd.0001, historical warmup/step schedule, clip10",
+      "assets": "Four common initial state files; four fixed old epoch24 states; frozen input manifests; no new model selection",
+      "early_mature_note": "Synthetic10+10 minibatch prefixes, not actual complete historical epochs; production probe after step10(epoch1/24), then compare step11 and next actual loader draw",
+      "boundary_note": "Independent single updates at each preset iteration, reset common initial state per test; not an extra continuous training run"
+    },
+    "interpretation": "No24epoch rerun; fresh short engineering states not historical training replay; do not fabricate missing historical input or initialization traces",
+    "code_sha256": {
+      "crane_project/tools/audit_symeood_cross_entry_identity_v1.py": "4b6bf7dec0391f97aea6a163f0a292e2789d71bebee6a5cfe088274db268797d",
+      "crane_project/tools/audit_symeood_cross_entry_performance_v1.py": "e2016a68981700cf35d07970e0f12cb81ce1183264a82c1ccb0613eb0e732544",
+      "crane_project/tools/audit_symeood_cross_entry_short_v1.py": "ea42d2113af823015636234520f46fb1868822ea3f83d2a6f99f73309648b27d"
+    },
+    "input_manifest_sha256": {
+      "inputs_rank0.json": "b89712530afd162f19e3f57e079d0aaa3bf660d3e0b7f6a4d7fe6c7aaa4542fb",
+      "inputs_rank1.json": "80777d6812b370d51e55d8e140ed19ae417fa7ab72f9f4fcc87f7ad828c89bd6"
+    }
+  },
+  "resource_amendment": {
+    "date": "2026-10-25",
+    "reason": "User explicitly requested lower GPU memory and slower execution",
+    "preserve_completed": [
+      "det100early",
+      "det100mature",
+      "det101early"
+    ],
+    "aborted": "det101mature; interrupted to lower resources, not a numerical failure",
+    "unchanged": [
+      "pairs",
+      "common parameters",
+      "batch2 per rank",
+      "world2",
+      "loss/assignment/LR",
+      "frozen live loader inputs",
+      "20steps continuous path",
+      "no TEST/depth/24epoch retraining"
+    ],
+    "resource_mode": "one live model per rank, serial paths; torch.save_on_cpu(pin_memory=False), no recomputation or dtype conversion; allocator cap0.28 of8GiB; empty unused cache between steps",
+    "comparison": "exact SHA for every tensor field each step; bounded deterministic2048samples for magnitude, NOT globalLinf; full numeric comparison retained only steps0/10",
+    "limits": "CUDA/CPU transfers and allocator timing differ from historical execution; nondeterministic-mode numerical variation does not reconstruct historical variance",
+    "source_sha256": {
+      "crane_project/tools/audit_symeood_cross_entry_history_v1.py": "58a02a289673abec80b07de4803525283f2e241ee4ad6a07afbd3fb2c26f080e",
+      "crane_project/tools/audit_symeood_cross_entry_boundaries_v1.py": "76e7ba4e9596ca07330aa567b4c832b0c2b229224989e4430ee7feb7779f011f",
+      "crane_project/tools/audit_symeood_cross_entry_identity_v1.py": "4b6bf7dec0391f97aea6a163f0a292e2789d71bebee6a5cfe088274db268797d",
+      "crane_project/tools/audit_symeood_cross_entry_performance_v1.py": "e2016a68981700cf35d07970e0f12cb81ce1183264a82c1ccb0613eb0e732544",
+      "crane_project/tools/audit_symeood_cross_entry_short_v1.py": "ea42d2113af823015636234520f46fb1868822ea3f83d2a6f99f73309648b27d",
+      "crane_project/tools/audit_symeood_cross_entry_serial_v1.py": "73d48cfc800290820c7270abe13e863407ba2cdfd2d9cf3150d77461a156782c"
+    }
+  },
+  "queue_contract": {
+    "frozen_before_pending_queue": true,
+    "source_sha256": {
+      "crane_project/tools/audit_symeood_cross_entry_history_v1.py": "58a02a289673abec80b07de4803525283f2e241ee4ad6a07afbd3fb2c26f080e",
+      "crane_project/tools/audit_symeood_cross_entry_boundaries_v1.py": "be209a7efedcfdece9be0a8c7f8b6084343fd243be28679d9b58521be9ffb550",
+      "crane_project/tools/audit_symeood_cross_entry_identity_v1.py": "4b6bf7dec0391f97aea6a163f0a292e2789d71bebee6a5cfe088274db268797d",
+      "crane_project/tools/audit_symeood_cross_entry_performance_v1.py": "e2016a68981700cf35d07970e0f12cb81ce1183264a82c1ccb0613eb0e732544",
+      "crane_project/tools/audit_symeood_cross_entry_short_v1.py": "ea42d2113af823015636234520f46fb1868822ea3f83d2a6f99f73309648b27d",
+      "crane_project/tools/audit_symeood_cross_entry_serial_v1.py": "73d48cfc800290820c7270abe13e863407ba2cdfd2d9cf3150d77461a156782c",
+      "crane_project/tools/queue_symeood_cross_entry_review_v1.py": "c5fbebe9c1c8992e69b568206d13c9a6a9a38963d31aa2d452722f17c763f247",
+      "crane_project/utils/symeood_usg_v1.py": "4d2681750175a1e13301197551c860cc3cd17b919577807c8fe9c6d5549e697f"
+    },
+    "resource": "One live model/rank, saved tensors CPU, PyTorch allocator fraction.28 per GPU; no precision/batch/loss changes",
+    "boundaries": [
+      0,
+      998,
+      999,
+      1000,
+      1998,
+      1999,
+      2000,
+      3998,
+      3999,
+      4000
+    ],
+    "S_tolerance": "G versus S value relative error <=4FP32eps; exact per-level formula and parameter gradients; no G graph path; other losses exact",
+    "exit": "Stop on error, no retry/tuning, no formal24epoch training, no TEST/depth, no deletion"
+  },
+  "results": {
+    "receipt_files_verified": 313,
+    "selection_versions_verified": 8,
+    "deterministic_comparisons": 640,
+    "deterministic_equal": 640,
+    "nondeterministic_comparisons": 960,
+    "nondeterministic_first_cases": 48,
+    "all_firsts_parameter_grad_step0": true,
+    "boundary_comparisons": 160,
+    "boundary_equal": 160,
+    "hook_state_events": 64,
+    "S_checks": 8,
+    "serial_peak_allocated_mib": 1659.74853515625,
+    "serial_peak_reserved_mib": 2268.0,
+    "common_sources": 316,
+    "historical_updates_each": 15360,
+    "passed": true,
+    "TEST": false,
+    "depth": false,
+    "limits": [
+      "Current-source bounded diagnostic is not historical complete replay.",
+      "Mature uses shared oldep24 weights/optimizer plus injected counts; not recovered historical schedule state.",
+      "Low-VRAM serial CPU transfers change timing/residency; no full historical noise estimate.",
+      "Exact byte SHA each step; numerical Linf is full only at steps0/10; bounded samples elsewhere.",
+      "DDP parameter gradients checked after reduction; retained logits gradients are local.",
+      "No24epoch rerun, no original checkpoint reselection or score substitution."
+    ]
+  },
+  "final_integrity": {
+    "time": "2026-10-25 11:31:28",
+    "usg_frozen_sources_unchanged": 332,
+    "frozen_input_files_verified": 80,
+    "current_diagnostic_assets": {
+      "work_dirs/symeood_cross_entry_review_20261025_v1/identity/initial_100.pth": {
+        "sha256": "59e6f4d8ee189fd70da7ecea6b74ee5442ed3d45711b6dab9630d4635886322a",
+        "bytes": 126575161,
+        "mtime": 1792891108.48834
+      },
+      "work_dirs/symeood_ablation_v1/100/epoch_24.pth": {
+        "sha256": "7018defd0e07c679ff331617d0f4ee5a23a5ca1240fe5425bcf6ce9640a8e742",
+        "bytes": 251970215,
+        "mtime": 1792730263.9601007
+      },
+      "work_dirs/symeood_cross_entry_review_20261025_v1/identity/initial_101.pth": {
+        "sha256": "8dc3feadecc5c05516d105946716e0367e48c47ed80130fded10eb89f21434c0",
+        "bytes": 126575161,
+        "mtime": 1792891111.7722664
+      },
+      "work_dirs/symeood_ablation_v1/101/epoch_24.pth": {
+        "sha256": "0de260ce8f2a77db3a29cf4fe21bc52b3ba4a17da0e50ca75f305d6fc109816f",
+        "bytes": 251970151,
+        "mtime": 1792770267.1773195
+      },
+      "work_dirs/symeood_cross_entry_review_20261025_v1/identity/initial_110.pth": {
+        "sha256": "32427cb449baa4c81bcfdc6e40ee1343854ab997d9ec545fb715ca1377ad7d82",
+        "bytes": 126575161,
+        "mtime": 1792891114.9079833
+      },
+      "work_dirs/symeood_ablation_v1/110/epoch_24.pth": {
+        "sha256": "615e2852633d855b4397f387f308f6bebcc3f57f958df79497b6f42f806e185f",
+        "bytes": 251970087,
+        "mtime": 1792763023.2094421
+      },
+      "work_dirs/symeood_cross_entry_review_20261025_v1/identity/initial_111.pth": {
+        "sha256": "b46f052c0ccd95401dd446d659972e50b0cf3608aa9f5ee3372a3a63890c1483",
+        "bytes": 126575161,
+        "mtime": 1792891118.1392126
+      },
+      "work_dirs/symeood_ablation_v1/111/epoch_24.pth": {
+        "sha256": "fb71e6c87fc286d7e784ede9f5f47fa24465deaed245aa8259c1afac16b847b1",
+        "bytes": 251970087,
+        "mtime": 1792784489.1065254
+      }
+    },
+    "note": "Asset hashes recorded at completion, not backdated historical whole-run initialization/input evidence."
+  },
+  "receipts_manifest_sha256": "00bb72b511cdfa718f2b9700cd249293bf4411042bb1832512ad77d26d77ebd4",
+  "analysis_verification": {
+    "passed": true,
+    "receipt_manifest_sha256": "00bb72b511cdfa718f2b9700cd249293bf4411042bb1832512ad77d26d77ebd4",
+    "source_sha256": "d9442336c666604e3e29b38dea62e7a126e27aa47e58ac93f35b3d5d69d4266b",
+    "outputs": {
+      "first_divergences.csv": "fee23cb256fd4f0c55a5ba70e997c6d3ccd1bb0d3ddcd3ac9933c7c0fce7d66a",
+      "bare_full_direct.json": "2c7b526b2ee3a69ab8f8bca35c2ba9d79cc8f7f1a4587d6dd6ec8ccd98b6d3c6",
+      "hook_conservation.json": "55760b4a12188ecf38d9183024c698242882299cc427580f332802085a3fa6fd",
+      "same_epoch_curve_summary.csv": "d853ec00698c160adca8790db15967f623ba033fc6a7d9b42efacbbbc8ff9bae",
+      "training_identity_inventory.csv": "0bcd702879ff0dd06a7ed1c8e2b7110796d472c06e865588a802950333bf9d46",
+      "numeric_full_steps0_10.csv": "3372f75e04d3c0f15d89cac9dadf2740b9caedc94a153eca32ec0510d3d9dba3",
+      "short_path_summary.csv": "584dcc80227e08d054332c5f27608cc658119d230808c2fe50d490e8518ff4b7",
+      "analysis.json": "50f0efe515346a0492a808a373159ebeff8569c762e82a3d6e2df70b71e14134",
+      "S_contract_checks.json": "f9a21e76f18e1a996f2d52142c7b8b60d463b3e31a4d025b40f5b768e0f1666b"
+    }
+  },
+  "performance_sha256": {
+    "provenance.json": "46a69bb0787cbcf50a3ce126f1c4be008237fcbefecc6a79ec2aece0dcce3cda",
+    "performance_differences.csv": "9a2afcde1db989ccaf67e207d6d79823a9df753d752bf45c24f1aef1cbd8e9dd",
+    "performance_values.csv": "270c746a32269c0db3f466444da98ceb3f3473d7f5b2b334beb56887f30f1bb1",
+    "selection_verification.json": "62486110b26cbad354a22c46cf7c569ee08304dea579c6f2dfaca2bd153b4f05"
+  },
+  "final_source_sha256": {
+    "crane_project/tools/audit_symeood_cross_entry_history_v1.py": "58a02a289673abec80b07de4803525283f2e241ee4ad6a07afbd3fb2c26f080e",
+    "crane_project/tools/audit_symeood_cross_entry_boundaries_v1.py": "be209a7efedcfdece9be0a8c7f8b6084343fd243be28679d9b58521be9ffb550",
+    "crane_project/tools/summarize_symeood_cross_entry_review_v1.py": "d9442336c666604e3e29b38dea62e7a126e27aa47e58ac93f35b3d5d69d4266b",
+    "crane_project/tools/audit_symeood_cross_entry_identity_v1.py": "4b6bf7dec0391f97aea6a163f0a292e2789d71bebee6a5cfe088274db268797d",
+    "crane_project/tools/queue_symeood_cross_entry_review_v1.py": "c5fbebe9c1c8992e69b568206d13c9a6a9a38963d31aa2d452722f17c763f247",
+    "crane_project/tools/audit_symeood_cross_entry_performance_v1.py": "e2016a68981700cf35d07970e0f12cb81ce1183264a82c1ccb0613eb0e732544",
+    "crane_project/tools/audit_symeood_cross_entry_short_v1.py": "ea42d2113af823015636234520f46fb1868822ea3f83d2a6f99f73309648b27d",
+    "crane_project/tools/audit_symeood_cross_entry_serial_v1.py": "73d48cfc800290820c7270abe13e863407ba2cdfd2d9cf3150d77461a156782c",
+    "tests/test_symeood_cross_entry_review_v1.py": "4010a3ee0c8291a01dca06d5ff32947d42212e52e76033e4c5e14dbaf556c14d"
+  },
+  "interpretation": "Bounded current paths equal deterministically; historical24epoch equivalence unproven; do not substitute oldU/G for newS controls; no automatic long reruns"
+}
