@@ -1,0 +1,189 @@
+{
+  "protocol": "symeood_B111_canonical_CPU_preparation_v1",
+  "state": "CPU_READY_NATIVE_GPU_PENDING",
+  "date": "2026-10-25",
+  "user_scope": "CPU preparation only; native GPU checks arranged later; do not start or queue GPU training",
+  "results": {
+    "state": "CPU_READY_NATIVE_GPU_PENDING",
+    "CPU_identity_cases": 6,
+    "augmented_input_batches": 24,
+    "first_batches_saved": 2,
+    "canonical_plan_aliases_same_except_workdir": true,
+    "complete_initial_state_sha256": "2f8551c3bac98501a2d7f86961d903509c4abee551b5204e2c5f9f9df14f7a9f",
+    "parameters_sha256": "666f287e04a338bb499ad983f245d0bf5d7dff0fb29258e3711c87350f44adf5",
+    "additional_class_sources": {
+      "backbone": {
+        "module": "mmdet.models.backbones.resnet",
+        "name": "ResNet",
+        "file": "/media/omnisky/4435947f-033c-4e45-904d-f2c4d0bfbf70/Anaconda3/envs/mmrotljj/lib/python3.8/site-packages/mmdet/models/backbones/resnet.py",
+        "sha256": "dce1c414062e6f1878378aa964cd8893d8c0da92b5390ca87d7a54735e38c34d"
+      },
+      "neck": {
+        "module": "mmdet.models.necks.fpn",
+        "name": "FPN",
+        "file": "/media/omnisky/4435947f-033c-4e45-904d-f2c4d0bfbf70/Anaconda3/envs/mmrotljj/lib/python3.8/site-packages/mmdet/models/necks/fpn.py",
+        "sha256": "bb28cd8bc3b32b5b184341b316cd199414cc85de46818e75634f6990d0935717"
+      }
+    },
+    "validation": {
+      "online": {
+        "interval": 2,
+        "metric": "mAP",
+        "save_best": "Weighted_R_center",
+        "rule": "greater",
+        "thresh_sim": 10.0,
+        "thresh_real": 25.0,
+        "weight_sim": 0.7,
+        "weight_real": 0.3
+      },
+      "candidate_epochs": [
+        16,
+        18,
+        20,
+        22,
+        24
+      ],
+      "center_thresh_px": 15,
+      "selection": {
+        "r_center_delta": 0.005,
+        "mcml_limit": 5,
+        "weight_sim": 0.7,
+        "weight_real": 0.3,
+        "soft_w_tdr": 0.35,
+        "soft_w_r_center": 0.25,
+        "soft_w_aci": 0.2,
+        "soft_w_angle": 0.2
+      },
+      "implementation": "crane_project/tools/ckpt_sweep.py",
+      "implementation_sha256": "161fc8e9fcb10b916dfaea04f4137701469dbb47d70224d145a8e2eaf7acde50"
+    },
+    "runtime_lock_sha256": "10e0fe29bcb007fbe20d01536a0a38c45a4753a2a7f14cfadf1fc998462ddde4",
+    "server_git_head": "64b9b0145a4498162dcee965576dfbec9a512ec2",
+    "updates": 0,
+    "model_forward_calls": 0,
+    "model_backward_calls": 0,
+    "GPU_initialized": false,
+    "native_4step_GPU_checks_run": false,
+    "trace_hook_GPU_runtime_validated": false,
+    "performance_repeatability_established": false,
+    "run_count_or_seed_schedule_selected": false,
+    "formal_training_started": false,
+    "prior_obsolete_gate": "CPU saved-tensor offload is not accepted as the native-GPU primary gate",
+    "preparation_repairs": [
+      "auxiliary attribute corrected to actual aux_heads",
+      "relative __file__ metadata path resolved; passing CPU receipts reused without rerun"
+    ]
+  },
+  "local_verification": {
+    "passed": true,
+    "receipt_files": 17,
+    "CPU_instances": 6,
+    "input_tensor_batches": 24,
+    "distinct_rank_step_batches": 8,
+    "all_state_cpu": true,
+    "complete_initial_state_sha256": "2f8551c3bac98501a2d7f86961d903509c4abee551b5204e2c5f9f9df14f7a9f",
+    "pretrained_sha256": "0676ba61b6795bbe1773cffd859882e5e297624d384b6993f7c9e683e722fb8a",
+    "TRAIN_VAL_inventory": {
+      "train": 2558,
+      "val": 887
+    },
+    "CPU_mapped_libraries": 17,
+    "candidate_libraries": 24,
+    "GPU_acceptance": false,
+    "performance_repeatability": false,
+    "GPU_training_started": false,
+    "forward_calls": 0,
+    "backward_calls": 0,
+    "updates": 0,
+    "source_sha256": "664f392fde760bece3bda08b84676bc90bf1073de268b3fd231c4d47c0037ed7"
+  },
+  "runtime": {
+    "python": "3.8.20 (default, Oct  3 2024, 15:24:27) \n[GCC 11.2.0]",
+    "torch": "1.13.1+cu117",
+    "mmcv": "1.7.0",
+    "mmdet": "2.25.1",
+    "torch_cuda": "11.7",
+    "cudnn": 8500,
+    "CPU_mapped_libraries": 17,
+    "candidate_libraries": 24
+  },
+  "pretrained": {
+    "url": "https://download.pytorch.org/models/resnet50-0676ba61.pth",
+    "path": "/home/omnisky/.cache/torch/hub/checkpoints/resnet50-0676ba61.pth",
+    "sha256": "0676ba61b6795bbe1773cffd859882e5e297624d384b6993f7c9e683e722fb8a"
+  },
+  "budget": {
+    "epochs": 24,
+    "optimizer": {
+      "type": "SGD",
+      "lr": 0.0025,
+      "momentum": 0.9,
+      "weight_decay": 0.0001
+    },
+    "lr": {
+      "policy": "step",
+      "warmup": "linear",
+      "warmup_iters": 1000,
+      "warmup_ratio": 0.001,
+      "step": [
+        16,
+        22
+      ]
+    },
+    "per_rank_batch": 2,
+    "world_size": 2,
+    "clip": {
+      "grad_clip": {
+        "max_norm": 10,
+        "norm_type": 2
+      }
+    }
+  },
+  "validation": {
+    "online": {
+      "interval": 2,
+      "metric": "mAP",
+      "save_best": "Weighted_R_center",
+      "rule": "greater",
+      "thresh_sim": 10.0,
+      "thresh_real": 25.0,
+      "weight_sim": 0.7,
+      "weight_real": 0.3
+    },
+    "candidate_epochs": [
+      16,
+      18,
+      20,
+      22,
+      24
+    ],
+    "center_thresh_px": 15,
+    "selection": {
+      "r_center_delta": 0.005,
+      "mcml_limit": 5,
+      "weight_sim": 0.7,
+      "weight_real": 0.3,
+      "soft_w_tdr": 0.35,
+      "soft_w_r_center": 0.25,
+      "soft_w_aci": 0.2,
+      "soft_w_angle": 0.2
+    },
+    "implementation": "crane_project/tools/ckpt_sweep.py",
+    "implementation_sha256": "161fc8e9fcb10b916dfaea04f4137701469dbb47d70224d145a8e2eaf7acde50"
+  },
+  "formal_environment_accepted": false,
+  "formal_schedule_frozen": false,
+  "performance_repeatability_established": false,
+  "source_sha256": {
+    "crane_project/utils/symeood_repro_trace_v1.py": "d258fefef2f4e3dd5376d727dcea336814be4ca4f116ffaa8ab4c0ea15e8dadb",
+    "crane_project/tools/verify_symeood_canonical_cpu_v1.py": "664f392fde760bece3bda08b84676bc90bf1073de268b3fd231c4d47c0037ed7",
+    "crane_project/tools/finalize_symeood_canonical_cpu_v1.py": "7893ca76c0e6042f5f754cc0f69cde84d256750af0cfd6aea01e65ae9432aa51",
+    "crane_project/tools/prepare_symeood_b111_canonical_v1.py": "4e5360860819c2a1c7a24c14de3677143fcf0eb2a355a6fecccb292feb2a562d",
+    "crane_project/tools/prepare_symeood_canonical_plan_v1.py": "e2324b54f7c9684884f102e3dfb13f93107381938c9120cd50b54b76b270467c",
+    "crane_project/tools/native_symeood_b111_entry_check_v1.py": "55557792ccc3d843f171e04157207a7b0943c1000495be7e5b558eab70ba81f3",
+    "tests/test_symeood_canonical_cpu_v1.py": "361c56a2120dbfa4951459e4c435c0c59e53024ee902d2b8861adedf034022af"
+  },
+  "receipt_manifest_sha256": "8a8e42e0897abaffeffa8e0ff7f4fc26d85be39dfb9abfa7a9c27ac8bb44695a",
+  "pending_CPU_lock_sha256": "10e0fe29bcb007fbe20d01536a0a38c45a4753a2a7f14cfadf1fc998462ddde4",
+  "note": "CPU construction/input equality is not native forward/backward/update equality. No CPU saved-tensor offload allowed in later native primary gate or formal run. No repetitions or methods selected from exposed TEST."
+}
