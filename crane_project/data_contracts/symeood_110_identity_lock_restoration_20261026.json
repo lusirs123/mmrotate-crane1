@@ -1,0 +1,30 @@
+{
+  "status": "ORIGINAL_IDENTITY_LOCK_RESTORED_NOT_NEW_GPU_ACCEPTANCE",
+  "source": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_c_pair_seed0_20261025_v1/native_runtime_lock.json",
+  "git_preserved_copy": "crane_project/data_contracts/symeood_c_pair_seed0_native_runtime_lock_original_20261025.json",
+  "source_type": "local retained byte-exact copy; contract SHA verified against Git HEAD",
+  "contract": "crane_project/data_contracts/symeood_c_pair_seed0_v1_20261025.json",
+  "git_contract_commit": "30b25ebaeebcf8bb60b9c434068d04457e491478",
+  "server_host": "omnisky-codex",
+  "target": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_c_pair_seed0_20261025_v1/native_gate/native_runtime_lock.json",
+  "sha256": "4642a5060613a759db629afc4797a834205d9ed50e32b696667369e0372682ab",
+  "bytes": 34250,
+  "lock_type": "source/runtime identity baseline, not process exclusivity lock",
+  "copy_method": "SSH stdin original bytes, shell noclobber; target absence checked before copy",
+  "target_existed_before": false,
+  "existing_file_overwritten": false,
+  "server_mtime": "2026-10-26T16:09:21.220534+08:00",
+  "server_verified_at": "2026-10-26T16:10:56.553867+08:00",
+  "server_actual_sha256": "4642a5060613a759db629afc4797a834205d9ed50e32b696667369e0372682ab",
+  "original_state_preserved": "NATIVE_GPU_ACCEPTED",
+  "new_GPU_acceptance_performed": false,
+  "training_started": false,
+  "optimizer_updates": 0,
+  "config_deletions_synced": false,
+  "approval_history": "Two Python restore commands were not executed because automatic review timed out; read-only target absence checked, then shorter noclobber copy succeeded.",
+  "pending": [
+    "new GPU process actual loaded libraries",
+    "complete new initialization and input stream acceptance",
+    "formal training remains unauthorized"
+  ]
+}
