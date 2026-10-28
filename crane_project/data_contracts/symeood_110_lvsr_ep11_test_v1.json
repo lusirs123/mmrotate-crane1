@@ -1,0 +1,53 @@
+{
+  "protocol": "symeood_110_original_lvsr_ep11_exploratory_test_depth_v1",
+  "date": "2026-10-28",
+  "checkpoint": "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/head_epoch_11.pth",
+  "checkpoint_sha256": "cb0d65914a073306559a6e5ebcb5a4186676922cb4ae9cb23dff39e202cdb80a",
+  "epoch": 11,
+  "arm": "fixed_b",
+  "physical_gpu": 1,
+  "val_rows": "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_11_val.rows.jsonl.gz",
+  "val_names": [
+    "real_seq07_00001",
+    "real_seq07_00167",
+    "real_seq07_00169",
+    "real_seq07_00181",
+    "real_seq14_00001",
+    "sim_seq10_00000",
+    "sim_seq10_00211",
+    "sim_seq10_00410"
+  ],
+  "output_directory": "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/ep11_frozen_evaluation_20261028_v1",
+  "sources": {
+    "crane_project/tools/eval_symeood_110_lvsr_ep11_test_v1.py": "0707455e0d15a293c98084744e3e009262de27322fd68a01fc87b8198b505e4b",
+    "crane_project/tools/eval_symeood_110_lvsr_downstream.py": "cfcd677c2403af745430f8014edf4df947fec050d8e1e9b40033e045f2efee62",
+    "crane_project/tools/eval_symeood_110_midpoint_ep21_test.py": "197ad67f0187d8c4327988c71c372c1a17ad33df62a3448fa0c82535935706f1",
+    "crane_project/utils/port_size_qalign_v1.py": "bffff38f97d0d7cf8210f009c7b5160895a9d8e88f80fbca7efb80c3e1f71ca4",
+    "crane_project/utils/port_size_local_vectors_v1.py": "ec2100e814d982347847c82df81d75226ced85b546538690aabf8abccc1cf684",
+    "crane_project/tools/eval_port_size_proposal_downstream_v1.py": "19d7206f3a88b083abffa516ddaee0069974f87d72351eb42027e519b788c8c4"
+  },
+  "artifacts": {
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_11_val.json": "3428e105dee157e260fc6860787d0047adcb3e3b6bbec5a3f6afab69a4ed4355",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_11_val.rows.jsonl.gz": "a1622ceb0face9d005ac962bda66211483bdec118049ed36bddeec1d546e30bd",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/selection.json": "d0f9acd8a7c2c3ed91c5adc636fbc82c2b0a268e9269f5f33003221794ca4206",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/frozen_evaluation/test_rows.jsonl": "8e35287db4563aeb954f9edfcccd10794708453367ac87d8caef077172678bc9",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/frozen_evaluation/depth_predictions.jsonl": "0755c24905bf7504239a3bfef42e1ddcf6bbc51312da0ba978d7e884cc75dcf2",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/head_epoch_11.pth": "cb0d65914a073306559a6e5ebcb5a4186676922cb4ae9cb23dff39e202cdb80a"
+  },
+  "detector_sha256": "7f35dacc308943949a8fd2e6aaad312d14651564903ec87c8c8dcec0552ec054",
+  "midpoint_sha256": "7aaaacc6c666116e466c9a99ac59d71acf7f77312dc86de224fcf965569fd9ac",
+  "TEST_frames": 1440,
+  "depth_frames": 1097,
+  "training_updates": 0,
+  "selection": false,
+  "original_selected": null,
+  "original_representative": 7,
+  "role": "User-fixed exploratory ep11 from retrospective VAL audit; not original selected model or independent confirmation",
+  "frozen_calibration_sha256": "c9c14fc1b09ba8223996121425e302888ac7d44213192225acd5365fb2f1ffe2",
+  "formula_refit": false,
+  "new_filters": false,
+  "full_VAL_replay": false,
+  "existing_8frame_VAL_gate": true,
+  "reuse": "Native predictor/capture, AlignedSizeHead, original detection_report/depth_report with only process-local version keys rebound and restored; baseline outputs compared to saved predictions.",
+  "limits": "One fixed epoch; no training, reselection, extra variants or new calibration. Keep original eligibility failure and historical weights/results."
+}

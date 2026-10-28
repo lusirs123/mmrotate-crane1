@@ -1,0 +1,129 @@
+{
+  "protocol": "symeood_110_lvsr_ESH_ep7_v1",
+  "authorization": "Separate user authorization for one ESH6 exploratory run; short32 failure preserved, not retrospectively passed",
+  "status": "IMPLEMENTED_PREPARE_RUN",
+  "parent_epoch": 7,
+  "parent_sha256": "dfa6206dd9eadd6875bd9523afa409a59d797bde3db926a41a8d0e33ea08eee6",
+  "fixed_identity": {
+    "detector_epoch": 20,
+    "detector_sha256": "7f35dacc308943949a8fd2e6aaad312d14651564903ec87c8c8dcec0552ec054",
+    "midpoint_epoch": 21,
+    "midpoint_sha256": "7aaaacc6c666116e466c9a99ac59d71acf7f77312dc86de224fcf965569fd9ac",
+    "parent_path": "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/head_epoch_07.pth",
+    "parent_sha256": "dfa6206dd9eadd6875bd9523afa409a59d797bde3db926a41a8d0e33ea08eee6",
+    "cache_manifest_sha256": "5c481e900ed7f17e838156dcf43685a4191427f447374e1ac3f23289da87594d",
+    "train_shards": {
+      "train_s1.pt": "911388ae028bfaf25684246fb126c0fb332540d15830617740005dce459f0ed2",
+      "train_s05.pt": "fb464e32755a1a1bd3523b43721782614a435104034749806edbd4e09119e35f"
+    },
+    "train_fixed_references_sha256": "f7c212b5f5af4d520c2924f6cd4dbdb7547246502169d92feb915dce8714e59f"
+  },
+  "epochs": 6,
+  "batch": 8,
+  "updates_per_epoch": 639,
+  "expected_updates": 3834,
+  "seed": 1703,
+  "schedule_offset": 20,
+  "schedule_sha256": {
+    "1": "65e399c2e81fc7481e8d1ab6d0cb6cfecb47dd9fc032a747b7f8d424778a658a",
+    "2": "6613013b6155bdc7ce405719d7e33749bcbb27337b2e4289f2ebb797e76d8961",
+    "3": "87f2777e9db513d2b89ff6817037dcbdf1f8cd6065a47e4040a83806aa455e05",
+    "4": "0cc3dd403a01c3d247ad88da9969de86394b674e17f05962c378398e5071c4e4",
+    "5": "d13e67846bb7135a1e41165783e27f493116ad61f41160eeb8933733357406bb",
+    "6": "1e816f72b3d01c3874d4597dc1dffd82d3a8f09db15242bb9eab0e61a621b069"
+  },
+  "optimizer": {
+    "type": "torch.optim.Adam",
+    "lr": 0.0001,
+    "betas": [
+      0.9,
+      0.999
+    ],
+    "eps": 1e-08,
+    "weight_decay": 0.0,
+    "amsgrad": false,
+    "seed": 1703,
+    "initialization": "Per arm seed->AlignedSizeHead fixed_b->strict load same ep7->fresh empty Adam; preserve original RNG position",
+    "clip_norm": 10.0,
+    "AMP": false,
+    "source": "Reuse original C update path for control; candidate only changes gradient fed to same Adam",
+    "candidate_state": "Weighted gradients update BOTH Adam moments and step normally once; never reset per batch or retain control moments",
+    "previews": "Read own-arm current moments via cloned state obtained with state.get(param,{}) (avoid defaultdict insertion); unweighted Adam preview must leave complete optimizer state and RNG unchanged."
+  },
+  "solver": {
+    "source": "Only fixed official get_sample_scales, lanczos_extremal, projection_ellipsoid_box, ChambollePock_hinge; minimal CPU/Python3.8 compatibility and logging patch, preserve MIT notice and diff",
+    "sum_grads": false,
+    "constraint": "both",
+    "box_bound": 2.0,
+    "radius_bound": 0.2,
+    "allow_neg_weights": false,
+    "final_weight_range": [
+      1.0,
+      3.0
+    ],
+    "reg": 0.0,
+    "warm_start_iter": 10,
+    "max_iter": 50,
+    "tol": 0.001,
+    "mom_stats_Q": 0.98,
+    "max_raise_condition_Q": 1.25,
+    "max_raise_dgdg": 1.25,
+    "EMA_init": {
+      "condition": -1.0,
+      "dgdg": -1.0
+    },
+    "guard_behavior": "Retain official Gram identity loading and dgdg/Gdg scaling; record raw vs effective Q,q,energy and every guard. Never silently treat adjusted matrices as exact physical geometry.",
+    "small_batch_eigen": "Use official eigvalsh path (n16<=256), no random Lanczos vector",
+    "degenerate": "If ||d0||<=1e-12 use all-one weights; if Q and positive harm both zero use all-one weights; any nonfinite input/output stops (no silent nan_to_num).",
+    "numerical_acceptance": "finite 0<=w<=2 (tol1e-6); effective ellipsoid relative violation<=1e-5; official objective fallback to w0 recorded; no extra line search or actual-step acceptance filter",
+    "limitations": "Radial box-then-ellipsoid map is approximate projection; finite iterations/mean-change tolerance not global optimality certificate.",
+    "paper_code_discrepancy": "Official dgdg spike guard multiplies Gdg by max_dgdg/dgdg, whereas PMLR Appendix C Algorithm2 prints sqrt(max_dgdg/dgdg); freeze pinned code behavior and log it. No silent reconciliation.",
+    "raw_matrices": "Pass cloned Q1/Q2/q/dgdg into the official in-place safeguard wrapper; preserve exact raw matrices from full G separately."
+  },
+  "precision": "Same accepted float32 path, original deterministic flags, no AMP",
+  "sources": {
+    "crane_project/tools/run_symeood_110_lvsr_esh_ep7.py": "fc329157b940f1f850c2ac7664f3655ac9ec3862cc5beb56967ad4d475bb6909",
+    "crane_project/tools/run_symeood_110_lvsr_esh_short_v1.py": "08bf97107652bb00de43e1e44e7c4a96586055b50596fd72d4a3fff5e12e245b",
+    "crane_project/utils/lvsr_sample_harm_core_v1.py": "41aed30137446e8f6e776124c4c15e6a8a48022078dd48adb4a0dc814f654e34",
+    "crane_project/tools/run_symeood_110_lvsr_c_ep7.py": "420a65d521daa62408336133fc0526d102c0f52f7e45fa6fdb09599fd23c2496",
+    "crane_project/tools/run_symeood_110_lvsr_v1.py": "0d565b6f169f440275a4f8630c20b4474791284ce8dbbfb8a9fbe3141ba456fa",
+    "crane_project/tools/run_port_size_a20_protection_v1.py": "0a724b9aa4dd92bd2abe56807bc6f44ad15b177d2e228dcfe7d0ee728e158aa0",
+    "crane_project/utils/port_size_a20_protection_train_v1.py": "5a10ee650f65d1f5f54a815671e7d2c3b78a7a029bd8a21e995af4d47cc09da2",
+    "crane_project/tools/run_port_size_native_train_v1.py": "46a4febcb998334f5f4ddd72fb0773bcf9a1c59e885f3f9229755633b9761552",
+    "crane_project/utils/port_size_qalign_v1.py": "bffff38f97d0d7cf8210f009c7b5160895a9d8e88f80fbca7efb80c3e1f71ca4",
+    "crane_project/utils/port_size_local_vectors_v1.py": "ec2100e814d982347847c82df81d75226ced85b546538690aabf8abccc1cf684",
+    "crane_project/utils/port_geometry_midpoint_edge_residual_v1.py": "260eb599b50d966801ec84fa1517584a174daa5d41388e6133e1d773e6782d28",
+    "crane_project/tools/diagnose_symeood_110_lvsr_edges.py": "c7b895e13e3ebc9d93fa83d9ba35b55f6189e5cb04e8be778faff66a4f57d7e1"
+  },
+  "control_files": {
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/continuation_ep7/identity.json": "ba38dbac69c010329188662b9f365f08cbe5de88c2fe79c80056c52594db0b9d",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/continuation_ep7/completion.json": "e5d583d965c3d51bbfe1c3cc72eeeeb82a49da3a88d5cb8810b3d5708cc17ab8",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/continuation_ep7/C/selection.json": "1feee3f36bc1bdd95f68ab44896326d6de5ea33c9980ffa3f5c0c4e2eb3927d8",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/continuation_ep7/C/train_fixed_references.json": "f7c212b5f5af4d520c2924f6cd4dbdb7547246502169d92feb915dce8714e59f",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/continuation_ep7/C/val_fixed_references.json": "3f5eae3b3ee168b9357fcb1b1ae6ea06044617e04621dcc8c390da5e3af4aad1",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/continuation_ep7/C/epoch_01_val.json": "fc4c7a9f5b0b2d270c2e6ba8d5729df26689d72761a07b94040b04c32916b0d7",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/continuation_ep7/C/epoch_02_val.json": "e386dd5a2a09668fcc29b9377f3806776c1055bb7d04080ddf95ab6214df6d68",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/continuation_ep7/C/epoch_03_val.json": "91449a362c7d9fd83e9c2beda442be7cdf7f01f9cae82b82aaf783eadc8029d0",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/continuation_ep7/C/epoch_04_val.json": "7320ac66721ea104efd494b2663420b9d2e4c6f4c9ba023b8f3a21c3d3813786",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/continuation_ep7/C/epoch_05_val.json": "a0807f21c4c4540b09fff8cfb06a8f4ab718faa5dcb16e594b5273b533cac48a",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/continuation_ep7/C/epoch_06_val.json": "8afa8db33edd8ed299e60b50939fbcd78b19ad128d246c92de47d72c28991a44"
+  },
+  "short_evidence": {
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/edge_diagnostic/sample_harm_review/short_validation_contract.json": "38625ca3f63cfc979bf185d4f019477c0cd6aae9610d697ecb4c323d06948f46",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/edge_diagnostic/sample_harm_review/run32/completion.json": "c380eafaabf0f9f3aca7caa98c6130661160488acd3718562b1f351e165f7bcf",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/edge_diagnostic/sample_harm_review/run32/implementation_receipt.json": "df1a2bff82366186aa234e0cb4baa37b0792881dd5056f88a53fec42f4d0f23e"
+  },
+  "evaluation": "Each epoch original887 VAL, original reference/eligibility and original C ranking; selected null if none; descriptive representative independent; main ESH6vsC6; six same-epoch auxiliary comparisons",
+  "extra_losses": [],
+  "no_weight_mean_renormalization": true,
+  "model_parameters": 2800,
+  "optimizer_state_fresh": true,
+  "detailed_short_matrices_not_duplicated": true,
+  "new_smoke_updates": 0,
+  "checkpoint": "Each epoch head/Adam/ESH two EMAs/settings/RNG/schedules/contract/epoch/updates and events; readback equal. Explicit epoch-boundary resume only; no auto retry; later partial logs cannot silently be discarded.",
+  "backup": "Representative, eligible selection if any, and fixed6; each two independent filesystem copies with SHA and strict load",
+  "stop": "Nonfinite, failed solver/bounds or gradient clipping activation stop. No early score stop, no7th epoch, no parameter change/retry.",
+  "TEST": false,
+  "depth": false,
+  "formal_M_changed": false
+}

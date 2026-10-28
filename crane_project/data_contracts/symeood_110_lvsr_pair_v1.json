@@ -1,0 +1,44 @@
+{
+  "protocol": "symeood_110_lvsr_pair_v1",
+  "status": "IMPLEMENTED_LIMITED_SMOKE_AUTHORIZED_ONLY",
+  "design": {
+    "path": "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/edge_diagnostic/pair_specific_contract.json",
+    "sha256": "52eb960785bbf354c022326be3088697afe38e44ff526a1ced2558c164d513fd"
+  },
+  "scope": {
+    "physical_gpu": 0,
+    "train_views": 16,
+    "val_views": 4,
+    "actual_optimizer_updates": 4,
+    "formal_training_authorized": false,
+    "TEST": false,
+    "depth": false,
+    "cache_generation": false,
+    "automatic_resume": false
+  },
+  "sources": {
+    "crane_project/utils/port_size_pair_specific_v1.py": "5a5d3bc2d0d3fbfa9a4e0e36f08f1318b5675452642a8ba440ec5ef1487f1b6a",
+    "crane_project/tools/run_symeood_110_lvsr_pair_v1.py": "4d38ba7a2e5f14a857f6a606604d4595312d8678d6da541fc15ced93aadedd52",
+    "tests/test_symeood_110_lvsr_pair_v1.py": "6be2ea915dd79b95adfbdd9f203bf3019e4d1b950ca6479a81e0e0d9be3c7090",
+    "crane_project/tools/run_port_size_native_train_v1.py": "46a4febcb998334f5f4ddd72fb0773bcf9a1c59e885f3f9229755633b9761552",
+    "crane_project/tools/train_symeood_110_midpoint_v1.py": "16084b031f7a3cf7c48b84b5370f79c27b46ce80a69a63041af5a68074d8a47a",
+    "crane_project/utils/port_geometry_refine_g_v1.py": "2545e32ef953d22ef359a56bfc1cadd38d28e69f22b30de6c7fa60f27092c51b",
+    "crane_project/utils/port_structure_reliability_v1.py": "84e32d062f491070dcd6575cc4e50b231a0ff20cb835e70bec7e255c95181aa8"
+  },
+  "input_files": {
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/identity.json": "4ef50aeb13b267e7ae62e49d035a82aebcbed805fa3900431a255abf1be87f25",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/input_counts.json": "891385dc871cb3c1373be058c5465fc223ed8e3c33c06d79ac32a04e37ee4618",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_07_train.rows.jsonl.gz": "d04fe46f97bcf1f6838f4e011bb2885bd2ea8cf5a89797459aae62d09783dc69",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_07_val.rows.jsonl.gz": "e82b234b30b7eb8f83e7a4c5a507bc2032210618e31eb3c580ca488134197480",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/midpoint/formal/roi_cache/cache_manifest.json": "5c481e900ed7f17e838156dcf43685a4191427f447374e1ac3f23289da87594d"
+  },
+  "weight_files": {
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/110/epoch_20.pth": "7f35dacc308943949a8fd2e6aaad312d14651564903ec87c8c8dcec0552ec054",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/midpoint/formal/train/head_epoch_21.pth": "7aaaacc6c666116e466c9a99ac59d71acf7f77312dc86de224fcf965569fd9ac"
+  },
+  "initialization": "Fresh neutral head, seed1703; no parent checkpoint is loaded; ep7 saved rows supply frozen M21 outputs only.",
+  "updates": "main step1/2, save+restore, main step3 and restored step3 = four actual optimizer steps, discard all.",
+  "counts": "Deserialize existing three shards to retain only selected20 views; no complete feature generation, M replay or VAL.",
+  "RNG": "Original helper Python/Torch CPU/visible CUDA states; no NumPy random draws.",
+  "reuse": "Inherited original head forward/decode/delivery, native base.update/evaluate and Adam/RNG helpers; no formal training stage."
+}

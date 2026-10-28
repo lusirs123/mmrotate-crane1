@@ -1,0 +1,93 @@
+{
+  "protocol": "symeood_110_lvsr_c_ep11_joint_v1",
+  "authorization": "User explicitly revised VAL selection to joint size correctness and requested original C continuation from original common ep11. Six-epoch original C budget; no automatic TEST/depth.",
+  "parent_epoch": 11,
+  "parent_sha256": "cb0d65914a073306559a6e5ebcb5a4186676922cb4ae9cb23dff39e202cdb80a",
+  "parent_path": "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/head_epoch_11.pth",
+  "parent_role": "revised_joint_VAL_selected_exploratory",
+  "arms": [
+    "C"
+  ],
+  "epochs": 6,
+  "physical_gpu": 1,
+  "output_directory": "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/continuation_C_ep11_joint_v2",
+  "settings": {
+    "seed": 1703,
+    "lr": 0.0001,
+    "weight_decay": 0,
+    "batch_size": 8,
+    "clip_norm": 10,
+    "beta": 0.1,
+    "shuffle_offset": 20,
+    "optimizer": "fresh Adam",
+    "loss": "original C size only"
+  },
+  "selection": {
+    "version": "joint_VAL_v1_20261028",
+    "primary": "overall joint_size10_full_frame numerator on all 887 VAL frames; missing counts as failure",
+    "tie_breaks": [
+      "mean of overall long and short MAE; lower first",
+      "earlier continuation epoch; C0 precedes C1"
+    ],
+    "pool": "C0 original ep11 plus six continuation epochs; keep C0 if it ranks first",
+    "legacy_eligibility": "diagnostic only; do not overwrite original historical selection",
+    "hard_invariants": [
+      "finite values and original delivery checks",
+      "unchanged output presence, center, angle, score and 887 VAL identities"
+    ],
+    "report_costs": [
+      "Real/Sim and near-edge MAE",
+      "RIoU and continuity",
+      "scale and ratio error"
+    ],
+    "TEST_and_depth": "excluded from future continuation epoch selection; parent TEST and depth already exposed before this revision"
+  },
+  "sources": {
+    "crane_project/tools/run_symeood_110_lvsr_c_ep11_joint_v1.py": "d8736d4703fa1dd08f202fdc1fca6f9cd92271717ec5dac567c2814ee91b7de9",
+    "tests/test_symeood_110_lvsr_c_ep11_joint_v1.py": "393ed26918c9a7ffbeca6831bce1163811845600527b002ff1eb2fac402fabf4",
+    "crane_project/tools/run_symeood_110_lvsr_c_ep7.py": "420a65d521daa62408336133fc0526d102c0f52f7e45fa6fdb09599fd23c2496",
+    "crane_project/data_contracts/symeood_110_lvsr_c_ep7.json": "8d5bd57237d984d89a7fa722c4cddb26cd03df87253ea059f5e10a616b483187",
+    "crane_project/tools/run_symeood_110_lvsr_v1.py": "0d565b6f169f440275a4f8630c20b4474791284ce8dbbfb8a9fbe3141ba456fa",
+    "crane_project/tools/run_port_size_a20_protection_v1.py": "0a724b9aa4dd92bd2abe56807bc6f44ad15b177d2e228dcfe7d0ee728e158aa0",
+    "crane_project/utils/port_size_a20_protection_train_v1.py": "5a10ee650f65d1f5f54a815671e7d2c3b78a7a029bd8a21e995af4d47cc09da2"
+  },
+  "common_artifacts": {
+    "status.json": "e227cb49ceadb25c28ef345075b2d70a5bd9c7454b51aaf0f758c4074b07510f",
+    "completion.json": "07d57a2ab001a68c3bdb37a06dcd7b68ee4b57b4bb0ff10adae1d349667971ad",
+    "identity.json": "4ef50aeb13b267e7ae62e49d035a82aebcbed805fa3900431a255abf1be87f25",
+    "input_counts.json": "891385dc871cb3c1373be058c5465fc223ed8e3c33c06d79ac32a04e37ee4618",
+    "fixed_b/selection.json": "d0f9acd8a7c2c3ed91c5adc636fbc82c2b0a268e9269f5f33003221794ca4206",
+    "fixed_b/epoch_11_train.rows.jsonl.gz": "b71b26d789f2c6b4f17e18044f1236e40199c8c8d0af736c01bcc55c33daf238",
+    "fixed_b/epoch_11_val.rows.jsonl.gz": "a1622ceb0face9d005ac962bda66211483bdec118049ed36bddeec1d546e30bd",
+    "fixed_b/epoch_01_val.json": "8b4024e5928fdfdd2f39c95e1701a5340a620e2091f7536f8d7888658228e9d7",
+    "fixed_b/epoch_02_val.json": "4e0fd4df6300a48d3cf1332c4ac3736423bcd5494bf1b0e49dc360ba7a08d27f",
+    "fixed_b/epoch_03_val.json": "c6e47bc0eb0956709eba096da13de62fb4a45db5a2d2eb146e09427906fdfad4",
+    "fixed_b/epoch_04_val.json": "b0f50bf8b4f4a5058c85e3483e4457ee47a98821375037ae38eea1b9a9e39baa",
+    "fixed_b/epoch_05_val.json": "16489e19a6face7433584c8c00363caba6b3bbbf683b3a05f3d41ee5c425c342",
+    "fixed_b/epoch_06_val.json": "b1699f940a9ff4a7e2d702eb538f1f8c8d9d3d95c10e90c1621db143ad0a90d5",
+    "fixed_b/epoch_07_val.json": "484cbfc9100ae603771aed318d8283fac299ccb1f5df4932ae89f3688f7dcd59",
+    "fixed_b/epoch_08_val.json": "c8d727ed104b47b6d993f1baf925938fc4df638f2be285e699df9e56cd1eb1a8",
+    "fixed_b/epoch_09_val.json": "55558a501406ba9d2c9f461afe448877d5955b84b8c89ccbdbbe8cd28af15a26",
+    "fixed_b/epoch_10_val.json": "8fcdcbb9fdedc313ecf4091c158c61dc664bec96a339a1a1d66186bed99eccbe",
+    "fixed_b/epoch_11_val.json": "3428e105dee157e260fc6860787d0047adcb3e3b6bbec5a3f6afab69a4ed4355",
+    "fixed_b/epoch_12_val.json": "debf783fd52711be96bbd47aef8928f106684dabc352ced1804965bc337b8df7",
+    "fixed_b/epoch_13_val.json": "fca6c80ad9729837158cc46ed5053191090f049db59b1b144b71fbebb2755a0a",
+    "fixed_b/epoch_14_val.json": "a234d7a29edc4348351e25e7340d626fdac69e6cd1fd9be1f9fd45fc38b0535b",
+    "fixed_b/epoch_15_val.json": "bc3c5c5dfc214787f9fd45a4180ecbed634cb8a0396a186c33e5aa4e25cac86c",
+    "fixed_b/epoch_16_val.json": "544c66daede333bd35f4742b0c08f4bba2029adbe9c14040f42a36cd3e5e449f",
+    "fixed_b/epoch_17_val.json": "857dadd942bd96a30bc606f230441ae0f4e25815c10d8cbe2af6a3dda9fb9b13",
+    "fixed_b/epoch_18_val.json": "f80cc2a346d633452b9bfdf3d9abc57f60020a2f1b6029600db046a5cc030f4e",
+    "fixed_b/epoch_19_val.json": "bd05c1cba229208e53c5f94fba5a234da67197554f0ccf61d88142cbb0eb8e85",
+    "fixed_b/epoch_20_val.json": "8886866c243bcc06b3e8443fa785b36a1f80092d6251eb6e05fbaff3a933e62b",
+    "fixed_b/epoch_21_val.json": "7dfeb47962d68e91893096de414c02810c1510f01df4ae423dfa5b03145339da",
+    "fixed_b/epoch_22_val.json": "39a4583cc4b77d4f7aaaf745e6acb269fb1d3c337f2339a39ba665ce7d318abe",
+    "fixed_b/epoch_23_val.json": "ceb99d77ddc0b8c9f53641306abf48f216ebdda83c250dc73a6876219439d41a",
+    "fixed_b/epoch_24_val.json": "d1e709bf92ae21e7fe7d0fdc9286a218fcca76b413d4c407ad8adc45116f9513"
+  },
+  "comparison": "new110 -> M21 -> original shared LVSR ep11(C0) -> ep11-start C. Previous ep7-start C3/C6 are historical different-parent runs, not the main control.",
+  "TEST": false,
+  "depth": false,
+  "additional_seeds": false,
+  "automatic_retry": false,
+  "implementation_repair": "v1 stopped at original status callback before any formal optimizer update; bounded trial discarded. Preserve v1 and run repaired code into v2 from original ep11 with unchanged six-epoch budget."
+}

@@ -1,0 +1,195 @@
+{
+  "protocol": "symeood_110_lvsr_CP_v1",
+  "status": "IMPLEMENTED_NOT_TRAINED",
+  "scope_this_turn": "Independent CP implementation and explicitly authorized server CPU acceptance only. No GPU or formal training; wait for further instruction.",
+  "candidate": "CP",
+  "hypothesis": "Adding the existing soft per-edge protection term to C reduces damage to fixed-M accurate edges and retains ep7 gains without ratio supervision.",
+  "parent": {
+    "epoch": 7,
+    "role": "descriptive_only",
+    "sha256": "dfa6206dd9eadd6875bd9523afa409a59d797bde3db926a41a8d0e33ea08eee6",
+    "path": "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/head_epoch_07.pth"
+  },
+  "frontend": {
+    "detector_epoch": 20,
+    "detector_sha256": "7f35dacc308943949a8fd2e6aaad312d14651564903ec87c8c8dcec0552ec054",
+    "midpoint_epoch": 21,
+    "midpoint_sha256": "7aaaacc6c666116e466c9a99ac59d71acf7f77312dc86de224fcf965569fd9ac",
+    "all_frozen": true
+  },
+  "change": {
+    "single_factor_vs_C": "Add original0.1*protect only",
+    "total": "L_size + 0.1 L_protect",
+    "ratio_weight": 0.0,
+    "protect_weight": 0.1,
+    "beta": 0.1,
+    "protect_form": "sum(active_ij*relu(abs(candidate_pre_guard_edge_ij/GT_edge_ij-1)-fixed_reference_ij))/(2N)",
+    "near": "Fixed delivered M error<=.03",
+    "gain": "Fixed delivered ep7 error < fixed M error-1e-6",
+    "active": "near OR gain",
+    "reference": "min(M_error on near, ep7_error on gain) on overlap; inactive zero",
+    "epsilon": 0.0,
+    "reference_precision": "Original float64 thresholds/references, bool membership; detach all references/GT. Original raw-axis ordering for pre-guard candidate.",
+    "protect_is_soft": true,
+    "loss_implementation": "Reuse original objective.losses(...,C) size and protect tensors; total=size+.1*protect, ratio diagnostic has zero weight. Do not alter existing C/R/P loss entry or inference."
+  },
+  "settings": {
+    "epochs": 6,
+    "seed": 1703,
+    "batch_size": 8,
+    "optimizer": "fresh Adam",
+    "lr": 0.0001,
+    "weight_decay": 0.0,
+    "clip_norm": 10.0,
+    "shuffle": "Random(1703+20+k)",
+    "shuffle_offset": 20,
+    "parent_epoch_distinct": 7,
+    "sort": "(scale,image)",
+    "tail": "keep original final batch",
+    "expected_present_train_views": 5112,
+    "expected_updates_per_epoch": 639,
+    "expected_formal_updates": 3834,
+    "independent_optimizer": true,
+    "restore_parent_then_reset_rng": false,
+    "rng_reset_position": "Exactly existing C: seed1703 immediately before head construction, parent load and fresh Adam; do not reset after head construction."
+  },
+  "inputs": {
+    "ROI_cache": "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/midpoint/formal/roi_cache",
+    "cache_manifest_sha256": "5c481e900ed7f17e838156dcf43685a4191427f447374e1ac3f23289da87594d",
+    "reuse_saved_M21_outputs": true,
+    "no_detector_or_midpoint_forward": true,
+    "train_fixed_references": "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/continuation_ep7/C/train_fixed_references.json",
+    "train_reference_sha256": "f7c212b5f5af4d520c2924f6cd4dbdb7547246502169d92feb915dce8714e59f",
+    "val_fixed_references": "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/continuation_ep7/C/val_fixed_references.json",
+    "val_reference_sha256": "3f5eae3b3ee168b9357fcb1b1ae6ea06044617e04621dcc8c390da5e3af4aad1",
+    "train_references_only_in_fit": true,
+    "no_new_sample_filter": true
+  },
+  "control": {
+    "existing_C": "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/continuation_ep7",
+    "no_C_retrain_if_engineering_identity_passes": true,
+    "required_identity": [
+      "same parent head digest",
+      "same fresh Adam parameters and empty state",
+      "same RNG reset position",
+      "same ordered input ids per batch",
+      "same reference identities and training views",
+      "same budgets/tail/clipping/numeric environment"
+    ],
+    "epoch_schedule_sha256": {
+      "1": "65e399c2e81fc7481e8d1ab6d0cb6cfecb47dd9fc032a747b7f8d424778a658a",
+      "2": "6613013b6155bdc7ce405719d7e33749bcbb27337b2e4289f2ebb797e76d8961",
+      "3": "87f2777e9db513d2b89ff6817037dcbdf1f8cd6065a47e4040a83806aa455e05",
+      "4": "0cc3dd403a01c3d247ad88da9969de86394b674e17f05962c378398e5071c4e4",
+      "5": "d13e67846bb7135a1e41165783e27f493116ad61f41160eeb8933733357406bb",
+      "6": "1e816f72b3d01c3874d4597dc1dffd82d3a8f09db15242bb9eab0e61a621b069"
+    },
+    "comparison": "Primary mechanism comparison fixed CP6 vs existing C6; all six paired epochs reported. Candidate VAL selection is separate; no CP-selected vs C3 causality claim."
+  },
+  "engineering": {
+    "scope": "Only changed total loss/detach/normalization/gradient and limited real-view updates+save/restore. Discard smoke updates; restart exact parent/fresh Adam/RNG.",
+    "checks": [
+      "Scalar total=size+.1*protect, no ratio gradient",
+      "positive-hinge correct sign; inactive zero and detached references",
+      "gradient equals size gradient+.1protect gradient on same output; zero hinge equals C",
+      "mean2N denominator includes inactive entries",
+      "bounded Real/Sim both scales and saved fallback if present",
+      "finite grads and clip10; save/restore next update",
+      "C schedule/init/environment lock comparison; mismatch blocks claim"
+    ],
+    "do_not_repeat_old_checks": true
+  },
+  "metrics_and_success": {
+    "numeric_tolerance": 1e-06,
+    "layer1": "Exact output/center/raw angle/score identity to M21. Domain RIoU>=M-.001, overall RIoU>=M-1e-5; domain RIoU0.5 hits>=M; DFR<=M, MCML max/mean<=M, same TDR denominator and hits>=M, ACI/pair counts equal M.",
+    "original_eligibility": "Keep original objective.eligibility(summary,near,parent_ep7_summary) unchanged including all inherited gates and ratio/scale diagnostics. Historical field names vs_A20 refer to ep7 actual parent.",
+    "layer2": [
+      "Original eligibility passes",
+      "Overall joint10 > M and >=same-epoch C; each domain joint10>=M",
+      "Overall abs(a),abs(r)<=M+1e-6; original domain requirements retained",
+      "Sim long MAE < same-epoch C by >1e-6",
+      "Each domain fixed-M near-long positive harm mean<=same-epoch C+1e-6, overall strictly lower by >1e-6",
+      "Each domain material near-long harmed count(error increase>.001)<=same-epoch C; overall at least one fewer",
+      "Each domain near-short positive harm mean<=same-epoch C+1e-6; original near short MAE limits retained"
+    ],
+    "layer3_claim_only": "For full-chain joint localization/size claim: overall and each-domain joint10>=110, both edge MAE per domain<=110+.001, overall abs(a),abs(r)<=110+1e-6; coverage, RIoU,DFR,MCML,TDR costs vs110 fully reported. Failure narrows claim, not retroactive gate change.",
+    "unit": "Relative error unit .001=0.1 percentage points. Positive harm mean=sum max(error_CP-error_M,0)/fixed near-count, not signed mean; material count threshold is descriptive and does not alter old loss or eligibility.",
+    "primary_fixed6": "Matched CP6 vs C6 must pass layer1+2 to support the frozen-budget protection claim. If only earlier selected candidate passes, report selected local result and fixed6 failure separately, no stable claim."
+  },
+  "selection": {
+    "eligibility": "layer1 AND layer2, every condition frozen before training",
+    "key": [
+      "negative overall joint10 count",
+      "overall near-long positive harm mean",
+      "overall abs(r)",
+      "overall abs(a)",
+      "earlier epoch"
+    ],
+    "lexicographic_no_composite_score": true,
+    "selected_if_none": null,
+    "descriptive_representative": "Same key across all6 separately, does not imply adoption",
+    "fixed_epoch6_always_report": true,
+    "existing_C3_C6_identity_unchanged": true
+  },
+  "limits": {
+    "single_candidate": true,
+    "no_coefficient_search": true,
+    "no_extra_epochs": true,
+    "no_restart_for_low_scores": true,
+    "no_architecture_or_postprocess_change": true,
+    "no_TRAIN_cache_rebuild": true,
+    "TEST": false,
+    "depth": false,
+    "extra_seeds": false,
+    "formal_M_unchanged": true,
+    "old_chain_preserved": true
+  },
+  "stop": "Identity/nonfinite/coordinate/restoration failure stops. After six VAL stop; if no qualified candidate selected=null. Do not automatically TEST/depth, loosen gates or add another candidate.",
+  "evidence_files": {
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/edge_diagnostic/analysis.json": "eaa93882819846f9dc3c00e83ee3a25d9c3b983de9a73c28fff97ad3c629377d",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/edge_diagnostic/grouped_TRAIN_VAL.csv": "7602e2bc4ec7e6fc6358b45ec39124d951c3645aa27c5053a52999276076227e",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/edge_diagnostic/per_frame_damage.csv": "77ee075eb96344fa0dded394b77b12c56d998b604d66245a3797f1c76ed87208",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/continuation_ep7/C/selection.json": "1feee3f36bc1bdd95f68ab44896326d6de5ea33c9980ffa3f5c0c4e2eb3927d8",
+    "crane_project/tools/diagnose_symeood_110_lvsr_edges.py": "c7b895e13e3ebc9d93fa83d9ba35b55f6189e5cb04e8be778faff66a4f57d7e1",
+    "tests/test_symeood_110_lvsr_edge_diagnostic.py": "d8ce27c4cf407058cb3ff6bfd96da867aa2c42699758f2b864b95fdef6e877d0",
+    "crane_project/utils/port_size_a20_protection_train_v1.py": "5a10ee650f65d1f5f54a815671e7d2c3b78a7a029bd8a21e995af4d47cc09da2",
+    "crane_project/utils/port_size_a20_protection_review_v1.py": "b2f7a556c29be57197e2bc2a5db0f60618caa25eb024fdcd6c3378bc6c40ccf7"
+  },
+  "implementation": {
+    "entry": "crane_project/tools/run_symeood_110_lvsr_cp_v1.py",
+    "module": "crane_project/utils/symeood_110_lvsr_cp_v1.py",
+    "sources": {
+      "crane_project/utils/symeood_110_lvsr_cp_v1.py": "0ae3a3443a9364569761bfe92885f7e8b43375757057a862aec9426c3147739e",
+      "crane_project/tools/run_symeood_110_lvsr_cp_v1.py": "cf67fa27bb229d689154a3bf125186cd3b9f3dca89beb63ad66d1bc4722b14b0",
+      "tests/test_symeood_110_lvsr_cp_v1.py": "1952bce6dd348fe85ac77d8d5875c105aba0d611c882ba6571d6389d0a0d327c",
+      "crane_project/tools/diagnose_symeood_110_lvsr_edges.py": "c7b895e13e3ebc9d93fa83d9ba35b55f6189e5cb04e8be778faff66a4f57d7e1",
+      "tests/test_symeood_110_lvsr_edge_diagnostic.py": "d8ce27c4cf407058cb3ff6bfd96da867aa2c42699758f2b864b95fdef6e877d0"
+    },
+    "control_files": {
+      "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/continuation_ep7/identity.json": "ba38dbac69c010329188662b9f365f08cbe5de88c2fe79c80056c52594db0b9d",
+      "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/continuation_ep7/completion.json": "e5d583d965c3d51bbfe1c3cc72eeeeb82a49da3a88d5cb8810b3d5708cc17ab8",
+      "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/continuation_ep7/C/selection.json": "1feee3f36bc1bdd95f68ab44896326d6de5ea33c9980ffa3f5c0c4e2eb3927d8",
+      "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/continuation_ep7/C/progress.jsonl": "bcf9b562d8c671d98789ccecd8ac680efd62dbe727dfb099db00a1f208fe714a"
+    },
+    "scientific_sha256": "e5c5a6d0c8b92525f3d31f5dac547b8750ba513cae77930075f95665d31837da",
+    "design_snapshot": "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/edge_diagnostic/CP_contract_design_before_implementation.json",
+    "design_snapshot_sha256": "45b07bdcc6b448c3067ba4074d883209d15e7969bd8c8fb8d3599e961adc2c21",
+    "clarification": "The original restore_parent_then_reset_rng=true wording contradicted actual C. Match actual C seed-before-construction order; seed, schedule, optimizer, loss and success thresholds unchanged.",
+    "default_stage": "check",
+    "explicit_run_required": true,
+    "CPU_acceptance_hides_all_CUDA_devices": true,
+    "formal_train_requires_current_GPU_smoke_receipt": true,
+    "formal_training_authorized": false,
+    "required_acceptance": [
+      "server CPU loss/gradient tests",
+      "server bounded real-cache CPU smoke",
+      "future bounded GPU smoke before training"
+    ],
+    "acceptance_receipts": {
+      "CPU": "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/continuation_CP_ep7/cpu_smoke.json",
+      "GPU": "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/continuation_CP_ep7/gpu_smoke.json"
+    },
+    "receipt_precedence": "This frozen contract is not runtime status. Use receipts bound to the current source/contract; CPU acceptance does not authorize GPU training.",
+    "CPU_status_metadata_clarification": "Original inherited status writer labelled physical_gpu=0 even for CPU. A metadata-only CP writer now labels CPU as null. Accepted loss/update/smoke mathematics unchanged; original CPU receipt/source/contract preserved."
+  }
+}
