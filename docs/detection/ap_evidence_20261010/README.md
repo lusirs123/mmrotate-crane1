@@ -20,7 +20,7 @@ TEST脚本默认从`val_native/ap_report.json`读取固定原生VAL门槛，报�
 
 `test_source/`新增AP必需的五份原封存文件，逐字节复制共4,624,450字节，来源与SHA见其`bundle_manifest.json`。保存1440帧标准尺度的GT／B／midpoint／原分数和空输出，并保留原completion、protocol、VAL选权及artifacts；不包含图片、权重或新推理。原artifacts还列有非AP必需文件，本次未复制，不能据此称原结果目录全部归档。前述sync_manifest仅记录A060的9份报告副本，保持历史内容。
 
-TEST默认eval-dir现为本目录下的test_source，服务器命令见[运行说明](../AP评价口径与运行说明_20261010.md)。这解决服务器旧work_dirs输入目录缺失，并保留显式指定完整归档目录的能力；不自动搜索或选择其它候选。须同步test_source中的test_rows.jsonl，只有汇总AP不能重新进行原生核对。原标注仍读取服务器既有test/annfiles。
+TEST默认eval-dir现为本目录下的test_source，服务器命令见[运行说明](../历史归档/共同设置与旧链路_完整原文.md#original-05-02)。这解决服务器旧work_dirs输入目录缺失，并保留显式指定完整归档目录的能力；不自动搜索或选择其它候选。须同步test_source中的test_rows.jsonl，只有汇总AP不能重新进行原生核对。原标注仍读取服务器既有test/annfiles。
 
 ## A062：服务器原生TEST回传已核验
 

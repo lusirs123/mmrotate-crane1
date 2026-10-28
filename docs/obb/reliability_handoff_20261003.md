@@ -313,7 +313,7 @@ python crane_project/tools/run_port_size_reference_v1.py \
 
 ## 11. 二维尺寸参考v1服务器结果与下一步（2026-10-04）
 
-**证据与核验（事实）：** 用户提供`port_size_reference_v1_review_20261004_134359.tar.gz`及四阶段终端输出。结果保存在[服务器回传目录](../work_dirs/port_size_reference_v1_server_review_20261004_134359/)，主表为[assessment.json](../work_dirs/port_size_reference_v1_server_review_20261004_134359/port_size_reference_v1_assess/assessment.json)，本地[独立复核记录](../work_dirs/port_size_reference_v1_server_review_20261004_134359/review_analysis.json)保存包SHA、身份检查与补充偏差统计。四阶段合同一致；完成清单中17个随包文件SHA均通过，5个权重按打包要求排除，仅能核对声明SHA及训练/评价的epoch04身份一致，未本地重载权重。来源及父合同与当前代码、既有TRAIN/VAL/policy/旧ROI证据一致；1319条评价记录（432留出＋887 VAL）的原GT/B框/score/漏检与原缓存精确相同。四方法逐组AUROC以独立正负样本成对比较复算，同接受数错误接受全部一致；1318条探针重放最大风险浮点差1.11e−16。包与终端未提供服务器unittest日志，不补称全部单测已在服务器通过。本轮没有连接服务器、改算法、训练或读取TEST。
+**证据与核验（事实）：** 用户提供`port_size_reference_v1_review_20261004_134359.tar.gz`及四阶段终端输出。结果保存在[服务器回传目录](../work_dirs/port_size_reference_v1_server_review_20261004_134359)，主表为[assessment.json](../work_dirs/port_size_reference_v1_server_review_20261004_134359/port_size_reference_v1_assess/assessment.json)，本地[独立复核记录](../work_dirs/port_size_reference_v1_server_review_20261004_134359/review_analysis.json)保存包SHA、身份检查与补充偏差统计。四阶段合同一致；完成清单中17个随包文件SHA均通过，5个权重按打包要求排除，仅能核对声明SHA及训练/评价的epoch04身份一致，未本地重载权重。来源及父合同与当前代码、既有TRAIN/VAL/policy/旧ROI证据一致；1319条评价记录（432留出＋887 VAL）的原GT/B框/score/漏检与原缓存精确相同。四方法逐组AUROC以独立正负样本成对比较复算，同接受数错误接受全部一致；1318条探针重放最大风险浮点差1.11e−16。包与终端未提供服务器unittest日志，不补称全部单测已在服务器通过。本轮没有连接服务器、改算法、训练或读取TEST。
 
 **工程结果（事实）：** ideal原尺度14/14通过，半尺度8/14通过、6图分辨率不可用；smoke四步通过实际梯度、B原输出侧计算前后精确一致及保存/重载检查。正式有限训练严格384张×4轮=1536步，全部拟合帧职责正确，无留出训练帧；各轮均loss为0.090314、0.033457、0.029543、0.025038，最大裁剪前梯度7.1904，零裁剪步。B状态摘要训练前后相同，参考epoch04与评价声明SHA一致。训练PyTorch峰值allocated364.803MiB、reserved484MiB；这不等于nvidia-smi总占用或其他任务共享占用。评价完成432＋887帧，参考对全部1318个B输出数值可用，1个VAL漏检单独保留。
 
@@ -1426,7 +1426,7 @@ tar -czf work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1/analysis_20261
 
 ### 封存与本轮检查
 
-尺寸方向平衡版本保留本机Git `9042033`的源码、协议、曝光表、来源闭包和15项本地测试，以及本地check／prepare；尚无真实GPU smoke／finite／VAL成绩。原失败连续尺寸C及其下游负结果、权重、缓存完整保留。封存只改变推进状态，不删除/移动证据或修改算法；历史命令保留在[尺寸统一运行说明](../detection/尺寸优化专用记录_20261016.md#legacy-size-run-doc)，恢复须用户明确授权。本轮未核验远端同步或进程，不声称已经停止远程作业。
+尺寸方向平衡版本保留本机Git `9042033`的源码、协议、曝光表、来源闭包和15项本地测试，以及本地check／prepare；尚无真实GPU smoke／finite／VAL成绩。原失败连续尺寸C及其下游负结果、权重、缓存完整保留。封存只改变推进状态，不删除/移动证据或修改算法；历史命令保留在[尺寸统一运行说明](../detection/历史归档/第三个创新点_完整研究与运行记录.md#original-03-03--legacy-size-run-doc)，恢复须用户明确授权。本轮未核验远端同步或进程，不声称已经停止远程作业。
 
 本轮只读核对当前源码、policy字节SHA、既有fit与TEST报告；从1440帧保存的错误量与冻结标志复算上述四状态和接受数下界，与原报告一致，并验证角度变化不改变三特征。没有重新推理、拟合、选择门限或生成结果副本。仅更新本交接、尺寸运行说明及旧OBB文档身份提示；旧σ1／epoch23、当前σ1.5模型/policy/数值与论文均未修改。
 

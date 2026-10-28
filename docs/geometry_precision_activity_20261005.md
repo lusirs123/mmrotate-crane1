@@ -6,9 +6,9 @@
 
 **服务器项目：** /media/omnisky/personal_files/ljj/symEOOD
 
-**来源及分工：** [midpoint封存方法与结果](detection/旋转ROI四边中点几何修正_midpoint_v1_方法与结果_20261003.md)第12～14节负责已固定的方法／结果，[可靠性交接](reliability_handoff_20261003.md)由另一窗口独立维护。新阶段活动不写回旧交接，不因迁移改变任何模型、协议或性能结论。
+**来源及分工：** [midpoint封存方法与结果](detection/历史归档/第二个创新点_完整研究与运行记录.md#original-02-01)第12～14节负责已固定的方法／结果，[可靠性交接](reliability_handoff_20261003.md)由另一窗口独立维护。新阶段活动不写回旧交接，不因迁移改变任何模型、协议或性能结论。
 
-**最新论文机制补强（A067，2026-10-12）：** A066单卡24轮／21,648更新完整VAL选中均匀头epoch04；按用户新授权，A067双头887帧在线VAL及1440帧固定TEST完成、退出0，旧B／σ1.5-ep03封存TEST输出与摘要复现，本机15,348项摘要复算最大差0。高斯相对均匀TEST real／sim RIoU0.8263／0.8950高于0.8159／0.8861，sim角度1.2934°低于1.6119°、两域ACI更高，中心／覆盖相同；real DFR、MCML_mean／MRF及部分尺寸误差有代价，不称全指标改善。保留原B＋σ1.5，均匀作为固定机制对照，可写同一TEST消融；无训练、选权、AP或自动推广待办，TEST暴露限定继续。统一表／反面证据见[A067](#activity-a067)及[机制对照结果](detection/midpoint_readout_v1_机制对照结果_20261012.md)，可靠性／深度／论文未改。
+**最新论文机制补强（A067，2026-10-12）：** A066单卡24轮／21,648更新完整VAL选中均匀头epoch04；按用户新授权，A067双头887帧在线VAL及1440帧固定TEST完成、退出0，旧B／σ1.5-ep03封存TEST输出与摘要复现，本机15,348项摘要复算最大差0。高斯相对均匀TEST real／sim RIoU0.8263／0.8950高于0.8159／0.8861，sim角度1.2934°低于1.6119°、两域ACI更高，中心／覆盖相同；real DFR、MCML_mean／MRF及部分尺寸误差有代价，不称全指标改善。保留原B＋σ1.5，均匀作为固定机制对照，可写同一TEST消融；无训练、选权、AP或自动推广待办，TEST暴露限定继续。统一表／反面证据见[A067](#activity-a067)及[机制对照结果](detection/历史归档/第二个创新点_完整研究与运行记录.md#original-02-02)，可靠性／深度／论文未改。
 
 **最新执行状态（A055，2026-10-07）：** 用户已补齐candidate08_f00386／f00452两帧的人工复核标志；读取保存文件确认20/20均independent_reviewed=true、unmeasurable=false。相比A054，仅这两份JSON SHA变化，全部20帧四点坐标／类型／标签和原PNG SHA保持；继承A054结构及几何检查，不重跑未变化测试。目标仍为顶梁及长边梯形凸起，人工绘制和复核标志保存完成；20份对象定义／测量依据仍空，旧实体四角点检查合同尚未适配，不等于规范OBB读出或训练资格通过。最新状态见[完成确认JSON](../annotation_materials/port_independent_size_labels_v1_20261006_final/review_20261007/annotation_completion.json)及[A055](#activity-a055)，A054报告／叠加图保留为补勾前快照。下一待办是统一四点到OBB合同、补齐符合实际的对象／测量声明及同帧原轴／k比较；无需再补勾这两帧。没有改标注、检查器、旧GT／split、模型／policy／深度公式或启动训练。
 
@@ -30,7 +30,7 @@
 
 ### 1.1 当前目标与任务分工
 
-**论文投稿准备（A062，2026-10-10）：** [有限实验清单](detection/小论文投稿有限实验清单_20261010.md)P0完整VAL原生AP已由A058核验完成；A062固定已暴露TEST原生回传核验完成，8项AP与CPU逐值一致，输入SHA／TP／FP及三覆盖分母一致。回传与收件检查保存非忽略目录test_native；服务器PR／源码清单未回传，属归档边界，无AP补跑待办。按用户同步要求，9份必要AP JSON逐字节复制到[可同步证据目录](detection/ap_evidence_20261010/README.md)，TEST默认VAL门槛及文档链接改用该目录，不需同步本机work_dirs。A061修复服务器原TEST目录缺失：将5份原输入逐字节复制到可同步test_source，默认入口改用该路径并增加明确缺文件诊断，29项测试及新默认路径完整1440帧输入静态核对通过，原VAL源码、报告字节、AP公式／数值保持；迁移没有重算AP或删历史结果。real TEST AP75 78.2849%→78.5908%、sim 90.8355%→90.9091%；real AP50 TP852→851同时披露。服务器命令更新见[AP统一报告](detection/AP评价口径与运行说明_20261010.md)，固定B24／σ1.5-ep03，不训练／推理／选权，不改论文、可靠性／深度。TEST不升级为独立确认；外部比较仍待下一阶段，本轮不启动。
+**论文投稿准备（A062，2026-10-10）：** [有限实验清单](detection/小论文投稿有限实验清单_20261010.md)P0完整VAL原生AP已由A058核验完成；A062固定已暴露TEST原生回传核验完成，8项AP与CPU逐值一致，输入SHA／TP／FP及三覆盖分母一致。回传与收件检查保存非忽略目录test_native；服务器PR／源码清单未回传，属归档边界，无AP补跑待办。按用户同步要求，9份必要AP JSON逐字节复制到[可同步证据目录](detection/ap_evidence_20261010/README.md)，TEST默认VAL门槛及文档链接改用该目录，不需同步本机work_dirs。A061修复服务器原TEST目录缺失：将5份原输入逐字节复制到可同步test_source，默认入口改用该路径并增加明确缺文件诊断，29项测试及新默认路径完整1440帧输入静态核对通过，原VAL源码、报告字节、AP公式／数值保持；迁移没有重算AP或删历史结果。real TEST AP75 78.2849%→78.5908%、sim 90.8355%→90.9091%；real AP50 TP852→851同时披露。服务器命令更新见[AP统一报告](detection/历史归档/共同设置与旧链路_完整原文.md#original-05-02)，固定B24／σ1.5-ep03，不训练／推理／选权，不改论文、可靠性／深度。TEST不升级为独立确认；外部比较仍待下一阶段，本轮不启动。
 
 **当前推进（A055）：** A048两组有限实验已收束、不采用，保持B24＋σ1.5-ep03，无补跑／延长预算。A050～A053来源核对及材料准备完成，A054记录20帧四点包围框及OBB／固定k比较职责，A055确认20份人工复核标志全部保存，取消两帧补勾待办。全部坐标及PNG保持，已有结构／几何诊断沿用；对象／测量声明仍空、旧检查合同未适配，不能直接导出GT或训练。下一步固定顶梁及梯形凸起的包围方向／范围与四点→OBB读取，补声明并取得同帧原轴／适用k配对；20帧仍UNASSIGNED，事件／近重复和物理对应待核验。没有model／policy／公式改动，不从Train-03或TEST选方案，两个下游共同收益须分别评价。
 
@@ -108,8 +108,8 @@
 
 本机阅读顺序：
 1. 本文件第1节及第2节最新活动；需要历史证据时再按需读旧交接第86～96节。
-2. [midpoint封存方法与结果](detection/旋转ROI四边中点几何修正_midpoint_v1_方法与结果_20261003.md)第12～14节：公式、三σVAL、三者TEST、权重及文献差异的主来源。
-3. [数据及四组检测总记录](detection/港口新数据集与EOOD_SymEOOD尺度增强实验总记录.md)：EOOD为检测比较基线，EOOD+B为增强控制，SymEOOD+B为细化前端；较早关闭实验状态不能覆盖最新封存。
+2. [midpoint封存方法与结果](detection/历史归档/第二个创新点_完整研究与运行记录.md#original-02-01)第12～14节：公式、三σVAL、三者TEST、权重及文献差异的主来源。
+3. [数据及四组检测总记录](detection/历史归档/共同设置与旧链路_完整原文.md#original-05-01)：EOOD为检测比较基线，EOOD+B为增强控制，SymEOOD+B为细化前端；较早关闭实验状态不能覆盖最新封存。
 4. [可靠性交接](reliability_handoff_20261003.md)顶部及第18～21节，只识别边界，不在本窗口改动。
 
 服务器权重原位保留：
@@ -639,7 +639,7 @@ sha256sum work_dirs/port_detection_runtime_v1_review_20261006.tar.gz
 | SymEOOD+B | `crane_symeood_k1_port_day2night_aug_b_v1.py`／epoch24 | 与无B的SymEOOD比较训练增强；B不增加部署模块／推理变换 |
 | SymEOOD+B+midpoint σ1.5 | 同一B24＋head_epoch03／2706步 | 与同一B检测器比较midpoint局部几何细化耗时 |
 
-**已有证据与边界：** [检测总记录](detection/港口新数据集与EOOD_SymEOOD尺度增强实验总记录.md)第3.2节明确原SymEOOD已完成、VAL选epoch20；EOOD及B为epoch24。各组使用原规则选中的权重，不为表格统一成epoch24，不重跑VAL选择。四组是顺序对照，不是模型×增强的完整因子实验；已有EOOD+B精度控制保留原角色，此轮不增加第五组。B只用于训练，所以其FPS差异不能解释为额外增强模块耗时；checkpoint预测分布、输出数量和测量波动仍可能使相同结构的实测耗时不同。实时性本身不能证明几何或所有精度指标改善，论文需与既有同协议精度证据对应。
+**已有证据与边界：** [检测总记录](detection/历史归档/共同设置与旧链路_完整原文.md#original-05-01)第3.2节明确原SymEOOD已完成、VAL选epoch20；EOOD及B为epoch24。各组使用原规则选中的权重，不为表格统一成epoch24，不重跑VAL选择。四组是顺序对照，不是模型×增强的完整因子实验；已有EOOD+B精度控制保留原角色，此轮不增加第五组。B只用于训练，所以其FPS差异不能解释为额外增强模块耗时；checkpoint预测分布、输出数量和测量波动仍可能使相同结构的实测耗时不同。实时性本身不能证明几何或所有精度指标改善，论文需与既有同协议精度证据对应。
 
 **实现：** 更新A015的入口／合同工具／protocol／sources／测试共5份文件，固定协议名改为`port_detection_runtime_v1_four_arm`，避免和三组结果混认；文件入口名仍为v1。四组依次加载、释放，单GPU／batch1／FP32、1024等比例推理、50预热及1440×3保持，不同时驻留四个模型。新增原SymEOOD模型路径`work_dirs/crane_symeood_k1_port_day2night_v1/epoch_20.pth`及其既有source-VAL／final-TEST预测绑定；新增`--symeood-sweep-dir`／`--symeood-test-dir`只定位已有文件，不提供σ／epoch／阈值参数。新断言在实际运行时检查SymEOOD及B的解析模型结构、四组TEST变换一致；输出保存三段相邻平均延迟差值／百分比，以及完整各组FPS／P95／显存。源文件／权重前后SHA、冻结状态、原图坐标／分数／候选数及每组4320预测复现保护保持。
 
@@ -1072,7 +1072,7 @@ CUDA_VISIBLE_DEVICES=3 bash crane_project/tools/run_port_detection_runtime_v1.sh
 
 **授权／范围：** 按用户“按推荐修改代码、检查并给服务器指令”，实施A043最近一步的支持／标注诊断，不扩展为新尺寸训练。读取已核验σ1.5 collect的2558 TRAIN＋887 VAL数值，不重建缓存、不加载模型／ROI／图像／policy，不执行深度公式或访问TEST预测／标注。旧64图fit48／probe16及标准尺度身份保持，未复用半尺度冒充独立支持。
 
-**改动：** 新增`port_geometry_size_support_v1.py`工具模块、`diagnose_port_geometry_size_support_v1.py`入口、`run_port_geometry_size_support_v1.sh`、protocol／sources及只含3445 TRAIN／VAL条目的labels合同、20项测试；说明集中至[新运行文件](detection/尺寸优化专用记录_20261016.md#legacy-size-run-doc)，更新顶部／第1.1节及深度结果第6.3节完成状态。逐帧双边log／有符号误差、尺度／比例、尾部、三个中心分母、域／视频／来源／旧采样角色、正确与错误子集、B→M恢复／新增错误分别报告。片段按已映射源视频／segment／时间／帧断开，未知时间只报编号相邻，不称独立场景或自动判定支持充分。
+**改动：** 新增`port_geometry_size_support_v1.py`工具模块、`diagnose_port_geometry_size_support_v1.py`入口、`run_port_geometry_size_support_v1.sh`、protocol／sources及只含3445 TRAIN／VAL条目的labels合同、20项测试；说明集中至[新运行文件](detection/历史归档/第三个创新点_完整研究与运行记录.md#original-03-03--legacy-size-run-doc)，更新顶部／第1.1节及深度结果第6.3节完成状态。逐帧双边log／有符号误差、尺度／比例、尾部、三个中心分母、域／视频／来源／旧采样角色、正确与错误子集、B→M恢复／新增错误分别报告。片段按已映射源视频／segment／时间／帧断开，未知时间只报编号相邻，不称独立场景或自动判定支持充分。
 
 **来源／标注合同：** 固定collect五文件SHA（rows=`0d971bb608761ecd9df180f3e6c0dffb46ca71974431cc97375b9cc9b14c88c6`）及B／head／选权／冻结receipt、VAL指纹；支持已有目录或原tar只读，不执行／解压包内代码。3445 annfile SHA、594 axis快照及k=2.1生成合同复核；0.25px容差只检查舍入多边形中心／尺寸与axis赋值，不重建或替换native GT。物理参考面保持UNCONFIRMED，不把固定k或图像比例等同于物理L/S。
 
@@ -1087,19 +1087,19 @@ CUDA_VISIBLE_DEVICES=3 bash crane_project/tools/run_port_detection_runtime_v1.sh
 
 **结果／推断边界：** TRAIN尺寸错误real70/1810、sim1/748；VAL real175/374、sim48/512，双边正确全帧199/375及464/512。旧64标准尺度仅fit1／probe1错，其余2494图有69错；旧64无双边偏小、短边偏小或比例>10%错误。全TRAIN共同偏小4、短边偏小14，VAL分别73／137；TRAIN71错误中seq05占44、55比例超限中占48。51错误描述片段并非51独立场景。事实支持代表性／错误分布失配，不能指定旧有限失败或深度退化唯一原因。3445标注／594 axis生成一致不保证物理定义相同；新real短边由长轴／2.1赋值，旧real各序列近固定比例来源仍待确认，不能直接改标签或强迫所有比例等于物理L/S。
 
-**改动／决定／待办：** 新增[复核JSON](detection/geometry_size_support_review_20261006.json)，完整表和建议集中写入[尺寸主要结果第4～5节](detection/尺寸精度主要结果与对比分析_20261006.md#train-size-support-results)，同步更新A044、顶部／第1.1节及运行说明完成状态，取消该诊断运行待办。A045时建议的新支持／监督协议已由用户授权在A046实现、A048运行核验完成，两组性能均未通过；共同偏小独立支持仍稀少，不能声称两个下游获益。A045没有源码、模型、可靠性／policy、公式或论文改动，不连接服务器；文档／数值／链接及diff检查通过。
+**改动／决定／待办：** 新增[复核JSON](detection/证据索引/geometry_size_support_review_20261006.json)，完整表和建议集中写入[尺寸主要结果第4～5节](detection/历史归档/第三个创新点_完整研究与运行记录.md#original-03-02--train-size-support-results)，同步更新A044、顶部／第1.1节及运行说明完成状态，取消该诊断运行待办。A045时建议的新支持／监督协议已由用户授权在A046实现、A048运行核验完成，两组性能均未通过；共同偏小独立支持仍稀少，不能声称两个下游获益。A045没有源码、模型、可靠性／policy、公式或论文改动，不连接服务器；文档／数值／链接及diff检查通过。
 
 ### A046. 2026-10-06：实现新TRAIN支持扩展＋双边／比例固定有限对照（A048已完成核验）
 
 **授权／设计：** 用户同意先完善TRAIN支持再做有限对照，并请求运行指令。不改原TRAIN／VAL，不把VAL不足推断成唯一原因；离线使用VAL选权仍是VAL选择。复用2558 TRAIN封存预测及三ROI缓存，身份排序预置每视频末尾约20%probe、前10编号purged；legacy64不进新梯度，原角色保持。fit1942／probe492／legacy64／purged60；fit54尺寸错误、共同偏小仅2，probe不独立于原训练，也不确认物理参考。视频平衡／错误曝光每尺度视图最多4次，同时保护正确框。
 
-**文件／实现：** 新增utils/port_geometry_size_contrast_v1.py、tools/run_port_geometry_size_contrast_v1.py及.sh、protocol／sources JSON、tests/test_port_geometry_size_contrast_v1.py和[运行说明](detection/尺寸优化专用记录_20261016.md#legacy-size-run-doc)。保留原2818参数在线头与全部交付保护，固定双边log与双边＋0.25投影比例两个监督组，同初始化／调度／Adam／200步。每组各2步smoke丢弃；完整M VAL887重放通过后才有限更新，无中间选权、重试或自动晋级。回传各项加权梯度／裁剪与原图连续误差；原联合gate加probe MAE／P95保护。脚本失败立即停，tar位于work_dirs根目录、排除权重／ROI。未修改旧源／权重／结果、policy／公式或论文。
+**文件／实现：** 新增utils/port_geometry_size_contrast_v1.py、tools/run_port_geometry_size_contrast_v1.py及.sh、protocol／sources JSON、tests/test_port_geometry_size_contrast_v1.py和[运行说明](detection/历史归档/第三个创新点_完整研究与运行记录.md#original-03-03--legacy-size-run-doc)。保留原2818参数在线头与全部交付保护，固定双边log与双边＋0.25投影比例两个监督组，同初始化／调度／Adam／200步。每组各2步smoke丢弃；完整M VAL887重放通过后才有限更新，无中间选权、重试或自动晋级。回传各项加权梯度／裁剪与原图连续误差；原联合gate加probe MAE／P95保护。脚本失败立即停，tar位于work_dirs根目录、排除权重／ROI。未修改旧源／权重／结果、policy／公式或论文。
 
 **验证／完成状态（A048更新）：** 交付时101来源闭包及真实封存collection的CPU prepare／角色复算通过；14测试中10本地通过、4因无Torch留服务器。A048服务器14项全部通过，实际两尺度资格、4次smoke更新及400次有限更新、完整VAL与回传核验均完成。测试涵盖VAL不能入计划、角色不由误差决定、fit／legacy／purge隔离、曝光上限／视频平衡、篡改与连续退化拒绝、shell失败后停止及根目录压缩。两组性能未通过、保持M，不追加预算，取消运行待办；可靠性／米制深度未新评，不从Train-03／TEST选方案。实现协议及旧反证保留，不将运行完成写成收益或根因已解决。
 
 ### A047. 2026-10-06：合并尺寸运行说明、集中论文结果，明确可靠性与深度共同目标
 
-**范围／改动：** 按用户授权合并两份尺度运行说明，移除原两份独立文件，仅维护[统一运行说明](detection/尺寸优化专用记录_20261016.md#legacy-size-run-doc)与[尺寸主要结果](detection/尺寸精度主要结果与对比分析_20261006.md)。保留已完成CPU诊断的精简流程存档、新有限协议／Git／服务器／根目录压缩指令；主要结果现按A049用户偏好只列固定B／M标准VAL、TRAIN支持及标注合同；旧200步和新有限反证留活动A014／A048，不再入论文结果文件。深度文件第6.4节改为尺寸结果引用，旧锚点保留，重复表格移出；更新本记录顶部／摘要及旧链接，不修改旧长交接。
+**范围／改动：** 按用户授权合并两份尺度运行说明，移除原两份独立文件，仅维护[统一运行说明](detection/历史归档/第三个创新点_完整研究与运行记录.md#original-03-03--legacy-size-run-doc)与[尺寸主要结果](detection/历史归档/第三个创新点_完整研究与运行记录.md#original-03-02)。保留已完成CPU诊断的精简流程存档、新有限协议／Git／服务器／根目录压缩指令；主要结果现按A049用户偏好只列固定B／M标准VAL、TRAIN支持及标注合同；旧200步和新有限反证留活动A014／A048，不再入论文结果文件。深度文件第6.4节改为尺寸结果引用，旧锚点保留，重复表格移出；更新本记录顶部／摘要及旧链接，不修改旧长交接。
 
 **目标／边界：** 用户明确尺寸修复应同时改善可靠性和深度。几何是共同上游，短边尺度与投影比例是重点，但几何通过不证明下游收益。匹配同一候选前端，固定policy／公式后分别检查可靠性同接受数错误接受／正确保留及分视频表现，独立深度米制误差／尾部／全帧有效覆盖；仅一侧改善不称共同改善。另拟合policy／公式另立版本，Train-03／TEST不选方案。此轮只整理文档和目标，没有新增下游代码、服务器运行、训练或论文改写。
 
@@ -1231,7 +1231,7 @@ CUDA_VISIBLE_DEVICES=3 bash crane_project/tools/run_port_detection_runtime_v1.sh
 
 **状态更新：** 下文为本机实现阶段快照；“原生核对待完成”已由A058服务器回传解决，无该项补跑待办。CPU原始报告身份保持。
 
-**授权／事实：** 用户要求进行AP计算、修改代码并审查逻辑。新增`crane_project/tools/eval_port_geometry_ap_v1.py`、`tests/test_port_geometry_ap_v1.py`及[AP口径／运行说明](detection/AP评价口径与运行说明_20261010.md)，同步清单和第1.1节状态。复用本地封存σ1.5在线VAL，固定B24和σ1.5-ep03身份、887帧／375real＋512sim、原score／空输出／回退及原图le90弧度。逐份artifact与原标注集合SHA通过；困难字段全0。新入口不经过CraneDataset吞异常包装，无TEST入口、推理、权重重载、训练、epoch扫描或重新选权。
+**授权／事实：** 用户要求进行AP计算、修改代码并审查逻辑。新增`crane_project/tools/eval_port_geometry_ap_v1.py`、`tests/test_port_geometry_ap_v1.py`及[AP口径／运行说明](detection/历史归档/共同设置与旧链路_完整原文.md#original-05-02)，同步清单和第1.1节状态。复用本地封存σ1.5在线VAL，固定B24和σ1.5-ep03身份、887帧／375real＋512sim、原score／空输出／回退及原图le90弧度。逐份artifact与原标注集合SHA通过；困难字段全0。新入口不经过CraneDataset吞异常包装，无TEST入口、推理、权重重载、训练、epoch扫描或重新选权。
 
 **口径／结果：** 固定单目标Top-1 OBB AP，VOC07十一点，0.50／0.75逐阈值最大IoU一对一匹配及全域score排序；与全候选AP／COCO AP区分。CPU复用原离线旋转IoU，27项测试全通过、Python3.8语法通过；独立float64凸多边形复核1772组IoU阈值判定差异0，AP复算最大差5.14e−8。real AP50 B／M均90.6181%，AP75 65.2725%→75.4430%（TP295→314）；sim AP50均100%，AP75 90.7415%→90.8156%（TP508→509）。中心三个分母另报：real B360/374、374/375、360/375；M362/374、374/375、362/375；sim均512/512。
 
@@ -1265,7 +1265,7 @@ CUDA_VISIBLE_DEVICES=3 bash crane_project/tools/run_port_detection_runtime_v1.sh
 
 **检查／当前CPU结果：** 完整TEST868real＋572sim、原标注及预测行SHA／GT包围／最小面积通过，24项新增测试及Python3.8语法通过；独立float64复核2862组IoU阈值判定差异0、AP最大差8.01e−8。real AP50 90.8224%→90.8873%、AP75 78.2849%→78.5908%；sim AP50均100%、AP75 90.8355%→90.9091%。real AP75 TP752→766、sim565→571；real AP50 TP852→851／FP7→8，AP略升不能替代最终召回。real中心命中858/859、输出859/868、全帧正确858/868，两方法保持；sim三个分母均572/572。CPU支持小幅严格重叠收益，变化幅度不如VAL real，不能称全面／显著或独立泛化收益。
 
-**交付／待验证：** 报告位于`work_dirs/port_geometry_ap_test_v1_cpu_final_20261010/`，静态位于`work_dirs/port_geometry_ap_test_v1_static_final_20261010/`，非final为同轮开发检查快照。集中写入[TEST AP结果／服务器及完整打包指令](detection/AP评价口径与运行说明_20261010.md)，同步VAL说明、投稿清单与第1.1节；未将CPU结果补写为封存原生TEST已完成。服务器目标成功状态`TEST_AP_NATIVE_VERIFIED`仍待真实运行／回传，新Python3.8入口未在服务器运行；本机无MMCV、不安装依赖、不连接服务器。VAL原生已完成，无重复运行；可将其已有PR／源码清单随本次TEST输出归档。TEST已多次暴露，最终σ1.5工程采用发生在旧TEST回传后；本次不消除暴露限制，不改模型、原自定义指标、论文、可靠性、深度或Git提交，不启动外部方法训练。
+**交付／待验证：** 报告位于`work_dirs/port_geometry_ap_test_v1_cpu_final_20261010/`，静态位于`work_dirs/port_geometry_ap_test_v1_static_final_20261010/`，非final为同轮开发检查快照。集中写入[TEST AP结果／服务器及完整打包指令](detection/历史归档/共同设置与旧链路_完整原文.md#original-05-02)，同步VAL说明、投稿清单与第1.1节；未将CPU结果补写为封存原生TEST已完成。服务器目标成功状态`TEST_AP_NATIVE_VERIFIED`仍待真实运行／回传，新Python3.8入口未在服务器运行；本机无MMCV、不安装依赖、不连接服务器。VAL原生已完成，无重复运行；可将其已有PR／源码清单随本次TEST输出归档。TEST已多次暴露，最终σ1.5工程采用发生在旧TEST回传后；本次不消除暴露限制，不改模型、原自定义指标、论文、可靠性、深度或Git提交，不启动外部方法训练。
 
 
 <a id="activity-a060"></a>
@@ -1380,7 +1380,7 @@ python crane_project/tools/train_port_geometry_midpoint_readout_v1.py \
 
 以nohup启动`--stage train`，运行目录`work_dirs/port_geometry_midpoint_readout_v1/formal_20261012_gpu2_v1/`、启动器PID421632；正式输出在train/，原成功preflight报告作为门槛。固定17,696参数、共同初值、24轮×902步＝21,648更新，全部24轮完整VAL原规则选权；B／σ1.5原结果复用，检测器不构建／forward／更新、缓存不重建、TEST不读。启动命令／物理卡／实际git HEAD／预检SHA保存在run_metadata.json，退出码与完成报告作为完成依据；启动时未填新成绩，完成后结果如下，未替换原头。
 
-正式结果集中写入[机制对照结果记录](detection/midpoint_readout_v1_机制对照结果_20261012.md)；原零更新分析保留历史身份。状态READOUT_FULL_TRAIN_VAL_COMPLETE_REVIEW_REQUIRED、退出0、24轮／21,648实际optimizer_step及train记录按序齐全，1,020.995秒。原24轮VAL规则选中均匀头epoch04；24轮均在可行域，权重重载完整VAL与选中摘要一致。服务器校验全artifact及轨迹，本机重要7份artifact SHA、887帧（375real／512sim）配对、全部24轮选择及2563项摘要数值复算通过（摘要最大差0，几何分解最大差6.7363e−6）。权重／全部中间结果只留服务器，必要报告与选中逐帧行保存非忽略docs目录。训练代码／协议不改；本机复算不构建模型，不冒称新在线推理或权重重载。
+正式结果集中写入[机制对照结果记录](detection/历史归档/第二个创新点_完整研究与运行记录.md#original-02-02)；原零更新分析保留历史身份。状态READOUT_FULL_TRAIN_VAL_COMPLETE_REVIEW_REQUIRED、退出0、24轮／21,648实际optimizer_step及train记录按序齐全，1,020.995秒。原24轮VAL规则选中均匀头epoch04；24轮均在可行域，权重重载完整VAL与选中摘要一致。服务器校验全artifact及轨迹，本机重要7份artifact SHA、887帧（375real／512sim）配对、全部24轮选择及2563项摘要数值复算通过（摘要最大差0，几何分解最大差6.7363e−6）。权重／全部中间结果只留服务器，必要报告与选中逐帧行保存非忽略docs目录。训练代码／协议不改；本机复算不构建模型，不冒称新在线推理或权重重载。
 
 **结果与决定：** real B／均匀／高斯RIoU0.7955／0.7957／0.7966，DFR4.5430／4.6147／4.5394，ACI0.9369／0.9379／0.9449；中心360／361／362，输出均374/375，全帧正确覆盖分别360／361／362除以375。sim RIoU0.8857／0.8869／0.8914、A-RMSE2.1072／1.7298／1.5635°、DFR2.4130／2.3669／2.3521、ACI0.9499／0.9548／0.9600，中心／输出覆盖均512/512。两头接受886／回退0／无效0，均匀头恢复2个real中心同时新增1失败，高斯恢复2且新增0。均匀头real中心误差均值／短边误差及sim长短边误差更低，保留反面证据，不称高斯全几何分量最优。支持空间先验对本协议下综合定位／方向／连续性的作用，不能单独证明中性期望相减、根因、普适性或显著性。保留σ1.5／ep03，均匀头封存为对照；本项已完成，可写VAL消融，无新TEST／AP／参数扫描待办。TEST多次暴露及σ1.5采用时序保持，可靠性／深度／论文及其它窗口改动不动。
 
@@ -1398,7 +1398,7 @@ TEST需先通过且索引、源码、权重、runtime一致的在线VAL报告。
 
 **结果与核验：** B／均匀／高斯TEST real RIoU0.8169／0.8159／0.8263，DFR2.5106／2.6757／2.7019、ACI0.9440／0.9428／0.9475；sim RIoU0.8815／0.8861／0.8950、A-RMSE1.8822／1.6119／1.2934°、DFR2.4734／2.3051／2.2299、ACI0.9479／0.9526／0.9585。三条件real中心858/859、输出859/868、全帧正确858/868；sim均572/572。均匀real接受858／回退1（angle_bound）／无效0、高斯接受859／回退0，sim两头接受572。两头无新增中心失败，高斯新增real RIoU<0.5帧2个、均匀1个；高斯real DFR、MCML_mean4.0／MRF2.43较均匀3.0／2.14更差，部分尺寸误差也较均匀高，不删反证。
 
-服务器全artifact与轨迹／源SHA通过；本机18份artifact文件SHA、当前91份来源／权重身份、两头VAL／TEST逐帧与15,348项摘要复算通过（摘要差0，几何分解最大差8.6927e−6）。原B并未换身份；两头同次B框／分数精确一致。必要门槛／报告／原预测／日志和收件存docs/detection/midpoint_readout_fixed_test_evidence_20261012，未本机模型重载／推理，未复制权重／缓存／服务器源码。结果追加至[统一记录](detection/midpoint_readout_v1_机制对照结果_20261012.md)末尾固定TEST表；VAL表原值／身份保持，可写第五节同集合机制消融，但单种子／暴露TEST不支持独立泛化、显著性、根因或全部分量改善。不因TEST重选模型，不改可靠性／深度／论文，代码与历史来源不改。
+服务器全artifact与轨迹／源SHA通过；本机18份artifact文件SHA、当前91份来源／权重身份、两头VAL／TEST逐帧与15,348项摘要复算通过（摘要差0，几何分解最大差8.6927e−6）。原B并未换身份；两头同次B框／分数精确一致。必要门槛／报告／原预测／日志和收件存docs/detection/midpoint_readout_fixed_test_evidence_20261012，未本机模型重载／推理，未复制权重／缓存／服务器源码。结果追加至[统一记录](detection/历史归档/第二个创新点_完整研究与运行记录.md#original-02-02)末尾固定TEST表；VAL表原值／身份保持，可写第五节同集合机制消融，但单种子／暴露TEST不支持独立泛化、显著性、根因或全部分量改善。不因TEST重选模型，不改可靠性／深度／论文，代码与历史来源不改。
 
 **A067回传清理完成：** 固定TEST回传包2,529,469字节、SHA 88b00bf5f44fd050e70c3e34002fc35a8814ed004162616edf41e316fa061b79，28份必要文本安全展开并完成核验。分析记录后仅删除本机与服务器该次传输压缩包，确认不存在；原始报告、逐帧、进度及训练权重保留。本机收件为独立检查，不重写服务器artifact。本轮未Git提交／推送、未改论文或其它窗口改动。
 
