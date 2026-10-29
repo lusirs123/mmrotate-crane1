@@ -1,0 +1,179 @@
+{
+  "protocol": "detector_module_ablation_v1",
+  "status": "CODE_PREPARATION_ONLY_NOT_RUN",
+  "date": "2026-10-28",
+  "output_directory": "work_dirs/detector_module_ablation_v1_20261028",
+  "train_scales": [
+    1.0,
+    0.5
+  ],
+  "val_scale": 1.0,
+  "midpoint": {
+    "epochs": 24,
+    "batch_size": 8,
+    "seed": 1703,
+    "optimizer": "Adam",
+    "lr": 0.001,
+    "weight_decay": 0.0,
+    "clip_norm": 10.0,
+    "adam": {
+      "betas": [
+        0.9,
+        0.999
+      ],
+      "eps": 1e-08
+    },
+    "parameters": 17696,
+    "sigma_cells": 1.5,
+    "train_center_match_px": 15.0,
+    "sampling": "original epoch_batches: eligible TRAIN, 4 Real + 4 Sim, cycle smaller domain",
+    "selection": "original ckpt_sweep SELECTION_CONFIG on all 24 full VAL"
+  },
+  "lvsr": {
+    "epochs": 24,
+    "batch_size": 8,
+    "seed": 1703,
+    "optimizer": "Adam",
+    "lr": 0.001,
+    "weight_decay": 0.0,
+    "clip_norm": 10.0,
+    "adam": {
+      "betas": [
+        0.9,
+        0.999
+      ],
+      "eps": 1e-08
+    },
+    "parameters": 2480,
+    "architecture": "PairSpecificSizeHead",
+    "reference_without_midpoint": "Q=B, unchanged read_pair/support/encode/decode/delivery",
+    "sampling": "all present TRAIN views sorted by (scale,image), original schedule_indices seed1703+epoch, last partial batch retained",
+    "selection": "joint10 desc, Sim longMAE asc, Sim shortMAE asc, Real longMAE asc, Real shortMAE asc, epoch asc; all24 VAL; fixedep24 auxiliary",
+    "adoption": "Selection is not a pass of historical strict adoption gates"
+  },
+  "arms": {
+    "eood_m": {
+      "frontend": "eood",
+      "midpoint": true,
+      "lvsr": false
+    },
+    "eood_l": {
+      "frontend": "eood",
+      "midpoint": false,
+      "lvsr": true
+    },
+    "eood_ml": {
+      "frontend": "eood",
+      "midpoint": true,
+      "lvsr": true
+    },
+    "110_l": {
+      "frontend": "110",
+      "midpoint": false,
+      "lvsr": true
+    }
+  },
+  "frontends": {
+    "eood": {
+      "identity": "EOOD-scale-augmented-original-VAL-ep24",
+      "epoch": 24,
+      "config": "work_dirs/crane_eood_k1_port_day2night_aug_b_v1/crane_eood_k1_port_day2night_aug_b_v1.py",
+      "checkpoint": "work_dirs/crane_eood_k1_port_day2night_aug_b_v1/epoch_24.pth",
+      "checkpoint_sha256": "95da2d648cfef95e1fcd00f2cdfc258d9cf75ed038135bbfc00059f8f6f2a4db",
+      "selection_evidence": "work_dirs/crane_eood_k1_port_day2night_aug_b_v1/val_sweep_port_v1/sweep_results.json",
+      "config_note": "Archived expanded config equals the original entry on model/data/optimizer/optimizer_config/lr_config/runner (local MMCV check). Sweep SHA names entry bytes, not expanded bytes. Checkpoint metadata still checked at runtime.",
+      "original_entry": "crane_project/configs/crane_eood_k1_port_day2night_aug_b_v1.py"
+    },
+    "110": {
+      "identity": "SymEOOD-110-retrain-seed0-ep20-20261026-v1",
+      "epoch": 20,
+      "config": "work_dirs/symeood_110_retrain_seed0_20261026_v1/configs/Coff_seed0.py",
+      "checkpoint": "work_dirs/symeood_110_retrain_seed0_20261026_v1/110/epoch_20.pth",
+      "checkpoint_sha256": "7f35dacc308943949a8fd2e6aaad312d14651564903ec87c8c8dcec0552ec054",
+      "cache": "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/midpoint/formal/roi_cache"
+    }
+  },
+  "fairness": {
+    "detector_retraining": false,
+    "frontend_weights_frozen": true,
+    "new_heads_fresh": true,
+    "resume_from_historical_head": false,
+    "eood_m_shared_by_m_and_ml": true,
+    "one_eood_cache_for_three_arms": true,
+    "native_nms_thresholds_unchanged": true,
+    "top1": "highest native score, first tie; no new score gate or NMS",
+    "different_frontend_outputs": "Keep natural missing/output differences. No GT intersection filtering. Same sampling rule, actual counts and update budgets reported, not forced to639.",
+    "historical_controls": "Existing E/S/S+M/S+M+L kept. Different detector runs/selection history prevent claiming a new fully paired eight-arm training.",
+    "selection_boundary": "New arms use frozen prospective rules. S+M+L ep11 was retrospectively identified on exposed development evidence; no retroactive preregistration claim.",
+    "main_comparisons": [
+      "E+M vs E",
+      "E+L vs E",
+      "E+M+L vs E+M and E+L",
+      "S+L vs S",
+      "S+M+L vs S+M and S+L"
+    ],
+    "report": "overall + Real/Sim + per sequence; center/loc/RIoU/angle plus both sizeMAEs/joint10/abs-a/abs-r, DFR auxiliary; retain all costs"
+  },
+  "scope": {
+    "training_started": false,
+    "cache_generated": false,
+    "server_checked": false,
+    "TEST": false,
+    "depth": false,
+    "continuation": false,
+    "automatic_queue": false
+  },
+  "sources": {
+    "crane_project/tools/run_detector_module_ablation_v1.py": "babc6ac91024260ec32b3a3c4ed1b3bfbacd87ab90dcf876c8939d331b492111",
+    "tests/test_detector_module_ablation_v1.py": "b26d7043cc321d5ce5a9d9aca6fbc7d848a51cd2b90571deee9783e4f0330a42",
+    "crane_project/tools/train_symeood_110_midpoint_v1.py": "16084b031f7a3cf7c48b84b5370f79c27b46ce80a69a63041af5a68074d8a47a",
+    "crane_project/tools/run_symeood_110_lvsr_v1.py": "0d565b6f169f440275a4f8630c20b4474791284ce8dbbfb8a9fbe3141ba456fa",
+    "crane_project/tools/train_symeood_110_lvsr_pair_v1.py": "024d43e4a85a77b3519430e4182e590993d4dee388c25d4cd12cb723d49f9ff5",
+    "crane_project/tools/run_port_size_native_train_v1.py": "46a4febcb998334f5f4ddd72fb0773bcf9a1c59e885f3f9229755633b9761552",
+    "crane_project/tools/ckpt_sweep.py": "161fc8e9fcb10b916dfaea04f4137701469dbb47d70224d145a8e2eaf7acde50",
+    "crane_project/tools/eval_crane_offline.py": "52d22caa5383a0c35c3b4f1b1f6b1453ba5da9d2618da0eb686eff8570bfc9b9",
+    "crane_project/utils/port_geometry_midpoint_v1.py": "cfb90a032d7c74b0e911f5f89b6f23a422baf2b2824813fc92d7a832b049bad3",
+    "crane_project/utils/port_geometry_midpoint_sigma_v1.py": "e634d5cfdab0547c038c0bba48518c2494f526aed624e2b6a96affe7a31cfd85",
+    "crane_project/utils/port_size_pair_specific_v1.py": "5a5d3bc2d0d3fbfa9a4e0e36f08f1318b5675452642a8ba440ec5ef1487f1b6a",
+    "crane_project/utils/port_size_qalign_v1.py": "bffff38f97d0d7cf8210f009c7b5160895a9d8e88f80fbca7efb80c3e1f71ca4",
+    "crane_project/utils/port_size_local_vectors_v1.py": "ec2100e814d982347847c82df81d75226ced85b546538690aabf8abccc1cf684",
+    "crane_project/utils/port_geometry_midpoint_edge_residual_v1.py": "260eb599b50d966801ec84fa1517584a174daa5d41388e6133e1d773e6782d28",
+    "crane_project/utils/port_geometry_size_distribution_metrics_v1.py": "cd08da015c45f3e404f933a10789759868437d5d86ee488ddf9ed1aa62ddbd57",
+    "crane_project/utils/port_geometry_midpoint_edge_residual_metrics_v1.py": "867df992db7311bdc53b42d6d637cd2f2a194847e5a567953b1877e179beaae0",
+    "mmrotate/models/detectors/eood.py": "4c1497000c7798b4cf703e88204620e13101943f68bbddd31ef10a9649e72f1f",
+    "mmrotate/models/detectors/single_stage.py": "76b2cc533f77f316b84de0afb7a437e7aaaf0a7c03eed8d09314f375a6ee8456",
+    "mmrotate/models/dense_heads/eood_head.py": "8cd271440369935cea4a1b4793fd95391ab8cb115610ed4e6237042f709e6aa3",
+    "work_dirs/crane_eood_k1_port_day2night_aug_b_v1/crane_eood_k1_port_day2night_aug_b_v1.py": "4fb64256fbe5d090168afccfd318478f2b1ea69cb759aac3515728ffc7e6e87e",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/configs/Coff_seed0.py": "a9ae487979ad657ce57ab48138ed968f0611457301aaf8b8d694fd0ab0b04e60",
+    "crane_project/data_contracts/symeood_110_detection_base_v2_20261026.json": "5a649ebda79082af894ec87df78a08eb8234568726a341c1ee9333acd85aeea3",
+    "crane_project/tools/preflight_port_structure_reliability_v1.py": "eb8e9a0fba0ad1414585254a21abd956962a5c6a3537e3cfb4363af2fde81458",
+    "crane_project/tools/preflight_port_geometry_g_v1.py": "45c5cd608f11364164efa0903d83606082e8066487453d472afd44f550fe0875",
+    "crane_project/utils/port_geometry_refine_g_v1.py": "2545e32ef953d22ef359a56bfc1cadd38d28e69f22b30de6c7fa60f27092c51b",
+    "crane_project/configs/crane_eood_k1_port_day2night_aug_b_v1.py": "8e72ebd5e4523382c06e878823820c81cd313d6dca0c2dfe1a1094ad40d513d8"
+  },
+  "runtime_reference": {
+    "torch": "1.13.1+cu117",
+    "cuda": "11.7",
+    "cudnn": 8500,
+    "mmcv": "1.7.0",
+    "mmdet": "2.25.1",
+    "mmrotate": "0.3.4",
+    "opencv": "4.13.0",
+    "gpu": "NVIDIA GeForce GTX 1080"
+  },
+  "smoke": {
+    "views_per_frontend": 12,
+    "train_views_per_frontend": 8,
+    "val_views_per_frontend": 4,
+    "frontends": [
+      "eood",
+      "110"
+    ],
+    "temporary_updates_per_case": 2,
+    "temporary_updates_total": 8,
+    "full_cache": false,
+    "TEST": false,
+    "formal_training": false,
+    "states_discarded": true
+  }
+}

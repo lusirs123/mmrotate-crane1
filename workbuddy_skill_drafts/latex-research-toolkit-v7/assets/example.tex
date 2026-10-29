@@ -1,0 +1,12 @@
+\documentclass[border=5pt]{standalone}
+\usepackage{xeCJK}
+\setCJKmainfont{FandolSong-Regular.otf}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta}
+\begin{document}
+\begin{tikzpicture}[node distance=15mm,box/.style={draw,rounded corners,minimum width=22mm,minimum height=9mm}]
+\node[box] (a) {输入 $x$};
+\node[box,right=of a] (b) {输出 $y$};
+\draw[-{Stealth}] (a) -- (b);
+\end{tikzpicture}
+\end{document}

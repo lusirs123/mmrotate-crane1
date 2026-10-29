@@ -1,0 +1,2401 @@
+{
+  "schema": "workdirs_cleanup_v1",
+  "date": "2026-10-28",
+  "state": "COMPLETE_LOCAL_FILES_VERIFIED",
+  "authorization": "小论文复现所需材料保留；DINO相关删除；可靠性和Webots保留；当前大论文共享LVSR与测距保留；仅本机，不修改服务器或Git历史。",
+  "Git_tracks_work_dirs_files": false,
+  "scope": "LOCAL_ONLY",
+  "server_modified": false,
+  "training_or_inference_executed": false,
+  "bytes_before": 7066915654,
+  "files_before": 113463,
+  "planned_deleted_files": 46596,
+  "planned_deleted_bytes": 2783269217,
+  "delete_top": [
+    "work_dirs/.DS_Store",
+    "work_dirs/crane_symeood_dino_k1_retentive_causal_phase_fixed_test",
+    "work_dirs/crane_symeood_dino_k1_retentive_causal_phase_refiner_source_v3_seed3407",
+    "work_dirs/dino_teacher_fc_cls_interpolation_v1",
+    "work_dirs/dino_teacher_scoped_lowlight_v1_formal8",
+    "work_dirs/git_comparison_20261023",
+    "work_dirs/historical_b_ablation111_audit_20261025_v1",
+    "work_dirs/port_detection_runtime_v1_review",
+    "work_dirs/port_direction_consistency_v1_server_review_20261003",
+    "work_dirs/port_frozen_downstream_v1_20261007_163625_1260566.tar.gz",
+    "work_dirs/port_geometry_ap_test_v1_cpu_20261010",
+    "work_dirs/port_geometry_ap_test_v1_static_20261010",
+    "work_dirs/port_geometry_ap_test_v1_static_final_20261010",
+    "work_dirs/port_geometry_ap_v1_val_cpu_20261010",
+    "work_dirs/port_geometry_ap_v1_val_static_20261010",
+    "work_dirs/port_geometry_ap_v1_val_static_final_20261010",
+    "work_dirs/port_geometry_g_roi_ablation_v1_local_review_20261002",
+    "work_dirs/port_geometry_g_roi_ablation_v1_server_review_20261002",
+    "work_dirs/port_geometry_g_roi_ablation_v1_static_local_20261002",
+    "work_dirs/port_geometry_g_v1_report_fix_local_20261002",
+    "work_dirs/port_geometry_g_v1_server_review_20261002",
+    "work_dirs/port_geometry_g_v1_static_check_local_20261002.artifacts.json",
+    "work_dirs/port_geometry_g_v1_static_check_local_20261002.json",
+    "work_dirs/port_geometry_g_v1_static_check_local_20261002.progress.jsonl",
+    "work_dirs/port_geometry_g_v1_static_check_local_20261002_v2.artifacts.json",
+    "work_dirs/port_geometry_g_v1_static_check_local_20261002_v2.json",
+    "work_dirs/port_geometry_g_v1_static_check_local_20261002_v2.progress.jsonl",
+    "work_dirs/port_geometry_g_v1_static_check_local_20261002_v3.artifacts.json",
+    "work_dirs/port_geometry_g_v1_static_check_local_20261002_v3.json",
+    "work_dirs/port_geometry_g_v1_static_check_local_20261002_v3.progress.jsonl",
+    "work_dirs/port_geometry_g_v1_static_check_local_20261002_v4.artifacts.json",
+    "work_dirs/port_geometry_g_v1_static_check_local_20261002_v4.json",
+    "work_dirs/port_geometry_g_v1_static_check_local_20261002_v4.progress.jsonl",
+    "work_dirs/port_geometry_size_axis_balance_v1",
+    "work_dirs/port_geometry_size_boundary_continuous_v1_20261007_154944_1078779.tar.gz",
+    "work_dirs/port_geometry_size_condition_v1",
+    "work_dirs/port_geometry_size_distribution_v1",
+    "work_dirs/port_geometry_size_proposal_v1",
+    "work_dirs/port_shape_e_v1_existing_val_riou_crosscheck_20261001.json",
+    "work_dirs/port_shape_e_v1_geometry_cpu_20261001.json",
+    "work_dirs/port_shape_e_v1_geometry_cpu_final_20261001.json",
+    "work_dirs/port_shape_e_v1_geometry_cpu_fix1_20261001.json",
+    "work_dirs/port_shape_e_v1_geometry_cpu_reviewed_20261001.json",
+    "work_dirs/port_shape_e_v1_train_preflight_server_20261001.json",
+    "work_dirs/port_size_a20_protection_review_v1",
+    "work_dirs/port_size_auxiliary_conflict_v1",
+    "work_dirs/port_size_joint_v1",
+    "work_dirs/port_size_local_aux_v1",
+    "work_dirs/port_size_native_p3_v1",
+    "work_dirs/port_size_proposal_downstream_v1",
+    "work_dirs/port_size_reference_v1_code_review_local_20261004",
+    "work_dirs/port_size_reference_v1_ideal_local_20261004_final_v3",
+    "work_dirs/port_size_reference_v1_server_review_20261004_134359",
+    "work_dirs/port_size_seven_replay_v1",
+    "work_dirs/source_calibration_collect",
+    "work_dirs/symeood_110_midpoint_lvsr_linkage_audit_20261026_v2",
+    "work_dirs/symeood_b111_canonical_20261025_v2",
+    "work_dirs/symeood_c_pair_seed0_20261025_v1",
+    "work_dirs/symeood_c_pair_seed0_20261025_v2",
+    "work_dirs/symeood_cross_entry_review_20261025_v1",
+    "work_dirs/symeood_mal_strength_seed0_20261026_v1",
+    "work_dirs/symeood_usg_v1"
+  ],
+  "prune_with_protected_exceptions": [
+    "work_dirs/symeood_ablation_v1/c_frozen_diagnostic_20261024_v1",
+    "work_dirs/symeood_ablation_v1/c_review_20261024_v1",
+    "work_dirs/symeood_ablation_v1/c_review_20261024_v2",
+    "work_dirs/symeood_ablation_v1/checks_20261022_144000",
+    "work_dirs/symeood_ablation_v1/cleanup_review_20261026_v1",
+    "work_dirs/symeood_ablation_v1/cleanup_review_20261026_v2",
+    "work_dirs/symeood_ablation_v1/diagnosis_000_cpu_20261023",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/edge_diagnostic",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/continuation_CP_ep7",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/continuation_ESH_ep7",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/continuation_C_ep11_joint_v2",
+    "work_dirs/port_size_native_train_v1"
+  ],
+  "deletions_by_top": {
+    "port_size_a20_protection_review_v1": {
+      "files": 14,
+      "bytes": 6603106
+    },
+    "port_geometry_g_v1_static_check_local_20261002_v2.json": {
+      "files": 1,
+      "bytes": 8780
+    },
+    "crane_symeood_dino_k1_retentive_causal_phase_fixed_test": {
+      "files": 4,
+      "bytes": 166387
+    },
+    "port_shape_e_v1_existing_val_riou_crosscheck_20261001.json": {
+      "files": 1,
+      "bytes": 350779
+    },
+    "port_shape_e_v1_geometry_cpu_20261001.json": {
+      "files": 1,
+      "bytes": 28125
+    },
+    "port_geometry_size_support_v1_local_review_20261006": {
+      "files": 1,
+      "bytes": 6148
+    },
+    "port_simple_reliability_v1_server_review_20261003": {
+      "files": 1,
+      "bytes": 6148
+    },
+    "port_geometry_g_v1_static_check_local_20261002.json": {
+      "files": 1,
+      "bytes": 1108
+    },
+    "symeood_110_midpoint_lvsr_linkage_audit_20261026_v2": {
+      "files": 7,
+      "bytes": 56261
+    },
+    "historical_b_ablation111_audit_20261025_v1": {
+      "files": 36,
+      "bytes": 2205597
+    },
+    "port_geometry_g_v1_static_check_local_20261002.artifacts.json": {
+      "files": 1,
+      "bytes": 497
+    },
+    "port_reliability_paired_ranking_audit_v1": {
+      "files": 1,
+      "bytes": 8196
+    },
+    "port_geometry_g_v1_static_check_local_20261002_v2.progress.jsonl": {
+      "files": 1,
+      "bytes": 0
+    },
+    "port_reliability_readout_test_v1": {
+      "files": 2,
+      "bytes": 12296
+    },
+    "port_geometry_ap_test_v1_static_20261010": {
+      "files": 2,
+      "bytes": 3178
+    },
+    "port_geometry_g_roi_ablation_v1_server_review_20261002": {
+      "files": 31,
+      "bytes": 5200087
+    },
+    "port_size_proposal_downstream_v1": {
+      "files": 33,
+      "bytes": 11821189
+    },
+    ".DS_Store": {
+      "files": 1,
+      "bytes": 65540
+    },
+    "port_size_auxiliary_conflict_v1": {
+      "files": 18,
+      "bytes": 7788499
+    },
+    "port_midpoint_sigma15_reliability_v1_cachefix1": {
+      "files": 1,
+      "bytes": 6148
+    },
+    "port_geometry_g_v1_static_check_local_20261002_v3.progress.jsonl": {
+      "files": 1,
+      "bytes": 0
+    },
+    "symeood_usg_v1": {
+      "files": 26875,
+      "bytes": 47612688
+    },
+    "port_geometry_size_boundary_continuous_v1_20261007_154944_1078779.tar.gz": {
+      "files": 1,
+      "bytes": 7106938
+    },
+    "crane_symeood_k1": {
+      "files": 3,
+      "bytes": 20492
+    },
+    "dino_teacher_scoped_lowlight_v1_formal8": {
+      "files": 1,
+      "bytes": 3165440
+    },
+    "port_geometry_g_v1_static_check_local_20261002_v4.progress.jsonl": {
+      "files": 1,
+      "bytes": 0
+    },
+    "port_shape_e_v1_geometry_cpu_final_20261001.json": {
+      "files": 1,
+      "bytes": 28087
+    },
+    "symeood_c_pair_seed0_20261025_v1": {
+      "files": 3,
+      "bytes": 1672526
+    },
+    "port_geometry_g_v1_static_check_local_20261002_v3.json": {
+      "files": 1,
+      "bytes": 8780
+    },
+    "symeood_ablation_v1": {
+      "files": 127,
+      "bytes": 90196037
+    },
+    "port_geometry_midpoint_sigma15_v1_results_20261005_095254": {
+      "files": 3,
+      "bytes": 24588
+    },
+    "port_geometry_size_support_v1_local_review_final_20261006": {
+      "files": 1,
+      "bytes": 6148
+    },
+    "symeood_110_retrain_seed0_20261026_v1": {
+      "files": 183,
+      "bytes": 73796357
+    },
+    "port_reliability_feature_source_test_v1": {
+      "files": 2,
+      "bytes": 12296
+    },
+    "port_size_seven_replay_v1": {
+      "files": 8,
+      "bytes": 5449823
+    },
+    "port_geometry_g_v1_server_review_20261002": {
+      "files": 11,
+      "bytes": 2759816
+    },
+    "source_calibration_collect": {
+      "files": 4,
+      "bytes": 819983
+    },
+    "port_reliability_opposite_border_v1": {
+      "files": 2,
+      "bytes": 12296
+    },
+    "port_geometry_g_v1_static_check_local_20261002_v4.json": {
+      "files": 1,
+      "bytes": 8804
+    },
+    "port_size_native_p3_v1": {
+      "files": 21,
+      "bytes": 242437
+    },
+    "symeood_cross_entry_review_20261025_v1": {
+      "files": 353,
+      "bytes": 963980967
+    },
+    "port_geometry_ap_v1_val_cpu_20261010": {
+      "files": 3,
+      "bytes": 603129
+    },
+    "port_geometry_g_roi_ablation_v1_local_review_20261002": {
+      "files": 1,
+      "bytes": 1005
+    },
+    "port_geometry_size_distribution_v1": {
+      "files": 407,
+      "bytes": 110509936
+    },
+    "port_size_reference_v1_ideal_local_20261004_final_v3": {
+      "files": 3,
+      "bytes": 202917
+    },
+    "port_size_annotation_readout_v1": {
+      "files": 1,
+      "bytes": 8196
+    },
+    "git_comparison_20261023": {
+      "files": 5,
+      "bytes": 1687334
+    },
+    "port_geometry_size_axis_balance_v1": {
+      "files": 564,
+      "bytes": 73460308
+    },
+    "port_detection_runtime_v1_review": {
+      "files": 6,
+      "bytes": 36617
+    },
+    "port_geometry_g_v1_static_check_local_20261002_v4.artifacts.json": {
+      "files": 1,
+      "bytes": 520
+    },
+    "port_depth_four_arm_v1": {
+      "files": 2,
+      "bytes": 12296
+    },
+    "port_size_reference_v1_server_review_20261004_134359": {
+      "files": 23,
+      "bytes": 7251665
+    },
+    "symeood_mal_strength_seed0_20261026_v1": {
+      "files": 4675,
+      "bytes": 48880310
+    },
+    "symeood_b111_canonical_20261025_v2": {
+      "files": 22,
+      "bytes": 2259093
+    },
+    "port_geometry_ap_test_v1_static_final_20261010": {
+      "files": 2,
+      "bytes": 3178
+    },
+    "port_shape_e_v1_geometry_cpu_fix1_20261001.json": {
+      "files": 1,
+      "bytes": 28087
+    },
+    "port_geometry_g_v1_static_check_local_20261002_v3.artifacts.json": {
+      "files": 1,
+      "bytes": 520
+    },
+    "port_independent_size_labels_v1_20261006_review": {
+      "files": 1,
+      "bytes": 6148
+    },
+    "port_reliability_tradeoff_v1": {
+      "files": 1,
+      "bytes": 6148
+    },
+    "port_size_joint_v1": {
+      "files": 19,
+      "bytes": 1558110
+    },
+    "port_geometry_g_v1_static_check_local_20261002.progress.jsonl": {
+      "files": 1,
+      "bytes": 0
+    },
+    "port_geometry_g_v1_static_check_local_20261002_v2.artifacts.json": {
+      "files": 1,
+      "bytes": 520
+    },
+    "port_reliability_feature_ablation_v1": {
+      "files": 2,
+      "bytes": 12296
+    },
+    "port_geometry_g_v1_report_fix_local_20261002": {
+      "files": 5,
+      "bytes": 22315
+    },
+    "base_v3_obb_reliability_baseline_v1": {
+      "files": 2,
+      "bytes": 16392
+    },
+    "symeood_c_pair_seed0_20261025_v2": {
+      "files": 11833,
+      "bytes": 16650275
+    },
+    "port_size_local_aux_v1": {
+      "files": 173,
+      "bytes": 228909779
+    },
+    "port_geometry_size_boundary_v1": {
+      "files": 7,
+      "bytes": 49180
+    },
+    "port_size_native_train_v1": {
+      "files": 294,
+      "bytes": 123878002
+    },
+    "port_geometry_ap_v1_val_static_20261010": {
+      "files": 2,
+      "bytes": 2998
+    },
+    "port_geometry_size_condition_v1": {
+      "files": 264,
+      "bytes": 60655448
+    },
+    "port_size_reference_v1_code_review_local_20261004": {
+      "files": 1,
+      "bytes": 4996
+    },
+    "port_geometry_size_proposal_v1": {
+      "files": 411,
+      "bytes": 98657005
+    },
+    "port_direction_consistency_v1_server_review_20261003": {
+      "files": 3,
+      "bytes": 2136579
+    },
+    "port_simple_reliability_v1_test_server_review_20261003_205844": {
+      "files": 1,
+      "bytes": 6148
+    },
+    "port_shape_e_v1_geometry_cpu_reviewed_20261001.json": {
+      "files": 1,
+      "bytes": 28087
+    },
+    "port_geometry_g_roi_ablation_v1_static_local_20261002": {
+      "files": 5,
+      "bytes": 34095
+    },
+    "port_size_frozen_downstream_v1": {
+      "files": 1,
+      "bytes": 6148
+    },
+    "port_reliability_spatial_axis_v1": {
+      "files": 1,
+      "bytes": 6148
+    },
+    "port_geometry_ap_test_v1_cpu_20261010": {
+      "files": 3,
+      "bytes": 1009351
+    },
+    "port_shape_e_v1_train_preflight_server_20261001.json": {
+      "files": 1,
+      "bytes": 90492
+    },
+    "port_frozen_downstream_v1_20261007_163625_1260566.tar.gz": {
+      "files": 1,
+      "bytes": 2813171
+    },
+    "dino_teacher_fc_cls_interpolation_v1": {
+      "files": 7,
+      "bytes": 228450628
+    },
+    "port_detection_runtime_v1": {
+      "files": 2,
+      "bytes": 12296
+    },
+    "port_reliability_separability_v1_server_review_20261004_092421": {
+      "files": 1,
+      "bytes": 6148
+    },
+    "crane_symeood_dino_k1_retentive_causal_phase_refiner_source_v3_seed3407": {
+      "files": 72,
+      "bytes": 542033729
+    },
+    "port_geometry_ap_v1_val_static_final_20261010": {
+      "files": 2,
+      "bytes": 2998
+    }
+  },
+  "kept_top": [
+    "work_dirs/base_v3_obb_reliability_baseline_v1",
+    "work_dirs/crane_eood_k1_port_day2night_aug_b_v1",
+    "work_dirs/crane_eood_k1_port_day2night_v1",
+    "work_dirs/crane_symeood_k1",
+    "work_dirs/crane_symeood_k1_port_day2night_aug_b_v1",
+    "work_dirs/crane_symeood_k1_port_day2night_v1",
+    "work_dirs/depth",
+    "work_dirs/port_depth_four_arm_v1",
+    "work_dirs/port_detection_runtime_v1",
+    "work_dirs/port_geometry_ap_test_v1_cpu_final_20261010",
+    "work_dirs/port_geometry_ap_v1_val_cpu_final_20261010",
+    "work_dirs/port_geometry_ap_v1_val_native_review_20261010",
+    "work_dirs/port_geometry_midpoint_sigma15_v1_results_20261005_095254",
+    "work_dirs/port_geometry_size_boundary_v1",
+    "work_dirs/port_geometry_size_support_v1_local_review_20261006",
+    "work_dirs/port_geometry_size_support_v1_local_review_final_20261006",
+    "work_dirs/port_geometry_size_support_v1_local_review_fix1_20261006",
+    "work_dirs/port_independent_size_labels_v1_20261006_review",
+    "work_dirs/port_low_fa_v1",
+    "work_dirs/port_midpoint_sigma15_reliability_v1_cachefix1",
+    "work_dirs/port_midpoint_simple_disagreement_v1",
+    "work_dirs/port_pilot_size_support_v1",
+    "work_dirs/port_reliability_actual_fr_bound_v1",
+    "work_dirs/port_reliability_actual_fr_v1",
+    "work_dirs/port_reliability_actual_fr_val_v1",
+    "work_dirs/port_reliability_boundary_readout_review_v1",
+    "work_dirs/port_reliability_box_contrast_v1",
+    "work_dirs/port_reliability_branches_v1_checkpoint_io_fix_local_20261002",
+    "work_dirs/port_reliability_branches_v1_server_review_20261003",
+    "work_dirs/port_reliability_branches_v1_val_cache_repair_local_20261003",
+    "work_dirs/port_reliability_candidate_fit_v1_server_review_20261003",
+    "work_dirs/port_reliability_candidate_support_v1",
+    "work_dirs/port_reliability_capacity_v1",
+    "work_dirs/port_reliability_class_condition_v1",
+    "work_dirs/port_reliability_complementarity_v1",
+    "work_dirs/port_reliability_conditional_evidence_v1",
+    "work_dirs/port_reliability_fallback_decision_v1",
+    "work_dirs/port_reliability_feature_ablation_v1",
+    "work_dirs/port_reliability_feature_source_test_v1",
+    "work_dirs/port_reliability_feature_source_v1",
+    "work_dirs/port_reliability_fr_constraint_v1",
+    "work_dirs/port_reliability_frozen_workpoints_v1",
+    "work_dirs/port_reliability_hard_error_pauc_v1",
+    "work_dirs/port_reliability_image_temporal_crossfit_v1",
+    "work_dirs/port_reliability_mechanism_v1_probe_path_fix_local_20261003_review",
+    "work_dirs/port_reliability_mechanism_v1_review_local_20261003",
+    "work_dirs/port_reliability_mechanism_v1_server_review_20261003",
+    "work_dirs/port_reliability_opposite_border_v1",
+    "work_dirs/port_reliability_paired_ranking_audit_v1",
+    "work_dirs/port_reliability_partial_auc_v1",
+    "work_dirs/port_reliability_pixel_border_v1",
+    "work_dirs/port_reliability_pixel_pauc_v1",
+    "work_dirs/port_reliability_readiness_v1_structure_complete_server_20261002",
+    "work_dirs/port_reliability_readout_compare_v1",
+    "work_dirs/port_reliability_readout_test_v1",
+    "work_dirs/port_reliability_redc_size_v1",
+    "work_dirs/port_reliability_remaining_error_support_v1",
+    "work_dirs/port_reliability_response_l2_v1",
+    "work_dirs/port_reliability_response_stats_v1",
+    "work_dirs/port_reliability_response_tail_v1",
+    "work_dirs/port_reliability_response_warm_test_v1",
+    "work_dirs/port_reliability_response_warm_v1",
+    "work_dirs/port_reliability_scale_asymmetry_v1",
+    "work_dirs/port_reliability_scale_consistency_v1",
+    "work_dirs/port_reliability_separability_v1_independent_review_local_20261004.json",
+    "work_dirs/port_reliability_separability_v1_run_local_final_20261004",
+    "work_dirs/port_reliability_separability_v1_server_review_20261004_092421",
+    "work_dirs/port_reliability_severity_v1",
+    "work_dirs/port_reliability_simple_anchor_v1",
+    "work_dirs/port_reliability_size_temporal_interaction_v1",
+    "work_dirs/port_reliability_sparse_candidate_v1",
+    "work_dirs/port_reliability_spatial_axis_v1",
+    "work_dirs/port_reliability_temporal_evidence_v1",
+    "work_dirs/port_reliability_temporal_fusion_v1",
+    "work_dirs/port_reliability_temporal_history_gate_v1",
+    "work_dirs/port_reliability_temporal_stack_test_v1",
+    "work_dirs/port_reliability_temporal_trend_v1",
+    "work_dirs/port_reliability_tradeoff_v1",
+    "work_dirs/port_reliability_train_support_v1_server_20261002",
+    "work_dirs/port_reliability_video_transfer_v1",
+    "work_dirs/port_reliability_within_video_rank_v1",
+    "work_dirs/port_response_fold_ensemble_v1",
+    "work_dirs/port_response_fold_ensemble_v1_delivery_20261016",
+    "work_dirs/port_response_fusion_crossfit_v1",
+    "work_dirs/port_response_fusion_crossfit_v1_delivery_20261016",
+    "work_dirs/port_response_fusion_feasibility_v1",
+    "work_dirs/port_shape_e_h_v1_config_check_20261001.json",
+    "work_dirs/port_shape_e_h_v1_config_final_20261001.json",
+    "work_dirs/port_shape_e_h_v1_config_reviewed_20261001.json",
+    "work_dirs/port_shape_e_h_v1_final_test_metrics_server_20261001.json",
+    "work_dirs/port_shape_e_h_v1_test_subsets_server_20261001.json",
+    "work_dirs/port_shape_e_h_v1_train_gradients_local_config_20261001.json",
+    "work_dirs/port_shape_e_h_v1_train_gradients_server_20261001.artifacts.json",
+    "work_dirs/port_shape_e_h_v1_train_gradients_server_20261001.json",
+    "work_dirs/port_shape_e_h_v1_train_gradients_server_20261001.progress.jsonl",
+    "work_dirs/port_shape_e_h_v1_train_log_review_server_20261001.json",
+    "work_dirs/port_shape_e_h_v1_val_compare_server_20261001.json",
+    "work_dirs/port_simple_pilot_increment_v1",
+    "work_dirs/port_simple_reliability_v1_server_review_20261003",
+    "work_dirs/port_simple_reliability_v1_test_cached_local_20261003",
+    "work_dirs/port_simple_reliability_v1_test_numeric_source_20261003",
+    "work_dirs/port_simple_reliability_v1_test_server_review_20261003_205844",
+    "work_dirs/port_size_a20_protection_downstream_v1",
+    "work_dirs/port_size_a20_protection_train_v1",
+    "work_dirs/port_size_annotation_readout_v1",
+    "work_dirs/port_size_annotation_readout_v1_20261007_final",
+    "work_dirs/port_size_annotation_readout_v1_20261007_local",
+    "work_dirs/port_size_annotation_readout_v1_20261007_local_final",
+    "work_dirs/port_size_annotation_readout_v1_paired_local_20261007_completed20",
+    "work_dirs/port_size_annotation_readout_v1_paired_local_20261007_completed20_final",
+    "work_dirs/port_size_annotation_readout_v1_same_frame_local_20261007",
+    "work_dirs/port_size_direct_continuation_downstream_v1",
+    "work_dirs/port_size_direct_continuation_v1",
+    "work_dirs/port_size_f_s_v1_config_check_local_20261001.json",
+    "work_dirs/port_size_f_s_v1_final_test_metrics_server_20261002.json",
+    "work_dirs/port_size_f_s_v1_formal_contract_local_20261001.json",
+    "work_dirs/port_size_f_s_v1_formal_contract_local_20261001_v2.json",
+    "work_dirs/port_size_f_s_v1_preflight_review_local_20261001.json",
+    "work_dirs/port_size_f_s_v1_preflight_terminal_server_20261001.txt",
+    "work_dirs/port_size_f_s_v1_returned_train_val_review_20261002.json",
+    "work_dirs/port_size_f_s_v1_saved_box_check_local_20261001.json",
+    "work_dirs/port_size_f_s_v1_saved_box_check_server_20261001.json",
+    "work_dirs/port_size_f_s_v1_test_review_local_20261002.json",
+    "work_dirs/port_size_f_s_v1_test_subsets_server_20261002.json",
+    "work_dirs/port_size_f_s_v1_test_terminal_server_20261002.txt",
+    "work_dirs/port_size_f_s_v1_train_preflight_server_20261001.artifacts.json",
+    "work_dirs/port_size_f_s_v1_train_preflight_server_20261001.json",
+    "work_dirs/port_size_f_s_v1_train_preflight_server_20261001.progress.jsonl",
+    "work_dirs/port_size_f_s_v1_training_log_server_20261002.log.json",
+    "work_dirs/port_size_f_s_v1_val_compare_review_local_20261002.json",
+    "work_dirs/port_size_f_s_v1_val_compare_server_20261002.json",
+    "work_dirs/port_size_f_s_v1_val_compare_terminal_server_20261002.txt",
+    "work_dirs/port_size_f_s_v1_val_sweep_terminal_server_20261002.txt",
+    "work_dirs/port_size_frozen_downstream_v1",
+    "work_dirs/port_size_local_vectors_v1",
+    "work_dirs/port_size_native_train_v1",
+    "work_dirs/port_size_qalign_downstream_v1",
+    "work_dirs/port_size_qalign_v1",
+    "work_dirs/port_size_reference_review_v1_20261006",
+    "work_dirs/port_size_reference_review_v1_20261006_final",
+    "work_dirs/port_size_reference_review_v1_20261006_fix1",
+    "work_dirs/port_size_structure_downstream_v1",
+    "work_dirs/port_size_structure_v1",
+    "work_dirs/port_structure_reliability_v1_pipeline_local_20261002.json",
+    "work_dirs/port_structure_reliability_v1_preflight_review_local_20261002.json",
+    "work_dirs/port_structure_reliability_v1_static_local_20261002.json",
+    "work_dirs/port_structure_reliability_v1_static_local_20261002_v2.json",
+    "work_dirs/port_structure_reliability_v1_train_preflight_server_20261002.json",
+    "work_dirs/port_three_feature_factorial_v1",
+    "work_dirs/smallpaper_readiness_20261028_v1",
+    "work_dirs/symeood_110_retrain_preflight_20261026_v1",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1",
+    "work_dirs/symeood_110_runtime_lock_restore_20261026_v1",
+    "work_dirs/symeood_ablation_v1"
+  ],
+  "protected_sha256": {
+    "work_dirs/port_shape_e_h_v1_train_gradients_server_20261001.json": "bf5316450298b1dfe53c90b77560a887ee2fb84b81300649bb97f4d5e8971ff8",
+    "work_dirs/crane_eood_k1_port_day2night_v1/val_sweep_port_v1/final_test/epoch_24/final_test_metrics_v2.json": "5698fec53d161a8a2c6013322e851a1d84aa26a3a92b33798bfc0f6dbf2d6a3e",
+    "work_dirs/symeood_ablation_v1/analysis_all8_20261024/selected_identity_all8.json": "c709b70e1644248857cab95b58a072c8d587701f402e68f5774ae166a7c4b137",
+    "work_dirs/symeood_ablation_v1/analysis_all8_20261024/custom_metrics_all8.csv": "7c9c95bf98152ca05ca3fc41ff15a56200877daf5cb16cbcc09396d8bcf55f13",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/protocol.json": "fc724172c36274221b9f99d2fba914d91c865b8f82781d3ec2bb4344c06fd22f",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/midpoint/formal/roi_cache/cache_manifest.json": "5c481e900ed7f17e838156dcf43685a4191427f447374e1ac3f23289da87594d",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/midpoint/finite_trial/completion.json": "acdef79078f22086ec2cda3eada393c7f0a3878c0bfa07b9b5e00074ae83ff28",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/midpoint/test_ep21/test_rows.jsonl": "d8712e3194d29fd9996de69822c5c2288b9b83f05df65d501ad5f2db9dba8c6d",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/midpoint/test_ep21/completion.json": "c8ae14ed89eb23bfb2da65b83d74275caae7de1ef6f411912328a75a38046ebb",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/input_counts.json": "891385dc871cb3c1373be058c5465fc223ed8e3c33c06d79ac32a04e37ee4618",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/identity.json": "4ef50aeb13b267e7ae62e49d035a82aebcbed805fa3900431a255abf1be87f25",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/continuation_ep7/completion.json": "e5d583d965c3d51bbfe1c3cc72eeeeb82a49da3a88d5cb8810b3d5708cc17ab8",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/continuation_ep7/C/epoch_06_val.rows.jsonl.gz": "505675faffd507a6d0c3d9a85dd10618652ee53c876a1c902e203f44cacae1e8",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/continuation_ep7/C/epoch_03_val.rows.jsonl.gz": "29f24594ef9fb46d7468e77d9b79d85ac4ed5e0a284297affa2596031f0d70a7",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/ep11_C1_frozen_evaluation_20261028_v1/depth_main_comparison.csv": "acda0f5a03ddc3925e556f38a732b5e7283109dc3442594c82af079bc58a7d01",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/ep11_C1_frozen_evaluation_20261028_v1/TEST_main_comparison.csv": "ecf2b344a7970bf489e7ddbeb2aee6bd3669124f0457174a6eb85c4882360b63",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/pair_specific/pair_vs_original_same_epoch.csv": "8a13ae4e4aa0b4367abe215415e1d98138114447a639f01d773d3f59b522a053",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/pair_specific/formal_completion.json": "acfc3ca960ff4ad4947793a691344f9e9c9ed10b46c8e0bc4a92af9171e4bd28",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/pair_specific/formal_identity.json": "bf31d47abc8123eb106c48c47bbfcd6c58c57d398790017b7039905ce8dcb142",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/pair_specific/train/epoch_11_val.json": "41388a96445ccfa047a7414aefb87dd23150571cfb526627989d0fc885f1cdd5",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/pair_specific/train/head_epoch_11.pth": "83fe7c9d79046218b9ad8759a0f16314a7dfbf7f897b75f6a9f0ab9fd0a4316e",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/pair_specific/train/selection.json": "d984e9c415d544c473131069d3b741e16484a4e2270ced615f4bdb9cccbd5ed0",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/pair_specific/train/epoch_11_val.rows.jsonl.gz": "5169f54a0bee91157a78216abedbda94821fcf524e30af898191c8d8d4d52f25",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/continuation_C_ep11_joint_v2/VAL_C0_to_C6_comparison.csv": "e6b74c31f133ceacda77ee020c7658d1a43931c78aca7b0efafc51768adfeb1c",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_05_val.rows.jsonl.gz": "32d03d83e2d3c96181aaf613a2fec1dbbc9855eb067b4b63a4704e19616ffd5d",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_17_val.json": "857dadd942bd96a30bc606f230441ae0f4e25815c10d8cbe2af6a3dda9fb9b13",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_16_val.json": "544c66daede333bd35f4742b0c08f4bba2029adbe9c14040f42a36cd3e5e449f",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_19_val.rows.jsonl.gz": "bdc7da835d7085366ceae208c996fee0ebde934716028c4d48623e0e6c87641d",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_23_val.json": "ceb99d77ddc0b8c9f53641306abf48f216ebdda83c250dc73a6876219439d41a",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_22_val.json": "39a4583cc4b77d4f7aaaf745e6acb269fb1d3c337f2339a39ba665ce7d318abe",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_04_val.rows.jsonl.gz": "01099d97b6e7b725636c466ac030cd526ce8e2394e8baa345fea35a348c3f091",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_18_val.rows.jsonl.gz": "ed4a589b226b4f202643d4f8c2badb2f5e301e8d42fd0ec1806bb5344425acd7",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_01_val.json": "8b4024e5928fdfdd2f39c95e1701a5340a620e2091f7536f8d7888658228e9d7",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_01_val.rows.jsonl.gz": "06f47896881a1555f00d1fde777c28c91f2dd3e0800d3b667e6e5c20eae7fc7b",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_07_val.rows.jsonl.gz": "e82b234b30b7eb8f83e7a4c5a507bc2032210618e31eb3c580ca488134197480",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_07_val.json": "484cbfc9100ae603771aed318d8283fac299ccb1f5df4932ae89f3688f7dcd59",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_06_val.json": "b1699f940a9ff4a7e2d702eb538f1f8c8d9d3d95c10e90c1621db143ad0a90d5",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_02_val.rows.jsonl.gz": "1ac261197601f09bff70f350fa39f4ec9b1a7aa399abfe30b01aa481e5f6e1ed",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_06_val.rows.jsonl.gz": "97e4e80d7b7060b04df5379090a3ab9744c16a0f5edc2b89a9bdc7befa7f0ed7",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_10_val.json": "8fcdcbb9fdedc313ecf4091c158c61dc664bec96a339a1a1d66186bed99eccbe",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_11_val.json": "3428e105dee157e260fc6860787d0047adcb3e3b6bbec5a3f6afab69a4ed4355",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_03_val.rows.jsonl.gz": "445597e67e3dde41418c594c99cd66c061dde6ff98fb4c7b4d8165bca147d16f",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_24_val.json": "d1e709bf92ae21e7fe7d0fdc9286a218fcca76b413d4c407ad8adc45116f9513",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_07_train.rows.jsonl.gz": "d04fe46f97bcf1f6838f4e011bb2885bd2ea8cf5a89797459aae62d09783dc69",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_22_val.rows.jsonl.gz": "4dc47f1895cf3b5336695ca3a71da7cb58e19ce5bd0372c0549e08703ac90282",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_09_val.json": "55558a501406ba9d2c9f461afe448877d5955b84b8c89ccbdbbe8cd28af15a26",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_08_val.json": "c8d727ed104b47b6d993f1baf925938fc4df638f2be285e699df9e56cd1eb1a8",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_16_val.rows.jsonl.gz": "6a8cf63c070ed217f1e84ec86945f709a5eb366a883b1bf6f4cfc41e9cbb8227",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_13_val.rows.jsonl.gz": "9cf9a579158ef5899e1f3b7dfa8f0f894b694c47d0815bd937ebb4b5749f24df",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_03_val.json": "c6e47bc0eb0956709eba096da13de62fb4a45db5a2d2eb146e09427906fdfad4",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_02_val.json": "4e0fd4df6300a48d3cf1332c4ac3736423bcd5494bf1b0e49dc360ba7a08d27f",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_23_val.rows.jsonl.gz": "bdd4b277f666d951a73be442379129a2cdd8036a7b6f90774328c04a2cb5e0ce",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_20_val.json": "8886866c243bcc06b3e8443fa785b36a1f80092d6251eb6e05fbaff3a933e62b",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_21_val.json": "7dfeb47962d68e91893096de414c02810c1510f01df4ae423dfa5b03145339da",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_17_val.rows.jsonl.gz": "f3cc88a9e93cd3565e994ad7b20503b0dc9e35303bb70ff1350aeb3b68001be6",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/selection.json": "d0f9acd8a7c2c3ed91c5adc636fbc82c2b0a268e9269f5f33003221794ca4206",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_14_val.json": "a234d7a29edc4348351e25e7340d626fdac69e6cd1fd9be1f9fd45fc38b0535b",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_12_val.rows.jsonl.gz": "d73b1020abb6dbd02f095b91bde3cf42710604a076b88a123e39270cc8a94f1f",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_15_val.json": "bc3c5c5dfc214787f9fd45a4180ecbed634cb8a0396a186c33e5aa4e25cac86c",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_20_val.rows.jsonl.gz": "113109b1eec49e6e5013ed74c542ab6bfe27803c4797ec8a62fad7ea1da6d149",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_08_val.rows.jsonl.gz": "c87fd92835c9141ebc1bd7a0e2bd7854ac3077eb21021603768e97c0424bc199",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_14_val.rows.jsonl.gz": "682f7869b51ca0a946914e9b96cd27d3010855ef2c50be9e1be78caee6e6fc54",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_19_val.json": "bd05c1cba229208e53c5f94fba5a234da67197554f0ccf61d88142cbb0eb8e85",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_18_val.json": "f80cc2a346d633452b9bfdf3d9abc57f60020a2f1b6029600db046a5cc030f4e",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_11_val.rows.jsonl.gz": "a1622ceb0face9d005ac962bda66211483bdec118049ed36bddeec1d546e30bd",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_13_val.json": "fca6c80ad9729837158cc46ed5053191090f049db59b1b144b71fbebb2755a0a",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_12_val.json": "debf783fd52711be96bbd47aef8928f106684dabc352ced1804965bc337b8df7",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_21_val.rows.jsonl.gz": "f718ab2f487490ad44c7303a93a12f54de4e0ede5975bc999275139aed9b6278",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_09_val.rows.jsonl.gz": "718af5818b889cdedd773af47bba23eaf619a74926b58ada8721637ffd9295ba",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_15_val.rows.jsonl.gz": "18ad9f9ac263394b066a6428e4d81242114fdfea81a65373324409e488297dbb",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_24_val.rows.jsonl.gz": "05f3066fb6e5894401813533473cc14e927bc4a7a972cff47d7976d88365c613",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_10_val.rows.jsonl.gz": "5fedf78baa1c5d2136998d6a25cb98aa0ec17501a4d504a5253cc54be6dd349c",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_04_val.json": "b0f50bf8b4f4a5058c85e3483e4457ee47a98821375037ae38eea1b9a9e39baa",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/fixed_b/epoch_05_val.json": "16489e19a6face7433584c8c00363caba6b3bbbf683b3a05f3d41ee5c425c342",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/pair_ep11_frozen_evaluation_20261028_v1/depth_main_comparison.csv": "6eaa1a3f0404ab2c1e75565c480b4831ce0a5e39fe9d23a84e7209a8294ededa",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/pair_ep11_frozen_evaluation_20261028_v1/local_verification.json": "fbc22c312cc160c584172634677e8c61cb2d0ee8d11e26da6e9b83d32b6eaf73",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/pair_ep11_frozen_evaluation_20261028_v1/TEST_main_comparison.csv": "e7439db953817bf297ee1dc803193b61cc421cc9f3b6382166727cc231ad77a7",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/pair_ep11_frozen_evaluation_20261028_v1/test_summary.json": "cc99641172cb055c0e898c165c38ce8522c2cab5869ed6eba112defe3026ffa8",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/pair_ep11_frozen_evaluation_20261028_v1/depth_summary.json": "302b34d16a8805d0dadb6ca7ffc3f4a535f4256603287efc2c907c5fc1d7299f",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/pair_ep11_frozen_evaluation_20261028_v1/completion.json": "6985e7b502f56624fdb5ebcb7b21b392d190be63908ed9b824922d6c0ee35149",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/pair_ep11_frozen_evaluation_20261028_v1/artifacts.json": "dd9e8cc7f0a47f1dc0d281c59bf1126e7f20101b3c5caaf6f96ce3692f7ba339",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/ep11_frozen_evaluation_20261028_v1/local_verification.json": "b62c4e98b6bb2e2a040193c92ec245f7a7eceda606dbccd4340615e9beec713f",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/ep11_frozen_evaluation_20261028_v1/test_rows.jsonl": "e5a6ffc5d8acc405da1685d8eeee075d6f368efb7c3908e414e0b4ce110c7496",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/ep11_frozen_evaluation_20261028_v1/depth_predictions.jsonl": "6239aff5768d75523ca1409d8b20f71b8a99df6608b16f711300b6b19e4a6f58",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/ep11_frozen_evaluation_20261028_v1/depth_input_identity.json": "cf0bd0dd6f8978d2f8006baa135ea5f931f36f5c548b2b72ba6854e2074687f2",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/ep11_frozen_evaluation_20261028_v1/head_epoch_11.pth": "cb0d65914a073306559a6e5ebcb5a4186676922cb4ae9cb23dff39e202cdb80a",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/ep11_frozen_evaluation_20261028_v1/test_summary.json": "bb04334826790ef99a5197ff6a58718631c19af344a3f0f604ff4c2618c0bc27",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/ep11_frozen_evaluation_20261028_v1/depth_comparison.csv": "303ea411b17b81758951dabdda1c39aa9e62492f2765094165c4cc15d5f7c1ff",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/ep11_frozen_evaluation_20261028_v1/depth_summary.json": "157e007e1d432478599275bc660b4d74c7539fd93bbb6e2bc9f148ab0802c685",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/ep11_frozen_evaluation_20261028_v1/completion.json": "446023fa5de012dbf7549118323678476ffb5786bf31b48232975aa225fb89b4",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/ep11_frozen_evaluation_20261028_v1/depth_rows.jsonl": "75d2c32cd7f44f2c11b69c8fb373529231457c18b606dcce0bacd5fabdf15d08",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/ep11_frozen_evaluation_20261028_v1/TEST_comparison.csv": "f834a29cb6196c00a05907d08b57b54efabfe659bd257599b80d7b7031fd67f6",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/edge_diagnostic/pair_specific_contract.json": "52eb960785bbf354c022326be3088697afe38e44ff526a1ced2558c164d513fd",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/frozen_evaluation/test_rows.jsonl": "8e35287db4563aeb954f9edfcccd10794708453367ac87d8caef077172678bc9",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/frozen_evaluation/depth_predictions.jsonl": "0755c24905bf7504239a3bfef42e1ddcf6bbc51312da0ba978d7e884cc75dcf2",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/frozen_evaluation/TEST_stage_deltas.csv": "647f76dfaa591cb1aa86b29238c7ceaaada9201e7d5761148d0507c3fa75917b",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/frozen_evaluation/depth_own_valid.csv": "c98defa867bea75a7240b2c7abcaf67b9ac4bfaca3dc1418f1452c2167170a73",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/frozen_evaluation/depth_common_valid.csv": "2aeb6fa4e49f5c052a1e8412d50e7ee5016235ad48ee41d8512d87809fb9bb20",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/frozen_evaluation/TEST_new_old_comparison.csv": "849c420ae4443c57431a126670ff638d1b490e7858ec74d77f7f6135fd23e6c7",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/frozen_evaluation/depth_paired_deltas.csv": "768ee28f8e06463ef1f3a99d9c0e67a5e4f5c41504cdd7bb6414fd3cbdbe2790",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/frozen_evaluation/depth_invalid_frames.csv": "8d98bfa6dd26775e6f6e11d1a3676adb112fad1f37368e121ce91440e72b4b16",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/frozen_evaluation/test_summary.json": "712d4234857a6cd52398039202a0b0f29977316cadd7123289341848b7ac3ad0",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/frozen_evaluation/analysis.json": "b4100f7818916a35e8da3c56d98cce728a59bacbecec18f0c738bb5959b16222",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/frozen_evaluation/depth_summary.json": "545069358e2d418bb7cb0fc5ef5b6c2b8007f62db9b9e72f58979152959b192b",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/configs/Coff_seed0.py": "a9ae487979ad657ce57ab48138ed968f0611457301aaf8b8d694fd0ab0b04e60",
+    "work_dirs/crane_eood_k1_port_day2night_aug_b_v1/val_sweep_port_v1/final_test/epoch_24/final_test_metrics_v2.json": "f51fe7979a798cbffa6cf767274d4e408d22169198771173a72e3b0773e5b313",
+    "work_dirs/port_shape_e_h_v1_val_compare_server_20261001.json": "474434c3d8ca9967939dfdecc0e0c16aabdc985bd8bd0bcdc13f8c43d6e568f4",
+    "work_dirs/port_size_native_train_v1/efficiency_idle_20261018_v1/source_identity.json": "9b5ee60d79a360569b877091340860d14ae99aa0da6c22a3e2750f42dc3cda90",
+    "work_dirs/port_size_native_train_v1/efficiency_idle_20261018_v1/finished.json": "6c2b74a490a294b682ea1f7f56845b247c89cabf7d41a2b55f872b20b82e8fc0",
+    "work_dirs/port_size_native_train_v1/efficiency_idle_20261018_v1/artifacts.json": "246f057906f50282186636191d56cfff2ba882de3cd3b0904abf1df06fc664d8",
+    "work_dirs/port_size_native_train_v1/efficiency_idle_20261018_v1/efficiency.json": "0796b9f4ee4437816a1c4bebf913db616c146dba833afd33b963fb1f11d06616",
+    "work_dirs/smallpaper_readiness_20261028_v1/unified_TEST_summary.json": "bd844ffd66109f0d54e6bf17ab81544d7386d0851e0a3e40f541c7c171fbed0e",
+    "work_dirs/smallpaper_readiness_20261028_v1/local_verification.json": "4cae732dfb1e3f02bff5675e65cdb8ea68aa2e302512dd0fb849e70a6570a584",
+    "work_dirs/smallpaper_readiness_20261028_v1/unified_TEST_comparison.csv": "f9bd668e472fc15ed6d498c346a9b75e98eb9aff32a2769b47b4a4f29205002b",
+    "work_dirs/smallpaper_readiness_20261028_v1/unified_evaluation_receipt.json": "39742c4943c27ac1b88056183b9eea2d2882ad6522c879f0dfb9e10cdab0bdba",
+    "work_dirs/smallpaper_readiness_20261028_v1/readiness_audit.json": "d1f1c2c5d1638db3361118788fda7d0bec2ae0b25d68b031c0d77a4d7ca7074d",
+    "work_dirs/port_detection_runtime_v1/four_arm_fix5_20261006_105204_491124/benchmark/runtime_compare.json": "ba3f137db2a9949309058d2915fa4c3064ec66c3dbca5b20291f4db112e00c2d",
+    "work_dirs/port_size_a20_protection_downstream_v1/run_20261020_v3_gpu2/completion.json": "996c6e5c3c61bb88c4f9cf6f08b1120a15d29a24b7d623dee16618f3a4d0fc1f",
+    "work_dirs/port_size_a20_protection_downstream_v1/run_20261020_v3_gpu2/artifacts.json": "7f93a4eba9b778ef4537561217686024de08afe19898c8fa1d8d50c7abacb628",
+    "work_dirs/port_size_a20_protection_downstream_v1/run_20261020_v3_gpu2/unknown_test_02_coverage_retry/summary.json": "59ad7314a275e9ba1e991377db45a27f536b528e2ea97a94350f9465bb4e9397",
+    "work_dirs/port_size_a20_protection_downstream_v1/run_20261020_v3_gpu2/unknown_test_02_coverage_retry/input_identity.json": "d4216bad97ecbd80fbf576fc1817de27e79ce012b0d070412f3a55f571c688dc",
+    "work_dirs/port_size_a20_protection_downstream_v1/run_20261020_v3_gpu2/unknown_test_02_coverage_retry/depth_rows.jsonl": "27ff32e6abcac3efad9714b3335238b70ee0c9abad00884dd1a5d10e6cb6ad80",
+    "work_dirs/port_size_a20_protection_downstream_v1/run_20261020_v3_gpu2/test/summary.json": "f6840abd23911ab28b9db60da38ebe9b8007600b60bc50f6324c1aee76c26f6d",
+    "work_dirs/port_size_a20_protection_downstream_v1/run_20261020_v3_gpu2/test/evaluation_rows.jsonl": "d8c340d46d7d6c3e99eeb6d70740d258a49a9dbf35305648ac1f07074eba3478"
+  },
+  "selected_local_weights_sha256": {
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/pair_specific/train/head_epoch_11.pth": "83fe7c9d79046218b9ad8759a0f16314a7dfbf7f897b75f6a9f0ab9fd0a4316e",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/ep11_frozen_evaluation_20261028_v1/head_epoch_11.pth": "cb0d65914a073306559a6e5ebcb5a4186676922cb4ae9cb23dff39e202cdb80a"
+  },
+  "reliability_preserved_file_count": 1745,
+  "webots_preserved_file_count": 30,
+  "retained_metadata_guard_count": 66869,
+  "deleted_paths_record": "docs/detection/历史归档/work_dirs删除路径_20261028.csv.gz",
+  "deleted_data_backup_created": false,
+  "validation": {
+    "protected_SHA_matched": 124,
+    "selected_local_weight_SHA_matched": 2,
+    "all_retained_metadata_unchanged": 66869,
+    "deleted_allowlist_absent": 46596,
+    "no_remote_mutation": true,
+    "existing_unittest_groups": 3,
+    "existing_unittest_passed": 26,
+    "pair_specific_live_design_and_input_gate": "PASS",
+    "workdirs_README_links": "PASS",
+    "git_diff_check": "PASS"
+  },
+  "deleted_files": 46596,
+  "deleted_bytes": 2783273313,
+  "bytes_after": 4283650240,
+  "retained_regular_files": 66869,
+  "limitations": [
+    "仅清理本机work_dirs；未访问或删除服务器。",
+    "110和midpoint正式权重本机缺失在清理前已存在，原合同继续绑定服务器路径；本轮未下载或删除它们。",
+    "删除数据无Git副本，本轮仅保留路径/大小/原因记录，不提供数据备份。"
+  ],
+  "local_second_pass": {
+    "date": "2026-10-28",
+    "state": "COMPLETE_PROTECTED_BYTES_UNCHANGED",
+    "files": {
+      "work_dirs/port_reliability_simple_anchor_v1/20261009_simple_anchor_v1/review.log": {
+        "bytes": 425,
+        "mtime_ns": 1791541928000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "b82bac1e0fc737104d7b2f5c2c6d0f61b06ae665738c989c255be9ec392e51ff"
+      },
+      "work_dirs/port_reliability_simple_anchor_v1/20261009_simple_anchor_v1/prepare.log": {
+        "bytes": 76,
+        "mtime_ns": 1791541892000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "1b3d6e504119be60d7f31254f800c22ec4f8cf4b0aeef23702c5cd79ca42400f"
+      },
+      "work_dirs/port_reliability_simple_anchor_v1/20261009_simple_anchor_v1/tests.log": {
+        "bytes": 2001,
+        "mtime_ns": 1791541890000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "ca3279c0206ec26c624eba7e641f02ccb067ea3fac3df5dd9d4b518833910d52"
+      },
+      "work_dirs/port_reliability_simple_anchor_v1/20261009_simple_anchor_v1/runtime.log": {
+        "bytes": 98,
+        "mtime_ns": 1791541886000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "51201aa3ec5495b4796b19d22d5a648b9ac87c8eca22e9d50312d4f6b8f4bf2a"
+      },
+      "work_dirs/port_reliability_simple_anchor_v1/20261009_simple_anchor_v1/gpu.log": {
+        "bytes": 15,
+        "mtime_ns": 1791541879000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "17a6217960b2ccadf1a2c5705b0ed7ba5e0e90441b81e1c7976139b63a056ee6"
+      },
+      "work_dirs/port_reliability_complementarity_v1/20261009_complementarity_v1/run.log": {
+        "bytes": 56,
+        "mtime_ns": 1791536397000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "ebef904a264cafa14050ac16283792b268ffd4871206836ddeb642c6c1771f03"
+      },
+      "work_dirs/port_reliability_complementarity_v1/20261009_complementarity_v1/review.log": {
+        "bytes": 353,
+        "mtime_ns": 1791536414000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "5454678a274f86f0d73d5b6c8169624232e1f45344a6beefec7c377c7ec7d4f9"
+      },
+      "work_dirs/port_reliability_complementarity_v1/20261009_complementarity_v1/tests.log": {
+        "bytes": 1632,
+        "mtime_ns": 1791536368000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "3cebb5144cc999862ee5b6f9ef14152c9f93ae375df0df0d7bfa1cc7fa965d6f"
+      },
+      "work_dirs/port_reliability_complementarity_v1/20261009_complementarity_v1/runtime.log": {
+        "bytes": 91,
+        "mtime_ns": 1791536367000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "08857b48c3633333b3ef1d34773548dddf94decde95799288a5fc9c5a6db639a"
+      },
+      "work_dirs/port_reliability_pixel_pauc_v1/local_check/tests.log": {
+        "bytes": 2958,
+        "mtime_ns": 1791957467301297829,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "ac66e9007ed9747a0f01baf6e2c04f2f958be614ce732ea821ebd61677670194"
+      },
+      "work_dirs/port_reliability_pixel_pauc_v1/20261014_paired_pixel_v1/run.log": {
+        "bytes": 218,
+        "mtime_ns": 1791957757000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "370dda9a60da08a54043386e1593322f2b3469f07f88aecc6ec300e626ccf286"
+      },
+      "work_dirs/port_reliability_pixel_pauc_v1/20261014_paired_pixel_v1/review.log": {
+        "bytes": 217,
+        "mtime_ns": 1791957864000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "4cdb355fc3db48970db95391d35f11a38ab74899942d046be602777e3d1bd660"
+      },
+      "work_dirs/port_reliability_pixel_pauc_v1/20261014_paired_pixel_v1/tests.log": {
+        "bytes": 2070,
+        "mtime_ns": 1791957660000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "4a4cdad538c687a3be10339b9c8e489691e7df815ccf253a34dcbedc8825d2cd"
+      },
+      "work_dirs/port_reliability_boundary_readout_review_v1/20261015_fixed36_v1/run.log": {
+        "bytes": 1126,
+        "mtime_ns": 1792028793000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "9ecc95f92c10f74f017b7015a8d1a1572bec30f0b0eac540e23fab91228539b1"
+      },
+      "work_dirs/port_reliability_boundary_readout_review_v1/20261015_fixed36_v1/tests.log": {
+        "bytes": 937,
+        "mtime_ns": 1792028781000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "931b9e38fc736edb658e17c139bc95edded4429f5e69bf7f016733208ad17cc8"
+      },
+      "work_dirs/port_reliability_within_video_rank_v1/20261009_within_video_rank_v1/review.log": {
+        "bytes": 530,
+        "mtime_ns": 1791548034000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "0723d0a38e89fbe6d53211d58e8ea4a28176dc00c59b10a863f8f329861a5c60"
+      },
+      "work_dirs/port_reliability_within_video_rank_v1/20261009_within_video_rank_v1/prepare.log": {
+        "bytes": 507,
+        "mtime_ns": 1791547984000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "3e40071e7e71c705d29d663a6193b347a0b325c4d472a300a08e5d4d15d5e819"
+      },
+      "work_dirs/port_reliability_within_video_rank_v1/20261009_within_video_rank_v1/tests.log": {
+        "bytes": 4004,
+        "mtime_ns": 1791547982000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "eb6ba905b3cd24d9ab5f99d1375d0ba1b1bb38744b27e1ca21a97bb4c376cb74"
+      },
+      "work_dirs/port_reliability_within_video_rank_v1/20261009_within_video_rank_v1/runtime.log": {
+        "bytes": 98,
+        "mtime_ns": 1791547976000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "51201aa3ec5495b4796b19d22d5a648b9ac87c8eca22e9d50312d4f6b8f4bf2a"
+      },
+      "work_dirs/port_reliability_within_video_rank_v1/20261009_within_video_rank_v1/gpu.log": {
+        "bytes": 15,
+        "mtime_ns": 1791547974000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "85246311cc2bdf047b51d599e9bec0d5e1949f954c3c4fb178703772260cc50c"
+      },
+      "work_dirs/port_reliability_sparse_candidate_v1/20261014_cached_sparse_v1/run.log": {
+        "bytes": 60,
+        "mtime_ns": 1791940057000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "e879360ab27713eb37830c9415028324d7c201bed032797aee69631d4677331e"
+      },
+      "work_dirs/port_reliability_sparse_candidate_v1/20261014_cached_sparse_v1/review.log": {
+        "bytes": 49,
+        "mtime_ns": 1791940058000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "358cdc5b624b50df736153d5ba7b0e0237dc59bb550857a866cc7a8351c31908"
+      },
+      "work_dirs/port_reliability_sparse_candidate_v1/20261014_cached_sparse_v1/check.log": {
+        "bytes": 58,
+        "mtime_ns": 1791940056000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "a29b798a57b2a1b8452c798cc5e789ec4e9ba45ffe3483dd2b3357395465b850"
+      },
+      "work_dirs/port_reliability_sparse_candidate_v1/20261014_cached_sparse_v1/unittest.log": {
+        "bytes": 1234,
+        "mtime_ns": 1791940055000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "2d4ad905e0788d2a36693b686030c8997bef9026c4e1cd2531e3baa66806f373"
+      },
+      "work_dirs/port_reliability_paired_ranking_audit_v1/20261015_saved_pairs_server_v1_fix1/run.log": {
+        "bytes": 118,
+        "mtime_ns": 1792033407330865920,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "51a990e421b3c8278bb1bcb7d40291026162305eb4bcafa61bd45aa44238985f"
+      },
+      "work_dirs/port_reliability_paired_ranking_audit_v1/20261015_saved_pairs_server_v1_fix1/tests.log": {
+        "bytes": 1325,
+        "mtime_ns": 1792033407331056088,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "0b74e69641467e6e9a991fe9124ba642e6594e99fb69c99aa02ff1de0a15d459"
+      },
+      "work_dirs/port_reliability_readout_test_v1/20261009_frozen_test_v1/review.log": {
+        "bytes": 363,
+        "mtime_ns": 1791508499000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "1f3bc516b2504701bf269df17ccfc154d87c805457e18689479d2f6fdd5c3a70"
+      },
+      "work_dirs/port_reliability_readout_test_v1/20261009_frozen_test_v1/evaluate.log": {
+        "bytes": 426,
+        "mtime_ns": 1791508495000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "94295e0bde7d313ff52afefce5908d5907ca8064a57a99dd94b34d899eb888b4"
+      },
+      "work_dirs/port_reliability_readout_test_v1/20261009_frozen_test_v1/tests.log": {
+        "bytes": 2385,
+        "mtime_ns": 1791508456000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "4048cda9766183274eabf51e8ad88335fc9f5c31b03fb327b19c06c951b48034"
+      },
+      "work_dirs/port_reliability_readout_test_v1/20261009_frozen_test_v1/runtime.log": {
+        "bytes": 60,
+        "mtime_ns": 1791508452000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "511e383c7d19a0f8dff65a76f4d209a8a9ccb61c7f6e9569689d0fa5accfc152"
+      },
+      "work_dirs/port_reliability_readout_test_v1/20261009_frozen_test_v1/check.log": {
+        "bytes": 19,
+        "mtime_ns": 1791508457000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "cb4c88c1ee3803b0793f4ee96e56f6ec7d409e2f2ba17db2abc8aef42036da2e"
+      },
+      "work_dirs/port_reliability_hard_error_pauc_v1/20261014_fixed_hard25x2_v1/run.log": {
+        "bytes": 372,
+        "mtime_ns": 1791941593000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "4a99f47a9eb4f411b021c01a14df907576c51edac7482948ee6c9e67ee1b9b43"
+      },
+      "work_dirs/port_reliability_hard_error_pauc_v1/20261014_fixed_hard25x2_v1/review.log": {
+        "bytes": 42,
+        "mtime_ns": 1791941611000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "3a0c550541a917c8b55fdb76d9f71d16a9a306b67fc5bd40ffa49116d441671b"
+      },
+      "work_dirs/port_reliability_hard_error_pauc_v1/20261014_fixed_hard25x2_v1/tests.log": {
+        "bytes": 1200,
+        "mtime_ns": 1791941579000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "28ff61119119b29dd76f9f8f366de94e8adc0f94c84fd245f5f29347f4b936aa"
+      },
+      "work_dirs/port_reliability_fr_constraint_v1/20261014_fr_constraint_v1/run.log": {
+        "bytes": 1602,
+        "mtime_ns": 1791968148000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "ad68e115090b6d04c57b263ad2608559653eb9693b9c8424c482f5824333fc2a"
+      },
+      "work_dirs/port_reliability_fr_constraint_v1/20261014_fr_constraint_v1/review.log": {
+        "bytes": 521,
+        "mtime_ns": 1791968159000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "95a18c7b7c88c2ee304aa5a8410d2d587f8b5347076c1ce734c8066b8172601a"
+      },
+      "work_dirs/port_reliability_fr_constraint_v1/20261014_fr_constraint_v1/tests.log": {
+        "bytes": 1419,
+        "mtime_ns": 1791968128000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "99b26a4faeccafb21a879a3a0154c754459cb1b6110c794bb6b62a034602728a"
+      },
+      "work_dirs/port_reliability_response_warm_v1/20261015_response_warm_gpu_v1/run.log": {
+        "bytes": 9870,
+        "mtime_ns": 1792068705000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "d7c40e88fad0f4d260586fd0c5d018a825d0cb9e02a75185a795f847ff98937f"
+      },
+      "work_dirs/port_reliability_response_warm_v1/20261015_response_warm_gpu_v1/review.log": {
+        "bytes": 2777,
+        "mtime_ns": 1792068759000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "31147342e8d81d9fa5c9a9d8e3dbf7f8f27fd9f7c19ea4c078f0de73e292a8c5"
+      },
+      "work_dirs/port_reliability_response_warm_v1/20261015_response_warm_gpu_v1/tests.log": {
+        "bytes": 996,
+        "mtime_ns": 1792068462000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "e89b0de3487e20234e9a76d77a513f666edcb7bf0871463a12a620aec3539c19"
+      },
+      "work_dirs/port_reliability_response_warm_v1/20261015_response_warm_gpu_v1/gpu.log": {
+        "bytes": 15,
+        "mtime_ns": 1792068451000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "dae947a7a65c79df9a6a026eafca5bf2ee001dbbfab8d79356f37054e2ca4aec"
+      },
+      "work_dirs/port_size_structure_downstream_v1/run_20261021_v2_gpu3.log": {
+        "bytes": 84462,
+        "mtime_ns": 1792546282262590885,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "dd605db5e7fcf4f94fe33d05d900b6469b980d764398eda17d99b41967bfa696"
+      },
+      "work_dirs/symeood_ablation_v1/analysis_all8_20261024/recompute.log": {
+        "bytes": 75,
+        "mtime_ns": 1792801200117313791,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "4a361df40859af2b76cd287e801218a4cb6e1be8fe9fcd204e36203160d0efa4"
+      },
+      "work_dirs/symeood_ablation_v1/analysis_first4_20261023/recompute_v2.log": {
+        "bytes": 75,
+        "mtime_ns": 1792747914660836598,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "f840936678f228acca81e4f985676dcc03f1770f774fe81bbdcafa0cd365e84b"
+      },
+      "work_dirs/port_pilot_size_support_v1/20261015_train203_server_v1/run.log": {
+        "bytes": 1727,
+        "mtime_ns": 1792052202000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "03be50fc64a83795ba92dad1feb4ce5d9764115ea18cd9ecf4df121ab3fda7dc"
+      },
+      "work_dirs/port_pilot_size_support_v1/20261015_train203_server_v1/tests.log": {
+        "bytes": 511,
+        "mtime_ns": 1792052132000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "85da0732cb2b00b77a19c10e6d7018cad8510449465b4edd7707baa0817b57a8"
+      },
+      "work_dirs/port_reliability_response_l2_v1/20261015_l2zero_gpu_v1/run.log": {
+        "bytes": 2754,
+        "mtime_ns": 1792071698000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "d56279cc398f9522dc12db46420185938f84afb710d8c728c97a8d495c5dae9a"
+      },
+      "work_dirs/port_reliability_response_l2_v1/20261015_l2zero_gpu_v1/review.log": {
+        "bytes": 32,
+        "mtime_ns": 1792071728000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "8db43e8e2723eef1a08c59460a65f55806fe75ed3c0ed1b075be88314661e140"
+      },
+      "work_dirs/port_reliability_response_l2_v1/20261015_l2zero_gpu_v1/tests.log": {
+        "bytes": 690,
+        "mtime_ns": 1792071628000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "1e2e2cb6f17c8b1128f7fc5fac7843519d08a00864f5990d8bc5ab4ab3e0fc83"
+      },
+      "work_dirs/port_reliability_response_l2_v1/20261015_l2zero_gpu_v1/gpu.log": {
+        "bytes": 46,
+        "mtime_ns": 1792071605000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "25c00a1b71a8ae2535bab6ab747baa44a20a935f6e9b78f59858c6597d22b5de"
+      },
+      "work_dirs/symeood_110_retrain_seed0_20261026_v1/TEST.log": {
+        "bytes": 4218,
+        "mtime_ns": 1793016461966961656,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "dfe8ef09ffbb00a49e246c046a6b2e19849b85a24ccb0af0e8b97139ca4b3f45"
+      },
+      "work_dirs/symeood_110_retrain_seed0_20261026_v1/VAL_analysis.log": {
+        "bytes": 75,
+        "mtime_ns": 1793016461967524911,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "f4b90eead4e14976ba0c2c4fd7bbd5c5012f17496648926dd551472bf646ca95"
+      },
+      "work_dirs/symeood_110_retrain_seed0_20261026_v1/final_analysis.log": {
+        "bytes": 74,
+        "mtime_ns": 1793016461964148468,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "efc925215751e3dee11717b04a2fae8a87d515123acb242d6a35abe46183c0f1"
+      },
+      "work_dirs/symeood_110_retrain_seed0_20261026_v1/queue.log": {
+        "bytes": 0,
+        "mtime_ns": 1793016461964614763,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "work_dirs/symeood_110_retrain_seed0_20261026_v1/gate_no_update.log": {
+        "bytes": 20830,
+        "mtime_ns": 1793016461964292177,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "f6bb10d4fff24d8f10d18b5a6ada9be9a58a73568ed8dc6342bfb3bf0de06206"
+      },
+      "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/finite_trial.log": {
+        "bytes": 1826,
+        "mtime_ns": 1793022130924554027,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "85a2ea57867309ede44952aa2ec54c1c5129642d8b011ce8f74afc51515f9c1f"
+      },
+      "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/midpoint/formal/formal.log": {
+        "bytes": 6763,
+        "mtime_ns": 1793057731018087003,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "ade85550608ce660421476f4237f239a8e26033f5ac432be10e5814cca509b59"
+      },
+      "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/midpoint/test_ep21/test_ep21.log": {
+        "bytes": 26590,
+        "mtime_ns": 1793060900026874034,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "225b569543911310b758b71532a33b76e0693b40614b535b3ae6401cd12cda7a"
+      },
+      "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/ep11_C1_frozen_evaluation_20261028_v1.launch.log": {
+        "bytes": 8736,
+        "mtime_ns": 1793150144000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "a39c501757e7b7aa7580b7933ae37b81422756c1c3ce1d1f3113be129a440f4e"
+      },
+      "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/run.log": {
+        "bytes": 4940,
+        "mtime_ns": 1793064366679800748,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "39ac2cfdb468f40812e322d551c71d612bbd61fc7023eaea9e09fcc306fc2447"
+      },
+      "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/continuation_C_ep11_joint_v2.launch.log": {
+        "bytes": 2398,
+        "mtime_ns": 1793148767000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "295806d1427f6d56c68445d24a8278b2023b61a635a726ebcb4c2c6f9e7ecabf"
+      },
+      "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/ep11_frozen_evaluation_20261028_v1.launch.log": {
+        "bytes": 11171,
+        "mtime_ns": 1793147624279999605,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "00f9ac6619d23de4c1abdfd4bb7e99277439a4f1b8134a7419b013b19e5aa25c"
+      },
+      "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/pair_ep11_frozen_evaluation_20261028_v1.launch.log": {
+        "bytes": 6301,
+        "mtime_ns": 1793151916000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "eabda2e9a378efa56190a757ac00b1aa3e6c951148fc8244abcac5390488b2f7"
+      },
+      "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/continuation_ep7/run.log": {
+        "bytes": 1550,
+        "mtime_ns": 1793066424169281959,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "d241b9c944a5c04767b9ac970d40dfc3e0ad0f76f3060d06e3b0cbbbd783a50a"
+      },
+      "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/pair_specific/unit_tests.log": {
+        "bytes": 747,
+        "mtime_ns": 1793109599785255122,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "15bc3c8be45c54c2d11e49cc548a79b7b6cc80e5850345583b746dc103ba9e94"
+      },
+      "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/pair_specific/smoke.log": {
+        "bytes": 1221,
+        "mtime_ns": 1793109599755233545,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "68dd24bd09e9525706038370f3b58e9094c0ce4ec1deac1b87164e8fc244081c"
+      },
+      "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/pair_specific/formal_rule_tests.log": {
+        "bytes": 98,
+        "mtime_ns": 1793112530362566540,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "fa4c2c7b33fb511939bd5c51cd7367fe897248d995c5e444d554b115fc46bca9"
+      },
+      "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/pair_specific/formal.log": {
+        "bytes": 3256,
+        "mtime_ns": 1793143939440795378,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "1f03898af7497e180b8eea679c89fbef6b3f507a6a523e14d1275dafc14d639f"
+      },
+      "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/frozen_evaluation/run.log": {
+        "bytes": 15462,
+        "mtime_ns": 1793069162081024885,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "13a8b5a2cc73e0d551bc19eccf409bc22e0caab74859c402e876c3b3108b9c12"
+      },
+      "work_dirs/port_reliability_feature_source_test_v1/20261009_source_frozen_test_v1/source_tests.log": {
+        "bytes": 3174,
+        "mtime_ns": 1791514489000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "cc81f60a786a903a878cab31377b669c39524ca617074a339df2aacd09ea7e11"
+      },
+      "work_dirs/port_reliability_feature_source_test_v1/20261009_source_frozen_test_v1/review.log": {
+        "bytes": 363,
+        "mtime_ns": 1791514699000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "1ef815ae97a6b94dccb417ba43e47fc068ae7326d0da5b1bfaa92afbcae4b99a"
+      },
+      "work_dirs/port_reliability_feature_source_test_v1/20261009_source_frozen_test_v1/evaluate.log": {
+        "bytes": 1700,
+        "mtime_ns": 1791514693000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "d64f89e19b703945862e632f21745f2a25957bbbe98680ee8386f6a25d4015d3"
+      },
+      "work_dirs/port_reliability_feature_source_test_v1/20261009_source_frozen_test_v1/tests.log": {
+        "bytes": 964,
+        "mtime_ns": 1791514478000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "b0ba670fb49bbb99173ffa7cc45a6fe940ef1be0851c5b4bd031b80e813204f7"
+      },
+      "work_dirs/port_reliability_feature_source_test_v1/20261009_source_frozen_test_v1/runtime.log": {
+        "bytes": 60,
+        "mtime_ns": 1791514473000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "eff9c4116cf9e517765dacab5d0858b284680b29b6bebdd95608417a27a689d8"
+      },
+      "work_dirs/port_reliability_feature_source_test_v1/20261009_source_frozen_test_v1/check.log": {
+        "bytes": 19,
+        "mtime_ns": 1791514492000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "cb4c88c1ee3803b0793f4ee96e56f6ec7d409e2f2ba17db2abc8aef42036da2e"
+      },
+      "work_dirs/port_reliability_response_stats_v1/20261015_response_stats_server_v1_fix1/run.log": {
+        "bytes": 2278,
+        "mtime_ns": 1792064996000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "422c05429de879b1e55852681cc5dc718fb5404d748a51d80fce08825a7b3449"
+      },
+      "work_dirs/port_reliability_response_stats_v1/20261015_response_stats_server_v1_fix1/review.log": {
+        "bytes": 1099,
+        "mtime_ns": 1792065115000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "66f4e866dc601f88d5f6d3098dfe36f7aa776264dd3d69b7adcad77f7bb3872a"
+      },
+      "work_dirs/port_reliability_response_stats_v1/20261015_response_stats_server_v1_fix1/tests.log": {
+        "bytes": 1116,
+        "mtime_ns": 1792064868000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "926b11a785cbd59e19dcf66c5eb82a0e8dd6b5ee374d9293c514c2e21c3a75c2"
+      },
+      "work_dirs/port_reliability_response_stats_v1/20261015_response_stats_server_v1_fix1/gpu.log": {
+        "bytes": 15,
+        "mtime_ns": 1792064866000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "dae947a7a65c79df9a6a026eafca5bf2ee001dbbfab8d79356f37054e2ca4aec"
+      },
+      "work_dirs/port_reliability_response_stats_v1/20261015_response_stats_server_v1/tests.log": {
+        "bytes": 1666,
+        "mtime_ns": 1792064811000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "0e86b5c9813db944ccd27586931c2ec43843cafe0f90f7743111a7fde2bc776c"
+      },
+      "work_dirs/port_reliability_response_stats_v1/20261015_response_stats_server_v1/gpu.log": {
+        "bytes": 15,
+        "mtime_ns": 1792064809000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "dae947a7a65c79df9a6a026eafca5bf2ee001dbbfab8d79356f37054e2ca4aec"
+      },
+      "work_dirs/port_three_feature_factorial_v1/20261015_three_seeds_server_v1/run.log": {
+        "bytes": 628,
+        "mtime_ns": 1792055531259476627,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "805d48310e1e4e4dfe8f10b652d0558811f6a7097ea653a5b850d76235503fc6"
+      },
+      "work_dirs/port_three_feature_factorial_v1/20261015_three_seeds_server_v1/tests.log": {
+        "bytes": 689,
+        "mtime_ns": 1792055531259615170,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "f1876e6de325e69b3f7fd4a49bd85cd853eda42aadb2f70a5c208d9a845fc779"
+      },
+      "work_dirs/port_reliability_opposite_border_v1/20261008_border_evidence_fix1/train_check.log": {
+        "bytes": 2904,
+        "mtime_ns": 1791447518000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "4a65a627a1c7a5f2d3abe59babddb7e8602bd238d59d58b80a18e668fc89c0b0"
+      },
+      "work_dirs/port_reliability_opposite_border_v1/20261008_border_evidence_fix1/tests.log": {
+        "bytes": 3509,
+        "mtime_ns": 1791447499000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "101fe8efeda438cd5fd95e75de4aefd96d12ed4c8694dc0034e0df1667c1e1ae"
+      },
+      "work_dirs/port_reliability_opposite_border_v1/20261008_border_evidence_fix1/val_supplement/run.log": {
+        "bytes": 763,
+        "mtime_ns": 1791449237000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "20f5e4a63e842c0cbf6b315be541a778d034665c44359999bbf2bebe690d163e"
+      },
+      "work_dirs/port_reliability_opposite_border_v1/20261008_border_evidence_fix1/val_supplement/tests.log": {
+        "bytes": 1204,
+        "mtime_ns": 1791449228000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "3d872fbea1af37568faff57d8bbdd10f952218ddf9ae42feeaf3feeb8adea560"
+      },
+      "work_dirs/port_size_qalign_v1/run_20261019_v1.log": {
+        "bytes": 69157,
+        "mtime_ns": 1792393251125810802,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "a91f93160e3db4c77d107a8d5ff4ffe312980000a8d363bb9c9f0b6e24642d50"
+      },
+      "work_dirs/port_reliability_image_temporal_crossfit_v1/20261013_cached_crossfit_v1/run.log": {
+        "bytes": 677,
+        "mtime_ns": 1791892623000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "cb86519ee13f1aed95fa5b03cefd9ec005bb07b7d8c78e2e91332224bf53647b"
+      },
+      "work_dirs/port_reliability_image_temporal_crossfit_v1/20261013_cached_crossfit_v1/review.log": {
+        "bytes": 50,
+        "mtime_ns": 1791892645000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "57be8ab9f421fb220e036efd3c0b66bb2636effd0130b31e2d6ea60022775cb9"
+      },
+      "work_dirs/port_reliability_image_temporal_crossfit_v1/20261013_cached_crossfit_v1/tests.log": {
+        "bytes": 1681,
+        "mtime_ns": 1791892588000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "a5960e9ff42bf6194d127208af6fdd863d9b03f6c233b098372ce3420cbd5961"
+      },
+      "work_dirs/port_low_fa_v1/20261015_server_v1/run.log": {
+        "bytes": 205,
+        "mtime_ns": 1792049201000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "23a97296fce41a70b172a2552aaa6186799ea82d69135a3c51904e07259f13b5"
+      },
+      "work_dirs/port_low_fa_v1/20261015_server_v1/tests.log": {
+        "bytes": 498,
+        "mtime_ns": 1792049192000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "8c6396e0a2d5de6c902e2687c4619d8639aecfa8d45c5a82d872d9a6620a1c4d"
+      },
+      "work_dirs/port_reliability_pixel_border_v1/local_check/tests.log": {
+        "bytes": 1391,
+        "mtime_ns": 1791943963116771156,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "8488ce571593d73a784de3470eca746424a4b339da7634daf8144376596b097f"
+      },
+      "work_dirs/port_reliability_pixel_border_v1/20261014_native_pixel_v1/run.log": {
+        "bytes": 179,
+        "mtime_ns": 1791944181000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "3a5f016673797e68b04b1bd8452bd4da9809903d1f4e065f2844cf5223d43c6f"
+      },
+      "work_dirs/port_reliability_pixel_border_v1/20261014_native_pixel_v1/review.log": {
+        "bytes": 22,
+        "mtime_ns": 1791944182000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "b4a6327041047d1344766dbb26d10a073425ffb01682b80406a39a93a08cf9ed"
+      },
+      "work_dirs/port_reliability_pixel_border_v1/20261014_native_pixel_v1/tests.log": {
+        "bytes": 1123,
+        "mtime_ns": 1791944106000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "1348f9046f70d8cf950be5f2c8556dde14e645ddfbf604836791c89f459d8f17"
+      },
+      "work_dirs/port_reliability_fallback_decision_v1/20261013_frozen_fallback_v1/run.log": {
+        "bytes": 145,
+        "mtime_ns": 1791896992559576511,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "50e968bd7625cd1797a65efc81e92f6014b7e480ca27e82dab6c24328ab6bb64"
+      },
+      "work_dirs/port_reliability_fallback_decision_v1/20261013_frozen_fallback_v1/review.log": {
+        "bytes": 44,
+        "mtime_ns": 1791897136192771196,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "e4cad9735b06de7555a9a88f0d20359b5631c50a8df60091081670c8d51aa368"
+      },
+      "work_dirs/port_reliability_fallback_decision_v1/20261013_frozen_fallback_v1/tests.log": {
+        "bytes": 1163,
+        "mtime_ns": 1791896601189213275,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "57d00766f930e9239325dfa2b812a3bcec116606e06f8f0736ebf1650b6eb213"
+      },
+      "work_dirs/port_response_fold_ensemble_v1/20261016_frozen_sixfold_v1/run.log": {
+        "bytes": 507,
+        "mtime_ns": 1792130604000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "d9e22c1015c52c04656df9a81f85092b377b05c665bfe2468e08a541931187fd"
+      },
+      "work_dirs/port_response_fold_ensemble_v1/20261016_frozen_sixfold_v1/review.log": {
+        "bytes": 27,
+        "mtime_ns": 1792130619000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "b934af55986706fdf70f83e26d37e12698487b5d0f07c99aa1621d12a97ef271"
+      },
+      "work_dirs/port_response_fold_ensemble_v1/20261016_frozen_sixfold_v1/tests.log": {
+        "bytes": 523,
+        "mtime_ns": 1792130590000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "43d616c0df9c24b2c2e74fdfa00ea974dc081d69c7a943c45fe737f85caa635a"
+      },
+      "work_dirs/port_midpoint_simple_disagreement_v1/20261015_frozen_disagreement_server_v1/run.log": {
+        "bytes": 96,
+        "mtime_ns": 1792047398852338993,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "6edab58290b8d78148207c4112d62d457d5f1997fb9be5d7da1e694cfb3a63c7"
+      },
+      "work_dirs/port_midpoint_simple_disagreement_v1/20261015_frozen_disagreement_server_v1/tests.log": {
+        "bytes": 920,
+        "mtime_ns": 1792047398852524203,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "8744aafe9e8524936032d9d25eb04b569ccfe034468f65461a2c167e05bc4403"
+      },
+      "work_dirs/port_reliability_response_warm_test_v1/20261015_frozen1701_test_v1_fix1/run.log": {
+        "bytes": 702,
+        "mtime_ns": 1792070224000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "22658d4101d0bacbbd4e9ef0af797127a10b2f4d77391577dfe8fcd4a5ddd956"
+      },
+      "work_dirs/port_reliability_response_warm_test_v1/20261015_frozen1701_test_v1_fix1/review_fix_tests.log": {
+        "bytes": 425,
+        "mtime_ns": 1792070325000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "d9a224c6ee8b277dd66c97fc4916c5698dadbf647d5d79e155173eb88af589d8"
+      },
+      "work_dirs/port_reliability_response_warm_test_v1/20261015_frozen1701_test_v1_fix1/review.log": {
+        "bytes": 777,
+        "mtime_ns": 1792070252000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "2cced24c1eeedba8633106651dc6df7adb9f2735294ee87135dfc4043eae77a6"
+      },
+      "work_dirs/port_reliability_response_warm_test_v1/20261015_frozen1701_test_v1_fix1/tests.log": {
+        "bytes": 316,
+        "mtime_ns": 1792070129000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "14cac24d7d39c43dc8837b6f57099798c904b449a71f5619f9e55598f3a88bdf"
+      },
+      "work_dirs/port_reliability_response_warm_test_v1/20261015_frozen1701_test_v1_fix1/review_fix.log": {
+        "bytes": 28,
+        "mtime_ns": 1792070359000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "12d40e5c554b6bdcfa9dd0bfda2f1c33de5071e0dcc0697c7983ff4620a76fc3"
+      },
+      "work_dirs/port_reliability_response_warm_test_v1/20261015_frozen1701_test_v1_fix1/gpu.log": {
+        "bytes": 45,
+        "mtime_ns": 1792070126000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "cef2c63211d82c92f7b1c98cc95b17e6e05a3973e4d6e54a774d38f9052e2cae"
+      },
+      "work_dirs/port_reliability_tradeoff_v1/20261008_retention95_v1/run.log": {
+        "bytes": 385,
+        "mtime_ns": 1791419720451215432,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "902156ac28f79ae7b265e1e534ebadbd9c200067f7c287e8e26d89941f9212de"
+      },
+      "work_dirs/port_reliability_tradeoff_v1/20261008_retention95_v1/tests.log": {
+        "bytes": 1311,
+        "mtime_ns": 1791419720451279558,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "c913d1b55548ac82f5df613580470c6d19f02b1c230ad78598edefd5f93cf982"
+      },
+      "work_dirs/port_reliability_tradeoff_v1/20261008_retention95_v2/run.log": {
+        "bytes": 385,
+        "mtime_ns": 1791420023254248149,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "5622c88c541b61d6cf31c9afe9636bbf95ba171960c5bc38d4a58d6fc026ab94"
+      },
+      "work_dirs/port_reliability_tradeoff_v1/20261008_retention95_v2/tests.log": {
+        "bytes": 1311,
+        "mtime_ns": 1791420023254320149,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "84cd50a0ecad83c823c9cb79413ccd7ae798d6dd1e3db51d3b2c8e2cae8c46eb"
+      },
+      "work_dirs/port_reliability_video_transfer_v1/20261014_video_transfer_v1/run.log": {
+        "bytes": 1583,
+        "mtime_ns": 1791965282000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "5fd569f94141d6867297fad3be13ceaeab000ca0cf7273c6b148798e6ae9b5ab"
+      },
+      "work_dirs/port_reliability_video_transfer_v1/20261014_video_transfer_v1/review.log": {
+        "bytes": 432,
+        "mtime_ns": 1791965293000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "641200a29c61397986c0df7aafeaca6dbeb06bd86e14179cb04128d5be2dabaa"
+      },
+      "work_dirs/port_reliability_video_transfer_v1/20261014_video_transfer_v1/tests.log": {
+        "bytes": 1159,
+        "mtime_ns": 1791965260000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "d7c230aa61fb40a867e9e3c4645bb829688bb18e0129fae42721f8957e3132c1"
+      },
+      "work_dirs/port_reliability_remaining_error_support_v1/20261014_frozen_train_support_v1/run.log": {
+        "bytes": 657,
+        "mtime_ns": 1791962892000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "31ab4e3c24a82380d90f81d89ee2023d7b9753166a589271b2ef7a5f22d8c0a0"
+      },
+      "work_dirs/port_reliability_remaining_error_support_v1/20261014_frozen_train_support_v1/review.log": {
+        "bytes": 346,
+        "mtime_ns": 1791962895000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "aed11bcbd1ddd1a071d07dfa33a5fe949b9b213cea3b11992e07fc8844a58aac"
+      },
+      "work_dirs/port_reliability_remaining_error_support_v1/20261014_frozen_train_support_v1/tests.log": {
+        "bytes": 1143,
+        "mtime_ns": 1791962887000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "2eab9090b98cf07d90c814f580601d11328a5bed4424e82f99effa31a5f3fa93"
+      },
+      "work_dirs/port_reliability_feature_ablation_v1/20261008_size_features_v1/fit.log": {
+        "bytes": 193,
+        "mtime_ns": 1791422266606405290,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "4f552cad52dbdf5576713fec384841feadbb213b65269ef85f36d1269ac02c18"
+      },
+      "work_dirs/port_reliability_feature_ablation_v1/20261008_size_features_v1/tests.log": {
+        "bytes": 2182,
+        "mtime_ns": 1791422266606806251,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "318d6e909c905965ea1b23d2417141e3280763018c9c40eea0088a60e2205430"
+      },
+      "work_dirs/port_response_fusion_feasibility_v1/20261016_five_scores_v2/run.log": {
+        "bytes": 28,
+        "mtime_ns": 1792111925000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "ef9890671e371f79c68fe8da05d0b9df5bd3d1ec10e37223346def502967a447"
+      },
+      "work_dirs/port_response_fusion_feasibility_v1/20261016_five_scores_v2/review.log": {
+        "bytes": 35,
+        "mtime_ns": 1792111933000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "9d2556c80f24d8c216168993faaacc395f19ad3e53a6e70a0f235a7a0946c93a"
+      },
+      "work_dirs/port_response_fusion_feasibility_v1/20261016_five_scores_v2/tests.log": {
+        "bytes": 410,
+        "mtime_ns": 1792111921000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "10345c0b71664242231d874cb89cfbdb7d3b1980c5bd4d8ec39f56338e38bb3a"
+      },
+      "work_dirs/port_response_fusion_feasibility_v1/20261016_five_scores_v2/runtime.log": {
+        "bytes": 48,
+        "mtime_ns": 1792111920000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "676b70c547cdff0ce2c9b54d7db5814cdcb8fe1974e4ee93708054351c4cfd1d"
+      },
+      "work_dirs/port_response_fusion_feasibility_v1/20261016_five_scores_v1/run.log": {
+        "bytes": 28,
+        "mtime_ns": 1792111803000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "ef9890671e371f79c68fe8da05d0b9df5bd3d1ec10e37223346def502967a447"
+      },
+      "work_dirs/port_response_fusion_feasibility_v1/20261016_five_scores_v1/review.log": {
+        "bytes": 34,
+        "mtime_ns": 1792111809000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "504799a1cb540ff061eb3578c1469a95cdbf8c3f5d2b6bd38bcecc6dab283b5b"
+      },
+      "work_dirs/port_response_fusion_feasibility_v1/20261016_five_scores_v1/tests.log": {
+        "bytes": 410,
+        "mtime_ns": 1792111799000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "943fae788c9d8b46ccf260eca76346d1112bb7a9690743eb97c5f0772ddf3f9e"
+      },
+      "work_dirs/port_response_fusion_feasibility_v1/20261016_five_scores_v1/runtime.log": {
+        "bytes": 48,
+        "mtime_ns": 1792111797000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "676b70c547cdff0ce2c9b54d7db5814cdcb8fe1974e4ee93708054351c4cfd1d"
+      },
+      "work_dirs/port_reliability_response_tail_v1/20261015_response_tail_server_v1/run.log": {
+        "bytes": 591,
+        "mtime_ns": 1792067290000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "56fa5cc0e8513865c1394826cdb8e3992668a70cefc3f025630eafecb26a536b"
+      },
+      "work_dirs/port_reliability_response_tail_v1/20261015_response_tail_server_v1/review.log": {
+        "bytes": 2613,
+        "mtime_ns": 1792067316000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "be9c7b8bf99650751c5a7e61d390c2d116c212b34268fb6a560663c012bbed43"
+      },
+      "work_dirs/port_reliability_response_tail_v1/20261015_response_tail_server_v1/tests.log": {
+        "bytes": 725,
+        "mtime_ns": 1792067070000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "3548bc58da5beb6e3c829c99cf07224c83bd458b29ca43edc4ee4b023f37ea2a"
+      },
+      "work_dirs/port_reliability_temporal_fusion_v1/20261013_fusion_cpu_v1/reviewfix2_tests.log": {
+        "bytes": 1670,
+        "mtime_ns": 1791879357000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "9337352cc0e3bf5bbc34ad3175eb51519bde23dc96977da211877009e13ca9c1"
+      },
+      "work_dirs/port_reliability_temporal_fusion_v1/20261013_fusion_cpu_v1/reviewfix_tests.log": {
+        "bytes": 1560,
+        "mtime_ns": 1791879135000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "013ec65c3802ff1176f8f187ba04607eabfcf76f1f67edf076fac679ad806443"
+      },
+      "work_dirs/port_reliability_temporal_fusion_v1/20261013_fusion_cpu_v1/run.log": {
+        "bytes": 188,
+        "mtime_ns": 1791878930000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "df20ebf07a6a43011840ffd736b563e5249ad1e43650600c802caecafc1e3a79"
+      },
+      "work_dirs/port_reliability_temporal_fusion_v1/20261013_fusion_cpu_v1/reviewfix.log": {
+        "bytes": 401,
+        "mtime_ns": 1791879144000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "b597d804ab1897d6079ed570a0b90b92198d6c7be84771bd72265926e35c4c93"
+      },
+      "work_dirs/port_reliability_temporal_fusion_v1/20261013_fusion_cpu_v1/review.log": {
+        "bytes": 399,
+        "mtime_ns": 1791878934000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "d5d1660b5e4188fa88288f85efe4a18475b3087ba9bec153710e0af1ba87cd68"
+      },
+      "work_dirs/port_reliability_temporal_fusion_v1/20261013_fusion_cpu_v1/tests.log": {
+        "bytes": 1440,
+        "mtime_ns": 1791878900000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "66741a4929900b4f723084ae00f21b77f88abbca48d9d2541487b3216253cc21"
+      },
+      "work_dirs/port_reliability_temporal_fusion_v1/20261013_fusion_cpu_v1/reviewfix2.log": {
+        "bytes": 959,
+        "mtime_ns": 1791879366000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "65a6e3e7ee1fa23098ec197975f0143d94eb1ccc2ab40b998045fb6de75de2b1"
+      },
+      "work_dirs/port_reliability_candidate_support_v1/20261014_native_candidates_gpu3_v1.launch.log": {
+        "bytes": 3585,
+        "mtime_ns": 1791938207000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "64147fde65a22af58d330f1d32f9839ea31322a9302bfa66b8021727921be975"
+      },
+      "work_dirs/port_reliability_candidate_support_v1/20261014_native_candidates_gpu3_fix1.launch.log": {
+        "bytes": 5117,
+        "mtime_ns": 1791938554000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "1b01f7f4a5eb66050f0dd6123dc4ad50fe980849973474be52e33285b043cebe"
+      },
+      "work_dirs/port_reliability_candidate_support_v1/20261014_native_candidates_gpu3_v1/run.log": {
+        "bytes": 2011,
+        "mtime_ns": 1791938204000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "fbb8c21d1b293f7a1efaa8a9f89cbe2d315ff311abe089728187befa55d3100e"
+      },
+      "work_dirs/port_reliability_candidate_support_v1/20261014_native_candidates_gpu3_v1/tests.log": {
+        "bytes": 1564,
+        "mtime_ns": 1791937978000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "5cd430ceaef01a2c714c673da4b7821328772045a875a3d8c8b6438238b15f14"
+      },
+      "work_dirs/port_reliability_candidate_support_v1/20261014_native_candidates_gpu3_fix1/run.log": {
+        "bytes": 3400,
+        "mtime_ns": 1791938550000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "ee5209fb9525416fabbff8e31391ff36f4a99281685dbbf8a2c4587356d2e087"
+      },
+      "work_dirs/port_reliability_candidate_support_v1/20261014_native_candidates_gpu3_fix1/review.log": {
+        "bytes": 44,
+        "mtime_ns": 1791938554000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "1998f35ef5ba3a1bd21425566a4cbfd17038c2c5c0fa7c95d7634b76e36d8e14"
+      },
+      "work_dirs/port_reliability_candidate_support_v1/20261014_native_candidates_gpu3_fix1/tests.log": {
+        "bytes": 1673,
+        "mtime_ns": 1791938274000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "dfea7f8451cc2ed4d112345aa04d0c7c156f4d01250c767b51206d06f6acc092"
+      },
+      "work_dirs/port_reliability_box_contrast_v1/20261009_box_contrast_v1_fix1/reused_tests.log": {
+        "bytes": 3174,
+        "mtime_ns": 1791528313000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "8f7b3de2cdd8c7ec5a16dd00cd01a0866ef410bf2d24559bec237e5d6acfe963"
+      },
+      "work_dirs/port_reliability_box_contrast_v1/20261009_box_contrast_v1_fix1/initial_fixture_failure_tests.log": {
+        "bytes": 3841,
+        "mtime_ns": 1791529862000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "c2ac89f66a546c6b4645332ecf0d8a08b1a104d076809b7cab51fddcd7ec05f0"
+      },
+      "work_dirs/port_reliability_box_contrast_v1/20261009_box_contrast_v1_fix1/launch.log": {
+        "bytes": 10941,
+        "mtime_ns": 1791529036000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "b388df4d21f55c5b3c85a9666790b6674a4c78bdeb9ec8b2a3e5c56d3bf4db0c"
+      },
+      "work_dirs/port_reliability_box_contrast_v1/20261009_box_contrast_v1_fix1/report_fix_tests.log": {
+        "bytes": 2902,
+        "mtime_ns": 1791529751000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "d9516c118b6afbd7cc27146f0070cc2e277eb4b58e6d566c3a8de256122fbf9f"
+      },
+      "work_dirs/port_reliability_box_contrast_v1/20261009_box_contrast_v1_fix1/run.log": {
+        "bytes": 4732,
+        "mtime_ns": 1791529010000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "bf1e3a45f8b74bdf64a4f50353f10172f18d0362d34273224c807ec7fd6fd574"
+      },
+      "work_dirs/port_reliability_box_contrast_v1/20261009_box_contrast_v1_fix1/final_review.log": {
+        "bytes": 4850,
+        "mtime_ns": 1791529792000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "758589b9c0dd37abc9464969fe70624503174cef18a037295813bf495d518ff1"
+      },
+      "work_dirs/port_reliability_box_contrast_v1/20261009_box_contrast_v1_fix1/finalization.log": {
+        "bytes": 16,
+        "mtime_ns": 1791529769000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "afde724c5f622cbf0e3b709a8b55b78460072f2c1c0d23cfac67b8972f2267ba"
+      },
+      "work_dirs/port_reliability_box_contrast_v1/20261009_box_contrast_v1_fix1/tests.log": {
+        "bytes": 2791,
+        "mtime_ns": 1791528300000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "f6b35141770dab7b1164f39529baff26166b5a6ed7645b6d832b8160ff8cb27f"
+      },
+      "work_dirs/port_reliability_box_contrast_v1/20261009_box_contrast_v1_fix1/runtime.log": {
+        "bytes": 98,
+        "mtime_ns": 1791528298000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "5bb2e85f50fd9e7ce1461e68e80b2a73b33e88d16d3e2cad60b0444bd0fc38be"
+      },
+      "work_dirs/port_geometry_size_boundary_v1/port_geometry_size_boundary_v1_20261007_143640_810794/run.log": {
+        "bytes": 4490,
+        "mtime_ns": 1791356358456020515,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "e04f05b15f58ecbb7e9a289febc734ef3e7c1b06bbc9a259abd2b18fe6feb53b"
+      },
+      "work_dirs/port_geometry_size_boundary_v1/port_geometry_size_boundary_continuous_v1_20261007_154944_1078779/run.log": {
+        "bytes": 5831,
+        "mtime_ns": 1791360091124285041,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "17dde477bd5709a9f94035d23ae6c3068cabf876654f6367812785439e7a7389"
+      },
+      "work_dirs/port_response_fusion_crossfit_v1/20261016_video_oof1701_v1/run.log": {
+        "bytes": 9323,
+        "mtime_ns": 1792118990000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "9d417a996d788ff8c052c9009d48c8d73a60afc735d666722463bf824521292d"
+      },
+      "work_dirs/port_response_fusion_crossfit_v1/20261016_video_oof1701_v1/review.log": {
+        "bytes": 28,
+        "mtime_ns": 1792119010000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "34099e02e1cbca4268c18f107b092d3d010f665adfa8ac7e2a57041d47df1530"
+      },
+      "work_dirs/port_response_fusion_crossfit_v1/20261016_video_oof1701_v1/tests.log": {
+        "bytes": 541,
+        "mtime_ns": 1792118407000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "c1f12fad9724c8d96b636e887460679192d0e18af0d6d05f56834498bbd2d7ce"
+      },
+      "work_dirs/port_size_direct_continuation_downstream_v1/run_20261021_v1_gpu3.log": {
+        "bytes": 119524,
+        "mtime_ns": 1792567884980988536,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "112c5e65b4622fd53fa3f4ac4b57a5936eaf29087e35961faa70e1341a912898"
+      },
+      "work_dirs/port_reliability_actual_fr_val_v1/20261014_frozen_VAL_v1/result/evaluation.log": {
+        "bytes": 29547,
+        "mtime_ns": 1791980641923549047,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "5dded35bbdfd7c96dd2a5701b4c4e8d10f96dd5528d0bd33d49442d276b6e92a"
+      },
+      "work_dirs/port_reliability_partial_auc_v1/20261013_pauc_cpu_v1/run.log": {
+        "bytes": 293,
+        "mtime_ns": 1791890691000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "987e06a674e7d6678984133cf6f8a31d04e10cf17c82b675e5a9f93ccf614337"
+      },
+      "work_dirs/port_reliability_partial_auc_v1/20261013_pauc_cpu_v1/review.log": {
+        "bytes": 38,
+        "mtime_ns": 1791890699000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "6b4c904a480743dbc3eeee7508c8a0bfbee019370f120b972248de2c01af3dfc"
+      },
+      "work_dirs/port_reliability_partial_auc_v1/20261013_pauc_cpu_v1/tests.log": {
+        "bytes": 1311,
+        "mtime_ns": 1791890681000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "f2ee4df03ac27615cfc5e58d759601e485b9fa38d2fb01ab255a022841c11f9c"
+      },
+      "work_dirs/port_reliability_temporal_stack_test_v1/20261014_frozen_stack_test_v1/run.log": {
+        "bytes": 893,
+        "mtime_ns": 1791959404000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "969cd802789d322f13042e83d6e39809b513cb4bfdc43ebc7a5f69f40973748f"
+      },
+      "work_dirs/port_reliability_temporal_stack_test_v1/20261014_frozen_stack_test_v1/review.log": {
+        "bytes": 466,
+        "mtime_ns": 1791959412000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "a9ce1645ee121d619892b853e2c6996d6cd159a4bd6a52133b6db29a2b280604"
+      },
+      "work_dirs/port_reliability_temporal_stack_test_v1/20261014_frozen_stack_test_v1/tests.log": {
+        "bytes": 961,
+        "mtime_ns": 1791959361000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "84df16dc3b98d62ec54574638a6de9a851b8b1377c52dbba14f11c036ff41632"
+      },
+      "work_dirs/port_reliability_severity_v1/20261015_severity_v1/run.log": {
+        "bytes": 1623,
+        "mtime_ns": 1792025872000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "e78e0af35e635c144f4a7fe9816a0238addab9bad2e8ebe827de18a2905cc4d4"
+      },
+      "work_dirs/port_reliability_severity_v1/20261015_severity_v1/tests.log": {
+        "bytes": 1220,
+        "mtime_ns": 1792025862000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "cf6d7e5671ccf5cb0b38e71228d1623cd454433df649c5810f9e7b7ba471d928"
+      },
+      "work_dirs/port_reliability_readout_compare_v1/20261008_readout_v1/run.log": {
+        "bytes": 619,
+        "mtime_ns": 1791467760000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "b9f2a46120fbcf8ccc5dd2e8bec12f2c835ea5d1e188aa60b92d8a2451b2a019"
+      },
+      "work_dirs/port_reliability_readout_compare_v1/20261008_readout_v1/review.log": {
+        "bytes": 9963,
+        "mtime_ns": 1791467835000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "da80737a2a5abde2629cf92a3165820e79bd287c17afbcd30cdc0ba67dcef846"
+      },
+      "work_dirs/port_reliability_readout_compare_v1/20261008_readout_v1/tests.log": {
+        "bytes": 2377,
+        "mtime_ns": 1791467730000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "eb5390e6fbcba3aff96242e99520e319521e620f4474226c82dd7164462343b5"
+      },
+      "work_dirs/port_reliability_readout_compare_v1/20261008_readout_v1/runtime.log": {
+        "bytes": 98,
+        "mtime_ns": 1791467726000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "5bb2e85f50fd9e7ce1461e68e80b2a73b33e88d16d3e2cad60b0444bd0fc38be"
+      },
+      "work_dirs/port_reliability_actual_fr_v1/20261014_actual_fr_v1/run.log": {
+        "bytes": 2051,
+        "mtime_ns": 1791979171682812760,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "24f048109c6f4677880eba5eb3c5e4b6dffc6e903571e8f5ab92245b168c4f05"
+      },
+      "work_dirs/port_reliability_actual_fr_v1/20261014_actual_fr_v1/tests.log": {
+        "bytes": 1332,
+        "mtime_ns": 1791979171695487030,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "d20acb025dd35b9b169569c9655c49754dcf2b4ac5887095aa259d1fb7cd01d3"
+      },
+      "work_dirs/port_reliability_actual_fr_v1/20261014_actual_fr_fix1/run.log": {
+        "bytes": 7780,
+        "mtime_ns": 1791979126000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "b9dc62fab7acdb33a0ecf0aaa26614a5e2fff12cb4ee186c7fee248c0b14fd4c"
+      },
+      "work_dirs/port_reliability_actual_fr_v1/20261014_actual_fr_fix1/review.log": {
+        "bytes": 597,
+        "mtime_ns": 1791979138000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "74408c3c168df4b64a09d5eba06df7904899cd0c4ac8543be73242f807333fd6"
+      },
+      "work_dirs/port_reliability_actual_fr_v1/20261014_actual_fr_fix1/tests.log": {
+        "bytes": 1332,
+        "mtime_ns": 1791978684000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "7442bcf73b55b76b75d87586a664c6e2935c6d84d2b372b8d704a5da6f061f12"
+      },
+      "work_dirs/port_reliability_size_temporal_interaction_v1/20261013_scalar_cpu_v1/run.log": {
+        "bytes": 201,
+        "mtime_ns": 1791885778442960262,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "43ad146bd113c221d6b376535ac5d88c5c20ea1b812249d758bfc2a58bc77237"
+      },
+      "work_dirs/port_reliability_size_temporal_interaction_v1/20261013_scalar_cpu_v1/review_fix_tests.log": {
+        "bytes": 1911,
+        "mtime_ns": 1791885989320471286,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "02623eb691029a638c5396557ce776b7acb95aa23b7835b89c3ced1d49deaa5d"
+      },
+      "work_dirs/port_reliability_size_temporal_interaction_v1/20261013_scalar_cpu_v1/review.log": {
+        "bytes": 768,
+        "mtime_ns": 1791885790887849092,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "af2cf9aceeb0cee26eaa4dfe26872642e1dad17dc462f60564052e18d045a0b4"
+      },
+      "work_dirs/port_reliability_size_temporal_interaction_v1/20261013_scalar_cpu_v1/tests.log": {
+        "bytes": 1794,
+        "mtime_ns": 1791885763931693792,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "cbbba4f3bb67494d50d9a9ae76bda870df41e424dbcd5ed99f888e8c39f925e2"
+      },
+      "work_dirs/port_size_frozen_downstream_v1/run_v5_gpu3.log": {
+        "bytes": 50399,
+        "mtime_ns": 1792227593373446454,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "ae4110a1351d00eaae564fac3b983f96a1d974b90afe1b1bc6efed6ba9bf1dd3"
+      },
+      "work_dirs/port_reliability_spatial_axis_v1/20261009_spatial_axis_v1/prepare.log": {
+        "bytes": 122,
+        "mtime_ns": 1791550847000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "806a865fa366e8562e9a0914b5a0ce2c388b63ecb9a5c168dde143bc09ab9564"
+      },
+      "work_dirs/port_reliability_spatial_axis_v1/20261009_spatial_axis_v1/tests.log": {
+        "bytes": 2367,
+        "mtime_ns": 1791550844000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "daf68055b4f00506bd7d91a9a125520edfe53ced2750266643efceeaec5900ad"
+      },
+      "work_dirs/port_reliability_spatial_axis_v1/20261009_spatial_axis_v1/runtime.log": {
+        "bytes": 98,
+        "mtime_ns": 1791550840000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "51201aa3ec5495b4796b19d22d5a648b9ac87c8eca22e9d50312d4f6b8f4bf2a"
+      },
+      "work_dirs/port_reliability_spatial_axis_v1/20261009_spatial_axis_v1/gpu.log": {
+        "bytes": 15,
+        "mtime_ns": 1791550839000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "85246311cc2bdf047b51d599e9bec0d5e1949f954c3c4fb178703772260cc50c"
+      },
+      "work_dirs/port_reliability_spatial_axis_v1/20261009_spatial_axis_v1_fix2/review.log": {
+        "bytes": 1283,
+        "mtime_ns": 1791552318000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "a31f467934adea3a2f8374fde2d313c42b60ba946035c5d18edbab5b2928e57b"
+      },
+      "work_dirs/port_reliability_spatial_axis_v1/20261009_spatial_axis_v1_fix2/prepare.log": {
+        "bytes": 122,
+        "mtime_ns": 1791551240000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "806a865fa366e8562e9a0914b5a0ce2c388b63ecb9a5c168dde143bc09ab9564"
+      },
+      "work_dirs/port_reliability_spatial_axis_v1/20261009_spatial_axis_v1_fix2/tests.log": {
+        "bytes": 2554,
+        "mtime_ns": 1791551238000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "b34332589142585c9fd742bb16cdefc80145e3b480e76db5246373f87bcf8b1f"
+      },
+      "work_dirs/port_reliability_spatial_axis_v1/20261009_spatial_axis_v1_fix2/runtime.log": {
+        "bytes": 98,
+        "mtime_ns": 1791551236000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "51201aa3ec5495b4796b19d22d5a648b9ac87c8eca22e9d50312d4f6b8f4bf2a"
+      },
+      "work_dirs/port_reliability_spatial_axis_v1/20261009_spatial_axis_v1_fix2/gpu.log": {
+        "bytes": 15,
+        "mtime_ns": 1791551233000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "85246311cc2bdf047b51d599e9bec0d5e1949f954c3c4fb178703772260cc50c"
+      },
+      "work_dirs/port_reliability_spatial_axis_v1/20261009_spatial_axis_v1_fix1/prepare.log": {
+        "bytes": 122,
+        "mtime_ns": 1791551048000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "806a865fa366e8562e9a0914b5a0ce2c388b63ecb9a5c168dde143bc09ab9564"
+      },
+      "work_dirs/port_reliability_spatial_axis_v1/20261009_spatial_axis_v1_fix1/tests.log": {
+        "bytes": 2458,
+        "mtime_ns": 1791551046000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "3bb87564dc9e95a2397497fec3c54549f95649ebc2f92b0c0ba18f0a4a30cc85"
+      },
+      "work_dirs/port_reliability_spatial_axis_v1/20261009_spatial_axis_v1_fix1/runtime.log": {
+        "bytes": 98,
+        "mtime_ns": 1791551043000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "51201aa3ec5495b4796b19d22d5a648b9ac87c8eca22e9d50312d4f6b8f4bf2a"
+      },
+      "work_dirs/port_reliability_spatial_axis_v1/20261009_spatial_axis_v1_fix1/gpu.log": {
+        "bytes": 15,
+        "mtime_ns": 1791551041000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "85246311cc2bdf047b51d599e9bec0d5e1949f954c3c4fb178703772260cc50c"
+      },
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1_r2/run.log": {
+        "bytes": 128,
+        "mtime_ns": 1791861780970744118,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "a08af4142bb5d74d091eff133c68eaa9d78757b8c3cd28702d2634bdce364308"
+      },
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1_r2/review.log": {
+        "bytes": 250,
+        "mtime_ns": 1791861780970657326,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "8f3ef79e0d589de2a350b12d75f1183d9a2e7deb694e8fb74232dee2017dd6d8"
+      },
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1_r2/tests.log": {
+        "bytes": 1191,
+        "mtime_ns": 1791861780970873411,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "7058aaf81201863a0c04857462998737500a2a26a0a01f11add4aacd8d6e101e"
+      },
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/run.log": {
+        "bytes": 128,
+        "mtime_ns": 1791861518024481981,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "a08af4142bb5d74d091eff133c68eaa9d78757b8c3cd28702d2634bdce364308"
+      },
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/review.log": {
+        "bytes": 250,
+        "mtime_ns": 1791861518024381147,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "ce6cb627c1bee2f4e3cd00ddb265c0e585cb4d8affe61c41b4877ac524d07403"
+      },
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/tests.log": {
+        "bytes": 1061,
+        "mtime_ns": 1791861518024569024,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "3de6c872c39057f330d19af751313f5f14725cc43050be14a2caf7928247e4bb"
+      },
+      "work_dirs/port_reliability_temporal_history_gate_v1/20261013_history_gate_cpu_v1/run.log": {
+        "bytes": 128,
+        "mtime_ns": 1791876333000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "a08af4142bb5d74d091eff133c68eaa9d78757b8c3cd28702d2634bdce364308"
+      },
+      "work_dirs/port_reliability_temporal_history_gate_v1/20261013_history_gate_cpu_v1/review.log": {
+        "bytes": 373,
+        "mtime_ns": 1791876351000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "311ed27f18b99f197db406f9183f82fc5e90403d930d4be6535b63d8546029a3"
+      },
+      "work_dirs/port_reliability_temporal_history_gate_v1/20261013_history_gate_cpu_v1/tests.log": {
+        "bytes": 1538,
+        "mtime_ns": 1791876311000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "4c61bc048785ade36709299a6bef79aa4bb9401310088fe51f9be69036c3dfa0"
+      },
+      "work_dirs/port_size_qalign_downstream_v1/run_20261020_v1_gpu3.log": {
+        "bytes": 28416,
+        "mtime_ns": 1792460434000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "6663aac284b2d65f217a7a8fcd0655f06ded96c9893c904fe5a0e7fcff36ee8e"
+      },
+      "work_dirs/port_detection_runtime_v1/four_arm_fix5_20261006_105204_491124/run.log": {
+        "bytes": 243,
+        "mtime_ns": 1791266833754181431,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "57fb704532e1f616949961019d0114db90bfa78828dc2cdc4380dc888934d588"
+      },
+      "work_dirs/port_detection_runtime_v1/four_arm_fix5_20261006_105204_491124/benchmark.log": {
+        "bytes": 8267,
+        "mtime_ns": 1791266833753084090,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "691dd273502fb0e72dc56da9190360e026421e75fdbeadcd40e26183fdefa9a8"
+      },
+      "work_dirs/port_detection_runtime_v1/four_arm_fix5_20261006_105204_491124/inputs.log": {
+        "bytes": 1499,
+        "mtime_ns": 1791266833754076222,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "5dfe45af0dbd976ccd7348c156819dad8482fec88a32dde4cb36e5bff803582b"
+      },
+      "work_dirs/port_detection_runtime_v1/four_arm_fix5_20261006_105204_491124/tests.log": {
+        "bytes": 6932,
+        "mtime_ns": 1791266833754382057,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "1c4ace8a07914580ef51df57a585d0db84f222ce236514ff27d70c4a5fcd3ce1"
+      },
+      "work_dirs/port_detection_runtime_v1/four_arm_fix5_20261006_105204_491124/check.log": {
+        "bytes": 197,
+        "mtime_ns": 1791266833753575385,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "bd7f7c28cf32a887a4cc4bda91157034568eb2eb1de6234f6eb06cb8f21ad8cb"
+      },
+      "work_dirs/port_reliability_scale_consistency_v1/20261008_paired_train_v1/train_check.log": {
+        "bytes": 992,
+        "mtime_ns": 1791430229000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "f93612f197c7593e0b103d0aef2706cbe0f100cb247b75fe9a5c725cb14febf9"
+      },
+      "work_dirs/port_reliability_scale_consistency_v1/20261008_paired_train_v1/tests.log": {
+        "bytes": 2419,
+        "mtime_ns": 1791430220000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "903b54df9237fa32221d0fa5266e549bad0cb1182272763c09f49512432662b2"
+      },
+      "work_dirs/port_reliability_class_condition_v1/20261014_class_condition_v1/run.log": {
+        "bytes": 1341,
+        "mtime_ns": 1791984980000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "48c7d341b49736723e78bb1968f556d76b35c16c24b57f1baaf617bf1199e134"
+      },
+      "work_dirs/port_reliability_class_condition_v1/20261014_class_condition_v1/tests.log": {
+        "bytes": 874,
+        "mtime_ns": 1791984978000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "5ad706c921457ced0585772e53d0752373e4de42a418c44863a2230364d63318"
+      },
+      "work_dirs/port_reliability_capacity_v1/20261015_three_seeds_server_v1/run.log": {
+        "bytes": 943,
+        "mtime_ns": 1792050259000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "add5c48fafd1edbe640e77f26abf29fa8ea8d776bcdc9a71f6a8cd846b388e89"
+      },
+      "work_dirs/port_reliability_capacity_v1/20261015_three_seeds_server_v1/tests.log": {
+        "bytes": 630,
+        "mtime_ns": 1792050232000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "d836c3f64916138ebd86eb85e5934542174c68bfcfbc702b8bbb97bd562036e2"
+      },
+      "work_dirs/port_reliability_temporal_trend_v1/20261013_trend_cpu_v1/run.log": {
+        "bytes": 128,
+        "mtime_ns": 1791874544000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "a08af4142bb5d74d091eff133c68eaa9d78757b8c3cd28702d2634bdce364308"
+      },
+      "work_dirs/port_reliability_temporal_trend_v1/20261013_trend_cpu_v1/legacy_tests.log": {
+        "bytes": 1191,
+        "mtime_ns": 1791874528000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "4d7570dfb1aca105ec59644758cace8a44e084847c83a8aa3aaa6dbd17ed23f7"
+      },
+      "work_dirs/port_reliability_temporal_trend_v1/20261013_trend_cpu_v1/review.log": {
+        "bytes": 374,
+        "mtime_ns": 1791874561000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "ee6639fd9013141f280a5b1f21f454fea1bb628fd569692ffade1d76d0feaec4"
+      },
+      "work_dirs/port_reliability_temporal_trend_v1/20261013_trend_cpu_v1/tests.log": {
+        "bytes": 1530,
+        "mtime_ns": 1791874528000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "2ad6d3d46a283f7ad15cfcc1146a7801b7ff33a7d6f076f829fd9aa10b7a8dea"
+      },
+      "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/run.log": {
+        "bytes": 3951,
+        "mtime_ns": 1791511457454994201,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "739959ca3456acae5af34b988ef8d738b71611bd11350cbaaffefe9e9640aac6"
+      },
+      "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/review_fixed.log": {
+        "bytes": 1747,
+        "mtime_ns": 1791511929254351854,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "2eb68670c94a3ce9a2359eb24d5516880978502f73a2f3e68f9da69bb4efcc96"
+      },
+      "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/review.log": {
+        "bytes": 1307,
+        "mtime_ns": 1791511775773028373,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "6ca292b994d027523db624bf231238b5c9b866a858dd339560d288105d8cd454"
+      },
+      "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/tests.log": {
+        "bytes": 3174,
+        "mtime_ns": 1791510935059345006,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "d424abd296286b24445ded3772affed24c3e325a0e47a915047d9318d7990a69"
+      },
+      "work_dirs/port_reliability_feature_source_v1/20261009_source_v1/runtime.log": {
+        "bytes": 98,
+        "mtime_ns": 1791510921429651021,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "5bb2e85f50fd9e7ce1461e68e80b2a73b33e88d16d3e2cad60b0444bd0fc38be"
+      },
+      "work_dirs/port_simple_pilot_increment_v1/20261015_train203_server_v1/run.log": {
+        "bytes": 16,
+        "mtime_ns": 1792053675179417723,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "afde724c5f622cbf0e3b709a8b55b78460072f2c1c0d23cfac67b8972f2267ba"
+      },
+      "work_dirs/port_simple_pilot_increment_v1/20261015_train203_server_v1/tests.log": {
+        "bytes": 687,
+        "mtime_ns": 1792053675179571350,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "982bc4656f48fb055a82b053c73cb9655b8cebc654b63b7e34573eca80140590"
+      },
+      "work_dirs/port_reliability_actual_fr_bound_v1/20261014_actual_fr_bound_v1/VAL_tests.log": {
+        "bytes": 935,
+        "mtime_ns": 1791982788000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "b514d2baf17bbe20c8dd7fee59833840a93dd37a3a548ba6ad653e6d127ec524"
+      },
+      "work_dirs/port_reliability_actual_fr_bound_v1/20261014_actual_fr_bound_v1/run.log": {
+        "bytes": 585,
+        "mtime_ns": 1791982854000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "634df4b7548e875465624f9eebc1314cd60bd2bb87b51bde95058e43aa717e48"
+      },
+      "work_dirs/port_reliability_actual_fr_bound_v1/20261014_actual_fr_bound_v1/review.log": {
+        "bytes": 268,
+        "mtime_ns": 1791982856000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "7f9d0301c7b056d5c11f50643946bba63e97fee6d5968376fd743a6775bb407b"
+      },
+      "work_dirs/port_reliability_actual_fr_bound_v1/20261014_actual_fr_bound_v1/tests.log": {
+        "bytes": 914,
+        "mtime_ns": 1791982788000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "22779b55b8e77ec17883a3ac380133d0f26cad4934378946afacdcab71ee1bea"
+      },
+      "work_dirs/port_reliability_conditional_evidence_v1/20261013_conditional_cpu_v1/run.log": {
+        "bytes": 332,
+        "mtime_ns": 1791882141942306995,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "6facf33ebcc40081a2cf7b03b2b69bcc8b1f252332809ee85bb014527d8cea75"
+      },
+      "work_dirs/port_reliability_conditional_evidence_v1/20261013_conditional_cpu_v1/review.log": {
+        "bytes": 26,
+        "mtime_ns": 1791882168595337390,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "4a7676f7c9f29faea015f351df75268db2ed74fd31ce67d6ff2dc09560e2c3b7"
+      },
+      "work_dirs/port_reliability_conditional_evidence_v1/20261013_conditional_cpu_v1/tests.log": {
+        "bytes": 1275,
+        "mtime_ns": 1791882112531985521,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "2e6c2189addae6690d92511cf44e7a0e3bbb8a90b26590163358ef783b93cbc0"
+      },
+      "work_dirs/port_reliability_scale_asymmetry_v1/20261008_role_evidence_v1/train_check.log": {
+        "bytes": 1305,
+        "mtime_ns": 1791442433000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "295142450f2a448fb26c2259e1c08e95b0533e373f6af8cefc896e6bec1df88d"
+      },
+      "work_dirs/port_reliability_scale_asymmetry_v1/20261008_role_evidence_v1/tests.log": {
+        "bytes": 2976,
+        "mtime_ns": 1791442403000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "425f5e03f6c6195d636609881f59e19a1d3be6b6ceff5c61c35695b75cf77450"
+      },
+      "work_dirs/port_reliability_redc_size_v1/20261008_redc_v1/run.log": {
+        "bytes": 969,
+        "mtime_ns": 1791464000000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "27a25c0a48418731efe6366db7c09bc31e98368321f9986c8da44ad333634a5c"
+      },
+      "work_dirs/port_reliability_redc_size_v1/20261008_redc_v1/tests.log": {
+        "bytes": 2580,
+        "mtime_ns": 1791463918000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "5f2ec4951c923caea0df464d38fcc47639b16566698c21f8fb9fbf5b38da0c49"
+      },
+      "work_dirs/port_reliability_redc_size_v1/20261008_redc_v1/runtime.log": {
+        "bytes": 98,
+        "mtime_ns": 1791463917000000000,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "5bb2e85f50fd9e7ce1461e68e80b2a73b33e88d16d3e2cad60b0444bd0fc38be"
+      },
+      "work_dirs/port_size_a20_protection_downstream_v1/run_20261020_v3_gpu2.log": {
+        "bytes": 72773,
+        "mtime_ns": 1792487542399250268,
+        "reason": "已完成测试/启动/审阅/重复终端输出日志；保留实际结果、协议和正式训练日志",
+        "sha256_before_delete": "0e9bba466d50cdab1278d3ba708a4ea6735cc512a248b3a6b1cc303fc93563e1"
+      },
+      "work_dirs/symeood_ablation_v1/launch_last4_20261023/document_before_last4.md": {
+        "bytes": 57244,
+        "mtime_ns": 1792755851405281518,
+        "reason": "被后续完整记录替代的旧文档快照",
+        "sha256_before_delete": "70243f7726b5ac371b4e06fd48f247afcd01510b192578b9f9ed05f23869c491"
+      },
+      "work_dirs/symeood_ablation_v1/analysis_all8_20261024/document_before_all8.md": {
+        "bytes": 60123,
+        "mtime_ns": 1792801473284588342,
+        "reason": "被后续完整记录替代的旧文档快照",
+        "sha256_before_delete": "1770f44cdd3756d479e6c8202493650eade3dff1c5388e7f6743c4399bd9579c"
+      },
+      "work_dirs/symeood_ablation_v1/analysis_all8_20261024/document_before_custom_metrics.md": {
+        "bytes": 81341,
+        "mtime_ns": 1792802007858204163,
+        "reason": "被后续完整记录替代的旧文档快照",
+        "sha256_before_delete": "01e552af17ad347328185571baed4c6122e3f0acf223065bcfd1a1de28a1fbfd"
+      },
+      "work_dirs/symeood_ablation_v1/analysis_first4_20261023/merged_document_before_results.md": {
+        "bytes": 38992,
+        "mtime_ns": 1792747856748843172,
+        "reason": "被后续完整记录替代的旧文档快照",
+        "sha256_before_delete": "334d1edd23950a0eb73694c1256e11b43cbe5845ccd3e56115b5173528b358e7"
+      },
+      "work_dirs/symeood_ablation_v1/analysis_all8_20261024/last4_snapshot.zip": {
+        "bytes": 10677231,
+        "mtime_ns": 1792801162303246617,
+        "reason": "压缩包全部成员与现存解压目录逐字节一致，删除重复交付包",
+        "sha256_before_delete": "055bb5da94db21aecf1b70c585c6367823d1e14438cba68796eb6263f5b12e8b"
+      },
+      "work_dirs/symeood_ablation_v1/analysis_first4_20261023/snapshot.zip": {
+        "bytes": 10684402,
+        "mtime_ns": 1792747184650975119,
+        "reason": "压缩包全部成员与现存解压目录逐字节一致，删除重复交付包",
+        "sha256_before_delete": "ae08a8ed4bbd57ebd952f0e979ebc5f5f182b3799d684fed8247eddd7c977e0e"
+      }
+    },
+    "delete_count": 250,
+    "delete_bytes": 22448296,
+    "kept_log_count": 56,
+    "kept_log_reasons": {
+      "work_dirs/port_reliability_simple_anchor_v1/20261009_simple_anchor_v1/train.log": "训练或VAL选版记录",
+      "work_dirs/port_size_structure_v1/train_20261020_v3_gpu3.log": "训练或VAL选版记录",
+      "work_dirs/port_reliability_within_video_rank_v1/20261009_within_video_rank_v1/train.log": "训练或VAL选版记录",
+      "work_dirs/crane_eood_k1_port_day2night_v1/20260929_105316.log": "正式训练原始日志",
+      "work_dirs/crane_symeood_k1/20260628_095157.log": "正式训练原始日志",
+      "work_dirs/symeood_ablation_v1/analysis_all8_20261024/last4_snapshot/work_dirs/symeood_ablation_v1/111/20261024_014449.log": "正式训练原始日志",
+      "work_dirs/symeood_ablation_v1/analysis_all8_20261024/last4_snapshot/work_dirs/symeood_ablation_v1/110/20261023_194314.log": "正式训练原始日志",
+      "work_dirs/symeood_ablation_v1/analysis_all8_20261024/last4_snapshot/work_dirs/symeood_ablation_v1/101/20261023_214438.log": "正式训练原始日志",
+      "work_dirs/symeood_ablation_v1/analysis_all8_20261024/last4_snapshot/work_dirs/symeood_ablation_v1/011/20261023_234516.log": "正式训练原始日志",
+      "work_dirs/symeood_ablation_v1/analysis_first4_20261023/snapshot/work_dirs/symeood_ablation_v1/000/20261023_082738.log": "正式训练原始日志",
+      "work_dirs/symeood_ablation_v1/analysis_first4_20261023/snapshot/work_dirs/symeood_ablation_v1/001/20261023_144023.log": "正式训练原始日志",
+      "work_dirs/symeood_ablation_v1/analysis_first4_20261023/snapshot/work_dirs/symeood_ablation_v1/100/20261023_102634.log": "正式训练原始日志",
+      "work_dirs/symeood_ablation_v1/analysis_first4_20261023/snapshot/work_dirs/symeood_ablation_v1/010/20261023_123934.log": "正式训练原始日志",
+      "work_dirs/symeood_110_retrain_seed0_20261026_v1/VAL_select.log": "训练或VAL选版记录",
+      "work_dirs/symeood_110_retrain_seed0_20261026_v1/train.log": "训练或VAL选版记录",
+      "work_dirs/symeood_110_retrain_seed0_20261026_v1/110/20261026_162930.log": "正式训练原始日志",
+      "work_dirs/symeood_110_retrain_seed0_20261026_v1/gate_no_update/20261026_162547.log": "正式训练原始日志",
+      "work_dirs/crane_symeood_k1_port_day2night_aug_b_v1/20260929_155706.log": "正式训练原始日志",
+      "work_dirs/crane_eood_k1_port_day2night_aug_b_v1/20260930_083040.log": "正式训练原始日志",
+      "work_dirs/port_size_direct_continuation_v1/train_20261021_v1_gpu0.log": "训练或VAL选版记录",
+      "work_dirs/crane_symeood_k1_port_day2night_v1/20260929_083248.log": "正式训练原始日志",
+      "work_dirs/port_size_a20_protection_train_v1/train_20261020_v1_gpu2.log": "训练或VAL选版记录",
+      "work_dirs/port_size_local_vectors_v1/train_20261018_v1.log": "训练或VAL选版记录",
+      "work_dirs/port_reliability_spatial_axis_v1/20261009_spatial_axis_v1/train.log": "训练或VAL选版记录",
+      "work_dirs/port_reliability_spatial_axis_v1/20261009_spatial_axis_v1_fix2/train.log": "训练或VAL选版记录",
+      "work_dirs/port_reliability_spatial_axis_v1/20261009_spatial_axis_v1_fix1/train.log": "训练或VAL选版记录",
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/cleanup_server/preserved_archive_members/port_reliability_oof_prevention_v1_20261012_A_budget10_cacheaware_gpu3.tar.gz/20261012_A_budget10_cacheaware_gpu3_prevention_v1/run.log": "既有可靠性归档的原始成员，保持",
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/cleanup_server/preserved_archive_members/port_reliability_oof_prevention_v1_20261012_A_budget10_cacheaware_gpu3.tar.gz/20261012_A_budget10_cacheaware_gpu3_prevention_v1/prepare.log": "既有可靠性归档的原始成员，保持",
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/cleanup_server/preserved_archive_members/port_reliability_oof_prevention_v1_20261012_A_budget10_cacheaware_gpu3.tar.gz/20261012_A_budget10_cacheaware_gpu3_prevention_v1/tests.log": "既有可靠性归档的原始成员，保持",
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/cleanup_server/preserved_archive_members/port_reliability_oof_prevention_v1_20261012_A_budget10_cacheaware_gpu3.tar.gz/20261012_A_budget10_cacheaware_gpu3_prevention_v1/check.log": "既有可靠性归档的原始成员，保持",
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/cleanup_server/preserved_archive_members/port_reliability_oof_prevention_v1_20261012_A_budget10_cacheaware_gpu3.tar.gz/20261012_A_budget10_cacheaware_gpu3_prevention_v1/launcher.log": "既有可靠性归档的原始成员，保持",
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/cleanup_server/preserved_archive_members/port_reliability_oof_prevention_v1_20261012_A_budget10_cacheaware_gpu3.tar.gz/20261012_A_budget10_cacheaware_gpu3_prevention_v1/budget_tests.log": "既有可靠性归档的原始成员，保持",
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/cleanup_server/preserved_archive_members/port_reliability_oof_prevention_v1_20261012_A_budget10_cacheaware_gpu3.tar.gz/20261012_A_budget10_cacheaware_gpu3_prevention_v1/gpu.log": "既有可靠性归档的原始成员，保持",
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/cleanup_server/preserved_archive_members/port_reliability_oof_prevention_v1_20261012_A_budget10_cacheaware_gpu3.tar.gz/20261012_A_budget10_cacheaware_gpu3_prevention_v1/result/A/detector/20261012_143940.log": "既有可靠性归档的原始成员，保持",
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/cleanup_server/preserved_archive_members/port_reliability_oof_v1_20261011_real_oof_v2_gpu3_fix1.tar.gz/20261011_real_oof_v2_gpu3_fix1/run.log": "既有可靠性归档的原始成员，保持",
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/cleanup_server/preserved_archive_members/port_reliability_oof_v1_20261011_real_oof_v2_gpu3_fix1.tar.gz/20261011_real_oof_v2_gpu3_fix1/training_repair_tests.log": "既有可靠性归档的原始成员，保持",
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/cleanup_server/preserved_archive_members/port_reliability_oof_v1_20261011_real_oof_v2_gpu3_fix1.tar.gz/20261011_real_oof_v2_gpu3_fix1/review.log": "既有可靠性归档的原始成员，保持",
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/cleanup_server/preserved_archive_members/port_reliability_oof_v1_20261011_real_oof_v2_gpu3_fix1.tar.gz/20261011_real_oof_v2_gpu3_fix1/tests.log": "既有可靠性归档的原始成员，保持",
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/cleanup_server/preserved_archive_members/port_reliability_oof_v1_20261011_real_oof_v2_gpu3_fix1.tar.gz/20261011_real_oof_v2_gpu3_fix1/background.log": "既有可靠性归档的原始成员，保持",
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/cleanup_server/preserved_archive_members/port_reliability_oof_v1_20261011_real_oof_v2_gpu3_fix1.tar.gz/20261011_real_oof_v2_gpu3_fix1/runtime.log": "既有可靠性归档的原始成员，保持",
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/cleanup_server/preserved_archive_members/port_reliability_oof_v1_20261011_real_oof_v2_gpu3_fix1.tar.gz/20261011_real_oof_v2_gpu3_fix1/gpu.log": "既有可靠性归档的原始成员，保持",
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/cleanup_server/preserved_archive_members/port_reliability_oof_v1_20261011_real_oof_v2_gpu3_fix1.tar.gz/20261011_real_oof_v2_gpu3_fix1/result/A/detector/20261011_080056.log": "既有可靠性归档的原始成员，保持",
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/cleanup_server/preserved_archive_members/port_reliability_oof_task_budget_prevention_v1_20261012_A_gpu3.tar.gz/20261012_A_task_budget_gpu3_prevention_v1/run.log": "既有可靠性归档的原始成员，保持",
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/cleanup_server/preserved_archive_members/port_reliability_oof_task_budget_prevention_v1_20261012_A_gpu3.tar.gz/20261012_A_task_budget_gpu3_prevention_v1/prepare.log": "既有可靠性归档的原始成员，保持",
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/cleanup_server/preserved_archive_members/port_reliability_oof_task_budget_prevention_v1_20261012_A_gpu3.tar.gz/20261012_A_task_budget_gpu3_prevention_v1/launcher.log": "既有可靠性归档的原始成员，保持",
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/cleanup_server/preserved_archive_members/port_reliability_oof_task_budget_prevention_v1_20261012_A_gpu3.tar.gz/20261012_A_task_budget_gpu3_prevention_v1/result/A/detector/20261012_182825.log": "既有可靠性归档的原始成员，保持",
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/cleanup_server/preserved_archive_members/port_reliability_oof_task_budget_20261012_192025_A_task_budget_gpu3_prevention_v1.tar.gz/20261012_192025_A_task_budget_gpu3_prevention_v1/run.log": "既有可靠性归档的原始成员，保持",
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/cleanup_server/preserved_archive_members/port_reliability_oof_task_budget_20261012_192025_A_task_budget_gpu3_prevention_v1.tar.gz/20261012_192025_A_task_budget_gpu3_prevention_v1/prepare.log": "既有可靠性归档的原始成员，保持",
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/cleanup_server/preserved_archive_members/port_reliability_oof_task_budget_20261012_192025_A_task_budget_gpu3_prevention_v1.tar.gz/20261012_192025_A_task_budget_gpu3_prevention_v1/check.log": "既有可靠性归档的原始成员，保持",
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/cleanup_server/preserved_archive_members/port_reliability_oof_task_budget_20261012_192025_A_task_budget_gpu3_prevention_v1.tar.gz/20261012_192025_A_task_budget_gpu3_prevention_v1/launcher.log": "既有可靠性归档的原始成员，保持",
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/cleanup_server/preserved_archive_members/port_reliability_oof_task_budget_20261012_192025_A_task_budget_gpu3_prevention_v1.tar.gz/20261012_192025_A_task_budget_gpu3_prevention_v1/result/A/detector/20261012_192122.log": "既有可靠性归档的原始成员，保持",
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/cleanup_server/preserved_archive_members/port_reliability_oof_v1_20261011_real_oof_v2_gpu3.tar.gz/20261011_real_oof_v2_gpu3/training_repair_tests.log": "既有可靠性归档的原始成员，保持",
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/cleanup_server/preserved_archive_members/port_reliability_oof_v1_20261011_real_oof_v2_gpu3.tar.gz/20261011_real_oof_v2_gpu3/tests.log": "既有可靠性归档的原始成员，保持",
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/cleanup_server/preserved_archive_members/port_reliability_oof_v1_20261011_real_oof_v2_gpu3.tar.gz/20261011_real_oof_v2_gpu3/background.log": "既有可靠性归档的原始成员，保持",
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/cleanup_server/preserved_archive_members/port_reliability_oof_v1_20261011_real_oof_v2_gpu3.tar.gz/20261011_real_oof_v2_gpu3/runtime.log": "既有可靠性归档的原始成员，保持",
+      "work_dirs/port_reliability_temporal_evidence_v1/20261013_temporal_cpu_v1/cleanup_server/preserved_archive_members/port_reliability_oof_v1_20261011_real_oof_v2_gpu3.tar.gz/20261011_real_oof_v2_gpu3/gpu.log": "既有可靠性归档的原始成员，保持"
+    },
+    "duplicate_archive_checks": [
+      {
+        "path": "work_dirs/symeood_ablation_v1/analysis_all8_20261024/last4_snapshot.zip",
+        "extracted": "work_dirs/symeood_ablation_v1/analysis_all8_20261024/last4_snapshot",
+        "all_members_match": true,
+        "members_verified": 25926,
+        "reason": ""
+      },
+      {
+        "path": "work_dirs/symeood_ablation_v1/analysis_first4_20261023/snapshot.zip",
+        "extracted": "work_dirs/symeood_ablation_v1/analysis_first4_20261023/snapshot",
+        "all_members_match": true,
+        "members_verified": 25926,
+        "reason": ""
+      }
+    ],
+    "source_scope": "本机work_dirs的独立测试/启动/审阅日志、旧文档快照与已完整解压的重复包；正式训练/选版及原始归档日志保持。",
+    "protected_sha256_passed": 124,
+    "selected_weight_sha256_passed": 2,
+    "types": {
+      ".log": 244,
+      ".md": 4,
+      ".zip": 2
+    },
+    "validation": {
+      "existing_unittest_passed": 26,
+      "protected_sha256_passed": 124,
+      "remaining_log_count": 56,
+      "README_links": "PASS",
+      "git_diff_check": "PASS",
+      "remote_deletion_performed": false
+    }
+  },
+  "server_dino_manual_advice": {
+    "date": "2026-10-28",
+    "server_root": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs",
+    "observed_top_names": [
+      "crane_symeood_dino_anchor_fallback_attribution_v1",
+      "crane_symeood_dino_conservative_takeover_v2",
+      "crane_symeood_dino_distill_support_v1",
+      "crane_symeood_dino_geometry_refiner_full_source_v1_seed3407",
+      "crane_symeood_dino_k1_retentive_causal_phase_fixed_test",
+      "crane_symeood_dino_k1_retentive_causal_phase_refiner_source_v3_seed3407",
+      "crane_symeood_dino_k1_retentive_causal_phase_refiner_source_v3_seq11_e1_epoch10_fixed_target_diagnostic",
+      "crane_symeood_dino_k1_retentive_causal_phase_refiner_source_v3_seq11_e1_seed3407",
+      "crane_symeood_dino_k1_retentive_causal_phase_refiner_source_v3_seq11_epoch10_paired_fixed_target_diagnostic_v1",
+      "crane_symeood_dino_k1_retentive_causal_phase_refiner_source_v4_seq11_v2_replay_seed3407",
+      "crane_symeood_dino_k1_retentive_component_current_only_source_val",
+      "crane_symeood_dino_k1_retentive_component_fixed_test",
+      "crane_symeood_dino_k1_retentive_component_source_val",
+      "crane_symeood_dino_source_inventory_v1",
+      "crane_symeood_dino_source_inventory_v2",
+      "crane_symeood_k1_dino_corrected_mask_a_v4",
+      "crane_symeood_k1_dino_corrected_mask_c_v4",
+      "crane_symeood_k1_dino_fpn_gradient_a_v3",
+      "crane_symeood_k1_dino_fpn_gradient_b_v3",
+      "crane_symeood_k1_dino_fpn_gradient_c_v3",
+      "crane_symeood_k1_dino_object_background_relation_a_v5",
+      "crane_symeood_k1_dino_object_background_relation_c_v5",
+      "crane_symeood_k1_dino_semantic_distill_fair_2gpu_v1",
+      "crane_symeood_k1_dino_semantic_distill_fair_v1",
+      "crane_symeood_k1_dino_semantic_distill_v1",
+      "crane_symeood_k1_dino_warmstart_control_v2",
+      "crane_symeood_k1_dino_warmstart_distill_v2",
+      "dino_teacher_fc_cls_interpolation_v1",
+      "dino_teacher_scoped_lowlight_v1_formal8"
+    ],
+    "observed_count": 29,
+    "operation_performed": "READ_ONLY_LIST_AND_PROCESS_INSPECTION",
+    "remote_deletion_performed": false,
+    "user_instruction": "服务器只给建议，用户自行删除；可靠性、Webots和当前链路保留。",
+    "important_preserve": [
+      "depth_raw_opt_v1",
+      "webots_depth_e2e",
+      "base_v3_obb_reliability_baseline_v1",
+      "crane_symeood_k1_source_val_reference_epoch24",
+      "symeood_110_retrain_seed0_20261026_v1"
+    ]
+  },
+  "total_local_deleted_files": 46846,
+  "total_local_deleted_bytes": 2805721609
+}
