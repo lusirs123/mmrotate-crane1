@@ -1,0 +1,346 @@
+{
+  "protocol": "detector_module_ablation_test_v1",
+  "date": "2026-10-29",
+  "training_contract_sha256": "0b53119ac26674ac7f3c2cd65ade3eebc80a2e3a9495b4b107c63fdb6c23dfa3",
+  "output_directory": "work_dirs/detector_module_ablation_v1_20261028/fixed_TEST_20261029_v1",
+  "heads": {
+    "eood_m": {
+      "kind": "midpoint",
+      "selection": "work_dirs/detector_module_ablation_v1_20261028/eood_m/selection.json",
+      "checkpoint": "work_dirs/detector_module_ablation_v1_20261028/eood_m/head_epoch_23.pth",
+      "selected_checkpoint": {
+        "path": "head_epoch_23.pth",
+        "sha256": "2c7e5b78cbded9e2487291140cb5e440fcc3e498a2dcc8190416b8c1d3875964",
+        "epoch": 23,
+        "updates": 20792
+      },
+      "identity": {
+        "cache_manifest_sha256": "bb820e01016d69300a5e5ede4a794a605f3736fd9888099158b9a9a9704b0b9a",
+        "detector_sha256": "95da2d648cfef95e1fcd00f2cdfc258d9cf75ed038135bbfc00059f8f6f2a4db",
+        "detector_state": {
+          "parameters": "f3619df2b98da221a9451013c9f38619f4e196aa84da651e0e3a21a0801b821f",
+          "buffers": "29da75a541fa4bc3117d9f17620a397b78b381b939b1d91898e2941b1954907b",
+          "parameter_count": 36281432,
+          "buffer_count": 159
+        },
+        "data_identity": {
+          "train": {
+            "annotation_sha256": "7a9fcc92493a90696bba89573474e9054e5b0c5e9a04b51b0fc7f7bc6b4989ed",
+            "image_identity_sha256": "506f4a0781d91f9a5eb6de0a84a797e78aa96c74385dba6e0961508d5f47db84",
+            "frames": 1810
+          },
+          "train_sim": {
+            "annotation_sha256": "1f98aeb3ead5fa1e4b1aac149ce6ee882e4e37e676e41bc4738a8ea268a6187a",
+            "image_identity_sha256": "0a3b919ce43f25019bd2cbcacb431ace14176ceec4a29b531fc25a3b65ec2dd3",
+            "frames": 748
+          },
+          "val": {
+            "annotation_sha256": "8bd2e2da86d52b555e2cac5e1098361bd01a4ca09f9df9cb0642e07accc1f6be",
+            "image_identity_sha256": "1bcd3d72feb9605e7e3f7f3d5c250e0186b2d3ec2a8082dc8c15e8662ffc7020",
+            "frames": 887
+          }
+        },
+        "shards": {
+          "train_s1.pt": "f93c2b8583c8c5c61651ef8a4589ef90c655d09668298c0e6b48367bd6c75262",
+          "train_s05.pt": "5e798c5c78767f6620036175f8915e70521bba52c7eec9f93d06126f91abbfa8",
+          "val_s1.pt": "3d6451640a46a357dee0b1f557d43ab7d983dd4fb0fa1f96f40d9a2ddf0eb1d6"
+        },
+        "cache_runtime": {
+          "torch": "1.13.1+cu117",
+          "cuda": "11.7",
+          "cudnn": 8500,
+          "mmcv": "1.7.0",
+          "mmdet": "2.25.1",
+          "mmrotate": "0.3.4",
+          "opencv": "4.13.0",
+          "gpu": "NVIDIA GeForce GTX 1080"
+        },
+        "frontend": "eood",
+        "module": "midpoint",
+        "contract_sha256": "0b53119ac26674ac7f3c2cd65ade3eebc80a2e3a9495b4b107c63fdb6c23dfa3"
+      }
+    },
+    "eood_l": {
+      "kind": "size",
+      "selection": "work_dirs/detector_module_ablation_v1_20261028/eood_l/selection.json",
+      "checkpoint": "work_dirs/detector_module_ablation_v1_20261028/eood_l/head_epoch_17.pth",
+      "selected_checkpoint": {
+        "path": "head_epoch_17.pth",
+        "sha256": "be4d06c82570672cfc1ec1720fdf981f9f2cc67e8afc7123afef50e16ecd1c07",
+        "epoch": 17,
+        "updates": 10880
+      },
+      "identity": {
+        "cache_manifest_sha256": "bb820e01016d69300a5e5ede4a794a605f3736fd9888099158b9a9a9704b0b9a",
+        "detector_sha256": "95da2d648cfef95e1fcd00f2cdfc258d9cf75ed038135bbfc00059f8f6f2a4db",
+        "detector_state": {
+          "parameters": "f3619df2b98da221a9451013c9f38619f4e196aa84da651e0e3a21a0801b821f",
+          "buffers": "29da75a541fa4bc3117d9f17620a397b78b381b939b1d91898e2941b1954907b",
+          "parameter_count": 36281432,
+          "buffer_count": 159
+        },
+        "data_identity": {
+          "train": {
+            "annotation_sha256": "7a9fcc92493a90696bba89573474e9054e5b0c5e9a04b51b0fc7f7bc6b4989ed",
+            "image_identity_sha256": "506f4a0781d91f9a5eb6de0a84a797e78aa96c74385dba6e0961508d5f47db84",
+            "frames": 1810
+          },
+          "train_sim": {
+            "annotation_sha256": "1f98aeb3ead5fa1e4b1aac149ce6ee882e4e37e676e41bc4738a8ea268a6187a",
+            "image_identity_sha256": "0a3b919ce43f25019bd2cbcacb431ace14176ceec4a29b531fc25a3b65ec2dd3",
+            "frames": 748
+          },
+          "val": {
+            "annotation_sha256": "8bd2e2da86d52b555e2cac5e1098361bd01a4ca09f9df9cb0642e07accc1f6be",
+            "image_identity_sha256": "1bcd3d72feb9605e7e3f7f3d5c250e0186b2d3ec2a8082dc8c15e8662ffc7020",
+            "frames": 887
+          }
+        },
+        "shards": {
+          "train_s1.pt": "f93c2b8583c8c5c61651ef8a4589ef90c655d09668298c0e6b48367bd6c75262",
+          "train_s05.pt": "5e798c5c78767f6620036175f8915e70521bba52c7eec9f93d06126f91abbfa8",
+          "val_s1.pt": "3d6451640a46a357dee0b1f557d43ab7d983dd4fb0fa1f96f40d9a2ddf0eb1d6"
+        },
+        "cache_runtime": {
+          "torch": "1.13.1+cu117",
+          "cuda": "11.7",
+          "cudnn": 8500,
+          "mmcv": "1.7.0",
+          "mmdet": "2.25.1",
+          "mmrotate": "0.3.4",
+          "opencv": "4.13.0",
+          "gpu": "NVIDIA GeForce GTX 1080"
+        },
+        "arm": "eood_l",
+        "midpoint": null,
+        "reference": "B",
+        "contract_sha256": "0b53119ac26674ac7f3c2cd65ade3eebc80a2e3a9495b4b107c63fdb6c23dfa3"
+      }
+    },
+    "eood_ml": {
+      "kind": "size",
+      "selection": "work_dirs/detector_module_ablation_v1_20261028/eood_ml/selection.json",
+      "checkpoint": "work_dirs/detector_module_ablation_v1_20261028/eood_ml/head_epoch_17.pth",
+      "selected_checkpoint": {
+        "path": "head_epoch_17.pth",
+        "sha256": "b5be060bf4b7b88cdfbd8d3db9e96c93ba30a38293641620b30ed24c8a29b8ab",
+        "epoch": 17,
+        "updates": 10880
+      },
+      "identity": {
+        "cache_manifest_sha256": "bb820e01016d69300a5e5ede4a794a605f3736fd9888099158b9a9a9704b0b9a",
+        "detector_sha256": "95da2d648cfef95e1fcd00f2cdfc258d9cf75ed038135bbfc00059f8f6f2a4db",
+        "detector_state": {
+          "parameters": "f3619df2b98da221a9451013c9f38619f4e196aa84da651e0e3a21a0801b821f",
+          "buffers": "29da75a541fa4bc3117d9f17620a397b78b381b939b1d91898e2941b1954907b",
+          "parameter_count": 36281432,
+          "buffer_count": 159
+        },
+        "data_identity": {
+          "train": {
+            "annotation_sha256": "7a9fcc92493a90696bba89573474e9054e5b0c5e9a04b51b0fc7f7bc6b4989ed",
+            "image_identity_sha256": "506f4a0781d91f9a5eb6de0a84a797e78aa96c74385dba6e0961508d5f47db84",
+            "frames": 1810
+          },
+          "train_sim": {
+            "annotation_sha256": "1f98aeb3ead5fa1e4b1aac149ce6ee882e4e37e676e41bc4738a8ea268a6187a",
+            "image_identity_sha256": "0a3b919ce43f25019bd2cbcacb431ace14176ceec4a29b531fc25a3b65ec2dd3",
+            "frames": 748
+          },
+          "val": {
+            "annotation_sha256": "8bd2e2da86d52b555e2cac5e1098361bd01a4ca09f9df9cb0642e07accc1f6be",
+            "image_identity_sha256": "1bcd3d72feb9605e7e3f7f3d5c250e0186b2d3ec2a8082dc8c15e8662ffc7020",
+            "frames": 887
+          }
+        },
+        "shards": {
+          "train_s1.pt": "f93c2b8583c8c5c61651ef8a4589ef90c655d09668298c0e6b48367bd6c75262",
+          "train_s05.pt": "5e798c5c78767f6620036175f8915e70521bba52c7eec9f93d06126f91abbfa8",
+          "val_s1.pt": "3d6451640a46a357dee0b1f557d43ab7d983dd4fb0fa1f96f40d9a2ddf0eb1d6"
+        },
+        "cache_runtime": {
+          "torch": "1.13.1+cu117",
+          "cuda": "11.7",
+          "cudnn": 8500,
+          "mmcv": "1.7.0",
+          "mmdet": "2.25.1",
+          "mmrotate": "0.3.4",
+          "opencv": "4.13.0",
+          "gpu": "NVIDIA GeForce GTX 1080"
+        },
+        "arm": "eood_ml",
+        "midpoint": {
+          "checkpoint": "work_dirs/detector_module_ablation_v1_20261028/eood_m/head_epoch_23.pth",
+          "sha256": "2c7e5b78cbded9e2487291140cb5e440fcc3e498a2dcc8190416b8c1d3875964",
+          "epoch": 23
+        },
+        "reference": "M",
+        "contract_sha256": "0b53119ac26674ac7f3c2cd65ade3eebc80a2e3a9495b4b107c63fdb6c23dfa3"
+      }
+    },
+    "110_l": {
+      "kind": "size",
+      "selection": "work_dirs/detector_module_ablation_v1_20261028/110_l/selection.json",
+      "checkpoint": "work_dirs/detector_module_ablation_v1_20261028/110_l/head_epoch_02.pth",
+      "selected_checkpoint": {
+        "path": "head_epoch_02.pth",
+        "sha256": "2a6d30169e9483179218535a91519db1092f3df0d21a9d8125dc889a4334bdcb",
+        "epoch": 2,
+        "updates": 1278
+      },
+      "identity": {
+        "cache_manifest_sha256": "5c481e900ed7f17e838156dcf43685a4191427f447374e1ac3f23289da87594d",
+        "detector_sha256": "7f35dacc308943949a8fd2e6aaad312d14651564903ec87c8c8dcec0552ec054",
+        "detector_state": {
+          "parameters": "3dc4b27d015d8b7ffcd480260772c46eaa34b0f2e8de4466882f255deaefec4a",
+          "buffers": "018b16598d2b463601403d3de5f6b99dd3455674df5fb2bddaec5303122e93e3",
+          "parameter_count": 31560792,
+          "buffer_count": 160
+        },
+        "data_identity": {
+          "train": {
+            "annotation_sha256": "7a9fcc92493a90696bba89573474e9054e5b0c5e9a04b51b0fc7f7bc6b4989ed",
+            "image_identity_sha256": "506f4a0781d91f9a5eb6de0a84a797e78aa96c74385dba6e0961508d5f47db84",
+            "frames": 1810
+          },
+          "train_sim": {
+            "annotation_sha256": "1f98aeb3ead5fa1e4b1aac149ce6ee882e4e37e676e41bc4738a8ea268a6187a",
+            "image_identity_sha256": "0a3b919ce43f25019bd2cbcacb431ace14176ceec4a29b531fc25a3b65ec2dd3",
+            "frames": 748
+          },
+          "val": {
+            "annotation_sha256": "8bd2e2da86d52b555e2cac5e1098361bd01a4ca09f9df9cb0642e07accc1f6be",
+            "image_identity_sha256": "1bcd3d72feb9605e7e3f7f3d5c250e0186b2d3ec2a8082dc8c15e8662ffc7020",
+            "frames": 887
+          }
+        },
+        "shards": {
+          "train_s1.pt": "911388ae028bfaf25684246fb126c0fb332540d15830617740005dce459f0ed2",
+          "train_s05.pt": "fb464e32755a1a1bd3523b43721782614a435104034749806edbd4e09119e35f",
+          "val_s1.pt": "26d272f344e313122119c2b4491c61b0ee127d31918462bb30d0ade406eb0953"
+        },
+        "cache_runtime": {
+          "torch": "1.13.1+cu117",
+          "cuda": "11.7",
+          "cudnn": 8500,
+          "mmcv": "1.7.0",
+          "mmdet": "2.25.1",
+          "mmrotate": "0.3.4",
+          "opencv": "4.13.0",
+          "gpu": "NVIDIA GeForce GTX 1080"
+        },
+        "arm": "110_l",
+        "midpoint": null,
+        "reference": "B",
+        "contract_sha256": "0b53119ac26674ac7f3c2cd65ade3eebc80a2e3a9495b4b107c63fdb6c23dfa3"
+      }
+    }
+  },
+  "groups": {
+    "eood": {
+      "physical_gpu": 0,
+      "arms": [
+        "eood_m",
+        "eood_l",
+        "eood_ml"
+      ],
+      "cache": "work_dirs/detector_module_ablation_v1_20261028/eood_cache",
+      "output_directory": "work_dirs/detector_module_ablation_v1_20261028/fixed_TEST_20261029_v1/eood_retry_v3",
+      "reuse_cached_VAL_gate": {
+        "receipt": "work_dirs/detector_module_ablation_v1_20261028/fixed_TEST_20261029_v1/eood/full_cached_VAL_gate.json",
+        "frozen_contract": "work_dirs/detector_module_ablation_v1_20261028/fixed_TEST_20261029_v1/eood/frozen_contract.json",
+        "files": {
+          "work_dirs/detector_module_ablation_v1_20261028/fixed_TEST_20261029_v1/eood/full_cached_VAL_gate.json": "519be9eea9ca9fe923ba0b7b3e284fbebbacb705bd98da9c17e453df8d00a3c0",
+          "work_dirs/detector_module_ablation_v1_20261028/fixed_TEST_20261029_v1/eood/frozen_contract.json": "b360d627692c860be3d8cdf2b28fc08456871a30eddb079ef4e252e89cf44072"
+        }
+      }
+    },
+    "110": {
+      "physical_gpu": 1,
+      "arms": [
+        "110_l"
+      ],
+      "cache": "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/midpoint/formal/roi_cache"
+    }
+  },
+  "val_rows": {
+    "eood_l": "work_dirs/detector_module_ablation_v1_20261028/eood_l/epoch_17_val.rows.jsonl.gz",
+    "eood_ml": "work_dirs/detector_module_ablation_v1_20261028/eood_ml/epoch_17_val.rows.jsonl.gz",
+    "110_l": "work_dirs/detector_module_ablation_v1_20261028/110_l/epoch_02_val.rows.jsonl.gz"
+  },
+  "val_names": [
+    "real_seq07_00001",
+    "real_seq07_00167",
+    "real_seq07_00169",
+    "real_seq07_00181",
+    "real_seq14_00001",
+    "sim_seq10_00000",
+    "sim_seq10_00211",
+    "sim_seq10_00410"
+  ],
+  "existing_TEST_rows": "work_dirs/smallpaper_readiness_20261028_v1/saved_predictions_unified.rows.jsonl",
+  "backup_directories": [
+    "work_dirs/detector_module_ablation_v1_20261028/selected_head_backups_20261029_v1",
+    "/home/omnisky/symeood_model_backups/detector_module_ablation_v1_20261028/selected_20261029_v1"
+  ],
+  "resources": {
+    "minimum_free_mib": 4096,
+    "allocator_cap_mib": 2048,
+    "shared_GPU_allowed": true,
+    "latency_benchmark": false
+  },
+  "TEST_frames": 1440,
+  "TEST_domains": {
+    "real": 868,
+    "sim": 572
+  },
+  "gate": {
+    "cached_VAL_heads": 887,
+    "online_VAL_views": 8
+  },
+  "limits": {
+    "training_updates": 0,
+    "selection": false,
+    "depth": false,
+    "TRAIN_cache_rebuild": false,
+    "threshold_changes": false,
+    "postprocessing_changes": false,
+    "TEST_repeatedly_exposed": true
+  },
+  "sources": {
+    "crane_project/tools/eval_detector_module_ablation_test_v1.py": "7a3125b2e899a33d6be33b5ad42d475611276cb1b5205e79dbc28fc3d573e7bb",
+    "tests/test_detector_module_ablation_test_v1.py": "123235f6af89d903ccbb3138e609923285f03bc2ec15feda5c3a78a16e9990bf",
+    "crane_project/tools/eval_port_geometry_midpoint_v1_test.py": "357c28543e09579b06b0c0ee86b242f0ba7a0665665cb4d737e85c38e0d97361",
+    "crane_project/tools/eval_port_size_proposal_downstream_v1.py": "19d7206f3a88b083abffa516ddaee0069974f87d72351eb42027e519b788c8c4",
+    "crane_project/utils/port_geometry_size_distribution_metrics_v1.py": "cd08da015c45f3e404f933a10789759868437d5d86ee488ddf9ed1aa62ddbd57",
+    "crane_project/utils/port_geometry_midpoint_edge_residual_metrics_v1.py": "867df992db7311bdc53b42d6d637cd2f2a194847e5a567953b1877e179beaae0",
+    "crane_project/tools/eval_crane_offline.py": "52d22caa5383a0c35c3b4f1b1f6b1453ba5da9d2618da0eb686eff8570bfc9b9",
+    "crane_project/tools/eval_port_geometry_ap_v1.py": "6b09332e8b6a36a8874780ac0331a01fc44cb859b8dfa21e50548b7b7ce16400"
+  },
+  "artifacts": {
+    "work_dirs/detector_module_ablation_v1_20261028/eood_m/selection.json": "b815d59c8f813f50b78a79250d25a30663b62746d914dd490df71b7ed4510103",
+    "work_dirs/detector_module_ablation_v1_20261028/eood_l/selection.json": "d2ac574133b945a30e0cfeed431ca10326f3785be2ccedbaaffc237fb05bc7ce",
+    "work_dirs/detector_module_ablation_v1_20261028/eood_ml/selection.json": "fd33aa47a72bfa1262b812df6b53bca65340ac933ac68beaf2f2f514bfdcc374",
+    "work_dirs/detector_module_ablation_v1_20261028/110_l/selection.json": "27cfd00ef335320e2e9ad31f954521e5143237ff1e9fed6345eb4339bf3c7999",
+    "work_dirs/detector_module_ablation_v1_20261028/eood_l/epoch_17_val.rows.jsonl.gz": "5dc3ea13707109a25ea7d807d73ad933c05f1930557fa6e35e4d470de4842994",
+    "work_dirs/detector_module_ablation_v1_20261028/eood_ml/epoch_17_val.rows.jsonl.gz": "725d1c57357092ccbb7ad5f30a1ca670affa3e1bf9e9d17641bc7ca089a35ee9",
+    "work_dirs/detector_module_ablation_v1_20261028/110_l/epoch_02_val.rows.jsonl.gz": "9f9664f10151ec941da8fa15d12e0229f7ce96bda7d4df8112b80846ce12cb09",
+    "work_dirs/detector_module_ablation_v1_20261028/eood_cache/cache_manifest.json": "bb820e01016d69300a5e5ede4a794a605f3736fd9888099158b9a9a9704b0b9a",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/midpoint/formal/roi_cache/cache_manifest.json": "5c481e900ed7f17e838156dcf43685a4191427f447374e1ac3f23289da87594d",
+    "work_dirs/smallpaper_readiness_20261028_v1/saved_predictions_unified.rows.jsonl": "1abae6afe6ece14c356c7b5608a5ceb692316172605d970444c41a2a12fa8481"
+  },
+  "historical_TEST_score_tolerance": {
+    "atol": 1e-05,
+    "rtol": 1e-05
+  },
+  "repair_v2": {
+    "reason": "Historical TEST score exact-bit comparison rejected sub-micro floating roundoff; geometry passed unchanged tolerance",
+    "diagnostic": "work_dirs/detector_module_ablation_v1_20261028/fixed_TEST_20261029_v1/gpu0_diagnostic.json",
+    "previous_contract_sha256": "b360d627692c860be3d8cdf2b28fc08456871a30eddb079ef4e252e89cf44072",
+    "same_forward_scores_remain_exact": true
+  },
+  "repair_v3": {
+    "reason": "Second historical score differs by 1.66893e-6; use float32 cross-run tolerance 1e-5 while preserving geometry and same-forward exact comparisons",
+    "previous_contract_sha256": "c0082feadad5bc980293f6234ffce739e14492e9cd67cf9090ffd212fc3f309b"
+  }
+}
