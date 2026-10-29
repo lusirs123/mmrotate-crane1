@@ -10,6 +10,14 @@ t=importlib.util.module_from_spec(spec);spec.loader.exec_module(t)
 
 
 class ControlTests(unittest.TestCase):
+    def test_gpu_mapping_preserves_preimport_environment(self):
+        original=dict(LD_LIBRARY_PATH='original-once:',CUDA_VISIBLE_DEVICES='0,1',CONDA_PREFIX=None)
+        mapped=t.mapped_launch_environment(original,[2,3])
+        self.assertEqual(mapped['CUDA_VISIBLE_DEVICES'],'2,3')
+        self.assertEqual(mapped['LD_LIBRARY_PATH'],'original-once:')
+        self.assertEqual(original['CUDA_VISIBLE_DEVICES'],'0,1')
+        self.assertIsNone(mapped['CONDA_PREFIX'])
+
     def test_data_optimizer_and_output_contract_changes_are_rejected(self):
         import runpy
         old=runpy.run_path(str(ROOT/'work_dirs/symeood_110_retrain_seed0_20261026_v1/configs/Coff_seed0.py'))

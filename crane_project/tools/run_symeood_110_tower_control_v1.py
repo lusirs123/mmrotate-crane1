@@ -74,6 +74,14 @@ def assert_config_delta(old, new):
     assert new['resume_from'] is None
 
 
+def mapped_launch_environment(reference_launch, physical_gpus):
+    # Runtime snapshots include cv2's import-time LD_LIBRARY_PATH prepend.
+    # Launch from the original pre-import environment, never that snapshot.
+    env = deepcopy(reference_launch)
+    env['CUDA_VISIBLE_DEVICES'] = ','.join(map(str, physical_gpus))
+    return env
+
+
 def prepare(base, physical_gpus):
     import torch
     from mmcv import Config
@@ -153,7 +161,7 @@ def prepare(base, physical_gpus):
         reference_initial_sha256=sha(original_init), added_parameters=added,
         sources=sources, reference_protocol_sha256=sha(REFERENCE/'protocol.json'),
         runtime_lock_sha256=sha(base/'runtime_lock.json'),
-        launch_environment=lock['runtime']['environment'], selection=SELECTION_CONFIG,
+        launch_environment=mapped_launch_environment(old['launch_environment'],physical_gpus), selection=SELECTION_CONFIG,
         candidate_epochs=[16,18,20,22,24], TEST=False, downstream=False,
         automatic_adoption=False, retry=False, initialization='Shared tensors copied from pretraining-before-update original110; new tower Normal(.01), bias0, isolated seed17030; not trained detector weights.',
         decision='Descriptive structural control. Report original-rule selection, all five same epochs and ep24. No TEST or posthoc reselection.'))
