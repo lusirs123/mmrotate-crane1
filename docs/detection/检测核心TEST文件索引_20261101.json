@@ -1,0 +1,654 @@
+{
+  "status": "COMPLETE_SHA_VERIFIED",
+  "time_Taipei": "2026-11-01T15:01:03.370752+08:00",
+  "server_modified": false,
+  "training_or_inference": false,
+  "downloaded_checkpoint_count": 3,
+  "logical_selected_checkpoint_count": 5,
+  "reused_existing_file_count": 61,
+  "new_downloaded_file_count": 4,
+  "downloaded_bytes": 850352128,
+  "VAL_predictions_or_metrics_downloaded": false,
+  "entries": [
+    {
+      "role": "EOOD baseline",
+      "logical_name": "weights/EOOD_ep24.pth",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/crane_eood_k1_port_day2night_aug_b_v1/epoch_24.pth",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/crane_eood_k1_port_day2night_aug_b_v1/epoch_24.pth",
+      "bytes": 289746473,
+      "sha256": "95da2d648cfef95e1fcd00f2cdfc258d9cf75ed038135bbfc00059f8f6f2a4db",
+      "action": "downloaded_missing"
+    },
+    {
+      "role": "adopted detector",
+      "logical_name": "weights/R4_ep16.pth",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_110_reg_tower_20261030_v1/R4/epoch_16.pth",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_110_reg_tower_20261030_v1/R4/epoch_16.pth",
+      "bytes": 270858887,
+      "sha256": "b5ee405108970552717b3b7c8f0e56c6813232e19aebccff82a5c7183511b13b",
+      "action": "downloaded_missing"
+    },
+    {
+      "role": "SGAR internal control",
+      "logical_name": "weights/EOOD_SGAR_ep24.pth",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/eood_sgar_20261101_v3/train/epoch_24.pth",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/eood_sgar_20261101_v3/train/epoch_24.pth",
+      "bytes": 289746665,
+      "sha256": "9890f389a031eb6ed00439b32e5a4efa63b5eee11c27f451b69a9faf238d1b6b",
+      "action": "downloaded_missing"
+    },
+    {
+      "role": "adopted midpoint",
+      "logical_name": "weights/Midpoint_ep20.pth",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_r4_adaptation_20261031/readbacks/completed/midpoint/attempt_001/train/head_epoch_20.pth",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_r4_adaptation_20261031/midpoint/attempt_001/train/head_epoch_20.pth",
+      "bytes": 273251,
+      "sha256": "d595ab01c3aea48aec66d6cf1e38460990ea272bb5ca962ca8ec8e17dd8d6dce",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "adopted size head",
+      "logical_name": "weights/LVSR_pair_ep05.pth",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_r4_adaptation_20261031/readbacks/lvsr_completed/lvsr/attempt_001/train/head_epoch_05.pth",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_r4_adaptation_20261031/lvsr/attempt_001/train/head_epoch_05.pth",
+      "bytes": 113679,
+      "sha256": "b272c50dfe6329414803d5f22c6e1e84d9c3db37b6bb2e31f1c7ed140f662c3e",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "fixed TEST result and provenance",
+      "logical_name": "results/R4/completion.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_110_reg_tower_20261030_v1/fixed_TEST_20261030_v1/downloaded_result/completion.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_110_reg_tower_20261030_v1/fixed_TEST_20261030_v1/completion.json",
+      "bytes": 521,
+      "sha256": "8eb80497488a034e9d18b21d1471f78ccedb27ffd4d6deb1f1c5fbcc7e6ad84f",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "fixed TEST result and provenance",
+      "logical_name": "results/R4/protocol.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_110_reg_tower_20261030_v1/fixed_TEST_20261030_v1/downloaded_result/protocol.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_110_reg_tower_20261030_v1/fixed_TEST_20261030_v1/protocol.json",
+      "bytes": 4012,
+      "sha256": "d19e8e92f29f6f879bbbf7367b67ea1e3da9761bd9ec3e0e1f2b3ee8054c6c15",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "fixed TEST result and provenance",
+      "logical_name": "results/R4/runtime_result_identity.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_110_reg_tower_20261030_v1/fixed_TEST_20261030_v1/downloaded_result/runtime_result_identity.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_110_reg_tower_20261030_v1/fixed_TEST_20261030_v1/runtime_result_identity.json",
+      "bytes": 184379,
+      "sha256": "b3185ef8403cbd7b2bfb24ec610302194bb091bf507c8109c2c5fadcbd91c686",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "fixed TEST result and provenance",
+      "logical_name": "results/R4/frozen_model_state.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_110_reg_tower_20261030_v1/fixed_TEST_20261030_v1/downloaded_result/frozen_model_state.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_110_reg_tower_20261030_v1/fixed_TEST_20261030_v1/frozen_model_state.json",
+      "bytes": 527,
+      "sha256": "97abe116569efcee269a8e0760fdd3bf5b593dda21866a2b105b017a9c6f927a",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "fixed TEST result and provenance",
+      "logical_name": "results/R4/runtime_audit.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_110_reg_tower_20261030_v1/fixed_TEST_20261030_v1/downloaded_result/runtime_audit.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_110_reg_tower_20261030_v1/fixed_TEST_20261030_v1/runtime_audit.json",
+      "bytes": 18595,
+      "sha256": "97a36c5fb3c30013736ce63d741bdd7e4e09f7a602103e948bdbfc45ac27e0b5",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "fixed TEST result and provenance",
+      "logical_name": "results/R4/analysis/metrics.csv",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_110_reg_tower_20261030_v1/fixed_TEST_20261030_v1/downloaded_result/analysis/metrics.csv",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_110_reg_tower_20261030_v1/fixed_TEST_20261030_v1/analysis/metrics.csv",
+      "bytes": 4030,
+      "sha256": "001622a6372e350f6e6ec20203fd97bdd3f67d6761b26acadc34000df95f6285",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "fixed TEST result and provenance",
+      "logical_name": "results/R4/analysis/per_frame.jsonl",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_110_reg_tower_20261030_v1/fixed_TEST_20261030_v1/downloaded_result/analysis/per_frame.jsonl",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_110_reg_tower_20261030_v1/fixed_TEST_20261030_v1/analysis/per_frame.jsonl",
+      "bytes": 3371494,
+      "sha256": "fac3c4d021bd27fe51ec3d832c436c769318797d643e3cbaa6359646fd8361ab",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "fixed TEST result and provenance",
+      "logical_name": "results/R4/analysis/summary.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_110_reg_tower_20261030_v1/fixed_TEST_20261030_v1/downloaded_result/analysis/summary.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_110_reg_tower_20261030_v1/fixed_TEST_20261030_v1/analysis/summary.json",
+      "bytes": 16619,
+      "sha256": "3a1247b2dd5698182631048c981801c2a9551feafc0c984fcf3f4823fd6e0c80",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "fixed TEST result and provenance",
+      "logical_name": "results/R4/preds/results.pkl",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_110_reg_tower_20261030_v1/fixed_TEST_20261030_v1/downloaded_result/preds/results.pkl",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_110_reg_tower_20261030_v1/fixed_TEST_20261030_v1/preds/results.pkl",
+      "bytes": 165393,
+      "sha256": "d1f3e7d5e33a71d2e6ca706af0c5a9631070b28ae0b3557c9ccf4dab43108c6c",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "fixed TEST result and provenance",
+      "logical_name": "results/R4/preds/results.pkl.provenance.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_110_reg_tower_20261030_v1/fixed_TEST_20261030_v1/downloaded_result/preds/results.pkl.provenance.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_110_reg_tower_20261030_v1/fixed_TEST_20261030_v1/preds/results.pkl.provenance.json",
+      "bytes": 817,
+      "sha256": "1791a8e9938effcb3fd3bf79aeeb3b76a8dc130897d81ea06ba5c618337b863c",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "fixed TEST result and provenance",
+      "logical_name": "results/EOOD_SGAR/completion.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/eood_sgar_20261101_v3/readbacks/fixed_TEST_20261101_v1/completion.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/eood_sgar_20261101_v3/fixed_TEST_20261101_v1/completion.json",
+      "bytes": 557,
+      "sha256": "8effcbcfefc232f58eae6d79a8a5fcd5b2f2267317ee16c9af29edaf982fa91d",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "fixed TEST result and provenance",
+      "logical_name": "results/EOOD_SGAR/protocol.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/eood_sgar_20261101_v3/readbacks/fixed_TEST_20261101_v1/protocol.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/eood_sgar_20261101_v3/fixed_TEST_20261101_v1/protocol.json",
+      "bytes": 566561,
+      "sha256": "22783ba7ce82005816b6e02de1baad3fac18e5f7d964f33fbb46507dd59e2db5",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "fixed TEST result and provenance",
+      "logical_name": "results/EOOD_SGAR/runtime_result_identity.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/eood_sgar_20261101_v3/readbacks/fixed_TEST_20261101_v1/runtime_result_identity.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/eood_sgar_20261101_v3/fixed_TEST_20261101_v1/runtime_result_identity.json",
+      "bytes": 184356,
+      "sha256": "6e1e9473a0de47852e4c2d3e81def3a51defb4ecc8ab16fdd239254469d1ca95",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "fixed TEST result and provenance",
+      "logical_name": "results/EOOD_SGAR/frozen_model_state.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/eood_sgar_20261101_v3/readbacks/fixed_TEST_20261101_v1/frozen_model_state.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/eood_sgar_20261101_v3/fixed_TEST_20261101_v1/frozen_model_state.json",
+      "bytes": 467,
+      "sha256": "83809a4480220511e9c0ea84942f445b0fee57fcba88a6090185c80121332bf2",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "fixed TEST result and provenance",
+      "logical_name": "results/EOOD_SGAR/runtime_audit.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/eood_sgar_20261101_v3/readbacks/fixed_TEST_20261101_v1/runtime_audit.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/eood_sgar_20261101_v3/fixed_TEST_20261101_v1/runtime_audit.json",
+      "bytes": 18225,
+      "sha256": "8af62d4baaa03d3334a60629a30575dab14726f1c8de32280362e964dfaf1aaf",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "fixed TEST result and provenance",
+      "logical_name": "results/EOOD_SGAR/analysis/metrics.csv",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/eood_sgar_20261101_v3/readbacks/fixed_TEST_20261101_v1/analysis/metrics.csv",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/eood_sgar_20261101_v3/fixed_TEST_20261101_v1/analysis/metrics.csv",
+      "bytes": 3628,
+      "sha256": "fa5e285bd5ad637fbe514988d7af194e69de11886c3529513c7a25606db65b4c",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "fixed TEST result and provenance",
+      "logical_name": "results/EOOD_SGAR/analysis/per_frame.jsonl",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/eood_sgar_20261101_v3/readbacks/fixed_TEST_20261101_v1/analysis/per_frame.jsonl",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/eood_sgar_20261101_v3/fixed_TEST_20261101_v1/analysis/per_frame.jsonl",
+      "bytes": 3383148,
+      "sha256": "883be319b37faab7d404b4bf2d716cb8156634f3637c7e59168b5f2a5ed9c99f",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "fixed TEST result and provenance",
+      "logical_name": "results/EOOD_SGAR/analysis/summary.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/eood_sgar_20261101_v3/readbacks/fixed_TEST_20261101_v1/analysis/summary.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/eood_sgar_20261101_v3/fixed_TEST_20261101_v1/analysis/summary.json",
+      "bytes": 14366,
+      "sha256": "91b8f8b0b68c97d73ca78a1c9cee68e890a869cba7ce2e60d27c88631612c024",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "fixed TEST result and provenance",
+      "logical_name": "results/EOOD_SGAR/preds/results.pkl",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/eood_sgar_20261101_v3/readbacks/fixed_TEST_20261101_v1/preds/results.pkl",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/eood_sgar_20261101_v3/fixed_TEST_20261101_v1/preds/results.pkl",
+      "bytes": 164994,
+      "sha256": "649269903a2e88a37011ce83a726588a2d77533a16c91c1c26267505957b2e34",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "fixed TEST result and provenance",
+      "logical_name": "results/EOOD_SGAR/preds/results.pkl.provenance.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/eood_sgar_20261101_v3/readbacks/fixed_TEST_20261101_v1/preds/results.pkl.provenance.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/eood_sgar_20261101_v3/fixed_TEST_20261101_v1/preds/results.pkl.provenance.json",
+      "bytes": 794,
+      "sha256": "0435c05a5a00e3034742bd5b7c7b72bdfe6a72937dbfb0357d9d4b45d76fdebd",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "baseline fixed TEST",
+      "logical_name": "results/EOOD/final_test_metrics_v2.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/crane_eood_k1_port_day2night_aug_b_v1/val_sweep_port_v1/final_test/epoch_24/final_test_metrics_v2.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/crane_eood_k1_port_day2night_aug_b_v1/val_sweep_port_v1/final_test/epoch_24/final_test_metrics_v2.json",
+      "bytes": 1653,
+      "sha256": "f51fe7979a798cbffa6cf767274d4e408d22169198771173a72e3b0773e5b313",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "baseline fixed TEST",
+      "logical_name": "results/EOOD/preds/results.pkl",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/crane_eood_k1_port_day2night_aug_b_v1/val_sweep_port_v1/final_test/epoch_24/preds/results.pkl",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/crane_eood_k1_port_day2night_aug_b_v1/val_sweep_port_v1/final_test/epoch_24/preds/results.pkl",
+      "bytes": 164368,
+      "sha256": "7c194bb6419abfbfa1357d643fb057e6e41c9d80746b9a58f7cf8c1e2672c2c0",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "baseline fixed TEST",
+      "logical_name": "results/EOOD/preds/Task1_grab.provenance.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/crane_eood_k1_port_day2night_aug_b_v1/val_sweep_port_v1/final_test/epoch_24/preds/Task1_grab.provenance.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/crane_eood_k1_port_day2night_aug_b_v1/val_sweep_port_v1/final_test/epoch_24/preds/Task1_grab.provenance.json",
+      "bytes": 34238,
+      "sha256": "3ef7c8840f0a9af651e23e6e66bfc481ca160dade5f4d59d5f94e9e2fd502ddd",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "config or selected epoch identity",
+      "logical_name": "configs/EOOD/crane_eood_k1_port_day2night_aug_b_v1.py",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/crane_eood_k1_port_day2night_aug_b_v1/crane_eood_k1_port_day2night_aug_b_v1.py",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/crane_eood_k1_port_day2night_aug_b_v1/crane_eood_k1_port_day2night_aug_b_v1.py",
+      "bytes": 11730,
+      "sha256": "4fb64256fbe5d090168afccfd318478f2b1ea69cb759aac3515728ffc7e6e87e",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "config or selected epoch identity",
+      "logical_name": "configs/EOOD/selected_checkpoint.txt",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/crane_eood_k1_port_day2night_aug_b_v1/val_sweep_port_v1/selected_checkpoint.txt",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/crane_eood_k1_port_day2night_aug_b_v1/val_sweep_port_v1/selected_checkpoint.txt",
+      "bytes": 103,
+      "sha256": "d43167489fe558b0b9d61b2aec984f71343acad62e03956053e296c775252361",
+      "action": "downloaded_missing"
+    },
+    {
+      "role": "actual detector config",
+      "logical_name": "configs/R4/config.py",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_110_reg_tower_20261030_v1/config.py",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_110_reg_tower_20261030_v1/config.py",
+      "bytes": 12452,
+      "sha256": "b5045f42a30c8876acb6a3f8510d4be3206c93e45c51491266ed9939232dac4a",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "actual detector config",
+      "logical_name": "configs/EOOD_SGAR/config.py",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/eood_sgar_20261101_v3/readbacks/completed_VAL_20261101_v1/candidate_config.py",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/eood_sgar_20261101_v3/candidate_config.py",
+      "bytes": 14020,
+      "sha256": "af8fa4c4a951025e8b21170526a6e98e3537b511505c3494eb5d224c4377fc9b",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "selected epoch and checkpoint SHA",
+      "logical_name": "identity/EOOD_SGAR_selected_identity.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/eood_sgar_20261101_v3/readbacks/completed_VAL_20261101_v1/selected_identity.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/eood_sgar_20261101_v3/selected_identity.json",
+      "bytes": 168,
+      "sha256": "8a622dd1622e3d7b352b7e386ebef5c7c0a9ac7dc95bf263077e96003f1392b7",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "selected epoch only",
+      "logical_name": "identity/R4_selected_checkpoint.txt",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_110_reg_tower_20261030_v1/downloaded_result/R4/ckpt_sweep/selected_checkpoint.txt",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_110_reg_tower_20261030_v1/R4/ckpt_sweep/selected_checkpoint.txt",
+      "bytes": 102,
+      "sha256": "683ddb58ffb2cc70976e5797452eb560aaa06d5ba168e5e9e44593fb35e02b2e",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "fixed midpoint TEST",
+      "logical_name": "results/R4_Midpoint/protocol.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_r4_adaptation_20261031/test/protocol.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_r4_adaptation_20261031/test/protocol.json",
+      "bytes": 39703,
+      "sha256": "4b46fdbc17a4000f45e39d48b5f02e6320198323b36c60e8485d0a0e3f9c0360",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "fixed midpoint TEST",
+      "logical_name": "results/R4_Midpoint/analysis/metrics.csv",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_r4_adaptation_20261031/readbacks/fixed_test_depth/test/analysis/metrics.csv",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_r4_adaptation_20261031/test/analysis/metrics.csv",
+      "bytes": 3440,
+      "sha256": "b61b1e250aebd02a6cc36d7f673520484d3eed278acbdd301cc5e35d3abdfeac",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "fixed midpoint TEST",
+      "logical_name": "results/R4_Midpoint/analysis/summary.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_r4_adaptation_20261031/readbacks/fixed_test_depth/test/analysis/summary.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_r4_adaptation_20261031/test/analysis/summary.json",
+      "bytes": 14116,
+      "sha256": "0219c0d15ce107ab0c0a47255e0f5d26c7f1bc39b69e8dae3a17283fe7cd2b23",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "fixed midpoint TEST",
+      "logical_name": "results/R4_Midpoint/attempt_001/completion.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_r4_adaptation_20261031/readbacks/fixed_test_depth/test/attempt_001/completion.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_r4_adaptation_20261031/test/attempt_001/completion.json",
+      "bytes": 2665,
+      "sha256": "4a8f19217c1f30fb4253771b53226f295a70b7754e919b909e327aa47cd9d282",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "fixed midpoint TEST",
+      "logical_name": "results/R4_Midpoint/attempt_001/frozen_contract.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_r4_adaptation_20261031/test/protocol.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_r4_adaptation_20261031/test/attempt_001/frozen_contract.json",
+      "bytes": 39703,
+      "sha256": "4b46fdbc17a4000f45e39d48b5f02e6320198323b36c60e8485d0a0e3f9c0360",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "fixed midpoint TEST",
+      "logical_name": "results/R4_Midpoint/attempt_001/test_compare.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_r4_adaptation_20261031/readbacks/fixed_test_depth/test/attempt_001/test_compare.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_r4_adaptation_20261031/test/attempt_001/test_compare.json",
+      "bytes": 1700317,
+      "sha256": "bc92526a7a6593434b8dc1ac8e6deed1ea3df554aa34fc5252c6ea2e68a5ab0d",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "fixed midpoint TEST",
+      "logical_name": "results/R4_Midpoint/attempt_001/test_rows.jsonl",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_r4_adaptation_20261031/readbacks/fixed_test_depth/test/attempt_001/test_rows.jsonl",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_r4_adaptation_20261031/test/attempt_001/test_rows.jsonl",
+      "bytes": 4505477,
+      "sha256": "404ff2b748f3852f921840590bcef1bf64d290e14b3e47447f103eb651be991f",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "fixed midpoint TEST",
+      "logical_name": "results/R4_Midpoint/analyze.py",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_r4_adaptation_20261031/test/analyze.py",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_r4_adaptation_20261031/test/analyze.py",
+      "bytes": 10063,
+      "sha256": "8a22b17cca18df33e085661a97fd3058419fcba6340feb65c51d371c0d65f0ea",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "final full-chain TEST",
+      "logical_name": "results/R4_Midpoint_LVSR/protocol_attempt_002.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_r4_adaptation_20261031/readbacks/lvsr_fixed_test/lvsr/test/protocol_attempt_002.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_r4_adaptation_20261031/lvsr/test/protocol_attempt_002.json",
+      "bytes": 100494,
+      "sha256": "8360ee9107a79a58b84d5b502ef6fb0cdfa32332ee9873e19b4240af54d9d200",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "final full-chain TEST",
+      "logical_name": "results/R4_Midpoint_LVSR/controller_completion.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_r4_adaptation_20261031/readbacks/lvsr_fixed_test/lvsr/test/controller_completion.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_r4_adaptation_20261031/lvsr/test/controller_completion.json",
+      "bytes": 198,
+      "sha256": "aa2402937152598e0741e0c8e541d83f6489e331c688689ecb1f8e97e7d3d451",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "final full-chain TEST",
+      "logical_name": "results/R4_Midpoint_LVSR/analysis/metrics.csv",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_r4_adaptation_20261031/readbacks/lvsr_fixed_test/lvsr/test/analysis/metrics.csv",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_r4_adaptation_20261031/lvsr/test/analysis/metrics.csv",
+      "bytes": 1180,
+      "sha256": "ac534eb870a334763b651f1b6f9ea1afcd548f215dcb8e3e2ad70959bc0a99cc",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "final full-chain TEST",
+      "logical_name": "results/R4_Midpoint_LVSR/analysis/summary.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_r4_adaptation_20261031/readbacks/lvsr_fixed_test/lvsr/test/analysis/summary.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_r4_adaptation_20261031/lvsr/test/analysis/summary.json",
+      "bytes": 6769,
+      "sha256": "54b2f193604d93520221ffbc8f88c758fef14e1565b69c37f23335ba5e9099d3",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "final full-chain TEST",
+      "logical_name": "results/R4_Midpoint_LVSR/attempt_002/artifacts.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_r4_adaptation_20261031/readbacks/lvsr_fixed_test/lvsr/test/attempt_002/artifacts.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_r4_adaptation_20261031/lvsr/test/attempt_002/artifacts.json",
+      "bytes": 785,
+      "sha256": "5a60dd924f21b00f63b13edc949b9420651a7a28a7d0c376f59d17a3711c049f",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "final full-chain TEST",
+      "logical_name": "results/R4_Midpoint_LVSR/attempt_002/completion.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_r4_adaptation_20261031/readbacks/lvsr_fixed_test/lvsr/test/attempt_002/completion.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_r4_adaptation_20261031/lvsr/test/attempt_002/completion.json",
+      "bytes": 3233,
+      "sha256": "b70e2ae583f36cf33ae8973604946a62430b17be9e988cdb770795d8a77a44c0",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "final full-chain TEST",
+      "logical_name": "results/R4_Midpoint_LVSR/attempt_002/frozen_contract.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_r4_adaptation_20261031/readbacks/lvsr_fixed_test/lvsr/test/protocol_attempt_002.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_r4_adaptation_20261031/lvsr/test/attempt_002/frozen_contract.json",
+      "bytes": 100494,
+      "sha256": "8360ee9107a79a58b84d5b502ef6fb0cdfa32332ee9873e19b4240af54d9d200",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "final full-chain TEST",
+      "logical_name": "results/R4_Midpoint_LVSR/attempt_002/test_rows.jsonl",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_r4_adaptation_20261031/readbacks/lvsr_fixed_test/lvsr/test/attempt_002/test_rows.jsonl",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_r4_adaptation_20261031/lvsr/test/attempt_002/test_rows.jsonl",
+      "bytes": 4922327,
+      "sha256": "9a11d0b625f0a05e45d7f7bacd7e41ff60def9bcd1f31561d30bd412b64ad240",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "final full-chain TEST",
+      "logical_name": "results/R4_Midpoint_LVSR/analyze.py",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_r4_adaptation_20261031/lvsr/test/analyze.py",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_r4_adaptation_20261031/lvsr/test/analyze.py",
+      "bytes": 9969,
+      "sha256": "5d554b3a59b73909d022c2aceb5438b074596357828b6ead9b58a25e5842c611",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "frozen TEST evaluation code",
+      "logical_name": "evaluation_sources/crane_project/data_contracts/symeood_r4_lvsr_pair_v1.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_r4_adaptation_20261031/readbacks/lvsr_fixed_test/lvsr/test/evaluation_sources/crane_project/data_contracts/symeood_r4_lvsr_pair_v1.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_r4_adaptation_20261031/lvsr/test/evaluation_sources/crane_project/data_contracts/symeood_r4_lvsr_pair_v1.json",
+      "bytes": 18813,
+      "sha256": "38177a21cfbccb8394c91f3e4b3e4ad7eee7cc7d8e3954f115315514a11099bb",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "frozen TEST evaluation code",
+      "logical_name": "evaluation_sources/crane_project/tools/eval_symeood_r4_lvsr_ep5_fixed_test_v1.py",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_r4_adaptation_20261031/readbacks/lvsr_fixed_test/lvsr/test/evaluation_sources/crane_project/tools/eval_symeood_r4_lvsr_ep5_fixed_test_v1.py",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_r4_adaptation_20261031/lvsr/test/evaluation_sources/crane_project/tools/eval_symeood_r4_lvsr_ep5_fixed_test_v1.py",
+      "bytes": 17558,
+      "sha256": "c6fc91b93c58a61d0d323a5e428ed2bb5362394ea4eb6c63dc6f92080537050b",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "frozen TEST evaluation code",
+      "logical_name": "evaluation_sources/crane_project/tools/eval_symeood_r4_midpoint_fixed_test_v1.py",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_r4_adaptation_20261031/readbacks/lvsr_fixed_test/lvsr/test/evaluation_sources/crane_project/tools/eval_symeood_r4_midpoint_fixed_test_v1.py",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_r4_adaptation_20261031/lvsr/test/evaluation_sources/crane_project/tools/eval_symeood_r4_midpoint_fixed_test_v1.py",
+      "bytes": 13496,
+      "sha256": "510cf8bc0d97b3aa4f3f765c22dab818949e1c74b41e44ecb56d427e95eeabf8",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "frozen TEST evaluation code",
+      "logical_name": "evaluation_sources/tests/test_symeood_r4_lvsr_ep5_fixed_test_v1.py",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_r4_adaptation_20261031/readbacks/lvsr_fixed_test/lvsr/test/evaluation_sources/tests/test_symeood_r4_lvsr_ep5_fixed_test_v1.py",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_r4_adaptation_20261031/lvsr/test/evaluation_sources/tests/test_symeood_r4_lvsr_ep5_fixed_test_v1.py",
+      "bytes": 3509,
+      "sha256": "a783efbe4ca9d4b947dcf9a12345cd1c0ae4ca47e57e862223061e97efe81642",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "completed historical module TEST only, no historical weights",
+      "logical_name": "results/historical_module_TEST/110/completion.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/detector_module_ablation_v1_20261028/fixed_TEST_20261029_v1/110/completion.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/detector_module_ablation_v1_20261028/fixed_TEST_20261029_v1/110/completion.json",
+      "bytes": 2017,
+      "sha256": "5c122303139528ecc1dee189bdf95a52f8471caebe5c0d2e7791ca62f5730792",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "completed historical module TEST only, no historical weights",
+      "logical_name": "results/historical_module_TEST/110/frozen_contract.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/detector_module_ablation_v1_20261028/fixed_TEST_20261029_v1/110/frozen_contract.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/detector_module_ablation_v1_20261028/fixed_TEST_20261029_v1/110/frozen_contract.json",
+      "bytes": 15112,
+      "sha256": "b360d627692c860be3d8cdf2b28fc08456871a30eddb079ef4e252e89cf44072",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "completed historical module TEST only, no historical weights",
+      "logical_name": "results/historical_module_TEST/110/selected_head_backups.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/detector_module_ablation_v1_20261028/fixed_TEST_20261029_v1/110/selected_head_backups.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/detector_module_ablation_v1_20261028/fixed_TEST_20261029_v1/110/selected_head_backups.json",
+      "bytes": 646,
+      "sha256": "b0d8ccb22a175645656e26076a79b6a3bcddb9fdc9570c622548c509790aca83",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "completed historical module TEST only, no historical weights",
+      "logical_name": "results/historical_module_TEST/110/test_rows.jsonl",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/detector_module_ablation_v1_20261028/fixed_TEST_20261029_v1/110/test_rows.jsonl",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/detector_module_ablation_v1_20261028/fixed_TEST_20261029_v1/110/test_rows.jsonl",
+      "bytes": 713959,
+      "sha256": "ca6eeec472f297a147366c41e7ad7048e0561a92cd1aa77f10cfae89ee86008a",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "completed historical module TEST only, no historical weights",
+      "logical_name": "results/historical_module_TEST/110/test_summary.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/detector_module_ablation_v1_20261028/fixed_TEST_20261029_v1/110/test_summary.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/detector_module_ablation_v1_20261028/fixed_TEST_20261029_v1/110/test_summary.json",
+      "bytes": 78636,
+      "sha256": "b407e8e0df490432ebf4f51380bb968f3f4e01df8e768da2caf521c196cc0670",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "completed historical module TEST only, no historical weights",
+      "logical_name": "results/historical_module_TEST/eood_retry_v3/completion.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/detector_module_ablation_v1_20261028/fixed_TEST_20261029_v1/eood_retry_v3/completion.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/detector_module_ablation_v1_20261028/fixed_TEST_20261029_v1/eood_retry_v3/completion.json",
+      "bytes": 3258,
+      "sha256": "1b1a18c185b16cc3d96e73a2f323b968291c9904517b631aaba6db8fdaee98b9",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "completed historical module TEST only, no historical weights",
+      "logical_name": "results/historical_module_TEST/eood_retry_v3/frozen_contract.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/detector_module_ablation_v1_20261028/fixed_TEST_20261029_v1/eood_retry_v3/frozen_contract.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/detector_module_ablation_v1_20261028/fixed_TEST_20261029_v1/eood_retry_v3/frozen_contract.json",
+      "bytes": 16680,
+      "sha256": "38647e22621831daa465c3f793102ece5a5ef742f4ca2ef6a8b2b9e20fb9975c",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "completed historical module TEST only, no historical weights",
+      "logical_name": "results/historical_module_TEST/eood_retry_v3/selected_head_backups.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/detector_module_ablation_v1_20261028/fixed_TEST_20261029_v1/eood_retry_v3/selected_head_backups.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/detector_module_ablation_v1_20261028/fixed_TEST_20261029_v1/eood_retry_v3/selected_head_backups.json",
+      "bytes": 1944,
+      "sha256": "b3ee090ed99be448d2e6b6235602cfc666b147fc576d3c9ebc7d9daeaa17228d",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "completed historical module TEST only, no historical weights",
+      "logical_name": "results/historical_module_TEST/eood_retry_v3/test_rows.jsonl",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/detector_module_ablation_v1_20261028/fixed_TEST_20261029_v1/eood_retry_v3/test_rows.jsonl",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/detector_module_ablation_v1_20261028/fixed_TEST_20261029_v1/eood_retry_v3/test_rows.jsonl",
+      "bytes": 1065188,
+      "sha256": "352d58195f9fe55360c4a47e496e78f9d9c04cdd48002537ef4eec45df8fb28d",
+      "action": "reused_existing_no_copy"
+    },
+    {
+      "role": "completed historical module TEST only, no historical weights",
+      "logical_name": "results/historical_module_TEST/eood_retry_v3/test_summary.json",
+      "local_path": "/Users/mac/Documents/paper/symEOOD/work_dirs/detector_module_ablation_v1_20261028/fixed_TEST_20261029_v1/eood_retry_v3/test_summary.json",
+      "source_server": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/detector_module_ablation_v1_20261028/fixed_TEST_20261029_v1/eood_retry_v3/test_summary.json",
+      "bytes": 188820,
+      "sha256": "dc10b6e62f1d4c942a8afada707ab532d26f129f9f05f14ad1c33669624a0cdd",
+      "action": "reused_existing_no_copy"
+    }
+  ],
+  "TEST_GT": {
+    "frames": 1440,
+    "source": "/media/omnisky/personal_files/ljj/symEOOD/crane_project/data/crane_grab_port_day2night_v1/test/annfiles",
+    "action": "reused_existing_no_copy",
+    "local_path": "/Users/mac/Documents/paper/symEOOD/crane_project/data/crane_grab_port_day2night_v1/test/annfiles"
+  },
+  "scope": "Current final R4/M20/L5, matched EOOD, EOOD+SGAR control; TEST only. Historical module TEST results referenced, historical weights excluded.",
+  "layout": "downloaded missing files placed in original corresponding experiment paths; existing TEST/head files retain their paths",
+  "saved_TEST_frame_checks": [
+    {
+      "logical_name": "results/R4/analysis/per_frame.jsonl",
+      "records": 4320,
+      "unique_images": 1440
+    },
+    {
+      "logical_name": "results/EOOD_SGAR/analysis/per_frame.jsonl",
+      "records": 4320,
+      "unique_images": 1440
+    },
+    {
+      "logical_name": "results/R4_Midpoint/attempt_001/test_rows.jsonl",
+      "records": 1440,
+      "unique_images": 1440
+    },
+    {
+      "logical_name": "results/R4_Midpoint_LVSR/attempt_002/test_rows.jsonl",
+      "records": 1440,
+      "unique_images": 1440
+    },
+    {
+      "logical_name": "results/historical_module_TEST/110/test_rows.jsonl",
+      "records": 1440,
+      "unique_images": 1440
+    },
+    {
+      "logical_name": "results/historical_module_TEST/eood_retry_v3/test_rows.jsonl",
+      "records": 1440,
+      "unique_images": 1440
+    }
+  ],
+  "experiment_folder_guides": [
+    "/Users/mac/Documents/paper/symEOOD/work_dirs/crane_eood_k1_port_day2night_aug_b_v1/核心文件说明.md",
+    "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_110_reg_tower_20261030_v1/核心文件说明.md",
+    "/Users/mac/Documents/paper/symEOOD/work_dirs/eood_sgar_20261101_v3/核心文件说明.md",
+    "/Users/mac/Documents/paper/symEOOD/work_dirs/symeood_r4_adaptation_20261031/核心文件说明.md"
+  ],
+  "final_validation": {
+    "all_65_files_sha_verified": true,
+    "temporary_central_folder_removed": true,
+    "actual_downloaded_checkpoints": 3,
+    "existing_head_weights_reused": 2,
+    "existing_TEST_files_not_copied": true,
+    "server_modified": false,
+    "VAL_results_downloaded": false
+  }
+}

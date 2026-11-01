@@ -1,0 +1,110 @@
+{
+  "schema": "crane_sgar_midpoint_lvsr_pipeline_v1",
+  "identity": "R4ep16-M20-pairLVSR-ep5",
+  "stages": [
+    {
+      "stage": "detector",
+      "config": "crane_project/configs/crane_sgar_r4_v1.py",
+      "epoch": 16,
+      "sha256": "b5ee405108970552717b3b7c8f0e56c6813232e19aebccff82a5c7183511b13b",
+      "paths": [
+        "work_dirs/symeood_110_reg_tower_20261030_v1/R4/epoch_16.pth"
+      ]
+    },
+    {
+      "stage": "midpoint",
+      "config": "crane_project/configs/crane_midpoint_r4_v1.py",
+      "epoch": 20,
+      "sha256": "d595ab01c3aea48aec66d6cf1e38460990ea272bb5ca962ca8ec8e17dd8d6dce",
+      "paths": [
+        "work_dirs/symeood_r4_adaptation_20261031/midpoint/attempt_001/train/head_epoch_20.pth",
+        "work_dirs/symeood_r4_adaptation_20261031/readbacks/completed/midpoint/attempt_001/train/head_epoch_20.pth"
+      ]
+    },
+    {
+      "stage": "lvsr",
+      "config": "crane_project/configs/crane_lvsr_r4_midpoint_v1.py",
+      "epoch": 5,
+      "sha256": "b272c50dfe6329414803d5f22c6e1e84d9c3db37b6bb2e31f1c7ed140f662c3e",
+      "paths": [
+        "work_dirs/symeood_r4_adaptation_20261031/lvsr/attempt_001/train/head_epoch_05.pth",
+        "work_dirs/symeood_r4_adaptation_20261031/readbacks/lvsr_completed/lvsr/attempt_001/train/head_epoch_05.pth"
+      ]
+    }
+  ],
+  "runtime": {
+    "torch": "1.13.1+cu117",
+    "cuda": "11.7",
+    "cudnn": 8500,
+    "mmcv": "1.7.0",
+    "mmdet": "2.25.1",
+    "mmrotate": "0.3.4",
+    "opencv": "4.13.0",
+    "gpu": "NVIDIA GeForce GTX 1080"
+  },
+  "memory": {
+    "allocator_mib": 3072,
+    "process_stop_mib": 4096,
+    "startup_free_mib": 4096,
+    "minimum_free_mib": 1024
+  },
+  "validation": {
+    "data_root": "crane_project/data/crane_grab_port_day2night_v1",
+    "images": [
+      "real_seq07_00001",
+      "real_seq07_00226",
+      "real_seq14_00000",
+      "real_seq14_00148",
+      "sim_seq10_00000",
+      "sim_seq10_00511",
+      "real_seq07_00193",
+      "real_seq07_00020"
+    ],
+    "midpoint_rows": {
+      "sha256": "f7762c38b798b72683452da9faf5a390025e176c2ba9ddc6c49bf1a6b056979f",
+      "paths": [
+        "work_dirs/symeood_r4_adaptation_20261031/midpoint/attempt_001/train/val_epoch_20.rows.jsonl",
+        "work_dirs/symeood_r4_adaptation_20261031/readbacks/completed/midpoint/attempt_001/train/val_epoch_20.rows.jsonl"
+      ]
+    },
+    "lvsr_rows": {
+      "sha256": "06fffb95f43304a6e3a88d5942cdee8bc97ecb1298edb939cbd677eecf448f56",
+      "paths": [
+        "work_dirs/symeood_r4_adaptation_20261031/lvsr/attempt_001/train/epoch_05_VAL.rows.jsonl.gz",
+        "work_dirs/symeood_r4_adaptation_20261031/readbacks/lvsr_completed/lvsr/attempt_001/train/epoch_05_VAL.rows.jsonl.gz"
+      ]
+    }
+  },
+  "source_sha256": {
+    "crane_project/configs/crane_sgar_r4_v1.py": "9c801268866597b843435d78bbf273e29326bfc4c6ac6aa8ad5d1b5fbe013652",
+    "crane_project/configs/crane_midpoint_r4_v1.py": "b802265733b72300c3fa87cab90b083174cf4d40f3a40546bcc7d9d8fd5db80a",
+    "crane_project/configs/crane_lvsr_r4_midpoint_v1.py": "2d09845123b4d0ee4c34ca35ba3b7d70cead9bda2a251d0672bd79d85879afeb",
+    "crane_project/utils/crane_frozen_pipeline_v1.py": "1882175193df624417da95e56ed9138321fb800026d66c6e06eebf5c847376f4",
+    "crane_project/tools/run_crane_frozen_pipeline_v1.py": "bb2892a39c257eab4fd637e0629814c2eb605ab6f6008cc5b04f8ca85f833e7f",
+    "mmrotate/models/detectors/sym_eood_detector.py": "d52b5e6b88e2d1ce5c807e6ca5697e62376b6f43df422829b2be20e323b5eb3f",
+    "mmrotate/models/dense_heads/sym_eood_head.py": "45db4adc70967a8c0c1a4426faf1eec093b81d745be89c31a21358567714c1b9",
+    "mmrotate/models/dense_heads/sym_eood_reg_tower_head_v1.py": "0ee88d66303b31b61b9d330e9fdb8ba410bcdac5cb17a3029257b7bbfd15a8ab",
+    "mmrotate/models/dense_heads/sym_eood_tower_head_v1.py": "5de3bb50b85dd5988bf5aa119ee93603286d600d809c23b8f5a0cf93e264ab45",
+    "mmrotate/models/losses/sym_nfl_loss.py": "a7e797c687d078f31448cafcef2c7da8df48cfb2d084f586a8ba7b2a440e13a2",
+    "mmrotate/models/losses/sym_kld_loss.py": "6b0577bbd3d64b2e8edd0d75667f01d2d51efd0ac884b0f36ea48acac2c275f4",
+    "mmrotate/core/bbox/assigners/sym_pola.py": "e2d1eee51c09d5ca412b212ec3d501781c0d3ec640a13174c60de5fc42ca29f2",
+    "crane_project/utils/port_geometry_midpoint_sigma_v1.py": "e634d5cfdab0547c038c0bba48518c2494f526aed624e2b6a96affe7a31cfd85",
+    "crane_project/utils/port_geometry_midpoint_v1.py": "cfb90a032d7c74b0e911f5f89b6f23a422baf2b2824813fc92d7a832b049bad3",
+    "crane_project/utils/port_geometry_refine_g_v1.py": "2545e32ef953d22ef359a56bfc1cadd38d28e69f22b30de6c7fa60f27092c51b",
+    "crane_project/utils/port_structure_reliability_v1.py": "84e32d062f491070dcd6575cc4e50b231a0ff20cb835e70bec7e255c95181aa8",
+    "crane_project/utils/port_size_pair_specific_v1.py": "5a5d3bc2d0d3fbfa9a4e0e36f08f1318b5675452642a8ba440ec5ef1487f1b6a",
+    "crane_project/utils/port_size_qalign_v1.py": "bffff38f97d0d7cf8210f009c7b5160895a9d8e88f80fbca7efb80c3e1f71ca4",
+    "crane_project/utils/port_size_local_vectors_v1.py": "ec2100e814d982347847c82df81d75226ced85b546538690aabf8abccc1cf684",
+    "crane_project/utils/port_geometry_midpoint_edge_residual_v1.py": "260eb599b50d966801ec84fa1517584a174daa5d41388e6133e1d773e6782d28",
+    "crane_project/configs/_base_/crane_sgar_detector_v1.py": "0b525b137eff0bb6d43488c9ec7b32b265c0d24e3e852a46f16c387173c5c90a",
+    "crane_project/configs/_base_/crane_midpoint_head_v1.py": "b26428756722cf3c7d59bf0a0c63e2599139f8d1ff4d111d0c1640d848198e0f",
+    "crane_project/configs/_base_/crane_lvsr_head_v1.py": "8254feadcb03f6705413f9fc97e00becd62cce046380dd36f3f7222850a63660"
+  },
+  "scope": {
+    "training": false,
+    "TEST": false,
+    "old_experiment_dependencies": false,
+    "LVSR_selected_epoch": null,
+    "LVSR_representative_epoch": 5
+  }
+}

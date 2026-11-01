@@ -1,0 +1,51 @@
+{
+  "captured_Taipei": "2026-11-01T15:58:11.255454+08:00",
+  "scope": "local crane_project/configs only",
+  "server_deleted": false,
+  "records": [
+    {
+      "path": "crane_project/configs/base_v3_obb_focused_paper_pipeline_v1.json",
+      "sha256": "373228fd49f82cd029c45830a6a274e87082253bfd465824d2600d6871594082",
+      "bytes": 6684,
+      "restore_commit": "80d250e1871d8f31874c722584a5760a7960d5d7",
+      "reason": "Retired DINO/source-val/reliability configuration; not part of current R4/M20/L5 or EOOD control",
+      "retired_references": [
+        "tests/test_base_v3_obb_focused_paper_pipeline_v1.py"
+      ]
+    },
+    {
+      "path": "crane_project/configs/crane_symeood_formal_dino_native_s14_v1.py",
+      "sha256": "00175d07197679d09414d614985a041fe6d59f59bcd8e0e0ebbffc2b8db069d5",
+      "bytes": 3252,
+      "restore_commit": "80d250e1871d8f31874c722584a5760a7960d5d7",
+      "reason": "Retired DINO/source-val/reliability configuration; not part of current R4/M20/L5 or EOOD control",
+      "retired_references": [
+        "crane_project/data_contracts/symeood_c_pair_seed0_native_runtime_lock_original_20261025.json",
+        "crane_project/data_contracts/base_v3_obb_true_online_pipeline_v1.json",
+        "crane_project/data_contracts/symeood_usg_v1_20261024.json",
+        "crane_project/configs/base_v3_obb_focused_paper_pipeline_v1.json",
+        "tests/test_dino_native_candidate_trace_v1.py",
+        "tests/test_scoped_dino_lowlight_detector.py",
+        "crane_project/tools/dino_teacher_rotated_labeller.py"
+      ]
+    },
+    {
+      "path": "crane_project/configs/crane_symeood_k1_source_val_eval.py",
+      "sha256": "9abfc8734638df3090fb7f2a0d46a9e6098a84bb437ba5f71df00af5cd9dd90a",
+      "bytes": 1571,
+      "restore_commit": "80d250e1871d8f31874c722584a5760a7960d5d7",
+      "reason": "Retired DINO/source-val/reliability configuration; not part of current R4/M20/L5 or EOOD control",
+      "retired_references": [
+        "crane_project/data_contracts/symeood_c_pair_seed0_native_runtime_lock_original_20261025.json",
+        "crane_project/data_contracts/symeood_usg_v1_20261024.json",
+        "tests/test_geometry_refiner_integration_contract.py",
+        "crane_project/tools/audit_teacher_student_source_val_gap_v1.py"
+      ]
+    }
+  ],
+  "before_config_count": 30,
+  "after_config_count": 27,
+  "current_pipeline_sources_preserved": 23,
+  "old_source_contracts_not_rewritten": true,
+  "historical_entrypoints_require_restoration": true
+}
