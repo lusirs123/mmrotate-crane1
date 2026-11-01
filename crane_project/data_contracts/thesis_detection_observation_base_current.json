@@ -1,0 +1,9 @@
+{
+  "schema": "thesis_detection_observation_base_current_v1",
+  "date": "2026-10-31",
+  "identity": "Thesis-R4ep16-M20-pairLVSR-ep5-20261031-v2",
+  "contract": "crane_project/data_contracts/thesis_detection_observation_base_v2_20261031.json",
+  "sha256": "a2b2640607c4e114b002d4264967ef78646af0edffe2328dc55ee12440997659",
+  "previous_contract": "crane_project/data_contracts/thesis_detection_observation_base_v1_20261028.json",
+  "previous_sha256": "9b04346eeec918a72f9e2d284c870b2b52efcb418a38477283b71d89e6034003"
+}

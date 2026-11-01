@@ -1,0 +1,180 @@
+{
+  "schema": "thesis_detection_observation_base_v2",
+  "date": "2026-10-31",
+  "status": "USER_ADOPTED_THESIS_OBSERVATION_BASE_FROZEN_SWING_NOT_VALIDATED",
+  "identity": "Thesis-R4ep16-M20-pairLVSR-ep5-20261031-v2",
+  "purpose": "大论文后续深度几何与连续观测研究的当前固定检测基底；不是物理摇摆角模型验收。",
+  "authorization": "用户明确要求将原共享LVSR大论文基线改为最新R4/M20/双分支LVSR ep5。",
+  "supersedes": {
+    "contract": "crane_project/data_contracts/thesis_detection_observation_base_v1_20261028.json",
+    "sha256": "9b04346eeec918a72f9e2d284c870b2b52efcb418a38477283b71d89e6034003",
+    "identity": "Thesis-110ep20-M21-sharedLVSR-ep11-20261028-v1",
+    "role": "historical_reference_only; existing results preserved"
+  },
+  "pipeline": [
+    {
+      "stage": "detector",
+      "identity": "SymEOOD-R4-seed0-ep16-20261030",
+      "epoch": 16,
+      "checkpoint": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_110_reg_tower_20261030_v1/R4/epoch_16.pth",
+      "sha256": "b5ee405108970552717b3b7c8f0e56c6813232e19aebccff82a5c7183511b13b",
+      "selection_basis": "original_VAL_rule_before_TEST",
+      "config": "work_dirs/symeood_110_reg_tower_20261030_v1/config.py"
+    },
+    {
+      "stage": "midpoint",
+      "identity": "R4-midpoint-sigma1p5-ep20",
+      "epoch": 20,
+      "checkpoint": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_r4_adaptation_20261031/midpoint/attempt_001/train/head_epoch_20.pth",
+      "sha256": "d595ab01c3aea48aec66d6cf1e38460990ea272bb5ca962ca8ec8e17dd8d6dce",
+      "sigma": 1.5,
+      "parameter_count": 17696,
+      "selection_basis": "original_VAL_rule_before_TEST"
+    },
+    {
+      "stage": "lvsr",
+      "identity": "R4-M20-pair-specific-LVSR-ep5",
+      "epoch": 5,
+      "checkpoint": "/media/omnisky/personal_files/ljj/symEOOD/work_dirs/symeood_r4_adaptation_20261031/lvsr/attempt_001/train/head_epoch_05.pth",
+      "sha256": "b272c50dfe6329414803d5f22c6e1e84d9c3db37b6bb2e31f1c7ed140f662c3e",
+      "architecture": "PairSpecificSizeHead",
+      "arm": "fixed_b",
+      "parameter_count": 2480,
+      "continuation": false,
+      "updates_at_checkpoint": 3195,
+      "training_epochs_completed": 24,
+      "original_selected_epoch": null,
+      "selection_basis": "pre_TEST_fixed_VAL_descriptive_representative; user_adopted_thesis_baseline_after_exposed_depth_comparison"
+    }
+  ],
+  "all_stages_frozen_for_downstream": true,
+  "delivery": {
+    "lvsr_replaces": "dimensions_only",
+    "center_angle_score_presence_from": "midpoint_ep20",
+    "gt_used_during_inference": false,
+    "physical_swing_not_equal_image_OBB_angle": true
+  },
+  "depth_reference": {
+    "formula_id": "raw_opt_v1",
+    "target": "z_cg_opt_m",
+    "calibration": "crane_project/configs/depth_scale_calibration_obb_raw_opt_short_q2_train03_v1.json",
+    "sha256": "c9c14fc1b09ba8223996121425e302888ac7d44213192225acd5365fb2f1ffe2",
+    "parameters": {
+      "c": 1.0044577340905951,
+      "beta": 20.682289543661955,
+      "b_m": 0.0,
+      "fit_offset": false,
+      "q_signed_min": -0.02070317402614643,
+      "q_signed_max": 0.006703449986171836,
+      "q_signed_p01": -0.02019995536448857,
+      "q_signed_p99": 0.005640719944840945
+    },
+    "sequence": "unknown_test_02_coverage_retry",
+    "pin": {
+      "count": 1097,
+      "evidence_role": "previously_exposed_TEST_frozen_Raw_opt_reporting_not_untouched_confirmation",
+      "image_identity_sha256": "e95effdb49856e1ba451c0534e1530044af4485c0d037cac1fbbf4c1a54c5ed3",
+      "manifest_sha256": "ed8a42c3755d67ff0051b7dfc3a898e1dd94d5325de275883d795a7d21dc5f15",
+      "run_instance_id": "c7ed7b43768e4b38aff7046b2266cf68",
+      "split": "unknown_test",
+      "truth_sha256": "6c5a728833a77b4f12caa854c8720d12813602a67a9caf75c9563c21c71ac29e"
+    },
+    "frames": 1097,
+    "formula_refit": false,
+    "q_filter": false,
+    "reliability_filter": false,
+    "already_exposed": true
+  },
+  "depth_snapshot": {
+    "metrics": {
+      "count": 1097,
+      "mae_m": 0.48037651272072757,
+      "rmse_m": 0.6188270439235,
+      "abs_rel": 0.02605238915589148,
+      "bias_m": 0.4361552336986214,
+      "p95_abs_error_m": 1.2346105215093062,
+      "max_abs_error_m": 2.6476616328740405
+    },
+    "step_error_against_truth_m": {
+      "count": 1096,
+      "mean": 0.33278455578930843,
+      "p95": 0.9417076267577542,
+      "max": 1.7589889815832294
+    },
+    "q_out_of_fit_support_count": 619,
+    "numeric_depth_count": 1097
+  },
+  "comparison_to_previous": {
+    "role": "whole_pipeline_version_comparison_not_pure_shared_vs_dual_ablation",
+    "same_input_pin": true,
+    "same_calibration": true,
+    "previous_metrics": {
+      "count": 1097,
+      "mae_m": 0.9236399034862227,
+      "rmse_m": 1.1238160728339373,
+      "abs_rel": 0.04878368514233129,
+      "bias_m": 0.9208729953427608,
+      "p95_abs_error_m": 2.076242975346674,
+      "max_abs_error_m": 4.348109264167434
+    },
+    "previous_step_error_mean_m": 0.495519833777039,
+    "mae_reduction_fraction": 0.4799093121598844
+  },
+  "detection_snapshot": {
+    "frames": 1440,
+    "metrics": {
+      "method": "R4_midpoint_L5",
+      "frames": 1440,
+      "outputs": 1440,
+      "TP50": 1438,
+      "TP75": 1369,
+      "Recall_pct": 99.86111111111111,
+      "center_correct": 1437,
+      "center_MAE_px": 1.5724084983847275,
+      "center_RMSE_px": 2.3211794044752305,
+      "mean_RIoU": 0.8810273876964854,
+      "Sim_angle_RMSE_deg": 1.3686780218153816,
+      "overall_image_angle_RMSE_deg": 1.8473162306781201,
+      "long_MAE_pct": 3.6999570850158343,
+      "short_MAE_pct": 4.9967499724001225,
+      "joint10": 1238,
+      "joint10_pct": 85.97222222222223,
+      "MCML_max": 1,
+      "AP50": 90.90909361839294,
+      "AP75": 89.29017782211304
+    }
+  },
+  "selection_history": {
+    "original_LVSR_selected_epoch": null,
+    "representative_epoch": 5,
+    "original_eligibility_passed": false,
+    "purpose_adoption_changes_original_gate_result": false,
+    "TEST_and_depth_already_exposed": true,
+    "thesis_choice_is_untouched_confirmation": false
+  },
+  "verification": {
+    "remote_three_checkpoints_SHA_matched": true,
+    "remote_access": "read_only_sha256sum_20261031",
+    "local_depth_verification": "work_dirs/symeood_r4_adaptation_20261031/lvsr/depth/local_verification.json",
+    "training_updates_this_freeze": 0,
+    "model_inference_this_freeze": false,
+    "GPU_used_this_freeze": false,
+    "future_swing_performance_validated": false
+  },
+  "evidence_sha256": {
+    "crane_project/data_contracts/thesis_detection_observation_base_v1_20261028.json": "9b04346eeec918a72f9e2d284c870b2b52efcb418a38477283b71d89e6034003",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/ep11_frozen_evaluation_20261028_v1/depth_summary.json": "157e007e1d432478599275bc660b4d74c7539fd93bbb6e2bc9f148ab0802c685",
+    "work_dirs/symeood_110_retrain_seed0_20261026_v1/downstream/lvsr/ep11_frozen_evaluation_20261028_v1/depth_input_identity.json": "cf0bd0dd6f8978d2f8006baa135ea5f931f36f5c548b2b72ba6854e2074687f2",
+    "work_dirs/symeood_r4_adaptation_20261031/readbacks/lvsr_fixed_depth/lvsr/depth/attempt_001/completion.json": "926e148425e7dad34f4b73b7a8ed6f45dccceacb971a4c437c85766cee786e14",
+    "work_dirs/symeood_r4_adaptation_20261031/readbacks/lvsr_fixed_depth/lvsr/depth/attempt_001/depth_summary.json": "5800d29e45a339b3d575e63d3be56f9280efb0b6d372a1749bd21aa508e730bc",
+    "work_dirs/symeood_r4_adaptation_20261031/readbacks/lvsr_fixed_depth/lvsr/depth/attempt_001/frozen_contract.json": "d229b0b7932da24b6fe83a038496a0ce9cf696ce64896ad554af33821055b43c",
+    "work_dirs/symeood_r4_adaptation_20261031/lvsr/depth/local_verification.json": "a4105757e4136269422163aec4f569b4cde1424c3b4c51d64aa0548857cc6bbe",
+    "work_dirs/symeood_r4_adaptation_20261031/readbacks/lvsr_fixed_test/lvsr/test/attempt_002/completion.json": "b70e2ae583f36cf33ae8973604946a62430b17be9e988cdb770795d8a77a44c0",
+    "work_dirs/symeood_r4_adaptation_20261031/readbacks/lvsr_fixed_test/lvsr/test/analysis/summary.json": "54b2f193604d93520221ffbc8f88c758fef14e1565b69c37f23335ba5e9099d3",
+    "work_dirs/symeood_r4_adaptation_20261031/readbacks/lvsr_completed/lvsr/attempt_001/train/selection.json": "94bfe79882ae625863639c64d09df07209cf03b4b2d11600b84649166eda7887",
+    "work_dirs/symeood_r4_adaptation_20261031/readbacks/completed/midpoint/attempt_001/train/selection.json": "ade312204703c975b4c95f0eae3f9fe45377fd83140b0182d13746938bd2966a",
+    "crane_project/configs/depth_scale_calibration_obb_raw_opt_short_q2_train03_v1.json": "c9c14fc1b09ba8223996121425e302888ac7d44213192225acd5365fb2f1ffe2"
+  },
+  "future_use": "新下游任务读取current登记并绑定这三个权重与公式；旧共享版或旧前端缓存不能改名复用，需重新生成并校验。既有历史评价入口保留原身份。本次不训练、不重推理、不重拟合。",
+  "core_record": "docs/detection/05_大论文_检测观测基底冻结.md"
+}
