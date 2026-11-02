@@ -1,0 +1,86 @@
+{
+  "schema": "faa_local_adaptation_v1",
+  "repository": "https://github.com/gcy0423/Fourier-Angle-Alignment",
+  "commit": "d3965484310fbb20347bbdccd07da19c0d8e52b8",
+  "license": "CC-BY-NC-4.0 (FAA upstream; see LICENSE.faa)",
+  "files": {
+    "mmrotate/models/necks/faafusion.py": {
+      "upstream_path": "mmrotate/models/necks/faafusion.py",
+      "upstream_sha256": "678fe06eefd144e231f38c8a6405b6353a6cac1ea3fc305edcfd34cba1b81119",
+      "local_sha256": "678fe06eefd144e231f38c8a6405b6353a6cac1ea3fc305edcfd34cba1b81119",
+      "change": "unchanged"
+    },
+    "mmrotate/models/roi_heads/bbox_heads/faa_head.py": {
+      "upstream_path": "mmrotate/models/roi_heads/bbox_heads/faa_head.py",
+      "upstream_sha256": "5b8e264114531542d52058acf34f952376d75c98d1789e253837e9252f50d2d8",
+      "local_sha256": "5b8e264114531542d52058acf34f952376d75c98d1789e253837e9252f50d2d8",
+      "change": "unchanged"
+    },
+    "configs/faa/oriented_rcnn_r50_fpn_1x_dota_le90_faa.py": {
+      "upstream_path": "configs/faa/oriented_rcnn_r50_fpn_1x_dota_le90_faa.py",
+      "upstream_sha256": "ae12385b0c7a61a6d0148891b2e038e07b30266e1dbe099605894d7023e7264a",
+      "local_sha256": "3b59071909797791ea75f2ae14cd493568e5205b1d06b302ca66f2a74c1750cf",
+      "change": "Only local _base_ paths and explicit custom_imports for the two unchanged FAA modules; model and official settings unchanged."
+    },
+    "configs/faa/_base_/dotav1.py": {
+      "upstream_path": "configs/_base_/datasets/dotav1.py",
+      "upstream_sha256": "7a08103b9729c55e3e8331911f771d701f3ba1e6e03a347e0a26987ed2bfe7bf",
+      "local_sha256": "7a08103b9729c55e3e8331911f771d701f3ba1e6e03a347e0a26987ed2bfe7bf",
+      "change": "unchanged"
+    },
+    "configs/faa/_base_/schedule_1x.py": {
+      "upstream_path": "configs/_base_/schedules/schedule_1x.py",
+      "upstream_sha256": "9909bebd5d6ce382e5be61d20022fe16dbb47b33b086c9d53653cb9cf440f73b",
+      "local_sha256": "9909bebd5d6ce382e5be61d20022fe16dbb47b33b086c9d53653cb9cf440f73b",
+      "change": "unchanged"
+    },
+    "configs/faa/LICENSE.faa": {
+      "upstream_path": "LICENSE",
+      "upstream_sha256": "fa4b06f7751c68d695eb3dc713616e1dcf09d12aa4a3b6196b8a9e0f4ff903d4",
+      "local_sha256": "fa4b06f7751c68d695eb3dc713616e1dcf09d12aa4a3b6196b8a9e0f4ff903d4",
+      "change": "unchanged"
+    },
+    "configs/_base_/default_runtime.py": {
+      "upstream_path": "configs/_base_/default_runtime.py",
+      "upstream_sha256": "046fc7f2d6a8dd3891b2ad90f1c5c5ea3e45345a1f44163318a6b8e8e33ceb77",
+      "local_sha256": "046fc7f2d6a8dd3891b2ad90f1c5c5ea3e45345a1f44163318a6b8e8e33ceb77",
+      "change": "unchanged existing runtime"
+    },
+    "configs/faa/crane_faa_oriented_rcnn_r50_fpn_24e_port_day2night_v1.py": {
+      "upstream_path": null,
+      "local_sha256": "739742aac85a710c9120f82ecd1256e42aeded1822c1f98194b83e232499ce84",
+      "change": "Project dataset and training-budget adapter; see README.md"
+    }
+  },
+  "checkpoint_selection": {
+    "split": "val",
+    "candidate_epochs": [
+      16,
+      18,
+      20,
+      22,
+      24
+    ],
+    "implementation": "crane_project/tools/ckpt_sweep.py:SELECTION_CONFIG",
+    "rule": "same task-constrained selection as EOOD/R4; not best-mAP hook",
+    "selection_config": {
+      "r_center_delta": 0.005,
+      "mcml_limit": 5,
+      "weight_sim": 0.7,
+      "weight_real": 0.3,
+      "soft_w_tdr": 0.35,
+      "soft_w_r_center": 0.25,
+      "soft_w_aci": 0.2,
+      "soft_w_angle": 0.2
+    }
+  },
+  "state": "local_adaptation_gpu_preflight_pending",
+  "training_launched": false,
+  "references_sha256": {
+    "crane_project/configs/crane_eood_k1_port_day2night_aug_b_v1.py": "8e72ebd5e4523382c06e878823820c81cd313d6dca0c2dfe1a1094ad40d513d8",
+    "crane_project/configs/crane_eood_k1.py": "fd9e2442af565eb81021c21171a5f74a528a780ec374171c58fe6c96d83594bf",
+    "crane_project/utils/crane_frozen_pipeline_v1.py": "1882175193df624417da95e56ed9138321fb800026d66c6e06eebf5c847376f4",
+    "crane_project/tools/ckpt_sweep.py": "161fc8e9fcb10b916dfaea04f4137701469dbb47d70224d145a8e2eaf7acde50",
+    "crane_project/data/crane_grab_port_day2night_v1/manifest.json": "128bd9aac390ad878a46c005a22f44d322a5acf61a47ad128991eb7444a4886f"
+  }
+}
