@@ -1,0 +1,37 @@
+Create a new publication-quality scientific architecture diagram for a computer vision paper on port crane grab oriented bounding box detection and geometric refinement. Use the supplied screenshot ONLY as a reference for composition and pastel academic drawing style: a wide upper overview pipeline, with exactly THREE equally sized detailed mechanism panels aligned horizontally underneath. Do NOT reproduce the screenshot, its paper content, conference title, palette swatches, browser UI, or its decorative header. Draw a NEW diagram of the method specified below. Landscape canvas approximately 3:2, high resolution, white background, crisp thin charcoal strokes, clear arrowheads, generous margins and whitespace. Vector-like precise scientific illustration. Readable concise Chinese labels with Latin method names and mathematical symbols. Avoid paragraphs, performance numbers, epoch labels, flames, or irrelevant icons. Do not use a giant figure title. Small section title on upper band: “整体流程”. Pastel palette from reference: light blue #A4CFE2, sage #AACFC2, soft pink #F4B3B7, peach #F9D3B8, blue gray #CDD9E2, olive gray #D6DBC2. Use consistent colors between overview modules and their lower panels: SGAR frontend blue, Midpoint sage, LVSR peach.
+
+STRUCTURE AND SCIENTIFIC FACTS:
+This is ONE detection frontend followed by TWO lightweight refiners, not three independent object detectors, not three backbone networks. The backbone is extracted once, and local features are reused. Stages are trained separately with upstream networks frozen. SGAR has assignment and loss components used ONLY DURING TRAINING, not two extra inference stages. No GT enters inference.
+
+UPPER OVERVIEW (roughly upper 38 percent):
+Read left to right. At far left a small clean schematic top-down port grab image tile, with a recognizable yellow mechanical clamshell grab over a gray dock, label “输入图像”. It is a schematic, not an experimental result. Then “ResNet50” and “FPN” drawn as modest feature blocks / feature pyramid. Then a blue block “SGAR检测前端” with smaller label “R4”; then a small tilted OBB icon labeled “初始框 B”; then sage block “Midpoint” smaller label “四中点精修”; then a small tilted OBB with four side-midpoint dots labeled “精修框 M”; then peach block “LVSR” smaller label “尺寸修正”; then final OBB graphic labeled “最终框 L”. Solid charcoal arrows indicate inference box flow B → M → L. M and L box icons must have identical center and orientation, only side lengths differ. Thin lightly colored dashed connectors lead the three top modules to lower panels (a), (b), (c), without crossing arrows.
+Under FPN, a labeled branch “P3” descends into one compact block “B引导旋转采样” producing a small 9×9 grid labeled “共享局部特征 F / 支持 S”. A blue thin orthogonal bus supplies THIS SAME local feature output to both Midpoint and LVSR. A short B geometric-condition line enters sampling. No resampling the full image or new backbone. Bus and box flow must be visibly distinct. Label main feature bus only once “局部特征复用”. Make upper diagram clear rather than overcrowded.
+
+LOWER THREE PANELS (roughly lower 58 percent), equal width, fine dotted outlines, nearly white tinted backgrounds, top-aligned. Titles exactly:
+“(a) SGAR：共享几何分配与回归”
+“(b) Midpoint：局部四中点精修”
+“(c) LVSR：对边向量尺寸修正”
+
+PANEL (a):
+Explain both actual frontend prediction structure and SGAR training geometry. Top half show FPN feature slabs branching into:
+- direct classifier path “分类预测”
+- four tiny consecutive convolution slabs grouped by bracket “4层回归塔” → “旋转框回归”.
+These feed a small OBB output B.
+Below a separate dashed enclosure labeled “仅训练”. Inside show predicted OBB and GT OBB entering “二维高斯表示” (draw two small rotated Gaussian ellipses), then a shared central node “对称KLD d”. Split two arrows from this ONE geometric quantity to “预测感知分配” and “回归监督”. Under assignment small notation “分类代价 + 几何代价”; under regression small notation “√(1+d) − 1”. Small annotation “共享几何依据”. GT and losses must remain in the training enclosure and not connect to inference output as inputs. No claim of novel KLD or guaranteed temporal stability.
+
+PANEL (b):
+Top show “F、S、局部坐标” → stacked 9×9 grid icon → “空间卷积头” → four miniature heatmaps. Nearby small four-midpoint rectangle B gives a separate “B高斯先验 Q” input. Combine network logits Z and prior Q with circled + then “Softmax”. Show a compact formula clearly in a dedicated clean region:
+“Δp = E[softmax(Q+Z)] − E[softmax(Q)]”
+Then “p = pᴮ + Δp” and a rectangle with four side-midpoint dots. Next arrow “原图坐标还原” → “矩形重建” → M.
+Keep formula short and readable, superscript may be typeset normally. Small bottom note “零修正保持 B”； second small note “越界整框回退 B”. Four points are side midpoints, NOT rectangle corners. Center and orientation can change; size may also change. No physical keypoint or 3D pose labels.
+
+PANEL (c):
+Inputs at top: “共享局部特征 F” plus “M参考向量 / 坐标 / 共同支持 W”. Use two visibly separate parallel mini-network branches with no shared learned block:
+“对边组 0 / 2”
+“对边组 1 / 3”
+Each outputs two 2D arrow vectors from small local grid sites; vector arrows represent latent local residuals. Then merge both branches to a compact decoder sequence:
+“原图向量还原” → “对边差长度” → “支持加权聚合”.
+Show compact expression “δ = log(d / d₀)” then “仅更新宽高”. To its right or below draw M and L centered at same crosshair and identical orientation, dashed sage M rectangle and solid peach L rectangle with slightly changed dimensions. Use a bypass line labeled “继承中心、角度与分数” from M reference directly to final L to make unchanged quantities explicit. Bottom note “零修正或无效候选：保持 M”. The two branches correspond to opposite-side groups, NOT permanently long-edge and short-edge branches. Do not label predicted vectors visible physical boundary points.
+
+Small footer legend across full width if space: “实线：推理数据流    虚线框：训练计算    F：局部特征    B / M / L：各阶段旋转框”. A very short footer note “分阶段训练，上游冻结” is appropriate; do not put snowflakes on all blocks and imply they were never trained.
+Aim for the same academic architecture-figure feel as the reference: shallow stacked feature slabs, restrained heatmap grids and geometric symbols, aligned modular mechanism illustrations, high text clarity. Ensure all diagram labels are accurate and arrows never imply SGAR losses are inference modules.
