@@ -1,0 +1,1488 @@
+{
+  "repository": "https://github.com/ultralytics/ultralytics",
+  "commit": "d1ebfd72646d5a5b9050d1d0557d7b7fb0ab31f4",
+  "archive_sha256": "ec1da936fb11eafe6359070a9731752c4844b1537425fd0345f89dd0e16fc65c",
+  "retained_scope": "Official runtime package, native tools/build metadata and licenses. Documentation/examples/unrelated configurations omitted. Retained source bytes unchanged.",
+  "files": {
+    "third_party/ultralytics/ultralytics/__init__.py": {
+      "upstream_path": "ultralytics/__init__.py",
+      "sha256": "d561fa3e4b02a4176cea938786edc034f0e84667c1749f46c22945c4e1b10daf"
+    },
+    "third_party/ultralytics/ultralytics/py.typed": {
+      "upstream_path": "ultralytics/py.typed",
+      "sha256": "95aebb28195b8d737effe0df18d71d39c8d8ba6569286fd3930fbc9f9767181e"
+    },
+    "third_party/ultralytics/ultralytics/nn/tasks.py": {
+      "upstream_path": "ultralytics/nn/tasks.py",
+      "sha256": "a11e1c1046309d8817365c99b750603db3eceb1fc4dc2a03e92c251a99c2618c"
+    },
+    "third_party/ultralytics/ultralytics/nn/text_model.py": {
+      "upstream_path": "ultralytics/nn/text_model.py",
+      "sha256": "a649d89ad7f7b978256ebdb0a06ca52e673993ddf24bf68c75baf3406d529374"
+    },
+    "third_party/ultralytics/ultralytics/nn/__init__.py": {
+      "upstream_path": "ultralytics/nn/__init__.py",
+      "sha256": "e77f0b64f50a2af737242320890e152c6a913766406952c57106de34d1c59040"
+    },
+    "third_party/ultralytics/ultralytics/nn/distill_model.py": {
+      "upstream_path": "ultralytics/nn/distill_model.py",
+      "sha256": "190311d996f9964a9f4302a41f43bd25f3b482516270e148df16f491b9d4fc9b"
+    },
+    "third_party/ultralytics/ultralytics/nn/autobackend.py": {
+      "upstream_path": "ultralytics/nn/autobackend.py",
+      "sha256": "d195757ea3099497158c99e8d14ba13550e847de74705215964570bc5fd85883"
+    },
+    "third_party/ultralytics/ultralytics/nn/backends/deepx.py": {
+      "upstream_path": "ultralytics/nn/backends/deepx.py",
+      "sha256": "30118ac6ea8f40940b3407159c5f5145ee75f665a412546e92166742e4f66198"
+    },
+    "third_party/ultralytics/ultralytics/nn/backends/qnn.py": {
+      "upstream_path": "ultralytics/nn/backends/qnn.py",
+      "sha256": "0db835d61f4fae4c4c19bbad84b352aa7870ee42853f594617e1dafc6ecc9216"
+    },
+    "third_party/ultralytics/ultralytics/nn/backends/triton.py": {
+      "upstream_path": "ultralytics/nn/backends/triton.py",
+      "sha256": "d70dd24c5cc67d2f57060b802ee31ee1c400b4ce4d008ed2d46b6c00ae1fdff2"
+    },
+    "third_party/ultralytics/ultralytics/nn/backends/coreai.py": {
+      "upstream_path": "ultralytics/nn/backends/coreai.py",
+      "sha256": "9600981335b15e35a66814bac0811962861c225212412be23a20e7e55bd58ca3"
+    },
+    "third_party/ultralytics/ultralytics/nn/backends/paddle.py": {
+      "upstream_path": "ultralytics/nn/backends/paddle.py",
+      "sha256": "26abe704e643abd94596667a59d50ca6e3dcbaf08de97db8ccacede70dbb7fb6"
+    },
+    "third_party/ultralytics/ultralytics/nn/backends/onnx.py": {
+      "upstream_path": "ultralytics/nn/backends/onnx.py",
+      "sha256": "dfad7b0fad642fb9807ddfc1ea5ae76d7cb6db69a553390cc82c196bdf2fb1f3"
+    },
+    "third_party/ultralytics/ultralytics/nn/backends/openvino.py": {
+      "upstream_path": "ultralytics/nn/backends/openvino.py",
+      "sha256": "d79ec9021e93ee03cb095fd097ef0415221c0922a5f89787b80756ebc663a292"
+    },
+    "third_party/ultralytics/ultralytics/nn/backends/__init__.py": {
+      "upstream_path": "ultralytics/nn/backends/__init__.py",
+      "sha256": "013dc860cdf7733a1344a49f89f7868630fe3b21dc82db696eac6fd200206c27"
+    },
+    "third_party/ultralytics/ultralytics/nn/backends/ncnn.py": {
+      "upstream_path": "ultralytics/nn/backends/ncnn.py",
+      "sha256": "cb5f345bad786019bec7139b491dd6718f794073a266543ca0529b35374a4d6b"
+    },
+    "third_party/ultralytics/ultralytics/nn/backends/tensorflow.py": {
+      "upstream_path": "ultralytics/nn/backends/tensorflow.py",
+      "sha256": "c8aa814364e3f2b870a7e33ceaedcd6301a8f8b9347508e95fb25d2712a29768"
+    },
+    "third_party/ultralytics/ultralytics/nn/backends/rknn.py": {
+      "upstream_path": "ultralytics/nn/backends/rknn.py",
+      "sha256": "38aaf7674f79b0734add79a9ee43d8d82fa3716f96afa52ac31f4a800587a15e"
+    },
+    "third_party/ultralytics/ultralytics/nn/backends/pytorch.py": {
+      "upstream_path": "ultralytics/nn/backends/pytorch.py",
+      "sha256": "aabae215c5474913be5887ce64c1d832f5f60b0e3c49c89a058fd3dfc91e03b3"
+    },
+    "third_party/ultralytics/ultralytics/nn/backends/hailo.py": {
+      "upstream_path": "ultralytics/nn/backends/hailo.py",
+      "sha256": "18355cf636ea8137d4608f9775774228d5fd2ef741002adf8d04f0f39b35be81"
+    },
+    "third_party/ultralytics/ultralytics/nn/backends/mnn.py": {
+      "upstream_path": "ultralytics/nn/backends/mnn.py",
+      "sha256": "9d5813a55bbf30f578febd8c3d1a0f962633a81667035a7966c69c588b0021cb"
+    },
+    "third_party/ultralytics/ultralytics/nn/backends/axelera.py": {
+      "upstream_path": "ultralytics/nn/backends/axelera.py",
+      "sha256": "063e2b8775889a56cbf0da5a3345425d3e0f146864cbda6def135815268d639f"
+    },
+    "third_party/ultralytics/ultralytics/nn/backends/ascend.py": {
+      "upstream_path": "ultralytics/nn/backends/ascend.py",
+      "sha256": "19e371f132833ea7a8e3e100808d7ffc2d9b7dd051a35427db58e4ae685e26f5"
+    },
+    "third_party/ultralytics/ultralytics/nn/backends/executorch.py": {
+      "upstream_path": "ultralytics/nn/backends/executorch.py",
+      "sha256": "29a09f284f47e2781fbfbde4b58dc9acbbcb56a8d17b5678e650a0e0d6710c76"
+    },
+    "third_party/ultralytics/ultralytics/nn/backends/tensorrt.py": {
+      "upstream_path": "ultralytics/nn/backends/tensorrt.py",
+      "sha256": "780be899b56481f005a8e2bf984688ce40300e6906f0ffdef3d05137a02738df"
+    },
+    "third_party/ultralytics/ultralytics/nn/backends/coreml.py": {
+      "upstream_path": "ultralytics/nn/backends/coreml.py",
+      "sha256": "52bcc609746d22f46d0cb0f628753d5ac6647379334c4f6dd0a1f529600e0736"
+    },
+    "third_party/ultralytics/ultralytics/nn/backends/litert.py": {
+      "upstream_path": "ultralytics/nn/backends/litert.py",
+      "sha256": "e22fcde664c4e849ae26556a72cf77e890fdaf82031b1b239ce4571b4bace39f"
+    },
+    "third_party/ultralytics/ultralytics/nn/backends/base.py": {
+      "upstream_path": "ultralytics/nn/backends/base.py",
+      "sha256": "b2d017ce821724538c287cd9f767dcfe9ed11f746596b86b3d83a9707ccd69be"
+    },
+    "third_party/ultralytics/ultralytics/nn/modules/__init__.py": {
+      "upstream_path": "ultralytics/nn/modules/__init__.py",
+      "sha256": "e38e952fc15cd2777610efd7af51eb21b41a2b2e0d2e482a7ff5ac669053eada"
+    },
+    "third_party/ultralytics/ultralytics/nn/modules/activation.py": {
+      "upstream_path": "ultralytics/nn/modules/activation.py",
+      "sha256": "50b665116c5e77e12ec3ef3d5e31016d34df156945b406bbf00887dd879585d9"
+    },
+    "third_party/ultralytics/ultralytics/nn/modules/utils.py": {
+      "upstream_path": "ultralytics/nn/modules/utils.py",
+      "sha256": "418ee1f438d083d53b2afd4fca60af7ad3bb79f02b4f635f30efd7f69fb9ab72"
+    },
+    "third_party/ultralytics/ultralytics/nn/modules/transformer.py": {
+      "upstream_path": "ultralytics/nn/modules/transformer.py",
+      "sha256": "38403a9cd03e420d1967017c0467c86cc46a772871725d938ef1f7eab83907a8"
+    },
+    "third_party/ultralytics/ultralytics/nn/modules/head.py": {
+      "upstream_path": "ultralytics/nn/modules/head.py",
+      "sha256": "667a5dc59e89d7a6f042fb94f50cf36456eae4b8e044a867dac9bfb41a5f62ad"
+    },
+    "third_party/ultralytics/ultralytics/nn/modules/conv.py": {
+      "upstream_path": "ultralytics/nn/modules/conv.py",
+      "sha256": "9b552d146792572bf60b1ed0edeb8eb0c7d7ed26d79cd079643e5b9ef9423c1f"
+    },
+    "third_party/ultralytics/ultralytics/nn/modules/block.py": {
+      "upstream_path": "ultralytics/nn/modules/block.py",
+      "sha256": "53294f5d586f4cbc4b0ba1cdad14692f37efab7400efcf39c33ab0a40a7ef18b"
+    },
+    "third_party/ultralytics/ultralytics/solutions/heatmap.py": {
+      "upstream_path": "ultralytics/solutions/heatmap.py",
+      "sha256": "9b031ee77beca2f760ad9b9ab1aa48580f7d25cd29821055a83a4fe5dddb31e7"
+    },
+    "third_party/ultralytics/ultralytics/solutions/config.py": {
+      "upstream_path": "ultralytics/solutions/config.py",
+      "sha256": "446647893ac99764ba705ab76118ebebe6b9f3997e44eb38f852094167921bb8"
+    },
+    "third_party/ultralytics/ultralytics/solutions/object_blurrer.py": {
+      "upstream_path": "ultralytics/solutions/object_blurrer.py",
+      "sha256": "4f454f44e89fee6ca0e84caa40b2e7a38371706d0057eb073305fb888be0143b"
+    },
+    "third_party/ultralytics/ultralytics/solutions/security_alarm.py": {
+      "upstream_path": "ultralytics/solutions/security_alarm.py",
+      "sha256": "9e21cf286f2d3f47018f3c7a1c333483d99c607fc43c3ffbedb5fb3aaddaf259"
+    },
+    "third_party/ultralytics/ultralytics/solutions/distance_calculation.py": {
+      "upstream_path": "ultralytics/solutions/distance_calculation.py",
+      "sha256": "63cce4e3d2eb56d2161803353dce568edfc7f9922058b1eb83a8fa3b1029c0e7"
+    },
+    "third_party/ultralytics/ultralytics/solutions/trackzone.py": {
+      "upstream_path": "ultralytics/solutions/trackzone.py",
+      "sha256": "51837687f97d6f2e8c3d7359ad13ddb5403604f22e72fceef4e14c1be1097d63"
+    },
+    "third_party/ultralytics/ultralytics/solutions/object_counter.py": {
+      "upstream_path": "ultralytics/solutions/object_counter.py",
+      "sha256": "437c427923a508d54f8b14b8d45a4ee1c93641deed40624f7cb04a2e67239d5d"
+    },
+    "third_party/ultralytics/ultralytics/solutions/instance_segmentation.py": {
+      "upstream_path": "ultralytics/solutions/instance_segmentation.py",
+      "sha256": "b8ff35d169440884406f0817e255ea57997cbef2e9ef3bdfd051b44656988d41"
+    },
+    "third_party/ultralytics/ultralytics/solutions/similarity_search.py": {
+      "upstream_path": "ultralytics/solutions/similarity_search.py",
+      "sha256": "2fce663fda0cd0013365c38de5a1f8c52f57a3161a8c889c8939cb59be4df969"
+    },
+    "third_party/ultralytics/ultralytics/solutions/queue_management.py": {
+      "upstream_path": "ultralytics/solutions/queue_management.py",
+      "sha256": "4b1155f1922bebd772c9104a3d3fd79edf9fe49f07cf835b1c737aca1d6ec1ea"
+    },
+    "third_party/ultralytics/ultralytics/solutions/__init__.py": {
+      "upstream_path": "ultralytics/solutions/__init__.py",
+      "sha256": "263ece7118988c71fe7b5d381f8c538238d1e56e9a3c1e260519dd6da48f9a05"
+    },
+    "third_party/ultralytics/ultralytics/solutions/parking_management.py": {
+      "upstream_path": "ultralytics/solutions/parking_management.py",
+      "sha256": "6b4024d2ee6b7eeb24e2a6564a4a9e18dfd5c8a938035d7a72fdfbb02a4c525f"
+    },
+    "third_party/ultralytics/ultralytics/solutions/ai_gym.py": {
+      "upstream_path": "ultralytics/solutions/ai_gym.py",
+      "sha256": "3c08d9a730e6c888f121f6cea284eb166367640b6126420c345f9c98e1f4477b"
+    },
+    "third_party/ultralytics/ultralytics/solutions/vision_eye.py": {
+      "upstream_path": "ultralytics/solutions/vision_eye.py",
+      "sha256": "4d5571cd14a4ea2bb957e053c5f8d7832f865ef4873091a5f948a60928a3b9fb"
+    },
+    "third_party/ultralytics/ultralytics/solutions/streamlit_inference.py": {
+      "upstream_path": "ultralytics/solutions/streamlit_inference.py",
+      "sha256": "426cbad9b855a6918b1fb70255542292de8e247d81f9e2817579ec9f77e6a999"
+    },
+    "third_party/ultralytics/ultralytics/solutions/object_cropper.py": {
+      "upstream_path": "ultralytics/solutions/object_cropper.py",
+      "sha256": "eac8dcf3fd731cb950cf9ef7dbdfa154c4d5eaac92b30276c00b7641301e75bf"
+    },
+    "third_party/ultralytics/ultralytics/solutions/solutions.py": {
+      "upstream_path": "ultralytics/solutions/solutions.py",
+      "sha256": "0b5aba529ab933cd18b748ddcd0cfbec84577f7f442b6afff1eeacf583a61bf3"
+    },
+    "third_party/ultralytics/ultralytics/solutions/analytics.py": {
+      "upstream_path": "ultralytics/solutions/analytics.py",
+      "sha256": "ae2e5b6ab0d0227face474196206ec93ccb308683c4fde2394834682e2014f44"
+    },
+    "third_party/ultralytics/ultralytics/solutions/region_counter.py": {
+      "upstream_path": "ultralytics/solutions/region_counter.py",
+      "sha256": "336832a6afd3930848de4a421db1073b79fd21045fe100f757e5618edca7d539"
+    },
+    "third_party/ultralytics/ultralytics/solutions/speed_estimation.py": {
+      "upstream_path": "ultralytics/solutions/speed_estimation.py",
+      "sha256": "3c6fdeadfaea3f2a9f56ebaeebb3cde3d6e4d1fa31a93026f5c747279df100ca"
+    },
+    "third_party/ultralytics/ultralytics/solutions/templates/similarity-search.html": {
+      "upstream_path": "ultralytics/solutions/templates/similarity-search.html",
+      "sha256": "7a95fc5c32dab0e531f0848fb8a3fd33449152345cbff144d6bfc41b742906dc"
+    },
+    "third_party/ultralytics/ultralytics/optim/__init__.py": {
+      "upstream_path": "ultralytics/optim/__init__.py",
+      "sha256": "17667d49af5dc614d045797fc2bf0df9899a79daedf513a396b11bf01000f42a"
+    },
+    "third_party/ultralytics/ultralytics/optim/muon.py": {
+      "upstream_path": "ultralytics/optim/muon.py",
+      "sha256": "b2781aaf53a5e1796ae0ec628c5c15b39b1658cc3deba67d4a8a5aae5ed05a4d"
+    },
+    "third_party/ultralytics/ultralytics/utils/instance.py": {
+      "upstream_path": "ultralytics/utils/instance.py",
+      "sha256": "ebc8b6337f4636c1457473c079d007693b3d8766c4891e2b5dd521c22c2e5527"
+    },
+    "third_party/ultralytics/ultralytics/utils/metrics.py": {
+      "upstream_path": "ultralytics/utils/metrics.py",
+      "sha256": "639ad0c31ac4c555ffc352f78e611ae8a96f98df5b63196449b92e923b3d380d"
+    },
+    "third_party/ultralytics/ultralytics/utils/files.py": {
+      "upstream_path": "ultralytics/utils/files.py",
+      "sha256": "c4f6d5967cface67ec0b0d143d03dd89f147139d6b15671dc376393c33edfc58"
+    },
+    "third_party/ultralytics/ultralytics/utils/git.py": {
+      "upstream_path": "ultralytics/utils/git.py",
+      "sha256": "8c372ac51f8d42fb1f6d70f9d5de7e1f892860d31bc6431d4fe6cee0799df563"
+    },
+    "third_party/ultralytics/ultralytics/utils/triton.py": {
+      "upstream_path": "ultralytics/utils/triton.py",
+      "sha256": "a50a128aa0a777fbfa5dc5bbdf57546e9fcd9ef53e9ffc9058c0720b8f3c699c"
+    },
+    "third_party/ultralytics/ultralytics/utils/autobatch.py": {
+      "upstream_path": "ultralytics/utils/autobatch.py",
+      "sha256": "5cc3c74e33ce3d38936a78a57e328d1ff077a709169e86a241e40cf9575054dc"
+    },
+    "third_party/ultralytics/ultralytics/utils/events.py": {
+      "upstream_path": "ultralytics/utils/events.py",
+      "sha256": "4f0c3f3f55c4828df29921050e87e8d3461ce675f2cd77aa902ac81d126ee132"
+    },
+    "third_party/ultralytics/ultralytics/utils/checks.py": {
+      "upstream_path": "ultralytics/utils/checks.py",
+      "sha256": "26ebe0ee91c22e43678808f137d6f12044ab22019a7235dc03f8d86ffdd374c4"
+    },
+    "third_party/ultralytics/ultralytics/utils/plotting.py": {
+      "upstream_path": "ultralytics/utils/plotting.py",
+      "sha256": "d1be43fccdacd960729f5b4dd889d98e4f60e98ce8bbbdf715af3f35b6576a64"
+    },
+    "third_party/ultralytics/ultralytics/utils/cpu.py": {
+      "upstream_path": "ultralytics/utils/cpu.py",
+      "sha256": "d017e1dc4682191b07ea5b98af00440bdf992f204ad54f9bd88568a8e427b078"
+    },
+    "third_party/ultralytics/ultralytics/utils/nms.py": {
+      "upstream_path": "ultralytics/utils/nms.py",
+      "sha256": "386cd0e3e38fddef5d434fbcfd58264bedfa37295534e9a2b7174a3436d4db62"
+    },
+    "third_party/ultralytics/ultralytics/utils/__init__.py": {
+      "upstream_path": "ultralytics/utils/__init__.py",
+      "sha256": "43cf0841155027d4ff4489da764dc03b203907326c05e13142f8ac342d79b1f0"
+    },
+    "third_party/ultralytics/ultralytics/utils/logger.py": {
+      "upstream_path": "ultralytics/utils/logger.py",
+      "sha256": "d87bea6d95af4a30c59e75f5026fb3ff3e94f8d5972054485715f7ea7b0c53d3"
+    },
+    "third_party/ultralytics/ultralytics/utils/tqdm.py": {
+      "upstream_path": "ultralytics/utils/tqdm.py",
+      "sha256": "915738ac7ab03915296c0666d79e86c1eb5847dd32033134e9b20b178c7fd123"
+    },
+    "third_party/ultralytics/ultralytics/utils/downloads.py": {
+      "upstream_path": "ultralytics/utils/downloads.py",
+      "sha256": "d2523a494f6f4a6f87333bb81c564def300d5cfd25cb3bc35378c5d7982f38f3"
+    },
+    "third_party/ultralytics/ultralytics/utils/tal.py": {
+      "upstream_path": "ultralytics/utils/tal.py",
+      "sha256": "c01685a57f1add12139be5a5d81d7bbdaf1b49089e21652cbe2db6b40fadc019"
+    },
+    "third_party/ultralytics/ultralytics/utils/ops.py": {
+      "upstream_path": "ultralytics/utils/ops.py",
+      "sha256": "7b15cd980abbd578a8be91661c2399b2cbdea0207f1e61b0fb74cfac659bed77"
+    },
+    "third_party/ultralytics/ultralytics/utils/loss.py": {
+      "upstream_path": "ultralytics/utils/loss.py",
+      "sha256": "19959a1e149d4c01da7b78a04f8eba5d4e8e0aff495f0c15a105e04bbc1ef0d6"
+    },
+    "third_party/ultralytics/ultralytics/utils/patches.py": {
+      "upstream_path": "ultralytics/utils/patches.py",
+      "sha256": "af2b3b50cd3ef067295a9f861b0d880d5df575d6626280dae9cc2833b4ed3dba"
+    },
+    "third_party/ultralytics/ultralytics/utils/autodevice.py": {
+      "upstream_path": "ultralytics/utils/autodevice.py",
+      "sha256": "c2a611e4a64f9bbf3a1435a2b28bf9b9d5bff7ad09d5ba26b7a9b4fb115182ed"
+    },
+    "third_party/ultralytics/ultralytics/utils/uploads.py": {
+      "upstream_path": "ultralytics/utils/uploads.py",
+      "sha256": "ef6d07d7649031673e86b526e74b8a7586038c213cf9cdfe2d1c617c0fbd4189"
+    },
+    "third_party/ultralytics/ultralytics/utils/tuner.py": {
+      "upstream_path": "ultralytics/utils/tuner.py",
+      "sha256": "c549a73ee20462dd5c71be98b2d54e8c999ea82e1ddf20df24744c08f519468a"
+    },
+    "third_party/ultralytics/ultralytics/utils/benchmarks.py": {
+      "upstream_path": "ultralytics/utils/benchmarks.py",
+      "sha256": "0d038e9b74c4aebc5309ae7f11fb912acbf8f0456363cd5c6ed69145823ecb2f"
+    },
+    "third_party/ultralytics/ultralytics/utils/dist.py": {
+      "upstream_path": "ultralytics/utils/dist.py",
+      "sha256": "6d07354fe7da107d7a8a82252e9f6bd0080baa421c33b0494f572cc82475f918"
+    },
+    "third_party/ultralytics/ultralytics/utils/torch_utils.py": {
+      "upstream_path": "ultralytics/utils/torch_utils.py",
+      "sha256": "c0ab25b5576a2a3a4ee119a888cca9c299c27620fd07f54828649c0089ae806c"
+    },
+    "third_party/ultralytics/ultralytics/utils/callbacks/comet.py": {
+      "upstream_path": "ultralytics/utils/callbacks/comet.py",
+      "sha256": "5829adc4a93d279415e69c337053eb099a19c4896eee1ca4593aad78fdbdf358"
+    },
+    "third_party/ultralytics/ultralytics/utils/callbacks/wb.py": {
+      "upstream_path": "ultralytics/utils/callbacks/wb.py",
+      "sha256": "5d28e8a7a28acd17f0c9ff75c80f78d29100c16bc186833c3b1ce645c2c3fae7"
+    },
+    "third_party/ultralytics/ultralytics/utils/callbacks/mlflow.py": {
+      "upstream_path": "ultralytics/utils/callbacks/mlflow.py",
+      "sha256": "878f71425017adba107c2de4c539c7bfdffbcbce5af24e9129803b21d9c130e4"
+    },
+    "third_party/ultralytics/ultralytics/utils/callbacks/clearml.py": {
+      "upstream_path": "ultralytics/utils/callbacks/clearml.py",
+      "sha256": "1a83e2dda832ff2da9d628e891ebebe1bf0a21dca38def2f07cdb5969b194f03"
+    },
+    "third_party/ultralytics/ultralytics/utils/callbacks/raytune.py": {
+      "upstream_path": "ultralytics/utils/callbacks/raytune.py",
+      "sha256": "8e224dfc848435b929dc9dc780d6cea5b8d89b2b4907d5edf7ada23cb74dfc7a"
+    },
+    "third_party/ultralytics/ultralytics/utils/callbacks/dvc.py": {
+      "upstream_path": "ultralytics/utils/callbacks/dvc.py",
+      "sha256": "b25460f2543e4b4bc0c3fb0c1ed293699c52eced4918d6bc19b370481da6ce43"
+    },
+    "third_party/ultralytics/ultralytics/utils/callbacks/__init__.py": {
+      "upstream_path": "ultralytics/utils/callbacks/__init__.py",
+      "sha256": "8732fadd171ee9591984fe0b7229bd2ca8da762c5a406f3a9caa8f864ec8912d"
+    },
+    "third_party/ultralytics/ultralytics/utils/callbacks/platform.py": {
+      "upstream_path": "ultralytics/utils/callbacks/platform.py",
+      "sha256": "04d6fe29ec3b8623633d7b9a32825f19f3563c1a7fad364e3b0d2fb5ef2c1389"
+    },
+    "third_party/ultralytics/ultralytics/utils/callbacks/base.py": {
+      "upstream_path": "ultralytics/utils/callbacks/base.py",
+      "sha256": "1edff1a0edf0e5605bfe0ad74eca6c0ec191a5987151e1f811e6a3122cd3d283"
+    },
+    "third_party/ultralytics/ultralytics/utils/callbacks/tensorboard.py": {
+      "upstream_path": "ultralytics/utils/callbacks/tensorboard.py",
+      "sha256": "3d37deee3e93a294c8895fbdd9b28f09849b2b2bb8be5b6c9e50e0b38831dfe6"
+    },
+    "third_party/ultralytics/ultralytics/utils/export/deepx.py": {
+      "upstream_path": "ultralytics/utils/export/deepx.py",
+      "sha256": "791e74f9860e2224f27ff2b9a8d4c72c6cded4e211fa41cff91ceb5be724d68f"
+    },
+    "third_party/ultralytics/ultralytics/utils/export/qnn.py": {
+      "upstream_path": "ultralytics/utils/export/qnn.py",
+      "sha256": "17c7a5ff507a47d585ffce9b5e698f8ef87003273339b9eb2dcfd793331fd977"
+    },
+    "third_party/ultralytics/ultralytics/utils/export/coreai.py": {
+      "upstream_path": "ultralytics/utils/export/coreai.py",
+      "sha256": "fdd239bdb379ebcf66862f465e694b6f5f742789c32efb4a800a1bcfae0d0ff0"
+    },
+    "third_party/ultralytics/ultralytics/utils/export/paddle.py": {
+      "upstream_path": "ultralytics/utils/export/paddle.py",
+      "sha256": "62566b663e8f4fee91c13d5565d285cfa911533e3a85d4207c18da736c6773fa"
+    },
+    "third_party/ultralytics/ultralytics/utils/export/onnx.py": {
+      "upstream_path": "ultralytics/utils/export/onnx.py",
+      "sha256": "d4249cd80154acb03e47d29e99795b480d8fe64350dd9f1e000e311314c8f0ce"
+    },
+    "third_party/ultralytics/ultralytics/utils/export/openvino.py": {
+      "upstream_path": "ultralytics/utils/export/openvino.py",
+      "sha256": "1693d5fd0d7bcfe021f2d9447a0a6e4307e962478882c3e51d4f87064098928f"
+    },
+    "third_party/ultralytics/ultralytics/utils/export/__init__.py": {
+      "upstream_path": "ultralytics/utils/export/__init__.py",
+      "sha256": "f9ca594ca448db2fc823cd2e5e5b07c73d0d4274936cb5447af3487e406e8973"
+    },
+    "third_party/ultralytics/ultralytics/utils/export/ncnn.py": {
+      "upstream_path": "ultralytics/utils/export/ncnn.py",
+      "sha256": "f7dd1c6a74154b24fc7b1206fb5d21f03771d63c34a3f5a60b7f22ec0756aa1b"
+    },
+    "third_party/ultralytics/ultralytics/utils/export/tensorflow.py": {
+      "upstream_path": "ultralytics/utils/export/tensorflow.py",
+      "sha256": "74f43bc6bf15b79e6b57b3026d149bca7304bed31718d7873f37cff946557c80"
+    },
+    "third_party/ultralytics/ultralytics/utils/export/imx.py": {
+      "upstream_path": "ultralytics/utils/export/imx.py",
+      "sha256": "d09891294d8d6c588c5d752222f13e294f5f811bec94cb62f1e5a53ac3373ef6"
+    },
+    "third_party/ultralytics/ultralytics/utils/export/rknn.py": {
+      "upstream_path": "ultralytics/utils/export/rknn.py",
+      "sha256": "4dc5b601d23da7d25555b2571ef0da5649f64376cae985fb54b0d03887819dc8"
+    },
+    "third_party/ultralytics/ultralytics/utils/export/engine.py": {
+      "upstream_path": "ultralytics/utils/export/engine.py",
+      "sha256": "207b76b3d29c35d6b331ab9bbfd9190824da5075cb7ba87b8e7bb85557c7b3b8"
+    },
+    "third_party/ultralytics/ultralytics/utils/export/mnn.py": {
+      "upstream_path": "ultralytics/utils/export/mnn.py",
+      "sha256": "60ef41de899f635281367e1107c3d77b99ee38b854ccd745566962d60bc14131"
+    },
+    "third_party/ultralytics/ultralytics/utils/export/axelera.py": {
+      "upstream_path": "ultralytics/utils/export/axelera.py",
+      "sha256": "5784e889564f20e63630174d36e28abeee897c234b1c0b7c733326fb08a6952a"
+    },
+    "third_party/ultralytics/ultralytics/utils/export/ascend.py": {
+      "upstream_path": "ultralytics/utils/export/ascend.py",
+      "sha256": "991ca5cfae8a60b3c869d9c563a541037e4c4128d3b40968fad1fa2eee8c96d8"
+    },
+    "third_party/ultralytics/ultralytics/utils/export/executorch.py": {
+      "upstream_path": "ultralytics/utils/export/executorch.py",
+      "sha256": "29ea81dffe23c4090bd73ecdcec17e4b836f116f30d1bc53e3f012125a7a1aad"
+    },
+    "third_party/ultralytics/ultralytics/utils/export/torchscript.py": {
+      "upstream_path": "ultralytics/utils/export/torchscript.py",
+      "sha256": "6d73e4e6cdb29591afbaaf270ff3d5ba4f15b321d2cd542ea2680195d40b7c36"
+    },
+    "third_party/ultralytics/ultralytics/utils/export/xilinx.py": {
+      "upstream_path": "ultralytics/utils/export/xilinx.py",
+      "sha256": "8ee24b5e52d30230921b5447eb74a6d6e4cf3cc594cdbedbd9fc5c754a73e721"
+    },
+    "third_party/ultralytics/ultralytics/utils/export/coreml.py": {
+      "upstream_path": "ultralytics/utils/export/coreml.py",
+      "sha256": "d5e61bd1df2a968ac2101de28861e266e3489b1de1bc1c8f7f10beacc44c7113"
+    },
+    "third_party/ultralytics/ultralytics/utils/export/litert.py": {
+      "upstream_path": "ultralytics/utils/export/litert.py",
+      "sha256": "e039612b4a9e89a20896b457e93544bfb4904ce2e0fc27b2980a82fd4545af8c"
+    },
+    "third_party/ultralytics/ultralytics/models/__init__.py": {
+      "upstream_path": "ultralytics/models/__init__.py",
+      "sha256": "4d50a88f3589908e0df534077d214547ab32cd94d9ac9d48be6cec5216e95f02"
+    },
+    "third_party/ultralytics/ultralytics/models/llm.py": {
+      "upstream_path": "ultralytics/models/llm.py",
+      "sha256": "e8646b5451d0e7df80114104a7b27e5af6762a90d78fd51223e9c550ff6d90a7"
+    },
+    "third_party/ultralytics/ultralytics/models/fastsam/val.py": {
+      "upstream_path": "ultralytics/models/fastsam/val.py",
+      "sha256": "30950ac7f3691447aea92abdca75f514948ae85e51854241f8faa1429d90d183"
+    },
+    "third_party/ultralytics/ultralytics/models/fastsam/predict.py": {
+      "upstream_path": "ultralytics/models/fastsam/predict.py",
+      "sha256": "f61076a887c63065d07e920226424250aa3ec175d83737a5e09abc8b1c0ffd90"
+    },
+    "third_party/ultralytics/ultralytics/models/fastsam/__init__.py": {
+      "upstream_path": "ultralytics/models/fastsam/__init__.py",
+      "sha256": "2aef3d172fd7f2893760f1146a38d46798b83b4f23749323247b7edd9f7d16b9"
+    },
+    "third_party/ultralytics/ultralytics/models/fastsam/model.py": {
+      "upstream_path": "ultralytics/models/fastsam/model.py",
+      "sha256": "8f5e4870d74bb00ea3fabbb30ef071faadc7cfd4b6dc26cc16c60059a3b7d44b"
+    },
+    "third_party/ultralytics/ultralytics/models/fastsam/utils.py": {
+      "upstream_path": "ultralytics/models/fastsam/utils.py",
+      "sha256": "75ef627a1e29054b93361e474e235d46959985701a49f368dd1d4534cb7618e1"
+    },
+    "third_party/ultralytics/ultralytics/models/sam/build.py": {
+      "upstream_path": "ultralytics/models/sam/build.py",
+      "sha256": "f63308487f0ce1237a81cf5e5a0d4803f4e8b4039c9082650d32ab29a930022f"
+    },
+    "third_party/ultralytics/ultralytics/models/sam/amg.py": {
+      "upstream_path": "ultralytics/models/sam/amg.py",
+      "sha256": "369fa88d129c506a4e55bccd8d322d1266b250a47bbb2668d5879928ecab7f2c"
+    },
+    "third_party/ultralytics/ultralytics/models/sam/predict.py": {
+      "upstream_path": "ultralytics/models/sam/predict.py",
+      "sha256": "9fbb4c725303155c480275f1054454400c960cfdc7f48f9c22e0dcfa46c080b0"
+    },
+    "third_party/ultralytics/ultralytics/models/sam/__init__.py": {
+      "upstream_path": "ultralytics/models/sam/__init__.py",
+      "sha256": "8687f3f5c186871116a595d7f322e9e64fcb4149962ff4a177d91fccae14eb3d"
+    },
+    "third_party/ultralytics/ultralytics/models/sam/model.py": {
+      "upstream_path": "ultralytics/models/sam/model.py",
+      "sha256": "2c631e8f53036f5e159da5598206fc82ae36c5b4b719f4c69a0f84c4553875c9"
+    },
+    "third_party/ultralytics/ultralytics/models/sam/build_sam3.py": {
+      "upstream_path": "ultralytics/models/sam/build_sam3.py",
+      "sha256": "e158c8113874774ae38490e14d5da34fb4808eec6d7e1b2397377859c2c51fd8"
+    },
+    "third_party/ultralytics/ultralytics/models/sam/modules/decoders.py": {
+      "upstream_path": "ultralytics/models/sam/modules/decoders.py",
+      "sha256": "ac216db851c4c583dc97908a8552789875339aabf4f2089500edb38eb09767cd"
+    },
+    "third_party/ultralytics/ultralytics/models/sam/modules/memory_attention.py": {
+      "upstream_path": "ultralytics/models/sam/modules/memory_attention.py",
+      "sha256": "4832614744f9f80516897e2347d0950f6018203b9cd79b9f486a1257c81257ba"
+    },
+    "third_party/ultralytics/ultralytics/models/sam/modules/__init__.py": {
+      "upstream_path": "ultralytics/models/sam/modules/__init__.py",
+      "sha256": "966e8c72415808f4dba88a17ef0d2cfdd6b176335e05e296e835e9a6fd7e4143"
+    },
+    "third_party/ultralytics/ultralytics/models/sam/modules/encoders.py": {
+      "upstream_path": "ultralytics/models/sam/modules/encoders.py",
+      "sha256": "4a018fdc98b6bc557d67c69fbce1ac04453647d19551c6272cc09cef890ff658"
+    },
+    "third_party/ultralytics/ultralytics/models/sam/modules/utils.py": {
+      "upstream_path": "ultralytics/models/sam/modules/utils.py",
+      "sha256": "b8f810cf127c67f735c6cf5f3b75901212a104cd520bf3f14a6680f48c5633d0"
+    },
+    "third_party/ultralytics/ultralytics/models/sam/modules/transformer.py": {
+      "upstream_path": "ultralytics/models/sam/modules/transformer.py",
+      "sha256": "19bbc124cbc14f7504284fe2cebdfd5daf9d9557f6d55d1c9ed343a0d2f2d009"
+    },
+    "third_party/ultralytics/ultralytics/models/sam/modules/blocks.py": {
+      "upstream_path": "ultralytics/models/sam/modules/blocks.py",
+      "sha256": "20cb7e1eb0acc8754f3014d11abcc9d444412a00ec7eca2d6b98cfd3ff7e8d58"
+    },
+    "third_party/ultralytics/ultralytics/models/sam/modules/tiny_encoder.py": {
+      "upstream_path": "ultralytics/models/sam/modules/tiny_encoder.py",
+      "sha256": "3ebe373867dccbd8c57c1b1f82ccd94b6a108f9082543a067810c72eb35c815d"
+    },
+    "third_party/ultralytics/ultralytics/models/sam/modules/sam.py": {
+      "upstream_path": "ultralytics/models/sam/modules/sam.py",
+      "sha256": "f7916a797ca07dc0e1783fe620eed1442c3f21b6c1c5fd3b67243c2a0c8b6ec5"
+    },
+    "third_party/ultralytics/ultralytics/models/sam/sam3/decoder.py": {
+      "upstream_path": "ultralytics/models/sam/sam3/decoder.py",
+      "sha256": "6f7aad9d37bf0a387cc9cbfe3a6f522d19aa6836fc068a2ff921e92e86f31c61"
+    },
+    "third_party/ultralytics/ultralytics/models/sam/sam3/vl_combiner.py": {
+      "upstream_path": "ultralytics/models/sam/sam3/vl_combiner.py",
+      "sha256": "ac528f20deb81d2ce72d07d2bf5cdc5b3f37ecfc1e46ca4b8497af0bdd5a4ead"
+    },
+    "third_party/ultralytics/ultralytics/models/sam/sam3/text_encoder_ve.py": {
+      "upstream_path": "ultralytics/models/sam/sam3/text_encoder_ve.py",
+      "sha256": "0caa8a4ea3acbb6a6b74953aa5a2aff7eb2eadc5b579762b290e9cedc4169345"
+    },
+    "third_party/ultralytics/ultralytics/models/sam/sam3/vitdet.py": {
+      "upstream_path": "ultralytics/models/sam/sam3/vitdet.py",
+      "sha256": "0f7aa64433a7f713804ca6c47e023288e71f6464e04422ef9ba43db692e136a3"
+    },
+    "third_party/ultralytics/ultralytics/models/sam/sam3/maskformer_segmentation.py": {
+      "upstream_path": "ultralytics/models/sam/sam3/maskformer_segmentation.py",
+      "sha256": "221699215e906dc4b80ad54b753544b60fe2fde47f7e1e4ad502bf6d9fe99ae1"
+    },
+    "third_party/ultralytics/ultralytics/models/sam/sam3/__init__.py": {
+      "upstream_path": "ultralytics/models/sam/sam3/__init__.py",
+      "sha256": "68ce3e2a29a76202057be7b972d2d3f1eea4f4f6a0beebca15a1da6a00d933b1"
+    },
+    "third_party/ultralytics/ultralytics/models/sam/sam3/sam3_image.py": {
+      "upstream_path": "ultralytics/models/sam/sam3/sam3_image.py",
+      "sha256": "0a82e3088aa554bf4435e28c71d2f597064f8a8b716fa311847916b39a962427"
+    },
+    "third_party/ultralytics/ultralytics/models/sam/sam3/model_misc.py": {
+      "upstream_path": "ultralytics/models/sam/sam3/model_misc.py",
+      "sha256": "b4a52a27443b5b9a4c9ffc0d9250f4ec134a41875fafe3acaf1fc5f2682bf90d"
+    },
+    "third_party/ultralytics/ultralytics/models/sam/sam3/encoder.py": {
+      "upstream_path": "ultralytics/models/sam/sam3/encoder.py",
+      "sha256": "db57f93f87ecafe3d0b27c4ba266162c8de557d4031f3c0c9eb4a556286d67f9"
+    },
+    "third_party/ultralytics/ultralytics/models/sam/sam3/necks.py": {
+      "upstream_path": "ultralytics/models/sam/sam3/necks.py",
+      "sha256": "e323747c4bb2a7bc025ec30961cd1796078eda7e99c1bb0fb538abcbe2ce7cb3"
+    },
+    "third_party/ultralytics/ultralytics/models/sam/sam3/geometry_encoders.py": {
+      "upstream_path": "ultralytics/models/sam/sam3/geometry_encoders.py",
+      "sha256": "379ada9b31903f6a63173766ae789e62b9bce007bc63ebe8aab7e28cbcdcd0bc"
+    },
+    "third_party/ultralytics/ultralytics/models/nas/val.py": {
+      "upstream_path": "ultralytics/models/nas/val.py",
+      "sha256": "e0c65f2b291461236b27e949f98e13e0522c772e7ccb8c5c37a4a21ec04a7dd7"
+    },
+    "third_party/ultralytics/ultralytics/models/nas/predict.py": {
+      "upstream_path": "ultralytics/models/nas/predict.py",
+      "sha256": "e9885972130a05b0610a360c8dfa4dace281e4c548765388da79096b53d7a5a5"
+    },
+    "third_party/ultralytics/ultralytics/models/nas/__init__.py": {
+      "upstream_path": "ultralytics/models/nas/__init__.py",
+      "sha256": "4386506a4f31356b55e584b0fe916ed1a9db0b20f1c4402e30c0df333bbafb4b"
+    },
+    "third_party/ultralytics/ultralytics/models/nas/model.py": {
+      "upstream_path": "ultralytics/models/nas/model.py",
+      "sha256": "d2810e011d16cb08e5b5caf63487f9f7c663547b69595ed396ed4563c7a2c8fe"
+    },
+    "third_party/ultralytics/ultralytics/models/utils/__init__.py": {
+      "upstream_path": "ultralytics/models/utils/__init__.py",
+      "sha256": "966e8c72415808f4dba88a17ef0d2cfdd6b176335e05e296e835e9a6fd7e4143"
+    },
+    "third_party/ultralytics/ultralytics/models/utils/ops.py": {
+      "upstream_path": "ultralytics/models/utils/ops.py",
+      "sha256": "40434ab6a9503e295aeb19bd0b028bfe469bcb89c84fe4855fcde61ed36610e5"
+    },
+    "third_party/ultralytics/ultralytics/models/utils/loss.py": {
+      "upstream_path": "ultralytics/models/utils/loss.py",
+      "sha256": "e5f4337203ebb68761426076395a9fe9f7358f0c3bb490d6bb1523474bfc4f39"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/__init__.py": {
+      "upstream_path": "ultralytics/models/yolo/__init__.py",
+      "sha256": "f05edf18cb4d5abe9d6b4594a416b12c7231b99e67cb16623f7468e81b85860a"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/model.py": {
+      "upstream_path": "ultralytics/models/yolo/model.py",
+      "sha256": "dd963e7e657b29e1a0138e29f9daa16f9a45c56026a1fc0f8c54f50c2407ad92"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/obb/val.py": {
+      "upstream_path": "ultralytics/models/yolo/obb/val.py",
+      "sha256": "3c1129e68e4b67f29e60bcc648bb46c7e04f444a48b1a33b313518b269a9c27a"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/obb/predict.py": {
+      "upstream_path": "ultralytics/models/yolo/obb/predict.py",
+      "sha256": "540e72468df62156a467fe6763be4a02b7da5e765b00dcd39313151839be728e"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/obb/__init__.py": {
+      "upstream_path": "ultralytics/models/yolo/obb/__init__.py",
+      "sha256": "b509a91bcc151ec6a35a465d983e9c8c6a21278922eb88925d04fc258fddc9da"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/obb/train.py": {
+      "upstream_path": "ultralytics/models/yolo/obb/train.py",
+      "sha256": "456cca6e32742e3ce95ab69bbe658917a80e96002c9c09140d07f14a816b7da3"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/detect/val.py": {
+      "upstream_path": "ultralytics/models/yolo/detect/val.py",
+      "sha256": "9393054c158c7b2100b8b75ea22562cd142ca6b5372d0c37b8ea824fd198e6a6"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/detect/predict.py": {
+      "upstream_path": "ultralytics/models/yolo/detect/predict.py",
+      "sha256": "1711eaacf6f577d5277e0933a5437881e2c3ba833d13358d3dc4244424b5edc2"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/detect/__init__.py": {
+      "upstream_path": "ultralytics/models/yolo/detect/__init__.py",
+      "sha256": "18846c2d847e913e09271ee5878659005181663d1a79ba24b94d00ec96e30d50"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/detect/train.py": {
+      "upstream_path": "ultralytics/models/yolo/detect/train.py",
+      "sha256": "439e8197ba7b995c84451acc9f8197deabfdafe4c010bbb177758aadaf98cf89"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/classify/val.py": {
+      "upstream_path": "ultralytics/models/yolo/classify/val.py",
+      "sha256": "2f52795893d9ddb793fdc117f272c0a8c848c7376f1f5de9373706fce7281dde"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/classify/predict.py": {
+      "upstream_path": "ultralytics/models/yolo/classify/predict.py",
+      "sha256": "79ded869d58d2dabe52a97bec59da923af4081c6c8445f0353380a98a69119ff"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/classify/__init__.py": {
+      "upstream_path": "ultralytics/models/yolo/classify/__init__.py",
+      "sha256": "f7ef8755a34e7c8d4aeeb9ffad1a9c94bf055009e97de06b46a11021a430db13"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/classify/train.py": {
+      "upstream_path": "ultralytics/models/yolo/classify/train.py",
+      "sha256": "4d97154acfbe74533b309523e8c0e8ab7a19540591f37b3e85acc4ec6c7f490c"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/depth/val.py": {
+      "upstream_path": "ultralytics/models/yolo/depth/val.py",
+      "sha256": "c0a65357d908ab287a3390b63645144b5cfb4b054de0ac65de52bba615da8e88"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/depth/predict.py": {
+      "upstream_path": "ultralytics/models/yolo/depth/predict.py",
+      "sha256": "297ac2775951e897cbf961b38f5488f646bb36a239a72b6ce2bd11fdf665675c"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/depth/__init__.py": {
+      "upstream_path": "ultralytics/models/yolo/depth/__init__.py",
+      "sha256": "1b9334b82ef390baa49048e2597c7daa74c2f156888cf02531360f41e9ad1733"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/depth/train.py": {
+      "upstream_path": "ultralytics/models/yolo/depth/train.py",
+      "sha256": "d6973bba3cc9bde1b224fc629f38177b0bdb47f5d440b2dd10cfe4f36c87cd22"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/depth/calibrate.py": {
+      "upstream_path": "ultralytics/models/yolo/depth/calibrate.py",
+      "sha256": "82830bc39da0eafb77d3b94187d339dc7bdb0a28f8068be3dddaea08c452f0b5"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/yoloe/train_seg.py": {
+      "upstream_path": "ultralytics/models/yolo/yoloe/train_seg.py",
+      "sha256": "d701cf9ead8e79bf9e7d67f8854b75e0133c4a1cb8a09362d88b73c9fc607df1"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/yoloe/val.py": {
+      "upstream_path": "ultralytics/models/yolo/yoloe/val.py",
+      "sha256": "4afbe691ff9f4e22b0f0a37a88fd4e3d9b76532611a55790c5b544472e99cbbc"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/yoloe/predict.py": {
+      "upstream_path": "ultralytics/models/yolo/yoloe/predict.py",
+      "sha256": "6ed53a001e1bcadb40567f8f7665358ebbba32967d509c2660ac0f2196ac6119"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/yoloe/__init__.py": {
+      "upstream_path": "ultralytics/models/yolo/yoloe/__init__.py",
+      "sha256": "cda668d7fa2699ac4dbfb983ef1a5d4a898d178b3c9a939c0954d7b298349dc6"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/yoloe/train.py": {
+      "upstream_path": "ultralytics/models/yolo/yoloe/train.py",
+      "sha256": "59ad2cd31ba82919f8fc8af7dfd95050b24177df96c5d88db6f4be22239e39b1"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/segment/val.py": {
+      "upstream_path": "ultralytics/models/yolo/segment/val.py",
+      "sha256": "637ce1ba57442ad72052cc93590c72feab71da515805d3b0d4a054b70a44f8f7"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/segment/predict.py": {
+      "upstream_path": "ultralytics/models/yolo/segment/predict.py",
+      "sha256": "66371a017252aa2e8606ba13dbc6c76307088d69159a5f46970138a9412846c5"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/segment/__init__.py": {
+      "upstream_path": "ultralytics/models/yolo/segment/__init__.py",
+      "sha256": "dc84e1859d7096463d16f9969bd704fb9f99c84e85d4583302d43a8ce385cf3c"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/segment/train.py": {
+      "upstream_path": "ultralytics/models/yolo/segment/train.py",
+      "sha256": "9429cc1f5ccb6bb60b217937a942fe6750688570349d5b147e4f1662c663708d"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/world/val.py": {
+      "upstream_path": "ultralytics/models/yolo/world/val.py",
+      "sha256": "86c87633ee1138e8b83da5511021fcb8abb41afea9838ccb899aaed073870eba"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/world/__init__.py": {
+      "upstream_path": "ultralytics/models/yolo/world/__init__.py",
+      "sha256": "32314a9d1107812638a59211cd0215b349d76d29173da027f451cf1c6c608166"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/world/train_world.py": {
+      "upstream_path": "ultralytics/models/yolo/world/train_world.py",
+      "sha256": "f05212939f47939988b9ac8b6c27fa811a63c7f7b1a4754e721d0e7b74d2dc8d"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/world/train.py": {
+      "upstream_path": "ultralytics/models/yolo/world/train.py",
+      "sha256": "55e047b38777a374f1990140900a6ca616288150794e22b7a9ec9ea674b2911e"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/pose/val.py": {
+      "upstream_path": "ultralytics/models/yolo/pose/val.py",
+      "sha256": "a23ede43337bdcf9d2478609f043d3822cbbde7b4b2a951e658067d5dfc32713"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/pose/predict.py": {
+      "upstream_path": "ultralytics/models/yolo/pose/predict.py",
+      "sha256": "8f0ce1afb26df2d30c38c5e7a550377cfa23c334cb0effba6927672779335c3e"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/pose/__init__.py": {
+      "upstream_path": "ultralytics/models/yolo/pose/__init__.py",
+      "sha256": "ffd3852e3d7d5f0bc91c147142d556e4257baef27fde10cf13dee68a2b74b0f7"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/pose/train.py": {
+      "upstream_path": "ultralytics/models/yolo/pose/train.py",
+      "sha256": "5a5a0fe8f913209266e60ce9620e31c1faa39734493dad593cf4ed6b8af655d2"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/semantic/val.py": {
+      "upstream_path": "ultralytics/models/yolo/semantic/val.py",
+      "sha256": "ccf90e078bf8282a8de3c550ec7a668683706400897ca8929a79b13a106f5c30"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/semantic/predict.py": {
+      "upstream_path": "ultralytics/models/yolo/semantic/predict.py",
+      "sha256": "361d32c6102072f604025eb11fcdce4a9a0d53eb2eda94e3d60c1e7755937efd"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/semantic/__init__.py": {
+      "upstream_path": "ultralytics/models/yolo/semantic/__init__.py",
+      "sha256": "cb32fc435029d9eb457af73960fb0fbf9ef30c55e57513345f6bd18c0ac53fb1"
+    },
+    "third_party/ultralytics/ultralytics/models/yolo/semantic/train.py": {
+      "upstream_path": "ultralytics/models/yolo/semantic/train.py",
+      "sha256": "c3f5d647c29243da20ebf2c488e0ba2bf9c43f1432afd2db2d970feadef1a6a5"
+    },
+    "third_party/ultralytics/ultralytics/models/rtdetr/val.py": {
+      "upstream_path": "ultralytics/models/rtdetr/val.py",
+      "sha256": "448438e19562e0dd185a69731791f432b345b5677fb730cc13d44508a89675cd"
+    },
+    "third_party/ultralytics/ultralytics/models/rtdetr/predict.py": {
+      "upstream_path": "ultralytics/models/rtdetr/predict.py",
+      "sha256": "69906f953359dcc637d8e50cdea658eb329568b537aee0410c5a391617d1c457"
+    },
+    "third_party/ultralytics/ultralytics/models/rtdetr/__init__.py": {
+      "upstream_path": "ultralytics/models/rtdetr/__init__.py",
+      "sha256": "17834442ab5c54a1718fdec387bae49f656edc91b811afe7c6aac107ef4fd6f7"
+    },
+    "third_party/ultralytics/ultralytics/models/rtdetr/model.py": {
+      "upstream_path": "ultralytics/models/rtdetr/model.py",
+      "sha256": "2026d5714d0830fde965337eb7eb54250e026019a0a8b98b68fcd51159dd3837"
+    },
+    "third_party/ultralytics/ultralytics/models/rtdetr/train.py": {
+      "upstream_path": "ultralytics/models/rtdetr/train.py",
+      "sha256": "bfb3bb04c0600c0199373a8c2ba87d7ba33f9b0f357903155eb5f4bef9a6860f"
+    },
+    "third_party/ultralytics/ultralytics/trackers/deep_oc_sort.py": {
+      "upstream_path": "ultralytics/trackers/deep_oc_sort.py",
+      "sha256": "c2ebdf0f8141e4958681bd3dd06552b2f7e9fb0d5cd6de5b9ff05e12d65d559c"
+    },
+    "third_party/ultralytics/ultralytics/trackers/bot_sort.py": {
+      "upstream_path": "ultralytics/trackers/bot_sort.py",
+      "sha256": "b157cbc33f75f1132df530f04361824bc39a30d4051ce6df1cd5c388e49b3117"
+    },
+    "third_party/ultralytics/ultralytics/trackers/track.py": {
+      "upstream_path": "ultralytics/trackers/track.py",
+      "sha256": "be18af845beee8640e17908ab070cce73bb663375387038e0c4a76ca2e2d10df"
+    },
+    "third_party/ultralytics/ultralytics/trackers/oc_sort.py": {
+      "upstream_path": "ultralytics/trackers/oc_sort.py",
+      "sha256": "4ec9580e40fbacc4d3a3921bb49bea186c7440cf621cd0eebe1e44d635d0eb7f"
+    },
+    "third_party/ultralytics/ultralytics/trackers/__init__.py": {
+      "upstream_path": "ultralytics/trackers/__init__.py",
+      "sha256": "fb5b5f617071a5bfb2dab601ec7e680f64746f16f011f297211773f1dcd6e492"
+    },
+    "third_party/ultralytics/ultralytics/trackers/fast_tracker.py": {
+      "upstream_path": "ultralytics/trackers/fast_tracker.py",
+      "sha256": "fd2de011d56136af54234c36a3505be414a15b6735f84d74162ff08ecd61a02a"
+    },
+    "third_party/ultralytics/ultralytics/trackers/README.md": {
+      "upstream_path": "ultralytics/trackers/README.md",
+      "sha256": "ae038dafa337ae23af29a4bb0c2f3d3e9ab1ebc686d7ef5dba7c930caa236bba"
+    },
+    "third_party/ultralytics/ultralytics/trackers/byte_tracker.py": {
+      "upstream_path": "ultralytics/trackers/byte_tracker.py",
+      "sha256": "7d4a16b926e43c2c9c5a65e250839c6c3eb0c2c81c82f7febb3cbc995dc7d32d"
+    },
+    "third_party/ultralytics/ultralytics/trackers/basetrack.py": {
+      "upstream_path": "ultralytics/trackers/basetrack.py",
+      "sha256": "9ef094b9a54ff2f52c9118b5bd1a2f84ba331aa557277f54186de11728c2f7e8"
+    },
+    "third_party/ultralytics/ultralytics/trackers/track_tracker.py": {
+      "upstream_path": "ultralytics/trackers/track_tracker.py",
+      "sha256": "1c16e32e193ec8fcd29aa96fa785c1717d37a4a83f44454d5f99ab0d085fee2b"
+    },
+    "third_party/ultralytics/ultralytics/trackers/utils/reid.py": {
+      "upstream_path": "ultralytics/trackers/utils/reid.py",
+      "sha256": "91c9cf904d6922061f007bb2ca96a21acfc9019e5462e37dbbd600838eb4b351"
+    },
+    "third_party/ultralytics/ultralytics/trackers/utils/gmc.py": {
+      "upstream_path": "ultralytics/trackers/utils/gmc.py",
+      "sha256": "d797f701a22347001d780b0dc4d0f2f5cabdfefb895c36bbab084ceb2dfc4000"
+    },
+    "third_party/ultralytics/ultralytics/trackers/utils/__init__.py": {
+      "upstream_path": "ultralytics/trackers/utils/__init__.py",
+      "sha256": "966e8c72415808f4dba88a17ef0d2cfdd6b176335e05e296e835e9a6fd7e4143"
+    },
+    "third_party/ultralytics/ultralytics/trackers/utils/matching.py": {
+      "upstream_path": "ultralytics/trackers/utils/matching.py",
+      "sha256": "b253e58d9967d993b5cd9f634a86749d4868a0056adeb2c86177442ea29678a1"
+    },
+    "third_party/ultralytics/ultralytics/trackers/utils/kalman_filter.py": {
+      "upstream_path": "ultralytics/trackers/utils/kalman_filter.py",
+      "sha256": "162c612980d35c34de2acbcc44983f9a253c8da9496577f21c283e6778d00409"
+    },
+    "third_party/ultralytics/ultralytics/trackers/utils/stracks.py": {
+      "upstream_path": "ultralytics/trackers/utils/stracks.py",
+      "sha256": "f34024d09c3d35f985545aa6287e8a8bf1d54062c4b54aacaba0f8dad05cfbbd"
+    },
+    "third_party/ultralytics/ultralytics/cfg/__init__.py": {
+      "upstream_path": "ultralytics/cfg/__init__.py",
+      "sha256": "0789a33052ff723becbf4753916a3dfe58b7a8bb95ad82827dd2196ac372f472"
+    },
+    "third_party/ultralytics/ultralytics/cfg/default.yaml": {
+      "upstream_path": "ultralytics/cfg/default.yaml",
+      "sha256": "13b58f3804fef762813cb78baa2a95dd5b3c5741723ebfdea6c7a99a54d314b1"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/african-wildlife.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/african-wildlife.yaml",
+      "sha256": "187f354b97c6e5d0226d3c3fa757348af68b9e7bd79461779335ad6f25377a3a"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/DOTAv1.5.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/DOTAv1.5.yaml",
+      "sha256": "5febb56c74b016a7f9faf80f2168897d87afdca2bd2c7857673d5285036471cd"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/depth-kitti.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/depth-kitti.yaml",
+      "sha256": "f01a8ec5347ce5074ca23390ec8f00969e8cf11490df164d70ccbc323b843dca"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/coco8.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/coco8.yaml",
+      "sha256": "030aaffa08f8a161dc3587d216aa956c0c8947e594b2d9d8515a36b9ac44f9fa"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/coco128.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/coco128.yaml",
+      "sha256": "07a083c6edd3098d4c9b7c7e8915c46ccd8dd48c8eb970bfb14d958958392844"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/coco.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/coco.yaml",
+      "sha256": "38ed1eb122fad6eed8e18dcf8da56a4b26db9c2064be41530485e2644fae9f7f"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/coco128-seg.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/coco128-seg.yaml",
+      "sha256": "96bf25ac49ebb083386ea1b5608f61601ac07f281fe4232ef68a46f055c97f96"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/brain-tumor.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/brain-tumor.yaml",
+      "sha256": "cb94a477e632f709807c5dc4e342d8bc742462c81b0e5594e5a2a0d0484ec096"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/coco-pose.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/coco-pose.yaml",
+      "sha256": "06a3a4ab8960f4555a9324a7bc0bde1ddac80603d1d2a2015d39336b73d9325f"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/depth-arkitscenes.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/depth-arkitscenes.yaml",
+      "sha256": "626fe430a98e8551836aa6f342ab07ca89191514e5c12cd680e90bf79328cf23"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/depth-vkitti2.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/depth-vkitti2.yaml",
+      "sha256": "433ca78d955e9a1040f3f9ac33e7afe81cf18d7c7df7cb273f0b333e8674f1a6"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/dota8.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/dota8.yaml",
+      "sha256": "5bfdc1729f1d44778e2f45455ac69a3445eaf0a8f63f3818c15110a9e3ad36a4"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/nyu-depth.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/nyu-depth.yaml",
+      "sha256": "1152202ac54e22d8f8db8ef12860dbeb6d847acd490141a8adbdc8a76e6efd25"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/HomeObjects-3K.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/HomeObjects-3K.yaml",
+      "sha256": "b90fb05934fd5be1ebee18aea9ae2b312e404e791078cb8645e689b2ac5e3fb5"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/GlobalWheat2020.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/GlobalWheat2020.yaml",
+      "sha256": "fc68c4e6cc467292e8bfbafe334e97b235a5a25322cb7c4bc6ce24b30da56517"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/depth-hypersim.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/depth-hypersim.yaml",
+      "sha256": "3e8507bcca4bf893ce5a8404184c71419e5dc624c994379174d4f961bbbb23de"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/DOTAv1.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/DOTAv1.yaml",
+      "sha256": "18e3ca2f92546dd154fc1ee35ad38f773dbb3a75ff0c93029bb5885ab64006bf"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/crack-seg.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/crack-seg.yaml",
+      "sha256": "1f5d641bc18f421a6f97a0b9204cd6a324ac432e69d20602df406b78f55e53e6"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/lvis.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/lvis.yaml",
+      "sha256": "b7533ca407cc0440def6ac7d0fc7fd68b858da7fddfaa29aa4317949fee3488f"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/VisDrone.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/VisDrone.yaml",
+      "sha256": "627f60f7602db38b6a462301ced87ad24bcdee2a692eaa9d4e02448492bb29fe"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/coco8-pose.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/coco8-pose.yaml",
+      "sha256": "a1a172cfaebc80951f88bf3752578949c87a50d57e6e288bdab2d333a46b64fb"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/dota128.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/dota128.yaml",
+      "sha256": "2b392d73ae33f77c1365d83786f1eb672b33961353678a0f56c6d79249ad5468"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/dota8-multispectral.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/dota8-multispectral.yaml",
+      "sha256": "b19ceb3f549432bc8425ef2cc8c6fa06c0208486f27cc42ea8723407188c452e"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/hand-keypoints.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/hand-keypoints.yaml",
+      "sha256": "c0f2d879998643c95623cf682f04553031a70646ba1fbc8f642b717a0f0ff3bf"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/medical-pills.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/medical-pills.yaml",
+      "sha256": "e462d8ac1d2bc243ab0d27b52acc1902e972d4b59d3725b51ac0124461da2843"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/SKU-110K.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/SKU-110K.yaml",
+      "sha256": "7155e83003876e293e30038aaad91ee93536402684ca7f5c065cada9078a876d"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/Objects365.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/Objects365.yaml",
+      "sha256": "7ca822c2f9ed33e4696df2660203e67cbde4d65c9797425965be9efd113cbf5e"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/depth-sunrgbd.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/depth-sunrgbd.yaml",
+      "sha256": "026799e939d75f083e77dec8ed87ecb2916c9e914f09202ee875b1d0edc8a4ab"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/cityscapes8.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/cityscapes8.yaml",
+      "sha256": "30ceca2d95b5261d9dba121a34ce6fe8f914b65160232a735c3add9e12f99082"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/xView.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/xView.yaml",
+      "sha256": "9b6a565f0fd285e0cfc243dd34454b225c7db8b85310e4e03b178f7bb306d89a"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/dog-pose.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/dog-pose.yaml",
+      "sha256": "39ba0f8ffcbc4251061fd102a8b36e4f7d9163f61aa44a372149fc59a96fca6d"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/Argoverse.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/Argoverse.yaml",
+      "sha256": "54bba1cff80f4194c0681147133482f4fc4c398df3f135325016550409bf1c51"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/tiger-pose.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/tiger-pose.yaml",
+      "sha256": "0d09394bbb87e496cfde90fa43b235d8001a80d440dc02a26537ae6ec8e1611e"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/open-images-v7.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/open-images-v7.yaml",
+      "sha256": "497468af9dc644d149101efc090727d3c6fd644591f4cc2e8c5adeb00f4ad848"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/depth-tartanair.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/depth-tartanair.yaml",
+      "sha256": "cc5ce47843c256bbbdea5f4b5b558aebd1d599f0caefcf88563a25c67a41cbdd"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/ImageNet.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/ImageNet.yaml",
+      "sha256": "d3ab26a117ae27d4345e6cca94ad18e3ccfefbef9279aaa00bacdd391cb76f6f"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/signature.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/signature.yaml",
+      "sha256": "d77e1ea3e12968af57c484b34d99d43f66cdb67dc76fee63ffe9cee0fb7e2493"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/construction-ppe.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/construction-ppe.yaml",
+      "sha256": "6698afd2595679c86337d2edcdcf1a986d76cdbd94824c484c4cb10fb3cc4655"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/carparts-seg.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/carparts-seg.yaml",
+      "sha256": "e1b635ed4cd80f77f9ad846e3e742c5094284c597a5d7de3b77c17f336158a14"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/coco12-formats.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/coco12-formats.yaml",
+      "sha256": "6735dea645b6877bbdc49a5861908f352f44ee1b462ca7f3c462d3abe6a2a10a"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/coco8-multispectral.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/coco8-multispectral.yaml",
+      "sha256": "98370d146992293f9b064f3c1030e722fbb2d7cbad4a301796ca354b9f350289"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/package-seg.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/package-seg.yaml",
+      "sha256": "d4573b7fae6cf06dedb3a6533a9cf05430b9ff5c0c52546216c633ad9a57c8da"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/coco8-grayscale.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/coco8-grayscale.yaml",
+      "sha256": "65b4ebe25429a955821f0f5de0f8218bd7b77c96a0acc2ea5ea5f4c2d534e86f"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/VOC.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/VOC.yaml",
+      "sha256": "6e2dae457723b975b20a60952852fa6cbc3d2ac469520282a0ef089effaa544d"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/coco8-seg.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/coco8-seg.yaml",
+      "sha256": "89700c57918fdb120ed8f1e5d490c75efc88a1bda77a8f1194a1e43950da73b4"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/depth-diode.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/depth-diode.yaml",
+      "sha256": "207ed7f527d248ad3ecac92acc8023264b5322893d327105fb58433ac4de43d3"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/cityscapes.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/cityscapes.yaml",
+      "sha256": "86fa8aeb90c48c23345e397dc53aa54315246320508df450db39f9eb51829c40"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/kitti.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/kitti.yaml",
+      "sha256": "3d1c8317a6e47c6dd7e1a62fe8f4d44d218788252c5400368bd8bc28ef4e1252"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/depth8.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/depth8.yaml",
+      "sha256": "b61e438a11da71b57a7ecc26550ba0b136641d1097ffa0247df375480b230aa6"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/ade20k.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/ade20k.yaml",
+      "sha256": "efd566b50a926ff442a8592698a840713a70bbdb16526a238d47bc83afbfd0c0"
+    },
+    "third_party/ultralytics/ultralytics/cfg/datasets/TT100K.yaml": {
+      "upstream_path": "ultralytics/cfg/datasets/TT100K.yaml",
+      "sha256": "08c6fde19c620038e0d682994e16360eb4aded5b2ac6bc482b7ce50a8b5f407c"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/README.md": {
+      "upstream_path": "ultralytics/cfg/models/README.md",
+      "sha256": "43cb64023ce1d5ae7c1a215f626f01a3fc89fa44cf7176025ff940e0e3f118d9"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v6/yolov6.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v6/yolov6.yaml",
+      "sha256": "b65d388877b875583fefc8e0ba956e97981ba8e9f984186d2ca7cfdf16317160"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v8/yolov8-seg.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v8/yolov8-seg.yaml",
+      "sha256": "8457a23855704d5e33bf4f08ae64c8bb325c519998918ed2222da8577db67ba5"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v8/yolov8-ghost-p2.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v8/yolov8-ghost-p2.yaml",
+      "sha256": "e4c5fc0f7ffc9648fd68a570a40202d4f64068ca1316cfd6abe5d9513567f4f5"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v8/yolov8-p6.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v8/yolov8-p6.yaml",
+      "sha256": "4ea22c6bc80d116d382a674bc710bdaea85decf087954aa4ce8883c673138a8d"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v8/yolov8-seg-p6.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v8/yolov8-seg-p6.yaml",
+      "sha256": "ec594d958fac07c6c2715b72d877ff9d80fc7f1669b2a693806c537da73c0d12"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v8/yolov8-cls-resnet50.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v8/yolov8-cls-resnet50.yaml",
+      "sha256": "81b22db4d32f8f4d9193778a8eae39aa08dd99d0a8e67fe657d479c6deb939d5"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v8/yoloe-v8.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v8/yoloe-v8.yaml",
+      "sha256": "76e8ed807aa5d91ceaa84129078533b04a405cc45aae496d9edf2f6f5bac20b7"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v8/yolov8-worldv2.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v8/yolov8-worldv2.yaml",
+      "sha256": "524751864ee96ae2c866da3b41d3ab5a95bc31bfb727ad51751bb14b99590b6e"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v8/yolov8-rtdetr.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v8/yolov8-rtdetr.yaml",
+      "sha256": "e5cba91ca3c70f8ddcbaf7771f7cef3628e2aa95bdf9b14b2a0f8a31e47338f1"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v8/yolov8-obb.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v8/yolov8-obb.yaml",
+      "sha256": "3b0967731e6978a053368df18646d5c73ff5aa5cd5251e19db335ea11fcd0f18"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v8/yolov8-pose.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v8/yolov8-pose.yaml",
+      "sha256": "2ddcdb8885649d940c2d8076c33087aae97736295f2a9e27c7949d68642c17ab"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v8/yolov8-cls-resnet101.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v8/yolov8-cls-resnet101.yaml",
+      "sha256": "4c0880919c14724ce359d63aca7fee946cccfa59c7698ed8c7dbfcac8fb65a80"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v8/yolov8-p2.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v8/yolov8-p2.yaml",
+      "sha256": "ba54363e9f283e8f60b0fa0843eb37115093338d6f9273ccd4f74f60639754f4"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v8/yolov8-ghost-p6.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v8/yolov8-ghost-p6.yaml",
+      "sha256": "73b6189c43f1dafaf01e36e0af8a3f43d7ff348d97d5dc7632b2e8f7178ebd77"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v8/yolov8.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v8/yolov8.yaml",
+      "sha256": "405a3c302eb6096103a99af4d82c1d2d8b2bbff469a228c55aac944b2c19672a"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v8/yolov8-pose-p6.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v8/yolov8-pose-p6.yaml",
+      "sha256": "b5f81f62b6d5bb96e25825a6753651afb6510bece5033c9cb11c9a25b0ed2358"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v8/yolov8-cls.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v8/yolov8-cls.yaml",
+      "sha256": "1b9d269f0f82d125ab669665e70ce8bf576e81d8d930ceb34f7d2de5c42b7094"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v8/yoloe-v8-seg.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v8/yoloe-v8-seg.yaml",
+      "sha256": "e5c8d9db108c505da957b82fd59a1114457a2e8eafe2c94c42dd6553bfc9aad7"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v8/yolov8-world.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v8/yolov8-world.yaml",
+      "sha256": "da1350a326c84cee4504d9ca2b3d393e4f7281e01fe2a5bb5ef90c11f05df740"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v8/yolov8-ghost.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v8/yolov8-ghost.yaml",
+      "sha256": "9f1cc896f9ed15a8c76eee0337cba3131eb93d11209fba340dde9c1e9f291d23"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v9/yolov9e.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v9/yolov9e.yaml",
+      "sha256": "3a5af63e5003a640fa3754e257200910cce4ac0ed26cdba5d6739a505f024b7f"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v9/yolov9c.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v9/yolov9c.yaml",
+      "sha256": "c7592eb3fda641d53d5776468345dd139593514de3f1fc067b53aedf1d9a5f92"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v9/yolov9t.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v9/yolov9t.yaml",
+      "sha256": "43c1a949713b7ee9a1b898908386b64a4b92fd49a75eaa7e7a86715bf0b4bc4a"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v9/yolov9e-seg.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v9/yolov9e-seg.yaml",
+      "sha256": "595a54e631e0a14b823158abbe69ff49c3a61fd775332555217f17018f3bf3b7"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v9/yolov9m.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v9/yolov9m.yaml",
+      "sha256": "59c290df146c0b524c800e361f1e31cebe05666b44e81df02afaa1950c64ab0f"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v9/yolov9c-seg.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v9/yolov9c-seg.yaml",
+      "sha256": "5011e843f709576ca9eab3331d7469e3ab8101498a22b6e07778e21013d1bea2"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v9/yolov9s.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v9/yolov9s.yaml",
+      "sha256": "716910b5835658e7243815e377c5eb27fab9bfa4ff0b9e3118c3f54b7aa7a595"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/rt-detr/rtdetr-l.yaml": {
+      "upstream_path": "ultralytics/cfg/models/rt-detr/rtdetr-l.yaml",
+      "sha256": "85716f626769cb5ddf00d59fcf6cafb5814aad196328100bdc7c93306f650e83"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/rt-detr/rtdetr-x.yaml": {
+      "upstream_path": "ultralytics/cfg/models/rt-detr/rtdetr-x.yaml",
+      "sha256": "4076b70793f077d4c0f41dd6e65130ad497efdb02fc065d5a9296f9cb49b28db"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/rt-detr/rtdetr-resnet101.yaml": {
+      "upstream_path": "ultralytics/cfg/models/rt-detr/rtdetr-resnet101.yaml",
+      "sha256": "e6f08f7e2872cd730a091ee46182034876d21ef03362559b399e56a7d9bce0cb"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/rt-detr/rtdetr-resnet50.yaml": {
+      "upstream_path": "ultralytics/cfg/models/rt-detr/rtdetr-resnet50.yaml",
+      "sha256": "5e6f94fe6fbfa2476ca625bbab16f99a037f34f64fbf28d7ad2d40d4a728685a"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/11/yolo11.yaml": {
+      "upstream_path": "ultralytics/cfg/models/11/yolo11.yaml",
+      "sha256": "43d8a7c86acc77282ddf4966d6526e091e5b064c140ed4a6e4c0b68ecbc3784c"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/11/yolo11-seg.yaml": {
+      "upstream_path": "ultralytics/cfg/models/11/yolo11-seg.yaml",
+      "sha256": "c724d65611684accc5d4b84d108ce7216f1018a535cf410022f929e0ec18b65b"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/11/yolo11-pose.yaml": {
+      "upstream_path": "ultralytics/cfg/models/11/yolo11-pose.yaml",
+      "sha256": "756393f55051c43f21fa39900b4a9610ebc5bf2c750946b4b5e92dd6439dbe69"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/11/yoloe-11.yaml": {
+      "upstream_path": "ultralytics/cfg/models/11/yoloe-11.yaml",
+      "sha256": "ab12836bc5edf9e99b35538b3ad85f425b753749051479c614eef847f090cd4c"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/11/yolo11-cls-resnet18.yaml": {
+      "upstream_path": "ultralytics/cfg/models/11/yolo11-cls-resnet18.yaml",
+      "sha256": "d58729f6a32bc296fcaeaedcaa1b7743ed6030dd11f3b537e679b68ff8ac76ba"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/11/yoloe-11-seg.yaml": {
+      "upstream_path": "ultralytics/cfg/models/11/yoloe-11-seg.yaml",
+      "sha256": "8f4e7771880730244553127b32e98d907cfb7aaea1c6f70c32e34eccdb1d575c"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/11/yolo11-cls.yaml": {
+      "upstream_path": "ultralytics/cfg/models/11/yolo11-cls.yaml",
+      "sha256": "d7b97919d37e56cb782ef69fb0adbeaba2e2f555fd52551c4f90a50ad8a4c1e1"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/11/yolo11-obb.yaml": {
+      "upstream_path": "ultralytics/cfg/models/11/yolo11-obb.yaml",
+      "sha256": "147a3bc56ae129d3760419f6c5d674f7d4f635ca9c5098aec90d1aeb376faea6"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/26/yolo26-depth.yaml": {
+      "upstream_path": "ultralytics/cfg/models/26/yolo26-depth.yaml",
+      "sha256": "41a4a1035eb9a21f07106ad23d5d44ca110ca7690714f7f0de5cc20c75d1abbb"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/26/yolo26.yaml": {
+      "upstream_path": "ultralytics/cfg/models/26/yolo26.yaml",
+      "sha256": "b1d1fa0c69eced64f9939536038bd8d697c32e72200b34187a767de431af7ef0"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/26/yoloe-26-seg.yaml": {
+      "upstream_path": "ultralytics/cfg/models/26/yoloe-26-seg.yaml",
+      "sha256": "425c8addac232ce8ecf6ad2b6a3d307b94021b5b43cbe36f436b90cca0e80589"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/26/yolo26-cls.yaml": {
+      "upstream_path": "ultralytics/cfg/models/26/yolo26-cls.yaml",
+      "sha256": "1a668bbe707ad97eabf7f999c29c746f62d3458217cd562a4aa47731ccb7dfa8"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/26/yolo26-obb.yaml": {
+      "upstream_path": "ultralytics/cfg/models/26/yolo26-obb.yaml",
+      "sha256": "03d360e6764ea30ef8b5891e8f1a15c86076c33b488bf72e36ac58aea0794f7f"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/26/yoloe-26.yaml": {
+      "upstream_path": "ultralytics/cfg/models/26/yoloe-26.yaml",
+      "sha256": "616b014b80f77fb421a8b433613f8b55d08e212a3455a4c82c868b2a6ba30dda"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/26/yolo26-p6.yaml": {
+      "upstream_path": "ultralytics/cfg/models/26/yolo26-p6.yaml",
+      "sha256": "78c459986c4482363b5fa3c0c11575bd525c1338c0681deef277c6dbf193925d"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/26/yolo26-sem.yaml": {
+      "upstream_path": "ultralytics/cfg/models/26/yolo26-sem.yaml",
+      "sha256": "ad7de0daf064ed4f53ede8ed0a32d6aa339a5da3cd304791d815aada87b99d82"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/26/yolo26-p2.yaml": {
+      "upstream_path": "ultralytics/cfg/models/26/yolo26-p2.yaml",
+      "sha256": "0dbc2fa3dfede5edcda2566ab8c7ea150ad066ea29d79e68d6c4da2bab476279"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/26/yolo26-pose.yaml": {
+      "upstream_path": "ultralytics/cfg/models/26/yolo26-pose.yaml",
+      "sha256": "07ba82d9637023f261e526c38fa9aeb8ab05d911766ffd8cf4f48cd33f27188d"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/26/yolo26-seg.yaml": {
+      "upstream_path": "ultralytics/cfg/models/26/yolo26-seg.yaml",
+      "sha256": "53c0348a36a3e19bbc3bd4f695f50cbbfc97a3059f62e9b251f278ad74fdd7cb"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v5/yolov5.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v5/yolov5.yaml",
+      "sha256": "403f1d45ee5ee72b39db05cf2af3499fadb61ffde25f48cfcc4ff6fbed9d671d"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v5/yolov5-p6.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v5/yolov5-p6.yaml",
+      "sha256": "54a116ca492cca44a5cefbb2ee27f8c85a3d5a56e50b785da9c37127d6f01de9"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v3/yolov3-spp.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v3/yolov3-spp.yaml",
+      "sha256": "86c33eca1756bfef17956b9a48e56a14970751567e1668c7e108e403d0872595"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v3/yolov3-tiny.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v3/yolov3-tiny.yaml",
+      "sha256": "498ad28349b503a12b51aa5dac90c8e44f9e74b687d2817e3516f9e7c0d98264"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v3/yolov3.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v3/yolov3.yaml",
+      "sha256": "16fb78fcf4f02c1a51c37478bf8550fb53c88a88e9a05643d6eb93672494612c"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v10/yolov10b.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v10/yolov10b.yaml",
+      "sha256": "5bd2be96a81410a382a55d007bb764f220541694934c5cc33c32f70079cc29fb"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v10/yolov10n.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v10/yolov10n.yaml",
+      "sha256": "88bf53e1752b4e77f4d358ba7bda85f70101094a2b6a5fdf1796e3205c4974c5"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v10/yolov10m.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v10/yolov10m.yaml",
+      "sha256": "610bb19f82a3886ab1c0afb706e452a6bb7ce9a5b17319f656780894740ac72e"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v10/yolov10x.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v10/yolov10x.yaml",
+      "sha256": "205218479a78e8e102b072b7cb3e543b908cc51d4934359e5cacd4410bf133f3"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v10/yolov10l.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v10/yolov10l.yaml",
+      "sha256": "62d74bef88afc56c58da352c6249145ff5ab696b0b26d70e2a144d8a80b0bc98"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/v10/yolov10s.yaml": {
+      "upstream_path": "ultralytics/cfg/models/v10/yolov10s.yaml",
+      "sha256": "746ff3d1f4b0788cc28bb2a6f4e63e43d233b443a35faef016c74fe046a6feda"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/12/yolo12-cls.yaml": {
+      "upstream_path": "ultralytics/cfg/models/12/yolo12-cls.yaml",
+      "sha256": "c8906e0ce5d160b6be2d08a91a42c14fdeee8ca4b25f1ef9e73b6ceb5d895567"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/12/yolo12-obb.yaml": {
+      "upstream_path": "ultralytics/cfg/models/12/yolo12-obb.yaml",
+      "sha256": "d9c3c9295ee4535b616319e736c0893df58da13934976f590f6d94e174d7df04"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/12/yolo12-pose.yaml": {
+      "upstream_path": "ultralytics/cfg/models/12/yolo12-pose.yaml",
+      "sha256": "781a3ef5bde8feabf7fa37ed802697d0579d78958e7ca1c32c93cf7c2330bbb3"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/12/yolo12.yaml": {
+      "upstream_path": "ultralytics/cfg/models/12/yolo12.yaml",
+      "sha256": "65e03c2eeca62573cd8d9e719319191e4724b4368a0f35016f629cde008b0b5c"
+    },
+    "third_party/ultralytics/ultralytics/cfg/models/12/yolo12-seg.yaml": {
+      "upstream_path": "ultralytics/cfg/models/12/yolo12-seg.yaml",
+      "sha256": "d094ea4a3ca13932cd4c8ac81403aebba17bc90a8c92ad6ca2c70091266db33f"
+    },
+    "third_party/ultralytics/ultralytics/cfg/trackers/fasttrack.yaml": {
+      "upstream_path": "ultralytics/cfg/trackers/fasttrack.yaml",
+      "sha256": "60078b50b27db21e78cd0dc1093639c8ee77b4f86accdbc56657d3ac29443ed7"
+    },
+    "third_party/ultralytics/ultralytics/cfg/trackers/deepocsort.yaml": {
+      "upstream_path": "ultralytics/cfg/trackers/deepocsort.yaml",
+      "sha256": "f72f9a9857688af4df1dc743fb15abba8bff8a27aa8d2c2c686aba6de3190bd9"
+    },
+    "third_party/ultralytics/ultralytics/cfg/trackers/bytetrack.yaml": {
+      "upstream_path": "ultralytics/cfg/trackers/bytetrack.yaml",
+      "sha256": "395701d947a749179dee3e327b1181b730c4ca98e7cac5a2ab05280aae573b8b"
+    },
+    "third_party/ultralytics/ultralytics/cfg/trackers/tracktrack.yaml": {
+      "upstream_path": "ultralytics/cfg/trackers/tracktrack.yaml",
+      "sha256": "33fcd0cf42023fabc1cff93e8769f949e3f92a39219a8b7de157fc612a1de37a"
+    },
+    "third_party/ultralytics/ultralytics/cfg/trackers/ocsort.yaml": {
+      "upstream_path": "ultralytics/cfg/trackers/ocsort.yaml",
+      "sha256": "55db91f14db3f01466d816a7af0f9faaeeb74f4485da63019c7ed69a9aafb6e3"
+    },
+    "third_party/ultralytics/ultralytics/cfg/trackers/botsort.yaml": {
+      "upstream_path": "ultralytics/cfg/trackers/botsort.yaml",
+      "sha256": "8cd88930d3be5557be0777f384eecff0a36a7011850fe613fc0a68178bfd5b01"
+    },
+    "third_party/ultralytics/ultralytics/data/split_dota.py": {
+      "upstream_path": "ultralytics/data/split_dota.py",
+      "sha256": "8e2d436a46ca61db6998ff16c5fcc03910fd1dce388c630c963c2cba0a529598"
+    },
+    "third_party/ultralytics/ultralytics/data/build.py": {
+      "upstream_path": "ultralytics/data/build.py",
+      "sha256": "bcf6fc89d755b6114d9a7251103a670111a4c648afcba7c2eb7ebbf7e46638df"
+    },
+    "third_party/ultralytics/ultralytics/data/loaders.py": {
+      "upstream_path": "ultralytics/data/loaders.py",
+      "sha256": "2ff27d82439e47bc78d59e497b0d03c713254dd921b05e0daa6f3a3d5977bf74"
+    },
+    "third_party/ultralytics/ultralytics/data/converter.py": {
+      "upstream_path": "ultralytics/data/converter.py",
+      "sha256": "132871c377275302830ad976d9c11107f19e842e9ad1ff784e6362182fe38580"
+    },
+    "third_party/ultralytics/ultralytics/data/__init__.py": {
+      "upstream_path": "ultralytics/data/__init__.py",
+      "sha256": "2ac57fffcc1644dce377e8947885f9ecfbed99eb76f0c4b18c7a86d6ec7e6283"
+    },
+    "third_party/ultralytics/ultralytics/data/annotator.py": {
+      "upstream_path": "ultralytics/data/annotator.py",
+      "sha256": "45ba596c2a838578c1ba680da8e645c88de2686c12822dbbabccfb281c8b1642"
+    },
+    "third_party/ultralytics/ultralytics/data/augment.py": {
+      "upstream_path": "ultralytics/data/augment.py",
+      "sha256": "414e49b76e5babfa118b88de60558e939fc436945cdf7a7ec4c09b0320a7036e"
+    },
+    "third_party/ultralytics/ultralytics/data/dataset.py": {
+      "upstream_path": "ultralytics/data/dataset.py",
+      "sha256": "23a87c27ff5818ec703a3ca546886b540499adc9c82785f37931026d1b198a32"
+    },
+    "third_party/ultralytics/ultralytics/data/utils.py": {
+      "upstream_path": "ultralytics/data/utils.py",
+      "sha256": "f8ba37e0eeeab143622545b26e4b5311523e6d829e8100e4ef2f88bfb03891bd"
+    },
+    "third_party/ultralytics/ultralytics/data/split.py": {
+      "upstream_path": "ultralytics/data/split.py",
+      "sha256": "93baf402b3fdd33ebec8f18af7cf2b2184c3c625dbd5720a024d0f6cd99463af"
+    },
+    "third_party/ultralytics/ultralytics/data/base.py": {
+      "upstream_path": "ultralytics/data/base.py",
+      "sha256": "d1ba23c88d7ec8c85c7050d927c7ea91d9678cd27bd7867e5e178242361b7b31"
+    },
+    "third_party/ultralytics/ultralytics/data/scripts/get_coco.sh": {
+      "upstream_path": "ultralytics/data/scripts/get_coco.sh",
+      "sha256": "52e26925ea37a90a531d520d78ea663f43589a0f0f844144dc0f09de32ab9cfc"
+    },
+    "third_party/ultralytics/ultralytics/data/scripts/get_imagenet.sh": {
+      "upstream_path": "ultralytics/data/scripts/get_imagenet.sh",
+      "sha256": "86be361f5e9b338ee24f6eeb812ecca44a3e19e3990185105e0af40767309f8f"
+    },
+    "third_party/ultralytics/ultralytics/data/scripts/download_weights.sh": {
+      "upstream_path": "ultralytics/data/scripts/download_weights.sh",
+      "sha256": "d32f17b59c4eaeeedd5538570c55172c706e20280e22a64d530a722f8461ea58"
+    },
+    "third_party/ultralytics/ultralytics/data/scripts/get_coco128.sh": {
+      "upstream_path": "ultralytics/data/scripts/get_coco128.sh",
+      "sha256": "aa645097f84e2abb1d1eb4eb9f242e1481f4d680f3de57dacf5dfc3a019f2edf"
+    },
+    "third_party/ultralytics/ultralytics/assets/zidane.jpg": {
+      "upstream_path": "ultralytics/assets/zidane.jpg",
+      "sha256": "16d73869e3267a7d4ed00de8e860833bd1657c1b252e94c0c348277adc7b6edb"
+    },
+    "third_party/ultralytics/ultralytics/assets/bus.jpg": {
+      "upstream_path": "ultralytics/assets/bus.jpg",
+      "sha256": "c02019c4979c191eb739ddd944445ef408dad5679acab6fd520ef9d434bfbc63"
+    },
+    "third_party/ultralytics/ultralytics/engine/validator.py": {
+      "upstream_path": "ultralytics/engine/validator.py",
+      "sha256": "9df74d4cecee8be82a6992d89f0b59e79ddf7eeb8c97978b3078d385ca7f9e72"
+    },
+    "third_party/ultralytics/ultralytics/engine/predictor.py": {
+      "upstream_path": "ultralytics/engine/predictor.py",
+      "sha256": "be124f7054a64139698434fba742f2d0a46dc73e32215ee0c750e6d429e423ec"
+    },
+    "third_party/ultralytics/ultralytics/engine/results.py": {
+      "upstream_path": "ultralytics/engine/results.py",
+      "sha256": "129d325b6149bc0761bf1d44479662caf622f700a1b0e62de949b7749ddc1ad3"
+    },
+    "third_party/ultralytics/ultralytics/engine/exporter.py": {
+      "upstream_path": "ultralytics/engine/exporter.py",
+      "sha256": "a3341fed9162d0b38cd9b111bffb961c8016ce8605ae0febde661b8339d64d82"
+    },
+    "third_party/ultralytics/ultralytics/engine/__init__.py": {
+      "upstream_path": "ultralytics/engine/__init__.py",
+      "sha256": "966e8c72415808f4dba88a17ef0d2cfdd6b176335e05e296e835e9a6fd7e4143"
+    },
+    "third_party/ultralytics/ultralytics/engine/model.py": {
+      "upstream_path": "ultralytics/engine/model.py",
+      "sha256": "ec9cc31ae194037d942c56d33ba1a2768cb2bc607af1d2da1d2f7236d733d6e7"
+    },
+    "third_party/ultralytics/ultralytics/engine/trainer.py": {
+      "upstream_path": "ultralytics/engine/trainer.py",
+      "sha256": "6855611784a4c03c7c8927e67b0d815c940432ff56a04a129ca91fc4a261d1f3"
+    },
+    "third_party/ultralytics/ultralytics/engine/tuner.py": {
+      "upstream_path": "ultralytics/engine/tuner.py",
+      "sha256": "f1b9ab009c41093c0da0b8df890d0ba6705078e4f7c26269fdcf1182b621a678"
+    },
+    "third_party/ultralytics/pyproject.toml": {
+      "upstream_path": "pyproject.toml",
+      "sha256": "28d8b082707242b08e81fbcb4e590513830a8daa68f943fd3f6051a5d1d6b321"
+    },
+    "third_party/ultralytics/LICENSE": {
+      "upstream_path": "LICENSE",
+      "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0"
+    },
+    "third_party/ultralytics/README.md": {
+      "upstream_path": "README.md",
+      "sha256": "4bbb146d3f82dddac401ba15f5f0dda09dc33dc96a7b59baed8009ff87e2b91e"
+    },
+    "configs/yolo26/official/yolo26-obb.yaml": {
+      "upstream_path": "ultralytics/cfg/models/26/yolo26-obb.yaml",
+      "sha256": "03d360e6764ea30ef8b5891e8f1a15c86076c33b488bf72e36ac58aea0794f7f"
+    },
+    "configs/yolo26/official/default.yaml": {
+      "upstream_path": "ultralytics/cfg/default.yaml",
+      "sha256": "13b58f3804fef762813cb78baa2a95dd5b3c5741723ebfdea6c7a99a54d314b1"
+    }
+  }
+}

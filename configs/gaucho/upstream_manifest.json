@@ -1,0 +1,117 @@
+{
+  "repository": "https://github.com/jhlmarques/GauCho",
+  "commit": "7d7ddd02cc587205c1fab44cc8ca23501042ca2b",
+  "archive_sha256": "61db6cb819b0641b4d641b428cfcf7da94bb92130cb944835c7a1231caedeb41",
+  "retained_scope": "Three official GauCho modules in the existing mmrotate directories. Only import routing / registry aliases change. All configuration inheritance stays under configs. Existing common dependencies are source/AST checked; no duplicate MMRotate runtime.",
+  "files": {
+    "mmrotate/models/dense_heads/gaussian_fcos_head.py": {
+      "upstream_path": "mmrotate-gaucho/mmrotate/models/dense_heads/gaussian_fcos_head.py",
+      "sha256": "1b886b6b847bf49c8f81c0fe21a04df70176aa170b0a31e3209e7e56c56b4277",
+      "upstream_sha256": "21fbd5a3029d1aad4dda5eede043e0c9e785be79df58dfe86f1e1920e9d46271",
+      "adaptations": [
+        {
+          "upstream": "from .rotated_fcos_head import RotatedFCOSHead",
+          "local": "from .gaucho_rotated_fcos_head import RotatedFCOSHead"
+        }
+      ]
+    },
+    "mmrotate/models/dense_heads/gaucho_rotated_fcos_head.py": {
+      "upstream_path": "mmrotate-gaucho/mmrotate/models/dense_heads/rotated_fcos_head.py",
+      "sha256": "951f80c7555939b524430f9214a736e648522fdc216b82bd075fb3ff2e019315",
+      "upstream_sha256": "39bb047b11238a83de53d1be55464f47a8f329d28658df55f0ae9a9a364cc669",
+      "adaptations": [
+        {
+          "upstream": "@ROTATED_HEADS.register_module()",
+          "local": "@ROTATED_HEADS.register_module(name='GauChoRotatedFCOSHead')"
+        }
+      ]
+    },
+    "mmrotate/models/losses/gaucho_gaussian_dist_loss_v1.py": {
+      "upstream_path": "mmrotate-gaucho/mmrotate/models/losses/gaussian_dist_loss_v1.py",
+      "sha256": "1bd00f0767909413553bff6357f320cddd254ea43f39d8b0fdff3669805a7673",
+      "upstream_sha256": "2cba800acd2a6ba20189d64177d73fab7f06eb3cecdbc07b078d9507eb61f1c4",
+      "adaptations": [
+        {
+          "upstream": "@ROTATED_LOSSES.register_module()",
+          "local": "@ROTATED_LOSSES.register_module(name='GauChoGDLossV1')"
+        }
+      ]
+    },
+    "configs/gaucho/gaucho_anchorless_dotav1/gaussian_fcos_r50_fpn_gaucho_probiou_1x_dota_le90.py": {
+      "upstream_path": "mmrotate-gaucho/configs_gaucho/gaucho_anchorless_dotav1/gaussian_fcos_r50_fpn_gaucho_probiou_1x_dota_le90.py",
+      "sha256": "c374524174a177504c2f7a52723f9f9579e1d472e543b18db2e611df2f06c3a6"
+    },
+    "configs/gaucho/_base_/datasets/dotav1.py": {
+      "upstream_path": "mmrotate-gaucho/configs_gaucho/_base_/datasets/dotav1.py",
+      "sha256": "4d4985193041029b84543562d97b49ed50d2356f1d6e1f1221ca93d009151793"
+    },
+    "configs/gaucho/_base_/schedules/schedule_1x.py": {
+      "upstream_path": "mmrotate-gaucho/configs_gaucho/_base_/schedules/schedule_1x.py",
+      "sha256": "eef4b63abefd4e51bce476a012013d63ec27e06c87516a2352ff57b5f46f80e9"
+    },
+    "configs/gaucho/_base_/default_runtime.py": {
+      "upstream_path": "mmrotate-gaucho/configs_gaucho/_base_/default_runtime.py",
+      "sha256": "046fc7f2d6a8dd3891b2ad90f1c5c5ea3e45345a1f44163318a6b8e8e33ceb77"
+    },
+    "configs/gaucho/LICENSE.gaucho": {
+      "upstream_path": "mmrotate-gaucho/LICENSE",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+    }
+  },
+  "shared_dependencies": {
+    "mmrotate/models/dense_heads/rotated_anchor_free_head.py": {
+      "local_sha256": "4eedf44d2ef22a7e4c7ee416a38fbd38694022ed3532cab4be5e9ac4ee05ff0a",
+      "upstream_path": "mmrotate-gaucho/mmrotate/models/dense_heads/rotated_anchor_free_head.py",
+      "upstream_sha256": "4eedf44d2ef22a7e4c7ee416a38fbd38694022ed3532cab4be5e9ac4ee05ff0a",
+      "same_python_ast": true
+    },
+    "mmrotate/models/detectors/rotated_fcos.py": {
+      "local_sha256": "66f8e146da1044ecb6c4bbc5159133e1b0f0dab5b52865aed5f3cbfb0cde12b8",
+      "upstream_path": "mmrotate-gaucho/mmrotate/models/detectors/rotated_fcos.py",
+      "upstream_sha256": "66f8e146da1044ecb6c4bbc5159133e1b0f0dab5b52865aed5f3cbfb0cde12b8",
+      "same_python_ast": true
+    },
+    "mmrotate/models/detectors/single_stage.py": {
+      "local_sha256": "76b2cc533f77f316b84de0afb7a437e7aaaf0a7c03eed8d09314f375a6ee8456",
+      "upstream_path": "mmrotate-gaucho/mmrotate/models/detectors/single_stage.py",
+      "upstream_sha256": "76b2cc533f77f316b84de0afb7a437e7aaaf0a7c03eed8d09314f375a6ee8456",
+      "same_python_ast": true
+    },
+    "mmrotate/models/detectors/base.py": {
+      "local_sha256": "4583a25001228b03ecfb149b3c0d084f2fcdd6961626808be0360af69865b52d",
+      "upstream_path": "mmrotate-gaucho/mmrotate/models/detectors/base.py",
+      "upstream_sha256": "4583a25001228b03ecfb149b3c0d084f2fcdd6961626808be0360af69865b52d",
+      "same_python_ast": true
+    },
+    "mmrotate/models/builder.py": {
+      "local_sha256": "da653ec13e8b36bc99690e88a7829c776ffd03778e4d87f03ee3017ad868be0c",
+      "upstream_path": "mmrotate-gaucho/mmrotate/models/builder.py",
+      "upstream_sha256": "da653ec13e8b36bc99690e88a7829c776ffd03778e4d87f03ee3017ad868be0c",
+      "same_python_ast": true
+    },
+    "mmrotate/core/bbox/transforms.py": {
+      "local_sha256": "e133b1cfd3f4fe8e6aeb05d4d6d93d16b0d52a89ebcdeff43d46887729f1f53c",
+      "upstream_path": "mmrotate-gaucho/mmrotate/core/bbox/transforms.py",
+      "upstream_sha256": "e133b1cfd3f4fe8e6aeb05d4d6d93d16b0d52a89ebcdeff43d46887729f1f53c",
+      "same_python_ast": true
+    },
+    "mmrotate/core/bbox/coder/distance_angle_point_coder.py": {
+      "local_sha256": "dfc91fe9f58fe0fb268e137e75f04758e6df21c55fefe419e890f001ffa5f09a",
+      "upstream_path": "mmrotate-gaucho/mmrotate/core/bbox/coder/distance_angle_point_coder.py",
+      "upstream_sha256": "dfc91fe9f58fe0fb268e137e75f04758e6df21c55fefe419e890f001ffa5f09a",
+      "same_python_ast": true
+    },
+    "mmrotate/core/bbox/builder.py": {
+      "local_sha256": "3d4f2404263d9d840a8ac6cd575d259d85e4d3aff53ccaa8405b7d8a7b982312",
+      "upstream_path": "mmrotate-gaucho/mmrotate/core/bbox/builder.py",
+      "upstream_sha256": "3d4f2404263d9d840a8ac6cd575d259d85e4d3aff53ccaa8405b7d8a7b982312",
+      "same_python_ast": true
+    },
+    "mmrotate/core/post_processing/bbox_nms_rotated.py": {
+      "local_sha256": "2c91216152a9bceb9561e965a61657b9ed35c58386d205eb1af5d922f0cfb85d",
+      "upstream_path": "mmrotate-gaucho/mmrotate/core/post_processing/bbox_nms_rotated.py",
+      "upstream_sha256": "bf689763ade94077a962f7a0722f68f8691d8c753fa436b5df76ed785c3b05a2",
+      "same_python_ast": true
+    }
+  }
+}

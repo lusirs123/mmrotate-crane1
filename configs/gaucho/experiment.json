@@ -1,0 +1,19 @@
+{
+  "status": "PREPARATION_ONLY_NOT_TRAINED",
+  "config": "configs/gaucho/crane_gaucho_fcos_r50_probiou_port_day2night_v1.py",
+  "official_runtime": "mmrotate",
+  "official_train_entry": "tools/train.py",
+  "initialization": "torchvision://resnet50 (ImageNet), same source as FAA",
+  "selection": {
+    "candidate_completed_epochs": [16, 18, 20, 22, 24],
+    "native_checkpoint_names": ["epoch_16.pth", "epoch_18.pth", "epoch_20.pth", "epoch_22.pth", "epoch_24.pth"],
+    "rule_source": "crane_project/tools/ckpt_sweep.py:SELECTION_CONFIG",
+    "auto_test": false
+  },
+  "notes": [
+    "Official FCOS R50 + GaussianFCOSHead (gaucho_encoding=True) + ProbIoU.",
+    "Only num_classes and a registry-only loss type alias change in config. Official computations remain unchanged. SGD and the FAA data/augmentation pipeline are retained.",
+    "Preparation budget 24 epochs extends the official 12-epoch schedule. TRAIN/VAL convergence and resource checks precede formal training.",
+    "GPU2/3 are intended. This preparation has not authorized or performed any GPU run."
+  ]
+}

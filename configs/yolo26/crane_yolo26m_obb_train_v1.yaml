@@ -1,0 +1,28 @@
+# Native Ultralytics training config. No custom trainer or loss.
+# Run only after explicit training authorization and server runtime checks.
+task: obb
+mode: train
+model: configs/yolo26/yolo26m-obb.yaml
+data: configs/yolo26/crane_grab_port_day2night_v1.yaml
+pretrained: pretrained/yolo26m_imagenet_backbone_v1.pt
+imgsz: 1024
+epochs: 100
+batch: 2
+nbs: 4
+device: 0,1
+workers: 2
+optimizer: auto
+nms: false
+resume: false
+amp: false
+cache: false
+seed: 0
+deterministic: true
+patience: 0
+save: true
+save_period: 1
+val: true
+plots: false
+project: work_dirs/crane_yolo26m_obb_port_day2night_v1
+name: train
+exist_ok: false

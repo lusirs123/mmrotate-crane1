@@ -1,0 +1,9 @@
+# Relative to this YAML directory, not an absolute Mac/server path.
+# Generated image/label copies are prepared by prepare_external_obb_v1.py.
+# TRAIN is Real TRAIN + Sim TRAIN. TEST is absent from the training dataset file.
+train: ../../crane_project/data/crane_grab_port_day2night_yolo26_v1/train/images
+val: ../../crane_project/data/crane_grab_port_day2night_yolo26_v1/val/images
+names:
+  0: grab
+nc: 1
+channels: 3

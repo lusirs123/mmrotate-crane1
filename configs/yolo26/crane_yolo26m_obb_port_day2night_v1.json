@@ -1,0 +1,71 @@
+{
+  "status": "PREPARATION_ONLY_NOT_TRAINED",
+  "upstream_manifest": "configs/yolo26/upstream_manifest.json",
+  "architecture": "configs/yolo26/yolo26m-obb.yaml",
+  "data": "configs/yolo26/crane_grab_port_day2night_v1.yaml",
+  "converted_data": "crane_project/data/crane_grab_port_day2night_yolo26_v1",
+  "initialization": {
+    "kind": "official_imagenet_classification_transfer",
+    "source_checkpoint": "pretrained/yolo26m-cls.pt",
+    "source_sha256": null,
+    "checkpoint": "pretrained/yolo26m_imagenet_backbone_v1.pt",
+    "sha256": null,
+    "source_url": "https://github.com/ultralytics/assets/releases/download/v8.4.0/yolo26m-cls.pt",
+    "api": "Native YOLO .load() / trainer pretrained=local_backbone_checkpoint",
+    "allow_detection_pretraining": false,
+    "note": "ImageNet-only. A derived initialization copy retains only the identical classification/detection backbone blocks 0..8. It excludes classifier block 9 because it is not detection SPPF block 9, despite some matching BN names. The official detector architecture and loader stay unchanged. Source/derived checkpoint SHAs must be verified before training."
+  },
+  "train_args": {
+    "task": "obb",
+    "imgsz": 1024,
+    "epochs": 100,
+    "batch": 2,
+    "nbs": 4,
+    "device": "0,1",
+    "workers": 2,
+    "optimizer": "auto",
+    "nms": false,
+    "pretrained": true,
+    "resume": false,
+    "amp": false,
+    "cache": false,
+    "seed": 0,
+    "deterministic": true,
+    "patience": 0,
+    "save": true,
+    "save_period": 1,
+    "val": true,
+    "plots": false,
+    "project": "work_dirs/crane_yolo26m_obb_port_day2night_v1",
+    "name": "train",
+    "exist_ok": false
+  },
+  "selection": {
+    "candidate_completed_epochs": [60, 70, 80, 90, 100],
+    "native_checkpoint_names": ["epoch59.pt", "epoch69.pt", "epoch79.pt", "epoch89.pt", "epoch99.pt"],
+    "rule_source": "crane_project/tools/ckpt_sweep.py:SELECTION_CONFIG",
+    "online_best_is_formal_selection": false,
+    "auto_test": false,
+    "note": "Official periodic checkpoint filenames are zero-based. Epochs are a declared initial budget, not a convergence claim. Freeze TRAIN/VAL decisions before TEST."
+  },
+  "prediction": {
+    "conf": 0.05,
+    "iou": 0.7,
+    "max_det": 300,
+    "imgsz": 1024,
+    "rect": false,
+    "nms": false,
+    "batch": 1,
+    "quantize": 32,
+    "augment": false,
+    "save": false,
+    "verbose": false
+  },
+  "protocol_notes": [
+    "Official YOLO26m OBB26 architecture and native trainer/assigner/loss/predictor are retained.",
+    "Retain pinned official YOLO training augmentations and optimizer auto rule. This is a per-method training-recipe comparison, not an equal-augmentation or equal-budget causal ablation.",
+    "100 epochs and batch 2/nbs 4 are preparation settings. Warmup accumulation varies under the official trainer. Do not claim every update has effective batch 4.",
+    "pretrained=true preserves the explicitly loaded ImageNet model in native train(). It must not be false, which would discard that initialization. No weight is downloaded by preparation/check commands. Formal initialization is blocked until its SHA is recorded.",
+    "GPU physical 2/3 are intended, but mapping, memory and runtime must be checked before any later authorized run."
+  ]
+}
