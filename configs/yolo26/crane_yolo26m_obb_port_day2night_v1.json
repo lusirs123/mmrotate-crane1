@@ -18,7 +18,7 @@
   "train_args": {
     "task": "obb",
     "imgsz": 1024,
-    "epochs": 100,
+    "epochs": 24,
     "batch": 2,
     "nbs": 4,
     "device": "0,1",
@@ -41,8 +41,20 @@
     "exist_ok": false
   },
   "selection": {
-    "candidate_completed_epochs": [60, 70, 80, 90, 100],
-    "native_checkpoint_names": ["epoch59.pt", "epoch69.pt", "epoch79.pt", "epoch89.pt", "epoch99.pt"],
+    "candidate_completed_epochs": [
+      16,
+      18,
+      20,
+      22,
+      24
+    ],
+    "native_checkpoint_names": [
+      "epoch15.pt",
+      "epoch17.pt",
+      "epoch19.pt",
+      "epoch21.pt",
+      "epoch23.pt"
+    ],
     "rule_source": "crane_project/tools/ckpt_sweep.py:SELECTION_CONFIG",
     "online_best_is_formal_selection": false,
     "auto_test": false,
@@ -64,8 +76,9 @@
   "protocol_notes": [
     "Official YOLO26m OBB26 architecture and native trainer/assigner/loss/predictor are retained.",
     "Retain pinned official YOLO training augmentations and optimizer auto rule. This is a per-method training-recipe comparison, not an equal-augmentation or equal-budget causal ablation.",
-    "100 epochs and batch 2/nbs 4 are preparation settings. Warmup accumulation varies under the official trainer. Do not claim every update has effective batch 4.",
+    "24 epochs and batch 2/nbs 4 are preparation settings. Warmup accumulation varies under the official trainer. Do not claim every update has effective batch 4.",
     "pretrained=true preserves the explicitly loaded ImageNet model in native train(). It must not be false, which would discard that initialization. No weight is downloaded by preparation/check commands. Formal initialization is blocked until its SHA is recorded.",
-    "GPU physical 2/3 are intended, but mapping, memory and runtime must be checked before any later authorized run."
+    "GPU physical 2/3 are intended, but mapping, memory and runtime must be checked before any later authorized run.",
+    "2026-11-05 user fixed the common budget at 24 epochs for both new external comparisons. Official LR schedule follows that budget; equal epochs do not imply identical augmentations, optimizer updates, or convergence."
   ]
 }

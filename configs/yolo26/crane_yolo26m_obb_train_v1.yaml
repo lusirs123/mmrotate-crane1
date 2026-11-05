@@ -6,7 +6,7 @@ model: configs/yolo26/yolo26m-obb.yaml
 data: configs/yolo26/crane_grab_port_day2night_v1.yaml
 pretrained: pretrained/yolo26m_imagenet_backbone_v1.pt
 imgsz: 1024
-epochs: 100
+epochs: 24
 batch: 2
 nbs: 4
 device: 0,1

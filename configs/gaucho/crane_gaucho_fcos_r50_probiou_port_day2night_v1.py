@@ -82,6 +82,9 @@ evaluation = dict(_delete_=True, interval=2, metric='mAP', save_best=None,
                   thresh_sim=10.0, thresh_real=25.0,
                   weight_sim=0.7, weight_real=0.3)
 seed = 0
+# The official GauCho branch retains scale_angle while its Cholesky path does
+# not consume it. Native DDP must detect this unused parameter on every step.
+find_unused_parameters = True
 gpu_ids = [0, 1]
 load_from = None
 resume_from = None

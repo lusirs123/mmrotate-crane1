@@ -2,6 +2,8 @@
 
 2026-11-04，仅本地代码准备，尚未训练或服务器/GPU试跑。
 
+2026-11-05状态更新：服务器CPU与此前GPU2/3双卡有界试跑已通过，每rank两个批次/两次临时更新，参数丢弃、不保存checkpoint，仍未正式训练。新增原生 `find_unused_parameters=True`，对应官方Cholesky路径未使用的scale_angle参数。完整记录见根目录 `docs/detection/09_外部模型对比与效率核查_20261101.md` 第11.4节。下文初始准备状态保留沿革，以本段和第11.4节的实际运行收据为准。
+
 ## 官方身份与接入目录
 
 论文为CVPR 2025 GauCho，作者仓库 https://github.com/jhlmarques/GauCho ，固定提交 `7d7ddd02cc587205c1fab44cc8ca23501042ca2b`。
@@ -59,3 +61,5 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=2,3 \
 `export_external_obb_v1.py --model gaucho` 默认打印计划。显式推理时调用现有官方MMRotate init_detector/inference_detector，严格加载权重，并核查GauCho官方父类/损失路径。保留完整原图K×6单类OBB、帧顺序、SHA和冻结状态。
 
 `evaluate_external_obb_saved_v1.py` 复用FAA共同指标；`select_external_obb_val_v1.py` 复用原离线选权函数。锁定VAL候选和所选权重后，才解锁TEST。真实训练权重、VAL/TEST结果和GPU运行尚待后续授权。
+
+2026-11-05正式启动更新：用户确认两模型共同24轮预算后，已在物理GPU0/1启动顺序队列，先GauCho后YOLO。此刻GauCho已实际更新，YOLO排队；没有启动离线选权或TEST。冻结协议及启动记录见09号文件第11.5节，下文历史准备/短试跑状态不代表当前训练状态。

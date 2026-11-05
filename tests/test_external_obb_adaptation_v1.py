@@ -61,17 +61,17 @@ class ExternalOBBAdaptation(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / 'selection.json'
             result = dict(model='yolo26', configuration={},
-                candidate_completed_epochs=[60, 70, 80, 90, 100],
-                selected_checkpoint='epoch_100', TEST_used_for_selection=False,
+                candidate_completed_epochs=[16, 18, 20, 22, 24],
+                selected_checkpoint='epoch_24', TEST_used_for_selection=False,
                 all_checkpoints={'epoch_%d' % e: dict(checkpoint_sha256='chosen')
-                                 for e in (60, 70, 80, 90, 100)})
+                                 for e in (16, 18, 20, 22, 24)})
             path.write_text(json.dumps(result))
             lock = dict(model='yolo26', configuration={}, checkpoint_sha256='chosen',
                         manifest_sha256=MANIFEST_SHA, selection_results=str(path),
                         selection_results_sha256=sha(path),
                         evidence_role='source_val_checkpoint_selection', TEST_used_for_selection=False)
             validate_test_lock(lock, 'yolo26', 'chosen', {})
-            del result['all_checkpoints']['epoch_60']
+            del result['all_checkpoints']['epoch_16']
             path.write_text(json.dumps(result))
             lock['selection_results_sha256'] = sha(path)
             with self.assertRaisesRegex(ValueError, 'candidate set'):
