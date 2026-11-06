@@ -1,0 +1,13 @@
+{
+  "role": "bounded_TRAIN_memory_diagnosis_only",
+  "formal_training": false,
+  "VAL_inference": false,
+  "TEST_access": false,
+  "save_checkpoints": false,
+  "automatic_retry": false,
+  "timeout_seconds_per_case": 600,
+  "cases": [
+    {"name": "tight_split128", "steps": 32, "allocator_mib": 4608, "driver_mib": 5120, "minimum_free_mib": 2560, "allocator_config": "max_split_size_mb:128"},
+    {"name": "default_cache", "steps": 64, "allocator_mib": 5120, "driver_mib": 6144, "minimum_free_mib": 2048, "allocator_config": ""}
+  ]
+}

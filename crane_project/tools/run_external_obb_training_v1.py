@@ -26,6 +26,12 @@ OBSERVED_CONFIG = 'configs/gaucho/crane_gaucho_fcos_r50_probiou_gpu01_observed_v
 GPUS = (0, 1)
 
 
+def yolo_epoch_for_status(trainer):
+    # The native on_pretrain_routine_end callback runs before epoch is assigned.
+    # Report zero there; do not set or modify the trainer's own loop state.
+    return int(getattr(trainer, 'epoch', -1)) + 1
+
+
 def atomic(path, value):
     path = Path(path)
     tmp = path.with_name(path.name+'.%d.tmp' % os.getpid())
@@ -147,7 +153,8 @@ def run_one(model_name, out, protocol):
         EXTERNAL_RUN_DIR=str(folder),EXTERNAL_QUEUE_DIR=str(out),PYTHONPATH=str(ROOT),
         OMP_NUM_THREADS='1',MKL_NUM_THREADS='1',OPENBLAS_NUM_THREADS='1',
         YOLO_AUTOINSTALL='false',YOLO_OFFLINE='true',WANDB_DISABLED='true',
-        YOLO_CONFIG_DIR=str(folder/'settings'),PYTORCH_CUDA_ALLOC_CONF='max_split_size_mb:128',
+        YOLO_CONFIG_DIR=str(folder/'settings'),
+        PYTORCH_CUDA_ALLOC_CONF=protocol.get('allocator_config','max_split_size_mb:128'),
         TORCH_NCCL_ASYNC_ERROR_HANDLING='1')
     command = [str(python),'-m','torch.distributed.run','--standalone','--nproc_per_node=2',
         str(Path(__file__).resolve()),'--stage','worker','--model',model_name,'--out',str(folder)]
@@ -175,7 +182,7 @@ def run_one(model_name, out, protocol):
                     peak['process_mib']=max(peak['process_mib'],memory)
                     peak['total_used_mib']=max(peak['total_used_mib'],row['used_mib'])
                     peak['minimum_free_mib']=min(peak['minimum_free_mib'],row['free_mib'])
-                    if memory>6656 or row['free_mib']<1536:
+                    if memory>protocol['driver_mib'] or row['free_mib']<protocol['minimum_free_mib']:
                         reason='GPU%d_MEMORY_GUARD'%g
                 item=dict(unix_time=time.time(),elapsed_seconds=time.monotonic()-start,gpus=rows,owned_processes=owned)
                 sample.write(json.dumps(item)+'\n');sample.flush()
@@ -225,7 +232,8 @@ def worker(model_name,folder):
     write_new(folder/('rank_%d_identity.json'%rank),dict(pid=os.getpid(),rank=rank,physical_gpu=GPUS[rank]))
     import torch
     torch.cuda.set_device(rank)
-    torch.cuda.set_per_process_memory_fraction(6144*2**20/torch.cuda.get_device_properties(rank).total_memory,rank)
+    torch.cuda.set_per_process_memory_fraction(protocol['allocator_mib']*2**20/
+                                              torch.cuda.get_device_properties(rank).total_memory,rank)
     torch.set_num_threads(1)
     torch.backends.cudnn.benchmark=False
     torch.backends.cuda.matmul.allow_tf32=False
@@ -253,7 +261,7 @@ def worker(model_name,folder):
                 items=({k:float(v.detach().cpu()) for k,v in t.loss_items.items()}
                        if isinstance(getattr(t,'loss_items',None),dict) else {})
                 atomic(folder/('rank_%d_heartbeat.json'%rank),dict(state=state,rank=rank,
-                    pid=os.getpid(),epoch=int(t.epoch)+1,max_epochs=t.epochs,
+                    pid=os.getpid(),epoch=yolo_epoch_for_status(t),max_epochs=t.epochs,
                     completed_microbatches=batches[0],optimizer_updates=updates[0],loss_terms=items,
                     peak_allocated_mib=torch.cuda.max_memory_allocated(rank)/2**20,
                     peak_reserved_mib=torch.cuda.max_memory_reserved(rank)/2**20,

@@ -1,0 +1,42 @@
+{
+  "schema": "external_obb_TEST_efficiency_v1",
+  "split": "test",
+  "frames": 1440,
+  "sequence_counts": {
+    "real_seq03": 200,
+    "real_seq04": 668,
+    "sim_seq09": 572
+  },
+  "data_root": "crane_project/data/crane_grab_port_day2night_v1",
+  "manifest_sha256": "128bd9aac390ad878a46c005a22f44d322a5acf61a47ad128991eb7444a4886f",
+  "batch_size": 1,
+  "precision": "FP32",
+  "input_shape": [
+    1,
+    3,
+    1024,
+    1024
+  ],
+  "warmup_frames": 50,
+  "repeats": 3,
+  "warmup_policy": "First 50 images in the sealed sorted TEST order; all 1440 images in each measured repeat.",
+  "primary_latency": "decoded_frame_to_obb",
+  "timing_scope": "Decoded BGR ndarray -> native preprocessing/H2D -> detector/NMS -> M/L when present -> highest-score original-coordinate OBB on CPU. Disk/decode is reported separately.",
+  "memory": {
+    "allocator_mib": 6144,
+    "process_stop_mib": 6656,
+    "startup_free_mib": 7168,
+    "minimum_free_mib": 1536
+  },
+  "timeout_seconds": 14400,
+  "physical_gpu_choices": [
+    0,
+    1
+  ],
+  "accuracy_evaluation": false,
+  "training_updates": 0,
+  "model_selection": false,
+  "module_efficiency": false,
+  "runtime_reference": "crane_project/configs/crane_sgar_midpoint_lvsr_pipeline_v1.json",
+  "scope": "VAL-locked external checkpoint; saved TEST outputs verify identity only; no new accuracy selection."
+}

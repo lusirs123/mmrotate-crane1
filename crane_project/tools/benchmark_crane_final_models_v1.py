@@ -75,6 +75,12 @@ def config_closure(path, stack=()):
 
 def contract(path=DEFAULT_CONFIG, require_weights=False):
     cfg = read(local(path))
+    if cfg['schema'] == 'external_obb_TEST_efficiency_v1':
+        from crane_project.tools.benchmark_external_obb_v1 import validate_profile
+        validate_profile(cfg)
+        weights = {a:[str(resolve(w)) if require_weights else None for w in s['weights']]
+                   for a,s in cfg['models'].items()}
+        return cfg, weights
     stages = cfg['schema'] == 'crane_stage_TEST_efficiency_v1'
     if (cfg['schema'] not in ('crane_final_models_TEST_efficiency_v1', 'crane_stage_TEST_efficiency_v1')
             or tuple(cfg['models']) != (STAGE_ARMS if stages else ARMS) or cfg['split'] != 'test'
@@ -117,7 +123,7 @@ def references(cfg):
             raise ValueError('Incomplete/duplicated saved TEST rows: '+arm)
         # Deliberately discard every GT and metric field before returning.
         output[arm] = [dict(image=r['image'], box=r[spec['reference_key']]) for r in rows]
-    ids = [r['image'] for r in output['final']]
+    ids = [r['image'] for r in next(iter(output.values()))]
     if ids != sorted(ids) or any([r['image'] for r in output[a]] != ids for a in cfg['models']):
         raise ValueError('Saved TEST image order differs')
     if Counter('_'.join(n.split('_')[:2]) for n in ids) != Counter(cfg['sequence_counts']):
@@ -220,6 +226,15 @@ def build(arm, cfg, weights):
     from mmrotate.models import build_detector
     from crane_project.tools.benchmark_port_detection_runtime_v1 import flatten
     spec = cfg['models'][arm]
+    if arm == 'gaucho':
+        from crane_project.tools.export_external_obb_v1 import load_backend
+        detector, _, _, _ = load_backend('gaucho', Path(weights[arm][0]), 'cpu')
+        detector.cuda(0)
+        # Same native simple_test used by the public single-image API; all
+        # preprocessing/H2D and Top1 extraction remain inside the common timer.
+        def predict(image, metas):
+            return flatten(detector.simple_test(image, metas, rescale=True), __import__('numpy'))
+        return predict, detector.cfg, (detector,), detector
     if arm in STAGE_DEPTHS:
         depth = STAGE_DEPTHS[arm]
         # The audited constructor checks all chain weights on CPU. Drop inactive
@@ -273,7 +288,7 @@ def verify_single_pass(counts, expected, depth=3):
 
 def run_worker(config_path, out):
     cfg, weights = contract(config_path, require_weights=True)
-    refs = references(cfg); ids = [r['image'] for r in refs['final']]
+    refs = references(cfg); ids = [r['image'] for r in next(iter(refs.values()))]
     paths = images(cfg, ids, verify_bytes=True)
     import torch
     import numpy as np
@@ -301,7 +316,8 @@ def run_worker(config_path, out):
     runtime = dict(torch=torch.__version__, cuda=torch.version.cuda, cudnn=torch.backends.cudnn.version(),
                    mmcv=mmcv.__version__, mmdet=mmdet.__version__, mmrotate=mmrotate.__version__,
                    opencv=cv2.__version__, gpu=torch.cuda.get_device_name(0))
-    frozen_runtime = read(local(cfg['models']['final']['config']))['runtime']
+    runtime_config = cfg.get('runtime_reference', cfg['models'].get('final', {}).get('config'))
+    frozen_runtime = read(local(runtime_config))['runtime']
     if runtime != frozen_runtime:
         raise ValueError('Runtime differs from the fixed inference: '+str(runtime))
     report = dict(protocol=cfg['schema'], runtime=runtime, host=host_info(),
@@ -425,9 +441,10 @@ def terminate(child):
 
 def benchmark(args):
     cfg, weights = contract(args.config, require_weights=True)
-    refs = references(cfg); images(cfg, [r['image'] for r in refs['final']], verify_bytes=True)
+    refs = references(cfg); images(cfg, [r['image'] for r in next(iter(refs.values()))], verify_bytes=True)
     from crane_project.tools.smoke_faa_gpu_v1 import gpu_rows, processes
-    if args.gpu not in (2, 3): raise ValueError('Use physical GPU 2 or 3')
+    if args.gpu not in cfg['physical_gpu_choices']:
+        raise ValueError('GPU is outside the authorized protocol choices')
     if args.out_dir is None: raise ValueError('A new --out-dir is required')
     all_gpus = gpu_rows(); gpu = next(r for r in all_gpus if r['index'] == args.gpu)
     if gpu['free_mib'] < cfg['memory']['startup_free_mib']:
@@ -498,7 +515,7 @@ def parser():
     p.add_argument('--stage', choices=('check', 'benchmark', 'worker'), default='check')
     p.add_argument('--config', default=DEFAULT_CONFIG)
     p.add_argument('--require-weights', action='store_true', help='Also hash the existing local/server checkpoints')
-    p.add_argument('--gpu', type=int, choices=(2, 3), help='Physical GPU; benchmark runs sequentially on one idle card')
+    p.add_argument('--gpu', type=int, choices=(0, 1, 2, 3), help='Physical GPU; allowed cards are constrained by the protocol')
     p.add_argument('--out-dir', type=Path)
     return p
 
@@ -508,7 +525,7 @@ def main():
     if args.stage == 'worker': return run_worker(args.config, args.out_dir)
     if args.stage == 'benchmark': return benchmark(args)
     cfg, _ = contract(args.config, require_weights=args.require_weights)
-    refs = references(cfg); paths = images(cfg, [r['image'] for r in refs['final']])
+    refs = references(cfg); paths = images(cfg, [r['image'] for r in next(iter(refs.values()))])
     print(json.dumps(dict(passed=True, models=list(cfg['models']), TEST_frames=len(paths),
                           TEST_images_read=False, checkpoints_hashed=args.require_weights,
                           model_forwards=0, GPU_access=False, training_updates=0,

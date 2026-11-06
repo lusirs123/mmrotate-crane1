@@ -43,6 +43,7 @@ def select(model, val_dir, out):
     write_new(result_path, dict(model=model, evidence_role='source_val_checkpoint_selection',
         selection_config=sweep.SELECTION_CONFIG, selection_rule_source_sha256=sha(Path(sweep.__file__)),
         candidate_completed_epochs=candidates, selection_info=info,
+        center_thresh_px=15.0,
         selected_checkpoint=selected, selected_path=data['checkpoint'], all_checkpoints=records,
         configuration=configuration, manifest_sha256=MANIFEST_SHA, TEST_used_for_selection=False))
     write_new(out / 'selected_identity.json', dict(model=model,

@@ -1,0 +1,9 @@
+{
+  "scope": "Restore the original observed-stable allocator/cache policy; model, resolution, FP32, batch and optimizer are unchanged",
+  "allocator_mib": 6144,
+  "driver_mib": 6656,
+  "minimum_free_mib": 1536,
+  "allocator_config": "max_split_size_mb:128",
+  "automatic_retry": false,
+  "on_memory_failure": "Stop and retain evidence; never silently reduce image size, change AMP or batch"
+}

@@ -10,6 +10,8 @@ import numpy as np
 from crane_project.tools.prepare_external_obb_v1 import polygon_label, check_configs, sha, MANIFEST_SHA
 from crane_project.tools.export_external_obb_v1 import validate_test_lock
 from crane_project.utils.external_obb_io_v1 import yolo_to_common
+from crane_project.utils.crane_frozen_pipeline_v1 import read_constants
+from crane_project.tools.prepare_external_obb_v1 import ROOT
 
 
 class ExternalOBBAdaptation(unittest.TestCase):
@@ -63,14 +65,23 @@ class ExternalOBBAdaptation(unittest.TestCase):
             result = dict(model='yolo26', configuration={},
                 candidate_completed_epochs=[16, 18, 20, 22, 24],
                 selected_checkpoint='epoch_24', TEST_used_for_selection=False,
-                all_checkpoints={'epoch_%d' % e: dict(checkpoint_sha256='chosen')
+                all_checkpoints={'epoch_%d' % e: dict(checkpoint_sha256='chosen',checkpoint='/weights/epoch%d.pt'%(e-1))
                                  for e in (16, 18, 20, 22, 24)})
+            result.update(selected_path='/weights/epoch23.pt',center_thresh_px=15.,
+                selection_config=read_constants(ROOT/'crane_project/tools/ckpt_sweep.py',['SELECTION_CONFIG'])['SELECTION_CONFIG'],
+                selection_rule_source_sha256=sha(ROOT/'crane_project/tools/ckpt_sweep.py'))
             path.write_text(json.dumps(result))
             lock = dict(model='yolo26', configuration={}, checkpoint_sha256='chosen',
                         manifest_sha256=MANIFEST_SHA, selection_results=str(path),
                         selection_results_sha256=sha(path),
                         evidence_role='source_val_checkpoint_selection', TEST_used_for_selection=False)
+            lock.update(selected_completed_epoch=24,checkpoint='/weights/epoch23.pt')
             validate_test_lock(lock, 'yolo26', 'chosen', {})
+            result['selection_config']['mcml_limit'] = 999
+            path.write_text(json.dumps(result))
+            lock['selection_results_sha256'] = sha(path)
+            with self.assertRaisesRegex(ValueError, 'selection rule'):
+                validate_test_lock(lock, 'yolo26', 'chosen', {})
             del result['all_checkpoints']['epoch_16']
             path.write_text(json.dumps(result))
             lock['selection_results_sha256'] = sha(path)

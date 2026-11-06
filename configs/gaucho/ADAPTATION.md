@@ -1,5 +1,7 @@
 # GauCho-FCOS R50 抓斗对比适配
 
+当前状态（2026-11-05）：GauCho训练、固定五候选VAL选权、ep18单次精度TEST及同协议效率补测全部完成，后续YOLO已按用户要求取消。精度目录为 `work_dirs/gaucho_eval_20261105_v1/attempt_002/`，效率目录为 `work_dirs/gaucho_efficiency_20261105_v1/attempt_001/`；结果与核验见09号文件第12节。单图接口按项目官方示例使用 `mmdet.apis`，不改模型计算。后续 `eval_gaucho_val_test_v1.py` 在精度TEST后默认继续统一效率测试，二者一并报告；效率入口为 `benchmark_external_obb_v1.py`，共同设置位于根目录 `configs/external_obb_efficiency_v1.json`。以下早期准备/启动记录保留沿革。
+
 2026-11-04，仅本地代码准备，尚未训练或服务器/GPU试跑。
 
 2026-11-05状态更新：服务器CPU与此前GPU2/3双卡有界试跑已通过，每rank两个批次/两次临时更新，参数丢弃、不保存checkpoint，仍未正式训练。新增原生 `find_unused_parameters=True`，对应官方Cholesky路径未使用的scale_angle参数。完整记录见根目录 `docs/detection/09_外部模型对比与效率核查_20261101.md` 第11.4节。下文初始准备状态保留沿革，以本段和第11.4节的实际运行收据为准。
