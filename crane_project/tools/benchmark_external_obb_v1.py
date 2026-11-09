@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from crane_project.tools import benchmark_crane_final_models_v1 as common
 from crane_project.tools.export_external_obb_v1 import config_identity, validate_test_lock
-from crane_project.tools.prepare_external_obb_v1 import GAUCHO_CONFIG
+from crane_project.tools.prepare_external_obb_v1 import GAUCHO_CONFIG, YOLO_CONFIG
 
 TEMPLATE = 'configs/external_obb_efficiency_v1.json'
 
@@ -27,15 +27,15 @@ def completed_identity(evaluation):
     lock_path = evaluation/'selection/selected_identity.json'
     lock = common.read(lock_path)
     if (not done['passed'] or done['TEST_runs'] != 1 or done['training_updates'] != 0
-            or done['TEST_reselection'] is not False or lock['model'] != 'gaucho'
+            or done['TEST_reselection'] is not False or lock['model'] not in ('gaucho','yolo26')
             or done['selected_epoch'] != lock['selected_completed_epoch']
             or done['checkpoint_sha256'] != lock['checkpoint_sha256']):
-        raise ValueError('Complete VAL-locked GauCho TEST is required')
-    validate_test_lock(lock, 'gaucho', done['checkpoint_sha256'], config_identity('gaucho'))
+        raise ValueError('Complete VAL-locked external TEST is required')
+    validate_test_lock(lock, lock['model'], done['checkpoint_sha256'], config_identity(lock['model']))
     test = evaluation/'test'/('epoch_%d'%lock['selected_completed_epoch'])
     receipt = common.read(test/'export_receipt.json')
     metrics = common.read(test/'paper_metrics.json')
-    if (not receipt['passed'] or receipt['model'] != 'gaucho' or receipt['split'] != 'test'
+    if (not receipt['passed'] or receipt['model'] != lock['model'] or receipt['split'] != 'test'
             or receipt['frames'] != 1440 or len(set(receipt['frame_ids'])) != 1440
             or receipt['checkpoint_sha256'] != lock['checkpoint_sha256']
             or receipt['selection_lock_sha256'] != common.frozen.sha(lock_path)
@@ -62,23 +62,27 @@ def make_profile(evaluation):
                  'crane_project/tools/smoke_faa_gpu_v1.py'):
         sources[name] = common.frozen.sha(common.local(name))
     epoch = lock['selected_completed_epoch']
+    model = lock['model']
+    model_config = GAUCHO_CONFIG if model == 'gaucho' else common.read(common.local(YOLO_CONFIG))['architecture']
+    if model == 'yolo26':
+        sources['crane_project/tools/benchmark_yolo26_runtime_v1.py'] = common.frozen.sha(common.local('crane_project/tools/benchmark_yolo26_runtime_v1.py'))
     cfg.update(evaluation_dir=str(evaluation), accuracy_evidence_sha256={
         str(p):common.frozen.sha(p) for p in (
             evaluation/'completion.json', evaluation/'selection/selected_identity.json',
             test/'export_receipt.json', test/'paper_metrics.json', test/'per_frame.jsonl')},
-        source_sha256=sources, models=dict(gaucho=dict(
-            label='Official GauCho FCOS R50 ProbIoU, VAL-selected ep%d'%epoch,
-            config=GAUCHO_CONFIG, weights=[dict(epoch=epoch,sha256=lock['checkpoint_sha256'],
+        source_sha256=sources, models={model:dict(
+            label=('Official GauCho FCOS R50 ProbIoU' if model == 'gaucho' else 'Official YOLO26m-OBB')+', VAL-selected ep%d'%epoch,
+            config=model_config, weights=[dict(epoch=epoch,sha256=lock['checkpoint_sha256'],
                 paths=[lock['checkpoint']])], reference=dict(
                 sha256=common.frozen.sha(test/'per_frame.jsonl'), paths=[str(test/'per_frame.jsonl')]),
-            reference_key='prediction')))
+            reference_key='prediction')})
     validate_profile(cfg)
     return cfg
 
 
 def validate_profile(cfg):
     template = common.read(common.local(TEMPLATE))
-    if any(cfg.get(k) != v for k,v in template.items()) or tuple(cfg['models']) != ('gaucho',):
+    if any(cfg.get(k) != v for k,v in template.items()) or tuple(cfg['models']) not in (('gaucho',),('yolo26',)):
         raise ValueError('External timing must retain the common TEST efficiency protocol')
     for name,digest in cfg['source_sha256'].items():
         if common.frozen.sha(common.local(name)) != digest:
@@ -87,18 +91,19 @@ def validate_profile(cfg):
         if common.frozen.sha(name) != digest:
             raise ValueError('Completed accuracy evidence changed: '+name)
     lock,test = completed_identity(cfg['evaluation_dir'])
-    spec = cfg['models']['gaucho']
+    spec = cfg['models'][lock['model']]
+    model_config = GAUCHO_CONFIG if lock['model'] == 'gaucho' else common.read(common.local(YOLO_CONFIG))['architecture']
     expected_weight = dict(epoch=lock['selected_completed_epoch'],sha256=lock['checkpoint_sha256'],
                            paths=[lock['checkpoint']])
     expected_ref = dict(sha256=common.frozen.sha(test/'per_frame.jsonl'),paths=[str(test/'per_frame.jsonl')])
-    if (spec['config'] != GAUCHO_CONFIG or spec['weights'] != [expected_weight]
+    if (spec['config'] != model_config or spec['weights'] != [expected_weight]
             or spec['reference'] != expected_ref or spec['reference_key'] != 'prediction'):
         raise ValueError('Efficiency may only replay the fixed VAL-selected TEST checkpoint')
     train = common.read(Path(cfg['evaluation_dir'])/'protocol.json')
     required = dict(train['training_sources'], **lock['configuration'])
     if any(cfg['source_sha256'].get(n) != h for n,h in required.items()):
         raise ValueError('Efficiency sources omit frozen model/evaluator dependencies')
-    for ancestor in common.config_closure(common.local(GAUCHO_CONFIG)):
+    for ancestor in (common.config_closure(common.local(GAUCHO_CONFIG)) if lock['model']=='gaucho' else [common.local(model_config)]):
         if str(ancestor.relative_to(ROOT)) not in cfg['source_sha256']:
             raise ValueError('Unpinned model config ancestor')
 
@@ -120,7 +125,7 @@ def run_prepared(profile, out, gpu):
         report = common.read(Path(out)/'benchmark/runtime_compare.json')
         common.save(Path(out)/'completion.json', dict(passed=True,accuracy_and_efficiency_complete=True,
             evaluation_dir=common.read(profile)['evaluation_dir'],training_updates=0,
-            accuracy_reselected=False,metrics=report['arms']['gaucho']))
+            accuracy_reselected=False,metrics=report['arms'][next(iter(common.read(profile)['models']))]))
     except BaseException as error:
         common.save(Path(out)/'failure.json',dict(passed=False,error=repr(error),automatic_retry=False))
         raise

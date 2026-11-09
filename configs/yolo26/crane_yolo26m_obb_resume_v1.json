@@ -1,0 +1,35 @@
+{
+  "role": "prepared_native_YOLO_resume_only",
+  "parent_run": "work_dirs/yolo26_formal_20261106_v1/attempt_005",
+  "parent_protocol_sha256": "33d59cf5fe4de96228032ba24c90c717a677150f1a1d8dfd83897e0de9a1064c",
+  "checkpoint": "work_dirs/yolo26_formal_20261106_v1/attempt_005/yolo26/train/weights/last.pt",
+  "checkpoint_sha256": "0e9be3b3fdd4dbbb73b12019b5aa2b7ac6eb08344a00e71b5005ee8641193a85",
+  "expected_completed_epochs": 4,
+  "total_epochs": 24,
+  "physical_gpus": [
+    0,
+    1
+  ],
+  "allocator_mib": 6144,
+  "driver_mib": 6656,
+  "minimum_free_mib": 1536,
+  "allocator_config": "max_split_size_mb:128",
+  "gpu_query_attempts": 3,
+  "gpu_query_timeout_seconds": 5,
+  "gpu_query_retry_seconds": 1,
+  "automatic_training_retry": false,
+  "auto_TEST": false,
+  "checkpoint_candidates_completed_epochs": [
+    16,
+    18,
+    20,
+    22,
+    24
+  ],
+  "runtime": {
+    "python": "3.10.13",
+    "torch": "2.5.1+cu121",
+    "ultralytics": "8.4.202"
+  },
+  "note": "Explicit native resume to a new output directory. Existing weights preserved. Epoch5 partial progress is not checkpointed; restart epoch5. Optimizer/EMA/scaler state follow the pinned official implementation; exact RNG/batch-level replay is not claimed."
+}

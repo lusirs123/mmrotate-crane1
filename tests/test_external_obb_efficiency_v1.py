@@ -10,20 +10,20 @@ from crane_project.tools import benchmark_external_obb_v1 as e
 
 
 class ExternalEfficiency(unittest.TestCase):
-    def fixture(self, root):
+    def fixture(self, root, model='gaucho'):
         root=Path(root);test=root/'test/epoch_18';(test/'preds').mkdir(parents=True)
         (root/'selection').mkdir()
         (test/'preds/results.pkl').write_bytes(b'fixture; never unpickled')
         (test/'per_frame.jsonl').write_text('{}\n')
-        config=e.config_identity('gaucho')
-        lock=dict(model='gaucho',selected_completed_epoch=18,checkpoint='/weights/epoch_18.pth',
+        config=e.config_identity(model)
+        lock=dict(model=model,selected_completed_epoch=18,checkpoint='/weights/epoch_18.pth',
                   checkpoint_sha256='frozen-weight',configuration=config)
         def save(p,v):p.write_text(json.dumps(v))
         save(root/'selection/selected_identity.json',lock)
         save(root/'completion.json',dict(passed=True,TEST_runs=1,training_updates=0,
             TEST_reselection=False,selected_epoch=18,checkpoint_sha256='frozen-weight'))
         save(root/'protocol.json',dict(training_sources={}))
-        save(test/'export_receipt.json',dict(passed=True,model='gaucho',split='test',frames=1440,
+        save(test/'export_receipt.json',dict(passed=True,model=model,split='test',frames=1440,
             frame_ids=list(range(1440)),checkpoint_sha256='frozen-weight',configuration=config,
             selection_lock_sha256=e.common.frozen.sha(root/'selection/selected_identity.json'),
             training_updates=0,initialized_state_sha256='state',final_state_sha256='state',
@@ -42,6 +42,16 @@ class ExternalEfficiency(unittest.TestCase):
                 changed=deepcopy(cfg);changed[field]=value
                 with self.assertRaises(ValueError):e.validate_profile(changed)
             changed=deepcopy(cfg);changed['models']['gaucho']['weights'][0]['epoch']=24
+            with self.assertRaisesRegex(ValueError,'VAL-selected'):e.validate_profile(changed)
+
+    def test_yolo_profile_keeps_selected_weight_and_common_timing_without_mmcv_config(self):
+        with tempfile.TemporaryDirectory() as tmp,patch.object(e,'validate_test_lock'):
+            root,test=self.fixture(tmp,model='yolo26');cfg=e.make_profile(root)
+            self.assertEqual(tuple(cfg['models']),('yolo26',))
+            self.assertEqual(cfg['models']['yolo26']['weights'][0]['epoch'],18)
+            self.assertEqual(cfg['warmup_frames'],50);self.assertEqual(cfg['repeats'],3)
+            self.assertIn('crane_project/tools/benchmark_yolo26_runtime_v1.py',cfg['source_sha256'])
+            changed=deepcopy(cfg);changed['models']['yolo26']['weights'][0]['epoch']=24
             with self.assertRaisesRegex(ValueError,'VAL-selected'):e.validate_profile(changed)
 
     def test_incomplete_accuracy_or_changed_predictions_cannot_start_timing(self):

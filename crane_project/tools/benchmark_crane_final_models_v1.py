@@ -287,6 +287,9 @@ def verify_single_pass(counts, expected, depth=3):
 
 
 def run_worker(config_path, out):
+    if tuple(read(local(config_path))['models']) == ('yolo26',):
+        from crane_project.tools.benchmark_yolo26_runtime_v1 import run_worker as native_worker
+        return native_worker(config_path, out)
     cfg, weights = contract(config_path, require_weights=True)
     refs = references(cfg); ids = [r['image'] for r in next(iter(refs.values()))]
     paths = images(cfg, ids, verify_bytes=True)
