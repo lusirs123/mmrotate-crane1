@@ -1,0 +1,19 @@
+{
+  "protocol": "symeood_r4_midpoint_leavevideo_diag_v1",
+  "output": "work_dirs/lvsr_diagnostic_20261112_v1/midpoint_leavevideo_001",
+  "physical_gpu": 3,
+  "gpu_uuid": "GPU-c6990e5d-f27d-46da-3756-95118d4d799a",
+  "arms": ["real_seq01", "real_seq13"],
+  "reference_val_video": {"real_seq01": "real_seq07", "real_seq13": "real_seq14"},
+  "updates_per_arm": 17980,
+  "checkpoint_interval": 4495,
+  "wall_seconds": 10800,
+  "training": {"lr": 0.001, "weight_decay": 0.0, "batch_size": 8, "seed": 1703, "clip_norm": 10.0},
+  "schedule": "Original epoch_batches on remaining eligible TRAIN views, virtual epochs starting at1; truncate the last epoch to exactly17980 updates. Exclude BOTH scales of the held-out video. Each batch4Real+4Sim.",
+  "selection": "Terminal17980 only; no intermediate VAL, no early or cross-arm selection, no TEST, no automatic adoption.",
+  "screen": {"signed_residual_W1_tolerance": 0.000001, "minimum_new_bad_views": 20, "minimum_new_bad_reachable_fraction": 0.9},
+  "screen_description": "In BOTH arms, native held-out signed log(GT/M) marginal W1 distances to the predeclared same-family M20 VAL video must each not increase (tol1e-6), and their mean must decrease >1e-6. Across both held-out TRAIN scales, at least20 M20-good/new-M-bad views, >=90% verified size10-reachable under unchanged LVSR guards. Descriptive screening only; frames are correlated, videos/geometry differ, and changing the M training composition confounds membership. Passing permits reviewing an LVSR input-generation proposal, not starting it automatically.",
+  "stop": "Nonfinite/identity/cache/schedule/reload/resource failure or total10800s: stop without retries or fallback search; retain partial checkpoints. A completed negative screen ends this direction.",
+  "scope": "Temporary M copies only. Original R4/M20/L5, data/annotations/splits/caches/LR and paper body unchanged. R4 has seen the held-out TRAIN videos: this is M-layer leave-video diagnosis, not full-chain OOF.",
+  "download": "Grouped JSON/CSV/MD and SHA receipts only; weights, optimizer, caches, full logs and per-view rows remain on server."
+}
