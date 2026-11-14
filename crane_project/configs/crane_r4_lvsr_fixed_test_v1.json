@@ -1,0 +1,20 @@
+{
+  "protocol": "r4_LB_ep3_fixed_TEST_v1",
+  "physical_gpu": 3,
+  "gpu_uuid": "GPU-c6990e5d-f27d-46da-3756-95118d4d799a",
+  "epoch": 3,
+  "checkpoint_sha256": "df30cf4d12db56e1c3af0643c25dfd925c733dcd106dcdfc3fc0eec2fc94e4a4",
+  "TEST_frames": 1440,
+  "batch_size": 1,
+  "precision": "FP32",
+  "CPU_threads": 1,
+  "timeout_seconds": 3600,
+  "condition": "B; no midpoint model construction or forward. Internal midpoint row field is only an alias of B.",
+  "comparison": "New R4+LB only. Reuse sealed R4/M20/LM predictions; compare four paths, sizes, joint migrations, RIoU/AP75, domains/videos, center/Sim angle and accurate B/M20 subsets separately.",
+  "selection_on_test": false,
+  "automatic_adoption": false,
+  "efficiency": false,
+  "memory": {"startup_free_mib": 7168, "minimum_free_mib": 1536, "process_stop_mib": 6656},
+  "stop": "Any identity, runtime, replay, coordinate, inherited-field, frozen-state or resource failure stops without automatic retry or checkpoint search.",
+  "download": "Core JSON/CSV/MD/SHA only. Weights, feature caches, prediction rows and images stay on server."
+}

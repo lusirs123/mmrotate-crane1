@@ -1,0 +1,64 @@
+{
+  "repository": "https://github.com/open-mmlab/mmrotate",
+  "tag": "v0.3.4",
+  "files": {
+    "mmrotate/models/detectors/oriented_rcnn.py": {
+      "url": "https://raw.githubusercontent.com/open-mmlab/mmrotate/v0.3.4/mmrotate/models/detectors/oriented_rcnn.py",
+      "sha256": "492be1bd359b47d6ef336b62685e258a965bb04f2974d7f65e863201b49827d8",
+      "upstream_sha256": "492be1bd359b47d6ef336b62685e258a965bb04f2974d7f65e863201b49827d8"
+    },
+    "mmrotate/models/detectors/two_stage.py": {
+      "url": "https://raw.githubusercontent.com/open-mmlab/mmrotate/v0.3.4/mmrotate/models/detectors/two_stage.py",
+      "sha256": "f868c698ed7b591abae3009a3af24b895156617e40915ac1ca121e8f4b26ad98",
+      "upstream_sha256": "f868c698ed7b591abae3009a3af24b895156617e40915ac1ca121e8f4b26ad98"
+    },
+    "mmrotate/models/dense_heads/oriented_rpn_head.py": {
+      "url": "https://raw.githubusercontent.com/open-mmlab/mmrotate/v0.3.4/mmrotate/models/dense_heads/oriented_rpn_head.py",
+      "sha256": "ae0caf0bef85ad81130798bbbe11ce3bac28c029eaa575c9e39fcb0209a65931",
+      "upstream_sha256": "ae0caf0bef85ad81130798bbbe11ce3bac28c029eaa575c9e39fcb0209a65931"
+    },
+    "mmrotate/models/roi_heads/oriented_standard_roi_head.py": {
+      "url": "https://raw.githubusercontent.com/open-mmlab/mmrotate/v0.3.4/mmrotate/models/roi_heads/oriented_standard_roi_head.py",
+      "sha256": "7b8d32f99c151cbfb8f6373f7300c4233022de247d64b2914468a5b9b2f5a4af",
+      "upstream_sha256": "7b8d32f99c151cbfb8f6373f7300c4233022de247d64b2914468a5b9b2f5a4af"
+    },
+    "mmrotate/models/roi_heads/bbox_heads/convfc_rbbox_head.py": {
+      "url": "https://raw.githubusercontent.com/open-mmlab/mmrotate/v0.3.4/mmrotate/models/roi_heads/bbox_heads/convfc_rbbox_head.py",
+      "sha256": "803af602b4ce9597dd42e32d391195d9e6e9c921f2eaab7833dbaf80c04077b1",
+      "upstream_sha256": "803af602b4ce9597dd42e32d391195d9e6e9c921f2eaab7833dbaf80c04077b1"
+    },
+    "mmrotate/core/bbox/coder/delta_midpointoffset_rbbox_coder.py": {
+      "url": "https://raw.githubusercontent.com/open-mmlab/mmrotate/v0.3.4/mmrotate/core/bbox/coder/delta_midpointoffset_rbbox_coder.py",
+      "sha256": "dc82ad7d079ebd7d3f25e9cc949dcfa3db818d43d7b37a00c1bdf2be2f131af5",
+      "upstream_sha256": "dc82ad7d079ebd7d3f25e9cc949dcfa3db818d43d7b37a00c1bdf2be2f131af5"
+    },
+    "configs/oriented_rcnn/oriented_rcnn_r50_fpn_1x_dota_le90.py": {
+      "url": "https://raw.githubusercontent.com/open-mmlab/mmrotate/v0.3.4/configs/oriented_rcnn/oriented_rcnn_r50_fpn_1x_dota_le90.py",
+      "sha256": "7e0ce8480404d015063a82a526db9d1be6b40d1efd7cb35cf5ab33c4414a1f3c",
+      "upstream_sha256": "7e0ce8480404d015063a82a526db9d1be6b40d1efd7cb35cf5ab33c4414a1f3c"
+    }
+  },
+  "author_recipe": {
+    "configs/obb/_base_/schedules/schedule_1x.py": {
+      "url": "https://raw.githubusercontent.com/jbwang1997/OBBDetection/master/configs/obb/_base_/schedules/schedule_1x.py",
+      "sha256": "3f77357ecc267af7d0f2c116cf5f3ff4b4bafdb7bba7a003d28b787a11d77170",
+      "text": "# optimizer\noptimizer = dict(type='SGD', lr=0.005, momentum=0.9, weight_decay=0.0001)\noptimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))\n# learning policy\nlr_config = dict(\n    policy='step',\n    warmup='linear',\n    warmup_iters=500,\n    warmup_ratio=0.001,\n    step=[8, 11])\ntotal_epochs = 12\n"
+    },
+    "configs/obb/_base_/datasets/dota.py": {
+      "url": "https://raw.githubusercontent.com/jbwang1997/OBBDetection/master/configs/obb/_base_/datasets/dota.py",
+      "sha256": "262f6f2bc37083dc2f0432d0a96cfef40c15bb6fc4e40e0b70137ccebbc4f39d",
+      "text": "dataset_type = 'DOTADataset'\ndata_root = 'data/ss_dota_split/'\nimg_norm_cfg = dict(\n    mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)\ntrain_pipeline = [\n    dict(type='LoadImageFromFile'),\n    dict(type='LoadOBBAnnotations', with_bbox=True,\n         with_label=True, obb_as_mask=True),\n    dict(type='LoadDOTASpecialInfo'),\n    dict(type='Resize', img_scale=(1024, 1024), keep_ratio=True),\n    dict(type='OBBRandomFlip', h_flip_ratio=0.5, v_flip_ratio=0.5),\n    dict(type='Normalize', **img_norm_cfg),\n    dict(type='RandomOBBRotate', rotate_after_flip=True,\n         angles=(0, 0), vert_rate=0.5, vert_cls=['roundabout', 'storage-tank']),\n    dict(type='Pad', size_divisor=32),\n    dict(type='DOTASpecialIgnore', ignore_size=2),\n    dict(type='FliterEmpty'),\n    dict(type='Mask2OBB', obb_type='obb'),\n    dict(type='OBBDefaultFormatBundle'),\n    dict(type='OBBCollect', keys=['img', 'gt_bboxes', 'gt_obboxes', 'gt_labels'])\n]\ntest_pipeline = [\n    dict(type='LoadImageFromFile'),\n    dict(\n        type='MultiScaleFlipRotateAug',\n        img_scale=[(1024, 1024)],\n        h_flip=False,\n        v_flip=False,\n        rotate=False,\n        transforms=[\n            dict(type='Resize', keep_ratio=True),\n            dict(type='OBBRandomFlip'),\n            dict(type='Normalize', **img_norm_cfg),\n            dict(type='RandomOBBRotate', rotate_after_flip=True),\n            dict(type='Pad', size_divisor=32),\n            dict(type='ImageToTensor', keys=['img']),\n            dict(type='OBBCollect', keys=['img']),\n        ])\n]\n\n# does evaluation while training\n# uncomments it  when you need evaluate every epoch\n# data = dict(\n    # samples_per_gpu=2,\n    # workers_per_gpu=4,\n    # train=dict(\n        # type=dataset_type,\n        # task='Task1',\n        # ann_file=data_root + 'train/annfiles/',\n        # img_prefix=data_root + 'train/images/',\n        # pipeline=train_pipeline),\n    # val=dict(\n        # type=dataset_type,\n        # task='Task1',\n        # ann_file=data_root + 'val/annfiles/',\n        # img_prefix=data_root + 'val/images/',\n        # pipeline=test_pipeline),\n    # test=dict(\n        # type=dataset_type,\n        # task='Task1',\n        # ann_file=data_root + 'val/annfiles/',\n        # img_prefix=data_root + 'val/images/',\n        # pipeline=test_pipeline))\n# evaluation = dict(metric='mAP')\n\n# disable evluation, only need train and test\n# uncomments it when use trainval as train\ndata = dict(\n    samples_per_gpu=2,\n    workers_per_gpu=4,\n    train=dict(\n        type=dataset_type,\n        task='Task1',\n        ann_file=data_root + 'trainval/annfiles/',\n        img_prefix=data_root + 'trainval/images/',\n        pipeline=train_pipeline),\n    test=dict(\n        type=dataset_type,\n        task='Task1',\n        ann_file=data_root + 'test/annfiles/',\n        img_prefix=data_root + 'test/images/',\n        pipeline=test_pipeline))\nevaluation = None\n"
+    }
+  },
+  "paper": "https://openaccess.thecvf.com/content/ICCV2021/papers/Xie_Oriented_R-CNN_for_Object_Detection_ICCV_2021_paper.pdf",
+  "declared_differences": {
+    "implementation": "Unmodified MMRotate v0.3.4 Oriented R-CNN, not an OBBDetection binary reproduction",
+    "batch": "Paper 1 GPU x 2; this run 2 GPUs x 1; global batch remains 2",
+    "warmup": "Use author warmup_ratio=0.001 instead of MMRotate generic 1/3",
+    "classes": "15 to 1, grab",
+    "data": "Frozen port TRAIN 2558 / VAL 887 / TEST 1440",
+    "input": "Aspect-preserving 1024 resize, fixed 1024 canvas, native normalized padding value 0",
+    "augmentation": "MMRotate H/V/diagonal probabilities 0.25 each, equivalent flip outcomes to author independent H/V at 0.5; no project shrink",
+    "schedule": "Author 12 epochs, LR 0.005, drops at 8/11; no equal-epoch-budget claim"
+  }
+}

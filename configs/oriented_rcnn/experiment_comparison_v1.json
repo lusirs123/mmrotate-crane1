@@ -1,0 +1,10 @@
+{
+  "model": "oriented_rcnn",
+  "training_dir": "work_dirs/oriented_rcnn_no_port_shrink_v1/attempt_001/oriented_rcnn",
+  "configuration": "configs/oriented_rcnn/crane_oriented_rcnn_r50_fpn_12e_port_day2night_v1.py",
+  "own_scale_augmentation": false,
+  "selection": {
+    "candidate_completed_epochs": [8, 9, 10, 11, 12],
+    "native_checkpoint_names": ["epoch_8.pth", "epoch_9.pth", "epoch_10.pth", "epoch_11.pth", "epoch_12.pth"]
+  }
+}

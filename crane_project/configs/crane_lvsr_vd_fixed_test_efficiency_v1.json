@@ -1,0 +1,22 @@
+{
+  "protocol": "r4_m20_D_ep2_fixed_TEST_and_efficiency_v1",
+  "physical_gpu": 3,
+  "gpu_uuid": "GPU-c6990e5d-f27d-46da-3756-95118d4d799a",
+  "D_epoch": 2,
+  "D_sha256": "b56ac54259edbbcc31d677dfc851d77aafae068b94afdfdd90d022209fffb4ce",
+  "TEST_frames": 1440,
+  "efficiency_arms": ["D"],
+  "warmup_frames": 50,
+  "repeats": 3,
+  "batch_size": 1,
+  "precision": "FP32",
+  "CPU_threads": 1,
+  "timeout_seconds": 7200,
+  "accuracy": "One locked D ep2 TEST; reuse sealed R4/M20/V predictions. Report sizes, joint migrations, RIoU/AP75, real/sim/videos and accurate M edges. No selection or optimizer.",
+  "efficiency": "Only D full chain rerun: decoded BGR CPU image -> preprocess/H2D -> R4 native head/NMS -> single shared ROI -> M20 -> D -> CPU original OBB. Warmup50 and1440x3; output verification outside timers; report mean/P50/P95/FPS, four time windows, parameters and GPU allocated/reserved and driver samples.",
+  "historical_efficiency": "Original M/V measurements are reused as historical context, not a new same-batch incremental-cost or speedup claim. No V or M-only rebenchmark.",
+  "memory": {"startup_free_mib": 7168, "minimum_free_mib": 1536, "process_stop_mib": 6656},
+  "stop": "Any identity/nonfinite/replay/contended-GPU/resource/output-equivalence failure stops without retry. No epoch, threshold or model search.",
+  "download": "Core JSON/CSV/MD/SHA only; weights, per-frame outputs/times and images stay on server.",
+  "automatic_adoption": false
+}

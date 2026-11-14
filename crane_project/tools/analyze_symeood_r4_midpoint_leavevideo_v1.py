@@ -25,12 +25,17 @@ def rows(path):
 
 
 def ap(rows_, method, np, ap11):
+    from crane_project.tools.eval_crane_offline import compute_riou
+    from crane_project.utils.port_geometry_midpoint_edge_residual_metrics_v1 import canonical
     present = [r for r in rows_ if r[method] is not None]
     score = np.asarray([r[method][5] for r in present], dtype=np.float32)
     order = np.argsort(-score)
+    # Historical compact M20 readbacks store boxes without per-view metrics.
+    # Recompute from geometry with the same native AP implementation for every source.
+    ious = [compute_riou(np.asarray(canonical(r[method])), np.asarray(canonical(r['gt']))) for r in present]
     result = dict(frames=len(rows_), outputs=len(present))
     for threshold in (.5, .75):
-        hits = np.asarray([r['metrics'][method]['riou'] >= threshold for r in present], dtype=np.float32)[order]
+        hits = np.asarray([iou >= threshold for iou in ious], dtype=np.float32)[order]
         tp, fp = hits.cumsum(), (1-hits).cumsum()
         result['AP'+str(round(threshold*100))] = 100*ap11(tp.astype(np.float64)/len(rows_),
             tp/np.maximum(tp+fp, np.finfo(np.float32).eps))
