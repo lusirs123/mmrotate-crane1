@@ -1,0 +1,97 @@
+{
+  "repository": "https://github.com/open-mmlab/mmrotate",
+  "tag": "v0.3.4",
+  "reference_recipe": "MMRotate standard one-refinement-stage R3Det R50/FPN FP32",
+  "files": {
+    "configs/r3det/r3det_r50_fpn_1x_dota_oc.py": {
+      "url": "https://raw.githubusercontent.com/open-mmlab/mmrotate/v0.3.4/configs/r3det/r3det_r50_fpn_1x_dota_oc.py",
+      "sha256": "f6a5eed9d592b1b2441b68030c1ca2f17a500aae6904afc4a3fc8ca46bbe12f4",
+      "upstream_sha256": "f6a5eed9d592b1b2441b68030c1ca2f17a500aae6904afc4a3fc8ca46bbe12f4"
+    },
+    "configs/_base_/schedules/schedule_1x.py": {
+      "url": "https://raw.githubusercontent.com/open-mmlab/mmrotate/v0.3.4/configs/_base_/schedules/schedule_1x.py",
+      "sha256": "eef4b63abefd4e51bce476a012013d63ec27e06c87516a2352ff57b5f46f80e9",
+      "upstream_sha256": "eef4b63abefd4e51bce476a012013d63ec27e06c87516a2352ff57b5f46f80e9"
+    },
+    "mmrotate/models/detectors/r3det.py": {
+      "url": "https://raw.githubusercontent.com/open-mmlab/mmrotate/v0.3.4/mmrotate/models/detectors/r3det.py",
+      "sha256": "e60c993e8e6bff81a8e62bd2b946b66316db5dedba907d87c6e3925a8ce2644a",
+      "upstream_sha256": "e60c993e8e6bff81a8e62bd2b946b66316db5dedba907d87c6e3925a8ce2644a"
+    },
+    "mmrotate/models/detectors/utils.py": {
+      "url": "https://raw.githubusercontent.com/open-mmlab/mmrotate/v0.3.4/mmrotate/models/detectors/utils.py",
+      "sha256": "b25fbbb12deddd318d4df0858f46ae87de60609bb344af257022efc13dc7cc6f",
+      "upstream_sha256": "b25fbbb12deddd318d4df0858f46ae87de60609bb344af257022efc13dc7cc6f"
+    },
+    "mmrotate/models/dense_heads/rotated_anchor_head.py": {
+      "url": "https://raw.githubusercontent.com/open-mmlab/mmrotate/v0.3.4/mmrotate/models/dense_heads/rotated_anchor_head.py",
+      "sha256": "740fc0a10bfe396361397bf12b413a994efd0e95331856a06fc04cd2da9a5298",
+      "upstream_sha256": "740fc0a10bfe396361397bf12b413a994efd0e95331856a06fc04cd2da9a5298"
+    },
+    "mmrotate/models/detectors/base.py": {
+      "url": "https://raw.githubusercontent.com/open-mmlab/mmrotate/v0.3.4/mmrotate/models/detectors/base.py",
+      "sha256": "4583a25001228b03ecfb149b3c0d084f2fcdd6961626808be0360af69865b52d",
+      "upstream_sha256": "4583a25001228b03ecfb149b3c0d084f2fcdd6961626808be0360af69865b52d"
+    },
+    "mmrotate/core/anchor/anchor_generator.py": {
+      "url": "https://raw.githubusercontent.com/open-mmlab/mmrotate/v0.3.4/mmrotate/core/anchor/anchor_generator.py",
+      "sha256": "905df765f285783e1622387dafa58dd1c2f5281fe5abee1ccda15f4668682e72",
+      "upstream_sha256": "905df765f285783e1622387dafa58dd1c2f5281fe5abee1ccda15f4668682e72"
+    },
+    "mmrotate/core/bbox/coder/delta_xywha_rbbox_coder.py": {
+      "url": "https://raw.githubusercontent.com/open-mmlab/mmrotate/v0.3.4/mmrotate/core/bbox/coder/delta_xywha_rbbox_coder.py",
+      "sha256": "c8194ab705da451b127eabaa3055179cceb1f5e130f39982de10b68cc2779f6a",
+      "upstream_sha256": "c8194ab705da451b127eabaa3055179cceb1f5e130f39982de10b68cc2779f6a"
+    },
+    "mmrotate/core/bbox/transforms.py": {
+      "url": "https://raw.githubusercontent.com/open-mmlab/mmrotate/v0.3.4/mmrotate/core/bbox/transforms.py",
+      "sha256": "e133b1cfd3f4fe8e6aeb05d4d6d93d16b0d52a89ebcdeff43d46887729f1f53c",
+      "upstream_sha256": "e133b1cfd3f4fe8e6aeb05d4d6d93d16b0d52a89ebcdeff43d46887729f1f53c"
+    },
+    "crane_project/utils/r3det_native_retina_head_v1.py": {
+      "url": "https://raw.githubusercontent.com/open-mmlab/mmrotate/v0.3.4/mmrotate/models/dense_heads/rotated_retina_head.py",
+      "sha256": "5a4a152de1309ee3f5e689121e19bc3b0dc7d9e3b74a3b6092166f3ca3912d06",
+      "upstream_sha256": "c13722a658e17aa8da169707de0d7dba58b4f7a62fe8c2f4eb2f495713cef06a",
+      "adaptations": [
+        {
+          "upstream": "from ..builder import ROTATED_HEADS",
+          "local": "from mmrotate.models.builder import ROTATED_HEADS"
+        },
+        {
+          "upstream": "from .rotated_anchor_head import RotatedAnchorHead",
+          "local": "from mmrotate.models.dense_heads.rotated_anchor_head import RotatedAnchorHead"
+        },
+        {
+          "upstream": "@ROTATED_HEADS.register_module()",
+          "local": "@ROTATED_HEADS.register_module(name='R3DetNativeRetinaHeadV1')"
+        }
+      ]
+    },
+    "crane_project/utils/r3det_native_refine_head_v1.py": {
+      "url": "https://raw.githubusercontent.com/open-mmlab/mmrotate/v0.3.4/mmrotate/models/dense_heads/rotated_retina_refine_head.py",
+      "sha256": "48fdac739fae03cd3481789baed84342ccc9461c0cf821a532756c86b9e4fc54",
+      "upstream_sha256": "4658d775f66daf8e96ca801d999752e11c11b31f3fa90b2368e1e254289348ee",
+      "adaptations": [
+        {
+          "upstream": "from ..builder import ROTATED_HEADS",
+          "local": "from mmrotate.models.builder import ROTATED_HEADS"
+        },
+        {
+          "upstream": "from . import RotatedRetinaHead",
+          "local": "from crane_project.utils.r3det_native_retina_head_v1 import RotatedRetinaHead"
+        },
+        {
+          "upstream": "@ROTATED_HEADS.register_module()",
+          "local": "@ROTATED_HEADS.register_module(name='R3DetNativeRetinaRefineHeadV1')"
+        }
+      ]
+    }
+  },
+  "adaptations": [
+    "isolated native four-convolution heads, registry/import aliases only",
+    "native oc adapter; same polygons and frame IDs",
+    "single class, frozen data, fixed1024canvas",
+    "batch1 accumulation2, effective2, warmup1000micro=500updates, native SGD0.0025 12epochs 8/11",
+    "no paper shrink, M or LVSR"
+  ]
+}
